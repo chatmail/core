@@ -304,6 +304,9 @@ impl TestContextManager {
 pub struct TestContextBuilder {
     key_pair: Option<SignedSecretKey>,
 
+    /// Email address.
+    address: Option<String>,
+
     /// Log sink if set.
     ///
     /// If log sink is not set,
@@ -328,6 +331,7 @@ impl TestContextBuilder {
     /// This is a shortcut for `.with_key_pair(alice_keypair())`.
     pub fn configure_alice(self) -> Self {
         self.with_key_pair(alice_keypair())
+            .with_address("alice@example.org".to_string())
     }
 
     /// Configures as bob@example.net with fixed secret key.
@@ -335,6 +339,7 @@ impl TestContextBuilder {
     /// This is a shortcut for `.with_key_pair(bob_keypair())`.
     pub fn configure_bob(self) -> Self {
         self.with_key_pair(bob_keypair())
+            .with_address("bob@example.net".to_string())
     }
 
     /// Configures as charlie@example.net with fixed secret key.
@@ -342,6 +347,7 @@ impl TestContextBuilder {
     /// This is a shortcut for `.with_key_pair(charlie_keypair())`.
     pub fn configure_charlie(self) -> Self {
         self.with_key_pair(charlie_keypair())
+            .with_address("charlie@example.net".to_string())
     }
 
     /// Configures as dom@example.net with fixed secret key.
@@ -349,6 +355,7 @@ impl TestContextBuilder {
     /// This is a shortcut for `.with_key_pair(dom_keypair())`.
     pub fn configure_dom(self) -> Self {
         self.with_key_pair(dom_keypair())
+            .with_address("dom@example.net".to_string())
     }
 
     /// Configures as elena@example.net with fixed secret key.
@@ -356,6 +363,7 @@ impl TestContextBuilder {
     /// This is a shortcut for `.with_key_pair(elena_keypair())`.
     pub fn configure_elena(self) -> Self {
         self.with_key_pair(elena_keypair())
+            .with_address("elena@example.net".to_string())
     }
 
     /// Configures as fiona@example.net with fixed secret key.
@@ -363,6 +371,7 @@ impl TestContextBuilder {
     /// This is a shortcut for `.with_key_pair(fiona_keypair())`.
     pub fn configure_fiona(self) -> Self {
         self.with_key_pair(fiona_keypair())
+            .with_address("fiona@example.net".to_string())
     }
 
     /// Configures the new [`TestContext`] with the provided [`SignedSecretKey`].
@@ -371,6 +380,12 @@ impl TestContextBuilder {
     /// given identity.
     pub fn with_key_pair(mut self, key_pair: SignedSecretKey) -> Self {
         self.key_pair = Some(key_pair);
+        self
+    }
+
+    /// Sets email address.
+    pub fn with_address(mut self, address: String) -> Self {
+        self.address = Some(address);
         self
     }
 
@@ -396,16 +411,7 @@ impl TestContextBuilder {
     /// Builds the [`TestContext`].
     pub async fn build(self, used_names: Option<&mut BTreeSet<String>>) -> TestContext {
         if let Some(key_pair) = self.key_pair {
-            let userid = {
-                let public_key = key_pair.to_public_key();
-                let id_bstr = public_key.details.users.first().unwrap().id.id();
-                String::from_utf8(id_bstr.to_vec()).unwrap()
-            };
-            let addr = mailparse::addrparse(&userid)
-                .unwrap()
-                .extract_single_info()
-                .unwrap()
-                .addr;
+            let addr = self.address.expect("Address is not set").clone();
             let name = EmailAddress::new(&addr).unwrap().local;
 
             let mut unused_name = name.clone();
