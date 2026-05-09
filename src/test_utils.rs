@@ -20,6 +20,7 @@ use pretty_assertions::assert_eq;
 use tempfile::{TempDir, tempdir};
 use tokio::runtime::Handle;
 use tokio::{fs, task};
+use uuid::Uuid;
 
 use crate::chat::{
     self, Chat, ChatId, ChatIdBlocked, MessageListOptions, add_to_chat_contacts_table, create_group,
@@ -32,13 +33,15 @@ use crate::contact::{
     Contact, ContactId, Modifier, Origin, import_vcard, make_vcard, mark_contact_id_as_verified,
 };
 use crate::context::Context;
+use crate::e2ee::EncryptHelper;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::key::{self, DcKey, self_fingerprint};
 use crate::log::warn;
 use crate::login_param::EnteredLoginParam;
 use crate::message::{Message, MessageState, MsgId, update_msg_state};
 use crate::mimeparser::{MimeMessage, SystemMessage};
-use crate::receive_imf::receive_imf;
+use crate::pgp::SeipdVersion;
+use crate::receive_imf::{ReceivedMsg, receive_imf};
 use crate::securejoin::{get_securejoin_qr, join_securejoin};
 use crate::smtp::msg_has_pending_smtp_job;
 use crate::stock_str::StockStrings;
@@ -831,10 +834,7 @@ ORDER BY id"
 
     /// Receive a message using the `receive_imf()` pipeline. This is similar
     /// to `recv_msg()`, but doesn't assume that the message is shown in the chat.
-    pub async fn recv_msg_opt(
-        &self,
-        msg: &SentMessage<'_>,
-    ) -> Option<crate::receive_imf::ReceivedMsg> {
+    pub async fn recv_msg_opt(&self, msg: &SentMessage<'_>) -> Option<ReceivedMsg> {
         receive_imf(self, msg.payload().as_bytes(), false)
             .await
             .unwrap()
@@ -1229,6 +1229,68 @@ ORDER BY id"
             .await
             .unwrap();
     }
+}
+
+pub async fn encrypt_raw_message(
+    context: &Context,
+    receivers: &[&TestContext],
+    payload: &[u8],
+) -> Result<String> {
+    let encryption_helper = EncryptHelper::new(context).await?;
+    let mut encryption_keyring = vec![encryption_helper.public_key.clone()];
+
+    for receiver in receivers {
+        encryption_keyring.push(key::load_self_public_key(receiver).await?);
+    }
+
+    let from = context.get_primary_self_addr().await?;
+    let compress = false;
+
+    let mut cleartext = format!("Autocrypt: {}", encryption_helper.get_aheader()).into_bytes();
+    cleartext.extend_from_slice(b"\r\n");
+    cleartext.extend_from_slice(payload);
+    let encrypted_payload = encryption_helper
+        .encrypt_raw(
+            context,
+            encryption_keyring,
+            cleartext,
+            compress,
+            SeipdVersion::V2,
+        )
+        .await?;
+    let boundary = Uuid::new_v4();
+
+    let res = format!(
+"Content-Type: multipart/encrypted; protocol=\"application/pgp-encrypted\"; boundary=\"{boundary}\"\r
+MIME-Version: 1.0\r
+From: {from}\r
+Subject: [...]\r
+\r
+\r
+--{boundary}\r
+Content-Type: application/pgp-encrypted\r
+\r
+Version: 1\r
+\r
+--{boundary}\r
+Content-Type: application/octet-stream\r
+\r
+{encrypted_payload}\r
+--{boundary}--\r
+");
+    Ok(res)
+}
+
+pub async fn receive_encrypted_imf(
+    context: &TestContext,
+    from: &TestContext,
+    imf_raw: &[u8],
+) -> Result<ReceivedMsg> {
+    let encrypted_message = encrypt_raw_message(from, &[context], imf_raw).await?;
+    let received_msg = receive_imf(context, encrypted_message.as_bytes(), false)
+        .await?
+        .unwrap();
+    Ok(received_msg)
 }
 
 impl Deref for TestContext {

@@ -358,7 +358,7 @@ mod tests {
 
     use super::*;
     use crate::chat::send_msg;
-    use crate::test_utils::TestContext;
+    use crate::test_utils::TestContextManager;
 
     #[test]
     fn test_downloadstate_values() {
@@ -378,12 +378,14 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_update_download_state() -> Result<()> {
-        let t = TestContext::new_alice().await;
-        let chat = t.create_chat_with_contact("Bob", "bob@example.org").await;
+        let mut tcm = TestContextManager::new();
+        let t = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+        let chat_id = t.create_chat_id(bob).await;
 
         let mut msg = Message::new_text("Hi Bob".to_owned());
-        let msg_id = send_msg(&t, chat.id, &mut msg).await?;
-        let msg = Message::load_from_db(&t, msg_id).await?;
+        let msg_id = send_msg(t, chat_id, &mut msg).await?;
+        let msg = Message::load_from_db(t, msg_id).await?;
         assert_eq!(msg.download_state(), DownloadState::Done);
 
         for s in &[
@@ -393,17 +395,15 @@ mod tests {
             DownloadState::Done,
             DownloadState::Done,
         ] {
-            msg_id.update_download_state(&t, *s).await?;
-            let msg = Message::load_from_db(&t, msg_id).await?;
+            msg_id.update_download_state(t, *s).await?;
+            let msg = Message::load_from_db(t, msg_id).await?;
             assert_eq!(msg.download_state(), *s);
         }
         t.sql
             .execute("DELETE FROM msgs WHERE id=?", (msg_id,))
             .await?;
         // Nothing to do is ok.
-        msg_id
-            .update_download_state(&t, DownloadState::Done)
-            .await?;
+        msg_id.update_download_state(t, DownloadState::Done).await?;
 
         Ok(())
     }

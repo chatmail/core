@@ -1,8 +1,8 @@
 Subject: webxdc object attached
-Message-ID: 12345@example.org
+Message-ID: 12345@example.net
 Date: Fri, 03 Dec 2021 10:00:27 +0000
 To: alice@example.org
-From: bob@example.org
+From: bob@example.net
 Chat-Version: 1.0
 Content-Type: multipart/mixed; boundary="==BREAK=="
 

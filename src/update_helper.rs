@@ -87,8 +87,8 @@ impl Params {
 mod tests {
     use super::*;
     use crate::chat::Chat;
-    use crate::receive_imf::receive_imf;
-    use crate::test_utils::TestContext;
+    use crate::test_utils;
+    use crate::test_utils::TestContextManager;
     use crate::tools::time;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -115,37 +115,39 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_out_of_order_subject() -> Result<()> {
-        let t = TestContext::new_alice().await;
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
 
-        receive_imf(
-            &t,
-            b"From: Bob Authname <bob@example.org>\n\
-                 To: alice@example.org\n\
-                 Subject: updated subject\n\
-                 Message-ID: <msg2@example.org>\n\
-                 Chat-Version: 1.0\n\
-                 Date: Sun, 22 Mar 2021 23:37:57 +0000\n\
-                 \n\
-                 second message\n",
-            false,
+        test_utils::receive_encrypted_imf(
+            alice,
+            bob,
+            b"From: Bob Authname <bob@example.net>\r\n\
+              To: alice@example.org\r\n\
+              Subject: updated subject\r\n\
+              Message-ID: <msg2@example.org>\r\n\
+              Chat-Version: 1.0\r\n\
+              Date: Sun, 22 Mar 2021 23:37:57 +0000\r\n\
+              \r\n\
+              second message\r\n",
         )
         .await?;
-        receive_imf(
-            &t,
-            b"From: Bob Authname <bob@example.org>\n\
-                 To: alice@example.org\n\
-                 Subject: original subject\n\
-                 Message-ID: <msg1@example.org>\n\
-                 Chat-Version: 1.0\n\
-                 Date: Sun, 22 Mar 2021 22:37:57 +0000\n\
-                 \n\
-                 first message\n",
-            false,
+        test_utils::receive_encrypted_imf(
+            alice,
+            bob,
+            b"From: Bob Authname <bob@example.net>\r\n\
+              To: alice@example.org\r\n\
+              Subject: original subject\r\n\
+              Message-ID: <msg1@example.org>\r\n\
+              Chat-Version: 1.0\r\n\
+              Date: Sun, 22 Mar 2021 22:37:57 +0000\r\n\
+              \r\n\
+              first message\r\n",
         )
         .await?;
 
-        let msg = t.get_last_msg().await;
-        let chat = Chat::load_from_db(&t, msg.chat_id).await?;
+        let msg = alice.get_last_msg().await;
+        let chat = Chat::load_from_db(alice, msg.chat_id).await?;
         assert_eq!(
             chat.param.get(Param::LastSubject).unwrap(),
             "updated subject"

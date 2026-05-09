@@ -335,18 +335,17 @@ impl Chat {
 
 #[cfg(test)]
 mod tests {
-    use deltachat_contact_tools::ContactAddress;
-
     use super::*;
     use crate::chat::{forward_msgs, get_chat_msgs, marknoticed_chat, send_text_msg};
     use crate::chatlist::Chatlist;
     use crate::config::Config;
-    use crate::contact::{Contact, Origin};
+    use crate::contact::Contact;
     use crate::key::{load_self_public_key, load_self_secret_key};
     use crate::message::{MessageState, Viewtype, delete_msgs, markseen_msgs};
     use crate::pgp::{SeipdVersion, pk_encrypt};
     use crate::receive_imf::receive_imf;
     use crate::sql::housekeeping;
+    use crate::test_utils;
     use crate::test_utils::E2EE_INFO_MSGS;
     use crate::test_utils::TestContext;
     use crate::test_utils::TestContextManager;
@@ -386,59 +385,54 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_receive_reaction() -> Result<()> {
-        let alice = TestContext::new_alice().await;
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
 
         // Alice receives BCC-self copy of a message sent to Bob.
-        receive_imf(
-            &alice,
-            "To: bob@example.net\n\
-From: alice@example.org\n\
-Date: Today, 29 February 2021 00:00:00 -800\n\
-Message-ID: 12345@example.org\n\
-Subject: Meeting\n\
-\n\
-Can we chat at 1pm pacific, today?"
-                .as_bytes(),
-            false,
+        let encrypted_message = test_utils::encrypt_raw_message(
+            alice,
+            &[alice, bob],
+            b"To: bob@example.net\r\n\
+From: alice@example.org\r\n\
+Date: Today, 29 February 2021 00:00:00 -800\r\n\
+Message-ID: 12345@example.org\r\n\
+Subject: Meeting\r\n\
+\r\n\
+Can we chat at 1pm pacific, today?",
         )
         .await?;
+        receive_imf(alice, encrypted_message.as_bytes(), false).await?;
         let msg = alice.get_last_msg().await;
         assert_eq!(msg.state, MessageState::OutDelivered);
-        let reactions = get_msg_reactions(&alice, msg.id).await?;
+        let reactions = get_msg_reactions(alice, msg.id).await?;
         let contacts = reactions.contacts();
         assert_eq!(contacts.len(), 0);
 
-        let bob_id = Contact::add_or_lookup(
-            &alice,
-            "",
-            &ContactAddress::new("bob@example.net")?,
-            Origin::ManuallyCreated,
-        )
-        .await?
-        .0;
+        let bob_id = alice.add_or_lookup_contact_id(bob).await;
         let bob_reaction = reactions.get(bob_id);
         assert!(bob_reaction.is_empty()); // Bob has not reacted to message yet.
 
         // Alice receives reaction to her message from Bob.
-        receive_imf(
-            &alice,
-            "To: alice@example.org\n\
-From: bob@example.net\n\
-Date: Today, 29 February 2021 00:00:10 -800\n\
-Message-ID: 56789@example.net\n\
-In-Reply-To: 12345@example.org\n\
-Subject: Meeting\n\
-Mime-Version: 1.0 (1.0)\n\
-Content-Type: text/plain; charset=utf-8\n\
-Content-Disposition: reaction\n\
-\n\
+        test_utils::receive_encrypted_imf(
+            alice,
+            bob,
+            "To: alice@example.org\r\n\
+From: bob@example.net\r\n\
+Date: Today, 29 February 2021 00:00:10 -800\r\n\
+Message-ID: 56789@example.net\r\n\
+In-Reply-To: 12345@example.org\r\n\
+Subject: Meeting\r\n\
+Mime-Version: 1.0 (1.0)\r\n\
+Content-Type: text/plain; charset=utf-8\r\n\
+Content-Disposition: reaction\r\n\
+\r\n\
 \u{1F44D}"
                 .as_bytes(),
-            false,
         )
         .await?;
 
-        let reactions = get_msg_reactions(&alice, msg.id).await?;
+        let reactions = get_msg_reactions(alice, msg.id).await?;
         assert_eq!(reactions.to_string(), "👍1");
 
         let contacts = reactions.contacts();
@@ -451,8 +445,9 @@ Content-Disposition: reaction\n\
         assert_eq!(bob_reaction.as_str(), "👍");
 
         // Alice receives reaction to her message from Bob with a footer.
-        receive_imf(
-            &alice,
+        test_utils::receive_encrypted_imf(
+            alice,
+            bob,
             "To: alice@example.org\n\
 From: bob@example.net\n\
 Date: Today, 29 February 2021 00:00:10 -800\n\
@@ -469,16 +464,16 @@ Content-Disposition: reaction\n\
 _______________________________________________\n\
 Here's my footer -- bob@example.net"
                 .as_bytes(),
-            false,
         )
         .await?;
 
-        let reactions = get_msg_reactions(&alice, msg.id).await?;
+        let reactions = get_msg_reactions(alice, msg.id).await?;
         assert_eq!(reactions.to_string(), "😀1");
 
         // Alice receives a message with reaction to her message from Bob.
-        let msg_bob = receive_imf(
-            &alice,
+        let msg_bob = test_utils::receive_encrypted_imf(
+            alice,
+            bob,
             "To: alice@example.org\n\
 From: bob@example.net\n\
 Date: Today, 29 February 2021 00:00:10 -800\n\
@@ -502,18 +497,16 @@ Content-Disposition: reaction\n\
 \n\
 --YiEDa0DAkWCtVeE4--"
                 .as_bytes(),
-            false,
         )
-        .await?
-        .unwrap();
-        let msg_bob = Message::load_from_db(&alice, msg_bob.msg_ids[0]).await?;
+        .await?;
+        let msg_bob = Message::load_from_db(alice, msg_bob.msg_ids[0]).await?;
         assert_eq!(msg_bob.from_id, bob_id);
         assert_eq!(msg_bob.chat_id, msg.chat_id);
         assert_eq!(msg_bob.viewtype, Viewtype::Text);
         assert_eq!(msg_bob.state, MessageState::InFresh);
         assert_eq!(msg_bob.hidden, false);
         assert_eq!(msg_bob.text, "Reply + reaction");
-        let reactions = get_msg_reactions(&alice, msg.id).await?;
+        let reactions = get_msg_reactions(alice, msg.id).await?;
         assert_eq!(reactions.to_string(), "👍1");
 
         Ok(())

@@ -998,33 +998,18 @@ async fn test_selfavatar_changed_event() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_last_seen() -> Result<()> {
-    let alice = TestContext::new_alice().await;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
 
-    let (contact_id, _) = Contact::add_or_lookup(
-        &alice,
-        "Bob",
-        &ContactAddress::new("bob@example.net")?,
-        Origin::ManuallyCreated,
-    )
-    .await?;
-    let contact = Contact::get_by_id(&alice, contact_id).await?;
+    let contact = alice.add_or_lookup_contact(bob).await;
     assert_eq!(contact.last_seen(), 0);
 
-    let mime = br#"Subject: Hello
-Message-ID: message@example.net
-To: Alice <alice@example.org>
-From: Bob <bob@example.net>
-Content-Type: text/plain; charset=utf-8; format=flowed; delsp=no
-Chat-Version: 1.0
-Date: Sun, 22 Mar 2020 22:37:55 +0000
-
-Hi."#;
-    receive_imf(&alice, mime, false).await?;
-    let msg = alice.get_last_msg().await;
+    let msg = tcm.send_recv(bob, alice, "Hi.").await;
 
     let timestamp = msg.get_timestamp();
     assert!(timestamp > 0);
-    let contact = Contact::get_by_id(&alice, contact_id).await?;
+    let contact = Contact::get_by_id(alice, contact.id).await?;
     assert_eq!(contact.last_seen(), timestamp);
 
     Ok(())

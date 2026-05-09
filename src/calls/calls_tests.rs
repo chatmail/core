@@ -4,6 +4,7 @@ use crate::config::Config;
 use crate::constants::DC_CHAT_ID_TRASH;
 use crate::message::MessageState;
 use crate::receive_imf::receive_imf;
+use crate::test_utils;
 use crate::test_utils::{TestContext, TestContextManager};
 
 struct CallSetup {
@@ -634,20 +635,23 @@ async fn test_forward_call() -> Result<()> {
 async fn test_end_text_call() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
 
-    let received1 = receive_imf(
-        alice,
-        b"From: bob@example.net\n\
-        To: alice@example.org\n\
-        Message-ID: <first@example.net>\n\
-        Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
-        Chat-Version: 1.0\n\
-        \n\
-        Hello\n",
-        false,
+    let encrypted_message = test_utils::encrypt_raw_message(
+        bob,
+        &[alice],
+        b"From: bob@example.net\r\n\
+        To: alice@example.org\r\n\
+        Message-ID: <first@example.net>\r\n\
+        Date: Sun, 22 Mar 2020 22:37:57 +0000\r\n\
+        Chat-Version: 1.0\r\n\
+        \r\n\
+        Hello\r\n",
     )
-    .await?
-    .unwrap();
+    .await?;
+    let received1 = receive_imf(alice, encrypted_message.as_bytes(), false)
+        .await?
+        .unwrap();
     assert_eq!(received1.msg_ids.len(), 1);
     let msg = Message::load_from_db(alice, received1.msg_ids[0])
         .await
@@ -656,21 +660,23 @@ async fn test_end_text_call() -> Result<()> {
 
     // Receiving "Call ended" message that refers
     // to the text message does not result in an error.
-    let received2 = receive_imf(
-        alice,
-        b"From: bob@example.net\n\
-        To: alice@example.org\n\
-        Message-ID: <second@example.net>\n\
-        Date: Sun, 22 Mar 2020 23:37:57 +0000\n\
-        In-Reply-To: <first@example.net>\n\
-        Chat-Version: 1.0\n\
-        Chat-Content: call-ended\n\
-        \n\
-        Call ended\n",
-        false,
+    let encrypted_message2 = test_utils::encrypt_raw_message(
+        bob,
+        &[alice],
+        b"From: bob@example.net\r\n\
+        To: alice@example.org\r\n\
+        Message-ID: <second@example.net>\r\n\
+        Date: Sun, 22 Mar 2020 23:37:57 +0000\r\n\
+        In-Reply-To: <first@example.net>\r\n\
+        Chat-Version: 1.0\r\n\
+        Chat-Content: call-ended\r\n\
+        \r\n\
+        Call ended\r\n",
     )
-    .await?
-    .unwrap();
+    .await?;
+    let received2 = receive_imf(alice, encrypted_message2.as_bytes(), false)
+        .await?
+        .unwrap();
     assert_eq!(received2.msg_ids.len(), 1);
     assert_eq!(received2.chat_id, DC_CHAT_ID_TRASH);
 

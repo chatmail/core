@@ -42,12 +42,25 @@ impl EncryptHelper {
         compress: bool,
         seipd_version: SeipdVersion,
     ) -> Result<String> {
-        let sign_key = load_self_secret_key(context).await?;
-
         let mut raw_message = Vec::new();
         let cursor = Cursor::new(&mut raw_message);
         mail_to_encrypt.clone().write_part(cursor).ok();
 
+        let ctext = self
+            .encrypt_raw(context, keyring, raw_message, compress, seipd_version)
+            .await?;
+        Ok(ctext)
+    }
+
+    pub async fn encrypt_raw(
+        self,
+        context: &Context,
+        keyring: Vec<SignedPublicKey>,
+        raw_message: Vec<u8>,
+        compress: bool,
+        seipd_version: SeipdVersion,
+    ) -> Result<String> {
+        let sign_key = load_self_secret_key(context).await?;
         let ctext =
             pgp::pk_encrypt(raw_message, keyring, sign_key, compress, seipd_version).await?;
 

@@ -12,7 +12,7 @@ use crate::{
     message::{MessageState, MessengerMessage},
     receive_imf::receive_imf,
     securejoin::QrInvite,
-    test_utils::{TestContext, TestContextManager},
+    test_utils::{self, TestContext, TestContextManager},
     tools::time,
 };
 
@@ -1503,96 +1503,89 @@ Some reply
 // Test that WantsMdn parameter is not set on outgoing messages.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_outgoing_wants_mdn() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-    let bob = TestContext::new_bob().await;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
+    let bob = &tcm.bob().await;
 
-    let raw = br"Date: Thu, 28 Jan 2021 00:26:57 +0000
-Chat-Version: 1.0\n\
-Message-ID: <foobarbaz@example.org>
-To: Bob <bob@example.org>
-From: Alice <alice@example.org>
-Subject: subject
-Chat-Disposition-Notification-To: alice@example.org
-
-Message.
-";
+    let chat_id = alice.create_chat(bob).await.id;
+    let sent = alice.send_text(chat_id, "Message.").await;
 
     // Bob receives message.
-    receive_imf(&bob, raw, false).await?;
-    let msg = bob.get_last_msg().await;
+    let bob_msg = bob.recv_msg(&sent).await;
     // Message is incoming.
-    assert!(msg.param.get_bool(Param::WantsMdn).unwrap());
+    assert!(bob_msg.param.get_bool(Param::WantsMdn).unwrap());
 
     // Alice receives copy-to-self.
-    receive_imf(&alice, raw, false).await?;
-    let msg = alice.get_last_msg().await;
+    let alice2_msg = alice2.recv_msg(&sent).await;
     // Message is outgoing, don't send read receipt to self.
-    assert!(msg.param.get_bool(Param::WantsMdn).is_none());
+    assert!(alice2_msg.param.get_bool(Param::WantsMdn).is_none());
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_ignore_read_receipt_to_self() -> Result<()> {
-    let alice = TestContext::new_alice().await;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
 
     // Alice receives BCC-self copy of a message sent to Bob.
-    receive_imf(
-        &alice,
-        "Received: (Postfix, from userid 1000); Mon, 4 Dec 2006 14:51:39 +0100 (CET)\n\
-                 From: alice@example.org\n\
-                 To: bob@example.net\n\
-                 Subject: foo\n\
-                 Message-ID: first@example.com\n\
-                 Chat-Version: 1.0\n\
-                 Chat-Disposition-Notification-To: alice@example.org\n\
-                 Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
-                 \n\
-                 hello\n"
+    let encrypted_message = test_utils::encrypt_raw_message(
+        alice,
+        &[bob],
+        "From: alice@example.org\r\n\
+         To: bob@example.net\r\n\
+         Subject: foo\r\n\
+         Message-ID: first@example.com\r\n\
+         Chat-Version: 1.0\r\n\
+         Chat-Disposition-Notification-To: alice@example.org\r\n\
+         Date: Sun, 22 Mar 2020 22:37:57 +0000\r\n\
+         \r\n\
+         hello\r\n"
             .as_bytes(),
-        false,
     )
     .await?;
+    receive_imf(alice, encrypted_message.as_bytes(), false).await?;
     let msg = alice.get_last_msg().await;
     assert_eq!(msg.state, MessageState::OutDelivered);
 
-    // Due to a bug in the old version running on the other device, Alice receives a read
-    // receipt from self.
-    receive_imf(
-            &alice,
-                "Received: (Postfix, from userid 1000); Mon, 4 Dec 2006 14:51:39 +0100 (CET)\n\
-                 From: alice@example.org\n\
-                 To: alice@example.org\n\
-                 Subject: message opened\n\
-                 Date: Sun, 22 Mar 2020 23:37:57 +0000\n\
-                 Chat-Version: 1.0\n\
-                 Message-ID: second@example.com\n\
-                 Content-Type: multipart/report; report-type=disposition-notification; boundary=\"SNIPP\"\n\
-                 \n\
-                 \n\
-                 --SNIPP\n\
-                 Content-Type: text/plain; charset=utf-8\n\
-                 \n\
-                 Read receipts do not guarantee sth. was read.\n\
-                 \n\
-                 \n\
-                 --SNIPP\n\
-                 Content-Type: message/disposition-notification\n\
-                 \n\
-                 Original-Recipient: rfc822;bob@example.com\n\
-                 Final-Recipient: rfc822;bob@example.com\n\
-                 Original-Message-ID: <first@example.com>\n\
-                 Disposition: manual-action/MDN-sent-automatically; displayed\n\
-                 \n\
-                 \n\
-                 --SNIPP--"
-            .as_bytes(),
-            false,
-        )
-        .await?;
+    // Alice receives a read receipt from self.
+    //
+    // This should mark the message as seen, i.e. not counted as fresh,
+    // but not "read" (having double checkmark in the UI).
+    let encrypted_message = test_utils::encrypt_raw_message(
+        alice,
+        &[alice],
+                "From: alice@example.org\r\n\
+                 To: alice@example.org\r\n\
+                 Subject: message opened\r\n\
+                 Date: Sun, 22 Mar 2020 23:37:57 +0000\r\n\
+                 Chat-Version: 1.0\r\n\
+                 Message-ID: second@example.com\r\n\
+                 Content-Type: multipart/report; report-type=disposition-notification; boundary=\"SNIPP\"\r\n\
+                 \r\n\
+                 \r\n\
+                 --SNIPP\r\n\
+                 Content-Type: text/plain; charset=utf-8\r\n\
+                 \r\n\
+                 Read receipts do not guarantee sth. was read.\r\n\
+                 \r\n\
+                 \r\n\
+                 --SNIPP\r\n\
+                 Content-Type: message/disposition-notification\r\n\
+                 \r\n\
+                 Original-Recipient: rfc822;bob@example.com\r\n\
+                 Final-Recipient: rfc822;bob@example.com\r\n\
+                 Original-Message-ID: <first@example.com>\r\n\
+                 Disposition: manual-action/MDN-sent-automatically; displayed\r\n\
+                 \r\n\
+                 \r\n\
+                 --SNIPP--".as_bytes()).await?;
+    receive_imf(alice, encrypted_message.as_bytes(), false).await?;
 
     // Check that the state has not changed to `MessageState::OutMdnRcvd`.
-    let msg = Message::load_from_db(&alice, msg.id).await?;
+    let msg = Message::load_from_db(alice, msg.id).await?;
     assert_eq!(msg.state, MessageState::OutDelivered);
 
     Ok(())
@@ -1604,7 +1597,8 @@ async fn test_ignore_read_receipt_to_self() -> Result<()> {
 /// recognize it as MDN nevertheless to avoid displaying it in the chat as normal message.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_ms_exchange_mdn() -> Result<()> {
-    let t = TestContext::new_alice().await;
+    let mut tcm = TestContextManager::new();
+    let t = tcm.alice().await;
 
     let original =
         include_bytes!("../../test-data/message/ms_exchange_report_original_message.eml");
@@ -1700,17 +1694,24 @@ Content-Disposition: reaction\n\
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_jpeg_as_application_octet_stream() -> Result<()> {
-    let context = TestContext::new_alice().await;
-    let raw = include_bytes!("../../test-data/message/jpeg-as-application-octet-stream.eml");
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let encrypted_msg = test_utils::encrypt_raw_message(
+        alice,
+        &[bob],
+        include_bytes!("../../test-data/message/jpeg-as-application-octet-stream.eml"),
+    )
+    .await?;
 
-    let msg = MimeMessage::from_bytes(&context.ctx, &raw[..])
+    let msg = MimeMessage::from_bytes(bob, encrypted_msg.as_bytes())
         .await
         .unwrap();
     assert_eq!(msg.parts.len(), 1);
     assert_eq!(msg.parts[0].typ, Viewtype::Image);
 
-    receive_imf(&context, &raw[..], false).await?;
-    let msg = context.get_last_msg().await;
+    receive_imf(alice, encrypted_msg.as_bytes(), false).await?;
+    let msg = alice.get_last_msg().await;
     assert_eq!(msg.get_viewtype(), Viewtype::Image);
 
     Ok(())
@@ -2065,19 +2066,24 @@ async fn test_receive_signed_only() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_huge_image_becomes_file() -> Result<()> {
-    let t = TestContext::new_alice().await;
-    let msg_id = receive_imf(
-        &t,
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let encrypted_msg = test_utils::encrypt_raw_message(
+        bob,
+        &[alice],
         include_bytes!("../../test-data/message/image_huge_64M.eml"),
-        false,
     )
-    .await?
-    .unwrap()
-    .msg_ids[0];
-    let msg = Message::load_from_db(&t.ctx, msg_id).await.unwrap();
+    .await?;
+
+    let msg_id = receive_imf(alice, encrypted_msg.as_bytes(), false)
+        .await?
+        .unwrap()
+        .msg_ids[0];
+    let msg = Message::load_from_db(alice, msg_id).await.unwrap();
     // Huge image should be treated as file:
     assert_eq!(msg.viewtype, Viewtype::File);
-    assert!(msg.get_file(&t).is_some());
+    assert!(msg.get_file(alice).is_some());
     assert_eq!(msg.get_filename().unwrap(), "huge_image.png");
     assert_eq!(msg.get_filemime().unwrap(), "image/png");
     // File has no width or height
@@ -2088,19 +2094,24 @@ async fn test_huge_image_becomes_file() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_4k_image_stays_image() -> Result<()> {
-    let t = TestContext::new_alice().await;
-    let msg_id = receive_imf(
-        &t,
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let encrypted_msg = test_utils::encrypt_raw_message(
+        bob,
+        &[alice],
         include_bytes!("../../test-data/message/image_4k.eml"),
-        false,
     )
-    .await?
-    .unwrap()
-    .msg_ids[0];
-    let msg = Message::load_from_db(&t.ctx, msg_id).await.unwrap();
+    .await?;
+
+    let msg_id = receive_imf(alice, encrypted_msg.as_bytes(), false)
+        .await?
+        .unwrap()
+        .msg_ids[0];
+    let msg = Message::load_from_db(alice, msg_id).await.unwrap();
     // 4K image should be treated as image:
     assert_eq!(msg.viewtype, Viewtype::Image);
-    assert!(msg.get_file(&t).is_some());
+    assert!(msg.get_file(alice).is_some());
     assert_eq!(msg.get_filename().unwrap(), "4k_image.png");
     assert_eq!(msg.get_filemime().unwrap(), "image/png");
     assert_eq!(msg.param.get_int(Param::Width).unwrap_or_default(), 3840);
