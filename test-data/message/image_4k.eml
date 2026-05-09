@@ -1,5 +1,4 @@
-Received: (Postfix, from userid 1000); Mon, 4 Dec 2006 14:51:39 +0100 (CET)
-From: Test Sender <sender@testrun.org>
+From: Test Sender <bob@example.net>
 Subject: Large image test
 To: alice@example.org
 Message-ID: <big-image-test@testrun.org>

@@ -11,8 +11,8 @@ use crate::chat::{
 use crate::chatlist::Chatlist;
 use crate::config::Config;
 use crate::ephemeral;
-use crate::receive_imf::receive_imf;
 use crate::securejoin::get_securejoin_qr;
+use crate::test_utils;
 use crate::test_utils::{E2EE_INFO_MSGS, TestContext, TestContextManager};
 use crate::tools::{self, SystemTime};
 use crate::{message, sql};
@@ -257,24 +257,26 @@ async fn test_resend_webxdc_instance_and_info() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_receive_webxdc_instance() -> Result<()> {
-    let t = TestContext::new_alice().await;
-    receive_imf(
-        &t,
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    test_utils::receive_encrypted_imf(
+        alice,
+        bob,
         include_bytes!("../../test-data/message/webxdc_good_extension.eml"),
-        false,
     )
     .await?;
-    let instance = t.get_last_msg().await;
+    let instance = alice.get_last_msg().await;
     assert_eq!(instance.viewtype, Viewtype::Webxdc);
     assert_eq!(instance.get_filename().unwrap(), "minimal.xdc");
 
-    receive_imf(
-        &t,
+    test_utils::receive_encrypted_imf(
+        alice,
+        bob,
         include_bytes!("../../test-data/message/webxdc_bad_extension.eml"),
-        false,
     )
     .await?;
-    let instance = t.get_last_msg().await;
+    let instance = alice.get_last_msg().await;
     assert_eq!(instance.viewtype, Viewtype::File); // we require the correct extension, only a mime type is not sufficient
     assert_eq!(instance.get_filename().unwrap(), "index.html");
 
@@ -682,13 +684,14 @@ async fn expect_status_update_event(t: &TestContext, instance_id: MsgId) -> Resu
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_send_webxdc_status_update() -> Result<()> {
-    let alice = TestContext::new_alice().await;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
     alice.set_config_bool(Config::BccSelf, true).await?;
-    let bob = TestContext::new_bob().await;
+    let bob = &tcm.bob().await;
 
     // Alice sends an webxdc instance and a status update
-    let alice_chat = alice.create_email_chat(&bob).await;
-    let alice_instance = send_webxdc_instance(&alice, alice_chat.id).await?;
+    let alice_chat = alice.create_email_chat(bob).await;
+    let alice_instance = send_webxdc_instance(alice, alice_chat.id).await?;
     let sent1 = &alice.pop_sent_msg().await;
     assert_eq!(alice_instance.viewtype, Viewtype::Webxdc);
     assert!(!sent1.payload().contains("report-type=status-update"));
@@ -697,7 +700,7 @@ async fn test_send_webxdc_status_update() -> Result<()> {
         .send_webxdc_status_update(alice_instance.id, r#"{"payload" : {"foo":"bar"}}"#)
         .await?;
     alice.flush_status_updates().await?;
-    expect_status_update_event(&alice, alice_instance.id).await?;
+    expect_status_update_event(alice, alice_instance.id).await?;
     let sent2 = &alice.pop_sent_msg().await;
     let alice_update = sent2.load_from_db().await;
     assert!(alice_update.hidden);
@@ -706,10 +709,10 @@ async fn test_send_webxdc_status_update() -> Result<()> {
     assert_eq!(alice_update.text, BODY_DESCR.to_string());
     assert_eq!(alice_update.chat_id, alice_instance.chat_id);
     assert_eq!(
-        alice_update.parent(&alice).await?.unwrap().id,
+        alice_update.parent(alice).await?.unwrap().id,
         alice_instance.id
     );
-    assert_eq!(alice_chat.id.get_msg_cnt(&alice).await?, 1);
+    assert_eq!(alice_chat.id.get_msg_cnt(alice).await?, 1);
     assert!(sent2.payload().contains("report-type=status-update"));
     assert!(sent2.payload().contains(BODY_DESCR));
     assert_eq!(
@@ -735,12 +738,12 @@ async fn test_send_webxdc_status_update() -> Result<()> {
     let bob_chat_id = bob_instance.chat_id;
     assert_eq!(bob_instance.rfc724_mid, alice_instance.rfc724_mid);
     assert_eq!(bob_instance.viewtype, Viewtype::Webxdc);
-    assert_eq!(bob_chat_id.get_msg_cnt(&bob).await?, 1);
+    assert_eq!(bob_chat_id.get_msg_cnt(bob).await?, 1);
 
     let bob_received_update = bob.recv_msg_opt(sent2).await;
     assert!(bob_received_update.is_none());
-    expect_status_update_event(&bob, bob_instance.id).await?;
-    assert_eq!(bob_chat_id.get_msg_cnt(&bob).await?, 1);
+    expect_status_update_event(bob, bob_instance.id).await?;
+    assert_eq!(bob_chat_id.get_msg_cnt(bob).await?, 1);
 
     assert_eq!(
         bob.get_webxdc_status_updates(bob_instance.id, StatusUpdateSerial(0))
@@ -749,19 +752,19 @@ async fn test_send_webxdc_status_update() -> Result<()> {
     );
 
     // Alice has a second device and also receives messages there
-    let alice2 = TestContext::new_alice().await;
+    let alice2 = &tcm.alice().await;
     alice2.recv_msg(sent1).await;
     alice2.recv_msg_trash(sent2).await;
     let alice2_instance = alice2.get_last_msg().await;
     let alice2_chat_id = alice2_instance.chat_id;
     assert_eq!(alice2_instance.viewtype, Viewtype::Webxdc);
-    assert_eq!(alice2_chat_id.get_msg_cnt(&alice2).await?, 1);
+    assert_eq!(alice2_chat_id.get_msg_cnt(alice2).await?, 1);
 
     // To support the second device, Alice has enabled bcc_self and will receive their own messages;
     // these messages, however, should be ignored
     alice.recv_msg_opt(sent1).await;
     alice.recv_msg_opt(sent2).await;
-    assert_eq!(alice_chat.id.get_msg_cnt(&alice).await?, 1);
+    assert_eq!(alice_chat.id.get_msg_cnt(alice).await?, 1);
     assert_eq!(
         alice
             .get_webxdc_status_updates(alice_instance.id, StatusUpdateSerial(0))
@@ -983,7 +986,7 @@ async fn test_pop_status_update() -> Result<()> {
 async fn test_draft_and_send_webxdc_status_update() -> Result<()> {
     let alice = TestContext::new_alice().await;
     let bob = TestContext::new_bob().await;
-    let alice_chat_id = alice.create_email_chat(&bob).await.id;
+    let alice_chat_id = alice.create_chat(&bob).await.id;
 
     // prepare webxdc instance,
     // status updates are not sent for drafts, therefore send_webxdc_status_update() returns Ok(None)
@@ -1030,8 +1033,6 @@ async fn test_draft_and_send_webxdc_status_update() -> Result<()> {
     let bob_instance = bob.recv_msg(&sent1).await;
     assert_eq!(bob_instance.viewtype, Viewtype::Webxdc);
     assert_eq!(bob_instance.get_filename().unwrap(), "minimal.xdc");
-    assert!(sent1.payload().contains("Content-Type: application/json"));
-    assert!(sent1.payload().contains("status-update.json"));
     assert_eq!(
         bob.get_webxdc_status_updates(bob_instance.id, StatusUpdateSerial(0))
             .await?,
@@ -1557,16 +1558,18 @@ async fn test_webxdc_info_msg_no_cleanup_on_interrupted_series() -> Result<()> {
 // even if they use the deprecated option `request_internet_access` in manifest.toml
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_webxdc_no_internet_access() -> Result<()> {
-    let t = TestContext::new_alice().await;
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let bob = &tcm.bob().await;
     let self_id = t.get_self_chat().await.id;
-    let single_id = t.create_chat_with_contact("bob", "bob@e.com").await.id;
-    let group_id = create_group(&t, "chat").await?;
-    let broadcast_id = create_broadcast(&t, "Channel".to_string()).await?;
+    let single_id = t.create_chat_id(bob).await;
+    let group_id = create_group(t, "chat").await?;
+    let broadcast_id = create_broadcast(t, "Channel".to_string()).await?;
 
     for chat_id in [self_id, single_id, group_id, broadcast_id] {
         for internet_xdc in [true, false] {
             let mut instance = create_webxdc_instance(
-                &t,
+                t,
                 "foo.xdc",
                 if internet_xdc {
                     include_bytes!("../../test-data/webxdc/request-internet-access.xdc")
@@ -1574,14 +1577,14 @@ async fn test_webxdc_no_internet_access() -> Result<()> {
                     include_bytes!("../../test-data/webxdc/minimal.xdc")
                 },
             )?;
-            let instance_id = send_msg(&t, chat_id, &mut instance).await?;
+            let instance_id = send_msg(t, chat_id, &mut instance).await?;
             t.send_webxdc_status_update(
                 instance_id,
                 r#"{"summary":"real summary", "payload": 42}"#,
             )
             .await?;
-            let instance = Message::load_from_db(&t, instance_id).await?;
-            let info = instance.get_webxdc_info(&t).await?;
+            let instance = Message::load_from_db(t, instance_id).await?;
+            let info = instance.get_webxdc_info(t).await?;
             assert_eq!(info.internet_access, false);
         }
     }

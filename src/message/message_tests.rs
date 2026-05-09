@@ -56,28 +56,25 @@ async fn test_get_width_height() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_quote_basic() {
-    let d = TestContext::new().await;
-    let ctx = &d.ctx;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
 
-    ctx.set_config(Config::ConfiguredAddr, Some("self@example.com"))
-        .await
-        .unwrap();
-
-    let chat = d.create_chat_with_contact("", "dest@example.com").await;
+    let chat = alice.create_chat(bob).await;
     let mut msg = Message::new_text("Quoted message".to_string());
 
     // Message has to be sent such that it gets saved to db.
-    chat::send_msg(ctx, chat.id, &mut msg).await.unwrap();
+    chat::send_msg(alice, chat.id, &mut msg).await.unwrap();
     assert!(!msg.rfc724_mid.is_empty());
 
     let mut msg2 = Message::new(Viewtype::Text);
-    msg2.set_quote(ctx, Some(&msg))
+    msg2.set_quote(alice, Some(&msg))
         .await
         .expect("can't set quote");
     assert_eq!(msg2.quoted_text().unwrap(), msg.get_text());
 
     let quoted_msg = msg2
-        .quoted_message(ctx)
+        .quoted_message(alice)
         .await
         .expect("error while retrieving quoted message")
         .expect("quoted message not found");
@@ -139,23 +136,14 @@ async fn test_unencrypted_quote_encrypted_message() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_chat_id() {
     // Alice receives a message that pops up as a contact request
-    let alice = TestContext::new_alice().await;
-    receive_imf(
-        &alice,
-        b"From: Bob <bob@example.com>\n\
-                    To: alice@example.org\n\
-                    Chat-Version: 1.0\n\
-                    Message-ID: <123@example.com>\n\
-                    Date: Fri, 29 Jan 2021 21:37:55 +0000\n\
-                    \n\
-                    hello\n",
-        false,
-    )
-    .await
-    .unwrap();
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let chat_id = bob.create_chat_id(alice).await;
+    let sent = bob.send_text(chat_id, "hello").await;
+    let msg = alice.recv_msg(&sent).await;
 
     // check chat-id of this message
-    let msg = alice.get_last_msg().await;
     assert!(!msg.get_chat_id().is_special());
     assert_eq!(msg.get_text(), "hello".to_string());
 }
@@ -465,7 +453,8 @@ async fn test_get_state() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_is_bot() -> Result<()> {
-    let alice = TestContext::new_alice().await;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
 
     // Alice receives an auto-generated non-chat message.
     //
@@ -473,7 +462,7 @@ async fn test_is_bot() -> Result<()> {
     // in which case the message should be marked as bot-generated,
     // but the contact should not.
     receive_imf(
-        &alice,
+        alice,
         b"From: Claire <claire@example.com>\n\
                     To: alice@example.org\n\
                     Message-ID: <789@example.com>\n\
@@ -487,12 +476,12 @@ async fn test_is_bot() -> Result<()> {
     let msg = alice.get_last_msg().await;
     assert_eq!(msg.get_text(), "hello".to_string());
     assert!(msg.is_bot());
-    let contact = Contact::get_by_id(&alice, msg.from_id).await?;
+    let contact = Contact::get_by_id(alice, msg.from_id).await?;
     assert!(!contact.is_bot());
 
     // Alice receives a message from Bob the bot.
     receive_imf(
-        &alice,
+        alice,
         b"From: Bob <bob@example.com>\n\
                     To: alice@example.org\n\
                     Chat-Version: 1.0\n\
@@ -507,12 +496,12 @@ async fn test_is_bot() -> Result<()> {
     let msg = alice.get_last_msg().await;
     assert_eq!(msg.get_text(), "hello".to_string());
     assert!(msg.is_bot());
-    let contact = Contact::get_by_id(&alice, msg.from_id).await?;
+    let contact = Contact::get_by_id(alice, msg.from_id).await?;
     assert!(contact.is_bot());
 
     // Alice receives a message from Bob who is not the bot anymore.
     receive_imf(
-        &alice,
+        alice,
         b"From: Bob <bob@example.com>\n\
                     To: alice@example.org\n\
                     Chat-Version: 1.0\n\
@@ -526,7 +515,7 @@ async fn test_is_bot() -> Result<()> {
     let msg = alice.get_last_msg().await;
     assert_eq!(msg.get_text(), "hello again".to_string());
     assert!(!msg.is_bot());
-    let contact = Contact::get_by_id(&alice, msg.from_id).await?;
+    let contact = Contact::get_by_id(alice, msg.from_id).await?;
     assert!(!contact.is_bot());
 
     Ok(())
@@ -627,19 +616,15 @@ def hello():
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_delete_msgs_offline() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-    let chat = alice
-        .create_chat_with_contact("Bob", "bob@example.org")
-        .await;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let chat_id = alice.create_chat_id(bob).await;
     let mut msg = Message::new_text("hi".to_string());
-    assert!(
-        chat::send_msg_sync(&alice, chat.id, &mut msg)
-            .await
-            .is_err()
-    );
+    assert!(chat::send_msg_sync(alice, chat_id, &mut msg).await.is_err());
     let stmt = "SELECT COUNT(*) FROM smtp WHERE msg_id=?";
     assert!(alice.sql.exists(stmt, (msg.id,)).await?);
-    delete_msgs(&alice, &[msg.id]).await?;
+    delete_msgs(alice, &[msg.id]).await?;
     assert!(!alice.sql.exists(stmt, (msg.id,)).await?);
 
     Ok(())

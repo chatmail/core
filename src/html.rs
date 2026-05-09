@@ -287,6 +287,7 @@ impl MsgId {
 mod tests {
     use super::*;
     use crate::chat::{self, Chat, forward_msgs, save_msgs};
+
     use crate::constants;
     use crate::contact::ContactId;
     use crate::message::{MessengerMessage, Viewtype};
@@ -520,31 +521,29 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_html_save_msg() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
         // Alice receives a non-delta html-message
-        let alice = TestContext::new_alice().await;
         let chat = alice
             .create_chat_with_contact("", "sender@testrun.org")
             .await;
         let raw = include_bytes!("../test-data/message/text_alt_plain_html.eml");
-        receive_imf(&alice, raw, false).await?;
+        receive_imf(alice, raw, false).await?;
         let msg = alice.get_last_msg_in(chat.get_id()).await;
 
         // Alice saves the message
         let self_chat = alice.get_self_chat().await;
-        save_msgs(&alice, &[msg.id]).await?;
+        save_msgs(alice, &[msg.id]).await?;
         let saved_msg = alice.get_last_msg_in(self_chat.get_id()).await;
         assert_ne!(saved_msg.id, msg.id);
-        assert_eq!(
-            saved_msg.get_original_msg_id(&alice).await?.unwrap(),
-            msg.id
-        );
+        assert_eq!(saved_msg.get_original_msg_id(alice).await?.unwrap(), msg.id);
         assert!(!saved_msg.is_forwarded()); // UI should not flag "saved messages" as "forwarded"
         assert_ne!(saved_msg.get_from_id(), ContactId::SELF);
         assert_eq!(saved_msg.get_from_id(), msg.get_from_id());
         assert_eq!(saved_msg.is_dc_message, MessengerMessage::No);
         assert!(saved_msg.get_text().contains("this is plain"));
         assert!(saved_msg.has_html());
-        let html = saved_msg.get_id().get_html(&alice).await?.unwrap();
+        let html = saved_msg.get_id().get_html(alice).await?.unwrap();
         assert!(html.contains("this is <b>html</b>"));
 
         Ok(())
@@ -618,18 +617,19 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_cp1252_html() -> Result<()> {
-        let t = TestContext::new_alice().await;
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
         receive_imf(
-            &t,
+            alice,
             include_bytes!("../test-data/message/cp1252-html.eml"),
             false,
         )
         .await?;
-        let msg = t.get_last_msg().await;
+        let msg = alice.get_last_msg().await;
         assert_eq!(msg.viewtype, Viewtype::Text);
         assert!(msg.text.contains("foo bar ä ö ü ß"));
         assert!(msg.has_html());
-        let html = msg.get_id().get_html(&t).await?.unwrap();
+        let html = msg.get_id().get_html(alice).await?.unwrap();
         println!("{html}");
         assert!(html.contains("foo bar ä ö ü ß"));
         Ok(())

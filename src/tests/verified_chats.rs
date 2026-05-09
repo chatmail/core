@@ -13,6 +13,7 @@ use crate::mimeparser::SystemMessage;
 use crate::receive_imf::receive_imf;
 use crate::securejoin::{get_securejoin_qr, join_securejoin};
 use crate::stock_str;
+use crate::test_utils;
 use crate::test_utils::{
     E2EE_INFO_MSGS, TestContext, TestContextManager, get_chat_msg, mark_as_verified,
 };
@@ -172,32 +173,32 @@ async fn test_missing_key_reexecute_securejoin() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_degrade_verified_oneonone_chat() -> Result<()> {
     let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-    let bob = tcm.bob().await;
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
 
-    mark_as_verified(&alice, &bob).await;
+    mark_as_verified(alice, bob).await;
 
-    let alice_chat = alice.create_chat(&bob).await;
+    let alice_chat = alice.create_chat(bob).await;
 
     receive_imf(
-        &alice,
-        b"From: Bob <bob@example.net>\n\
-          To: alice@example.org\n\
-          Message-ID: <1234-2@example.org>\n\
-          \n\
-          hello\n",
+        alice,
+        b"From: Bob <bob@example.net>\r\n\
+          To: alice@example.org\r\n\
+          Message-ID: <1234-2@example.net>\r\n\
+          \r\n\
+          hello\r\n",
         false,
     )
     .await?;
 
-    let msg0 = get_chat_msg(&alice, alice_chat.id, 0, 1).await;
-    let enabled = stock_str::messages_e2ee_info_msg(&alice);
+    let msg0 = get_chat_msg(alice, alice_chat.id, 0, 1).await;
+    let enabled = stock_str::messages_e2ee_info_msg(alice);
     assert_eq!(msg0.text, enabled);
     assert_eq!(msg0.param.get_cmd(), SystemMessage::ChatE2ee);
 
-    let email_chat = alice.get_email_chat(&bob).await;
-    assert!(!email_chat.is_encrypted(&alice).await?);
-    let email_msg = get_chat_msg(&alice, email_chat.id, 0, 1).await;
+    let email_chat = alice.get_email_chat(bob).await;
+    assert!(!email_chat.is_encrypted(alice).await?);
+    let email_msg = get_chat_msg(alice, email_chat.id, 0, 1).await;
     assert_eq!(email_msg.text, "hello".to_string());
     assert!(!email_msg.is_system_message());
 
@@ -209,32 +210,32 @@ async fn test_degrade_verified_oneonone_chat() -> Result<()> {
 /// This test tests that the messages are still in the right order.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_old_message_4() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-    let msg_incoming = receive_imf(
-        &alice,
-        b"From: Bob <bob@example.net>\n\
-          To: alice@example.org\n\
-          Message-ID: <1234-2-3@example.org>\n\
-          Date: Sun, 08 Dec 2019 19:00:27 +0000\n\
-          \n\
-          Thanks, Alice!\n",
-        true,
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let msg_incoming = test_utils::receive_encrypted_imf(
+        alice,
+        bob,
+        b"From: Bob <bob@example.net>\r\n\
+          To: alice@example.org\r\n\
+          Message-ID: <1234-2-3@example.org>\r\n\
+          Date: Sun, 08 Dec 2019 19:00:27 +0000\r\n\
+          \r\n\
+          Thanks, Alice!\r\n",
     )
-    .await?
-    .unwrap();
+    .await?;
 
-    let msg_sent = receive_imf(
-        &alice,
-        b"From: alice@example.org\n\
-          To: Bob <bob@example.net>\n\
-          Message-ID: <1234-2-4@example.org>\n\
-          Date: Sat, 07 Dec 2019 19:00:27 +0000\n\
-          \n\
-          Happy birthday, Bob!\n",
-        true,
+    let msg_sent = test_utils::receive_encrypted_imf(
+        alice,
+        alice,
+        b"From: alice@example.org\r\n\
+          To: Bob <bob@example.net>\r\n\
+          Message-ID: <1234-2-4@example.org>\r\n\
+          Date: Sat, 07 Dec 2019 19:00:27 +0000\r\n\
+          \r\n\
+          Happy birthday, Bob!\r\n",
     )
-    .await?
-    .unwrap();
+    .await?;
 
     // The "Happy birthday" message should be shown first, and then the "Thanks" message
     assert!(msg_sent.sort_timestamp < msg_incoming.sort_timestamp);
@@ -269,17 +270,17 @@ async fn test_mdn_doesnt_disable_verification() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_outgoing_mua_msg() -> Result<()> {
     let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-    let bob = tcm.bob().await;
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
 
-    mark_as_verified(&alice, &bob).await;
-    mark_as_verified(&bob, &alice).await;
+    mark_as_verified(alice, bob).await;
+    mark_as_verified(bob, alice).await;
 
-    tcm.send_recv_accept(&bob, &alice, "Heyho from DC").await;
-    assert_verified(&alice, &bob).await;
+    tcm.send_recv_accept(bob, alice, "Heyho from DC").await;
+    assert_verified(alice, bob).await;
 
     let sent = receive_imf(
-        &alice,
+        alice,
         b"From: alice@example.org\n\
           To: bob@example.net\n\
           \n\
@@ -288,7 +289,7 @@ async fn test_outgoing_mua_msg() -> Result<()> {
     )
     .await?
     .unwrap();
-    tcm.send_recv(&alice, &bob, "Sending with DC again").await;
+    tcm.send_recv(alice, bob, "Sending with DC again").await;
 
     // Unencrypted message from MUA gets into a separate chat.
     // PGP chat gets all encrypted messages.
@@ -296,7 +297,7 @@ async fn test_outgoing_mua_msg() -> Result<()> {
         .golden_test_chat(sent.chat_id, "test_outgoing_mua_msg")
         .await;
     alice
-        .golden_test_chat(alice.get_chat(&bob).await.id, "test_outgoing_mua_msg_pgp")
+        .golden_test_chat(alice.get_chat(bob).await.id, "test_outgoing_mua_msg_pgp")
         .await;
 
     Ok(())

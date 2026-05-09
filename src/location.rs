@@ -871,6 +871,7 @@ mod tests {
     use crate::config::Config;
     use crate::message::MessageState;
     use crate::receive_imf::receive_imf;
+    use crate::test_utils;
     use crate::test_utils::{ExpectedEvents, TestContext, TestContextManager};
     use crate::tools::SystemTime;
 
@@ -939,12 +940,15 @@ mod tests {
     /// Tests that location.kml is hidden.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn receive_location_kml() -> Result<()> {
-        let alice = TestContext::new_alice().await;
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
 
-        receive_imf(
-            &alice,
+        let encrypted_message = test_utils::encrypt_raw_message(
+            bob,
+            &[alice],
             br#"Subject: Hello
-Message-ID: hello@example.net
+Message-ID: <hello@example.net>
 To: Alice <alice@example.org>
 From: Bob <bob@example.net>
 Date: Mon, 20 Dec 2021 00:00:00 +0000
@@ -952,14 +956,15 @@ Chat-Version: 1.0
 Content-Type: text/plain; charset=utf-8; format=flowed; delsp=no
 
 Text message."#,
-            false,
         )
         .await?;
+        receive_imf(alice, encrypted_message.as_bytes(), false).await?;
         let received_msg = alice.get_last_msg().await;
         assert_eq!(received_msg.text, "Text message.");
 
-        receive_imf(
-            &alice,
+        let encrypted_message = test_utils::encrypt_raw_message(
+            bob,
+            &[alice],
             br#"Subject: locations
 MIME-Version: 1.0
 To: <alice@example.org>
@@ -986,16 +991,14 @@ Content-Disposition: attachment; filename="location.kml"
 </Document>
 </kml>
 
---U8BOG8qNXfB0GgLiQ3PKUjlvdIuLRF--"#,
-            false,
-        )
-        .await?;
+--U8BOG8qNXfB0GgLiQ3PKUjlvdIuLRF--"#).await?;
+        receive_imf(alice, encrypted_message.as_bytes(), false).await?;
 
         // Received location message is not visible, last message stays the same.
         let received_msg2 = alice.get_last_msg().await;
         assert_eq!(received_msg2.id, received_msg.id);
 
-        let locations = get_range(&alice, None, None, 0, 0).await?;
+        let locations = get_range(alice, None, None, 0, 0).await?;
         assert_eq!(locations.len(), 1);
         Ok(())
     }
@@ -1003,10 +1006,13 @@ Content-Disposition: attachment; filename="location.kml"
     /// Tests that `location.kml` is not hidden and not seen if it contains a message.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn receive_visible_location_kml() -> Result<()> {
-        let alice = TestContext::new_alice().await;
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
 
-        receive_imf(
-            &alice,
+        let encrypted_message = test_utils::encrypt_raw_message(
+            bob,
+            &[alice],
             br#"Subject: locations
 MIME-Version: 1.0
 To: <alice@example.org>
@@ -1034,16 +1040,15 @@ Content-Disposition: attachment; filename="location.kml"
 </Document>
 </kml>
 
---U8BOG8qNXfB0GgLiQ3PKUjlvdIuLRF--"#,
-            false,
-        )
-        .await?;
+--U8BOG8qNXfB0GgLiQ3PKUjlvdIuLRF--"#).await?;
+
+        receive_imf(alice, encrypted_message.as_bytes(), false).await?;
 
         let received_msg = alice.get_last_msg().await;
         assert_eq!(received_msg.text, "Text message.");
         assert_eq!(received_msg.state, MessageState::InFresh);
 
-        let locations = get_range(&alice, None, None, 0, 0).await?;
+        let locations = get_range(alice, None, None, 0, 0).await?;
         assert_eq!(locations.len(), 1);
         Ok(())
     }

@@ -169,49 +169,54 @@ pub(crate) async fn intercept_get_updates(
 
 #[cfg(test)]
 mod tests {
-    use crate::chat::{ChatId, create_group};
+    use crate::chat::create_group;
     use crate::chatlist::Chatlist;
-    use crate::contact::Contact;
     use crate::message::Message;
-    use crate::test_utils::TestContext;
+    use crate::test_utils::TestContextManager;
     use crate::webxdc::StatusUpdateSerial;
     use crate::{EventType, location};
     use anyhow::Result;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_maps_integration() -> Result<()> {
-        let t = TestContext::new_alice().await;
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
 
         let bytes = include_bytes!("../../test-data/webxdc/mapstest-integration-set.xdc");
-        let file = t.get_blobdir().join("maps.xdc");
+        let file = alice.get_blobdir().join("maps.xdc");
         tokio::fs::write(&file, bytes).await.unwrap();
-        t.set_webxdc_integration(file.to_str().unwrap()).await?;
+        alice.set_webxdc_integration(file.to_str().unwrap()).await?;
 
-        let chatlist = Chatlist::try_load(&t, 0, None, None).await?;
-        let summary = chatlist.get_summary(&t, 0, None).await?;
+        let chatlist = Chatlist::try_load(alice, 0, None, None).await?;
+        let summary = chatlist.get_summary(alice, 0, None).await?;
         assert_eq!(summary.text, "No messages.");
 
         // Integrate Webxdc into a chat with Bob;
         // sending updates is intercepted by integrations and results in setting a POI in core
-        let bob_id = Contact::create(&t, "", "bob@example.net").await?;
-        let bob_chat_id = ChatId::create_for_contact(&t, bob_id).await?;
-        let integration_id = t.init_webxdc_integration(Some(bob_chat_id)).await?.unwrap();
+        let bob_chat_id = alice.create_chat_id(bob).await;
+        let integration_id = alice
+            .init_webxdc_integration(Some(bob_chat_id))
+            .await?
+            .unwrap();
         assert!(!integration_id.is_special());
 
-        let integration = Message::load_from_db(&t, integration_id).await?;
-        let info = integration.get_webxdc_info(&t).await?;
+        let integration = Message::load_from_db(alice, integration_id).await?;
+        let info = integration.get_webxdc_info(alice).await?;
         assert_eq!(info.name, "Maps Test 2");
         assert_eq!(info.internet_access, true);
 
-        t.send_webxdc_status_update(
-            integration_id,
-            r#"{"payload": {"action": "pos", "lat": 11.0, "lng": 12.0, "label": "poi #1"}}"#,
-        )
-        .await?;
-        t.evtracker
+        alice
+            .send_webxdc_status_update(
+                integration_id,
+                r#"{"payload": {"action": "pos", "lat": 11.0, "lng": 12.0, "label": "poi #1"}}"#,
+            )
+            .await?;
+        alice
+            .evtracker
             .get_matching(|evt| matches!(evt, EventType::WebxdcStatusUpdate { .. }))
             .await;
-        let updates = t
+        let updates = alice
             .get_webxdc_status_updates(integration_id, StatusUpdateSerial(0))
             .await?;
         assert!(updates.contains(r#""lat":11"#));
@@ -220,28 +225,32 @@ mod tests {
         assert!(updates.contains(r#""contactId":"#)); // checking for sth. that is not in the sent update make sure integration is called
         assert!(updates.contains(r#""name":"Me""#));
         assert!(updates.contains(r##""color":"#"##));
-        let locations = location::get_range(&t, Some(bob_chat_id), None, 0, 0).await?;
+        let locations = location::get_range(alice, Some(bob_chat_id), None, 0, 0).await?;
         assert_eq!(locations.len(), 1);
         let location = locations.last().unwrap();
         assert_eq!(location.latitude, 11.0);
         assert_eq!(location.longitude, 12.0);
         assert_eq!(location.independent, 1);
-        let msg = t.get_last_msg().await;
+        let msg = alice.get_last_msg().await;
         assert_eq!(msg.text, "poi #1");
         assert_eq!(msg.chat_id, bob_chat_id);
 
         // Integrate Webxdc into another group
-        let group_id = create_group(&t, "foo").await?;
-        let integration_id = t.init_webxdc_integration(Some(group_id)).await?.unwrap();
+        let group_id = create_group(alice, "foo").await?;
+        let integration_id = alice
+            .init_webxdc_integration(Some(group_id))
+            .await?
+            .unwrap();
 
-        let locations = location::get_range(&t, Some(group_id), None, 0, 0).await?;
+        let locations = location::get_range(alice, Some(group_id), None, 0, 0).await?;
         assert_eq!(locations.len(), 0);
-        t.send_webxdc_status_update(
-            integration_id,
-            r#"{"payload": {"action": "pos", "lat": 22.0, "lng": 23.0, "label": "poi #2"}}"#,
-        )
-        .await?;
-        let updates = t
+        alice
+            .send_webxdc_status_update(
+                integration_id,
+                r#"{"payload": {"action": "pos", "lat": 22.0, "lng": 23.0, "label": "poi #2"}}"#,
+            )
+            .await?;
+        let updates = alice
             .get_webxdc_status_updates(integration_id, StatusUpdateSerial(0))
             .await?;
         assert!(!updates.contains(r#""lat":11"#));
@@ -249,27 +258,27 @@ mod tests {
         assert!(updates.contains(r#""lat":22"#));
         assert!(updates.contains(r#""lng":23"#));
         assert!(updates.contains(r#""label":"poi #2""#));
-        let locations = location::get_range(&t, Some(group_id), None, 0, 0).await?;
+        let locations = location::get_range(alice, Some(group_id), None, 0, 0).await?;
         assert_eq!(locations.len(), 1);
         let location = locations.last().unwrap();
         assert_eq!(location.latitude, 22.0);
         assert_eq!(location.longitude, 23.0);
         assert_eq!(location.independent, 1);
-        let msg = t.get_last_msg().await;
+        let msg = alice.get_last_msg().await;
         assert_eq!(msg.text, "poi #2");
         assert_eq!(msg.chat_id, group_id);
 
         // In global map, both POI are visible
-        let integration_id = t.init_webxdc_integration(None).await?.unwrap();
+        let integration_id = alice.init_webxdc_integration(None).await?.unwrap();
 
-        let updates = t
+        let updates = alice
             .get_webxdc_status_updates(integration_id, StatusUpdateSerial(0))
             .await?;
         assert!(updates.contains(r#""lat":11"#));
         assert!(updates.contains(r#""label":"poi #1""#));
         assert!(updates.contains(r#""lat":22"#));
         assert!(updates.contains(r#""label":"poi #2""#));
-        let locations = location::get_range(&t, None, None, 0, 0).await?;
+        let locations = location::get_range(alice, None, None, 0, 0).await?;
         assert_eq!(locations.len(), 2);
 
         Ok(())

@@ -1,8 +1,7 @@
-Received: (Postfix, from userid 1000); Mon, 4 Dec 2006 14:51:39 +0100 (CET)
-From: Test Sender <sender@testrun.org>
+From: Test Sender <bob@example.net>
 Subject: Large image test
 To: alice@example.org
-Message-ID: <huge-image-test@testrun.org>
+Message-ID: <huge-image-test@localhost>
 Date: Thu, 17 Dec 2020 15:38:45 +0100
 User-Agent: Test-Agent/1.0
 MIME-Version: 1.0
