@@ -1948,23 +1948,9 @@ pub(crate) fn wrap_encrypted_part(encrypted: String) -> MimePart<'static> {
         "multipart/encrypted; protocol=\"application/pgp-encrypted\"",
         vec![
             // Autocrypt part 1
-            MimePart::new("application/pgp-encrypted", "Version: 1\r\n").header(
-                "Content-Description",
-                mail_builder::headers::raw::Raw::new("PGP/MIME version identification"),
-            ),
+            MimePart::new("application/pgp-encrypted", "Version: 1\r\n"),
             // Autocrypt part 2
-            MimePart::new(
-                "application/octet-stream; name=\"encrypted.asc\"",
-                encrypted,
-            )
-            .header(
-                "Content-Description",
-                mail_builder::headers::raw::Raw::new("OpenPGP encrypted message"),
-            )
-            .header(
-                "Content-Disposition",
-                mail_builder::headers::raw::Raw::new("inline; filename=\"encrypted.asc\";"),
-            ),
+            MimePart::new("application/octet-stream", encrypted),
         ],
     )
 }
