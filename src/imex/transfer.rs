@@ -427,18 +427,16 @@ mod tests {
         let self_chat = ctx1.get_self_chat().await;
         let msgs = get_chat_msgs(&ctx1, self_chat.id).await.unwrap();
         assert_eq!(msgs.len(), 2);
-        let msgid = match msgs.first().unwrap() {
-            ChatItem::Message { msg_id } => msg_id,
-            _ => panic!("wrong chat item"),
+        let ChatItem::Message { msg_id } = msgs.first().unwrap() else {
+            panic!("wrong chat item");
         };
-        let msg = Message::load_from_db(&ctx1, *msgid).await.unwrap();
+        let msg = Message::load_from_db(&ctx1, *msg_id).await.unwrap();
         let text = msg.get_text();
         assert_eq!(text, "hi there");
-        let msgid = match msgs.get(1).unwrap() {
-            ChatItem::Message { msg_id } => msg_id,
-            _ => panic!("wrong chat item"),
+        let ChatItem::Message { msg_id } = msgs.get(1).unwrap() else {
+            panic!("wrong chat item");
         };
-        let msg = Message::load_from_db(&ctx1, *msgid).await.unwrap();
+        let msg = Message::load_from_db(&ctx1, *msg_id).await.unwrap();
 
         let path = msg.get_file(&ctx1).unwrap();
         assert_eq!(

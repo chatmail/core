@@ -1557,9 +1557,7 @@ pub(crate) async fn get_chat_msg(
         asserted_msgs_count,
         msgs.len()
     );
-    let msg_id = if let ChatItem::Message { msg_id } = msgs[index] {
-        msg_id
-    } else {
+    let ChatItem::Message { msg_id } = msgs[index] else {
         panic!("Wrong item type");
     };
     Message::load_from_db(&t.ctx, msg_id).await.unwrap()
