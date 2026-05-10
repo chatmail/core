@@ -704,10 +704,10 @@ async fn test_parse_ndn_group_msg() -> Result<()> {
     assert_eq!(msg.state, MessageState::OutFailed);
 
     let msgs = chat::get_chat_msgs(&t, msg.chat_id).await?;
-    let ChatItem::Message { msg_id } = *msgs.last().unwrap() else {
-        panic!("Wrong item type");
-    };
-    assert_eq!(msg_id, msg.id);
+    assert!(matches!(
+        *msgs.last().unwrap(),
+        ChatItem::Message { msg_id } if msg_id == msg.id
+    ));
     Ok(())
 }
 
@@ -1598,9 +1598,7 @@ async fn test_in_reply_to() {
 
     // Load the first message from the same chat.
     let msgs = chat::get_chat_msgs(&t, msg.chat_id).await.unwrap();
-    let msg_id = if let ChatItem::Message { msg_id } = msgs.first().unwrap() {
-        msg_id
-    } else {
+    let ChatItem::Message { msg_id } = msgs.first().unwrap() else {
         panic!("Wrong item type");
     };
 
