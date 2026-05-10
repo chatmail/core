@@ -73,8 +73,7 @@ fn shorten_name(name: &str, length: usize) -> String {
         // We use _ rather than ... to avoid dots at the end of the URL, which would confuse linkifiers
         format!(
             "{}_",
-            &name
-                .chars()
+            name.chars()
                 .take(length.saturating_sub(1))
                 .collect::<String>()
         )

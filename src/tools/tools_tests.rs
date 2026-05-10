@@ -247,12 +247,12 @@ proptest! {
         assert!(
             l <= approx_chars + el_len,
             "buf: '{}' - res: '{}' - len {}, approx {}",
-            &buf, &res, res.len(), approx_chars
+            buf, res, res.len(), approx_chars
         );
 
         if buf.chars().count() > approx_chars + el_len {
             let l = res.len();
-            assert_eq!(&res[l-5..l], "[...]", "missing ellipsis in {}", &res);
+            assert_eq!(&res[l-5..l], "[...]", "missing ellipsis in {res}");
         }
     }
 }

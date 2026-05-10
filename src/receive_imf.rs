@@ -3560,12 +3560,7 @@ async fn create_or_lookup_mailinglist_or_broadcast(
             mime_parser.timestamp_sent,
         )
         .await
-        .with_context(|| {
-            format!(
-                "failed to create mailinglist '{}' for grpid={}",
-                &name, &listid
-            )
-        })?;
+        .with_context(|| format!("failed to create mailinglist '{name}' for grpid={listid}",))?;
 
         if chattype == Chattype::InBroadcast {
             chat::add_to_chat_contacts_table(

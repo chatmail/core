@@ -275,7 +275,7 @@ pub unsafe extern "C" fn dc_get_config(
                 .strdup()
         } else {
             match config::Config::from_str(&key)
-                .with_context(|| format!("Invalid key {:?}", &key))
+                .with_context(|| format!("Invalid key {key:?}"))
                 .log_err(ctx)
             {
                 Ok(key) => ctx

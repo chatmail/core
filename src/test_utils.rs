@@ -1685,7 +1685,7 @@ async fn write_msg(context: &Context, prefix: &str, msg: &Message, buf: &mut Str
         msg.get_id(),
         if msg.get_showpadlock() { "🔒" } else { "" },
         if msg.has_location() { "📍" } else { "" },
-        &contact_name,
+        contact_name,
         contact_id,
         msgtext,
         if msg.get_from_id() == ContactId::SELF {

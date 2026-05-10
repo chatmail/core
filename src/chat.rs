@@ -2529,7 +2529,7 @@ async fn prepare_msg_blob(context: &Context, msg: &mut Message) -> Result<()> {
         // running numbers, etc.
         let filename: String = match viewtype_orig {
             Viewtype::Voice => format!(
-                "voice-messsage_{}.{}",
+                "voice-messsage_{}.{suffix}",
                 chrono::Utc
                     .timestamp_opt(msg.timestamp_sort, 0)
                     .single()
@@ -2537,10 +2537,9 @@ async fn prepare_msg_blob(context: &Context, msg: &mut Message) -> Result<()> {
                         || "YY-mm-dd_hh:mm:ss".to_string(),
                         |ts| ts.format("%Y-%m-%d_%H-%M-%S").to_string()
                     ),
-                &suffix
             ),
             Viewtype::Image | Viewtype::Gif => format!(
-                "image_{}.{}",
+                "image_{}.{suffix}",
                 chrono::Utc
                     .timestamp_opt(msg.timestamp_sort, 0)
                     .single()
@@ -2548,10 +2547,9 @@ async fn prepare_msg_blob(context: &Context, msg: &mut Message) -> Result<()> {
                         || "YY-mm-dd_hh:mm:ss".to_string(),
                         |ts| ts.format("%Y-%m-%d_%H-%M-%S").to_string(),
                     ),
-                &suffix,
             ),
             Viewtype::Video => format!(
-                "video_{}.{}",
+                "video_{}.{suffix}",
                 chrono::Utc
                     .timestamp_opt(msg.timestamp_sort, 0)
                     .single()
@@ -2559,7 +2557,6 @@ async fn prepare_msg_blob(context: &Context, msg: &mut Message) -> Result<()> {
                         || "YY-mm-dd_hh:mm:ss".to_string(),
                         |ts| ts.format("%Y-%m-%d_%H-%M-%S").to_string()
                     ),
-                &suffix
             ),
             _ => filename,
         };

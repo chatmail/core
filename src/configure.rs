@@ -707,8 +707,7 @@ async fn get_autoconfig(
         ctx,
         // the doc does not mention `emailaddress=`, however, Thunderbird adds it, see <https://releases.mozilla.org/pub/thunderbird/>,  which makes some sense
         &format!(
-            "https://{}/.well-known/autoconfig/mail/config-v1.1.xml?emailaddress={}",
-            &param_domain, &param_addr_urlencoded
+            "https://{param_domain}/.well-known/autoconfig/mail/config-v1.1.xml?emailaddress={param_addr_urlencoded}"
         ),
         &param.addr,
     )
@@ -721,7 +720,7 @@ async fn get_autoconfig(
     // Outlook uses always SSL but different domains (this comment describes the next two steps)
     if let Ok(res) = outlk_autodiscover(
         ctx,
-        format!("https://{}/autodiscover/autodiscover.xml", &param_domain),
+        format!("https://{param_domain}/autodiscover/autodiscover.xml"),
     )
     .await
     {
@@ -731,10 +730,7 @@ async fn get_autoconfig(
 
     if let Ok(res) = outlk_autodiscover(
         ctx,
-        format!(
-            "https://autodiscover.{}/autodiscover/autodiscover.xml",
-            &param_domain
-        ),
+        format!("https://autodiscover.{param_domain}/autodiscover/autodiscover.xml",),
     )
     .await
     {
@@ -745,7 +741,7 @@ async fn get_autoconfig(
     // always SSL for Thunderbird's database
     if let Ok(res) = moz_autoconfigure(
         ctx,
-        &format!("https://autoconfig.thunderbird.net/v1.1/{}", &param_domain),
+        &format!("https://autoconfig.thunderbird.net/v1.1/{param_domain}"),
         &param.addr,
     )
     .await

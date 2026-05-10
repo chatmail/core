@@ -432,7 +432,7 @@ async fn handle_cmd(
                 {
                     println!("Open the following url, set mail_pw to the generated token and server_flags to 2:\n{oauth2_url}");
                 } else {
-                    println!("OAuth2 not available for {}.", &addr);
+                    println!("OAuth2 not available for {addr}.");
                 }
             } else {
                 println!("oauth2: set addr first.");
