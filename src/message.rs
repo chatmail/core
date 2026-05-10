@@ -222,7 +222,7 @@ SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ?, ? FROM msgs WHERE id=?1
             } else {
                 msg.timestamp_sort
             });
-            ret += &format!("Received: {}", &s);
+            ret += &format!("Received: {s}");
             ret += "\n";
         }
 
@@ -301,7 +301,7 @@ SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ?, ? FROM msgs WHERE id=?1
             ret += "Type: ";
             ret += &format!("{}", msg.viewtype);
             ret += "\n";
-            ret += &format!("Mimetype: {}\n", &msg.get_filemime().unwrap_or_default());
+            ret += &format!("Mimetype: {}\n", msg.get_filemime().unwrap_or_default());
         }
         let w = msg.param.get_int(Param::Width).unwrap_or_default();
         let h = msg.param.get_int(Param::Height).unwrap_or_default();

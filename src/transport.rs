@@ -116,7 +116,7 @@ pub(crate) struct ConnectionCandidate {
 
 impl fmt::Display for ConnectionCandidate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}:{}", &self.host, self.port, self.security)?;
+        write!(f, "{}:{}:{}", self.host, self.port, self.security)?;
         Ok(())
     }
 }
@@ -131,7 +131,7 @@ pub(crate) struct ConfiguredServerLoginParam {
 
 impl fmt::Display for ConfiguredServerLoginParam {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}:{}", self.connection, &self.user)?;
+        write!(f, "{}:{}", self.connection, self.user)?;
         Ok(())
     }
 }

@@ -794,7 +794,7 @@ impl Config {
                 .with_push_subscriber(push_subscriber.clone())
                 .build()
                 .await
-                .with_context(|| format!("failed to create context from file {:?}", &dbfile))?;
+                .with_context(|| format!("failed to create context from file {dbfile:?}"))?;
             // Try to open without a passphrase,
             // but do not return an error if account is passphare-protected.
             ctx.open("".to_string()).await?;

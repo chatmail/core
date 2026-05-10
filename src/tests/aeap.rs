@@ -161,7 +161,7 @@ async fn check_that_transition_worked(
             2,
             "Group {} has members {:?}, but should have members {:?} and {:?}",
             group,
-            &members,
+            members,
             alice_contact_id,
             ContactId::SELF
         );

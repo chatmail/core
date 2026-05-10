@@ -62,13 +62,13 @@ pub(crate) fn truncate(buf: &str, approx_chars: usize) -> Cow<'_, str> {
     if let Some(index) = buf.get(..end_pos).and_then(|s| s.rfind([' ', '\n'])) {
         Cow::Owned(format!(
             "{}{}",
-            &buf.get(..=index).unwrap_or_default(),
+            buf.get(..=index).unwrap_or_default(),
             DC_ELLIPSIS
         ))
     } else {
         Cow::Owned(format!(
             "{}{}",
-            &buf.get(..end_pos).unwrap_or_default(),
+            buf.get(..end_pos).unwrap_or_default(),
             DC_ELLIPSIS
         ))
     }

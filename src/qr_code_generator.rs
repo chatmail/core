@@ -332,7 +332,7 @@ fn inner_generate_secure_join_qr_code(
                 d.attr("cx", logo_position_x + HALF_LOGO_SIZE)?;
                 d.attr("cy", logo_position_y + HALF_LOGO_SIZE)?;
                 d.attr("r", HALF_LOGO_SIZE)?;
-                d.attr("style", format!("fill:{}", &color))
+                d.attr("style", format!("fill:{color}"))
             })?;
 
             let avatar_font_size = LOGO_SIZE * 0.65;

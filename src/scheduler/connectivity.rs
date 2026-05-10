@@ -218,7 +218,7 @@ pub(crate) fn maybe_network_lost(context: &Context, stores: Vec<ConnectivityStor
 impl fmt::Debug for ConnectivityStore {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some(guard) = self.0.try_lock() {
-            write!(f, "ConnectivityStore {:?}", &*guard)
+            write!(f, "ConnectivityStore {:?}", *guard)
         } else {
             write!(f, "ConnectivityStore [LOCKED]")
         }

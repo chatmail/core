@@ -122,7 +122,7 @@ async fn poke_spec(context: &Context, spec: Option<&str>) -> bool {
                 let name_f = entry.file_name();
                 let name = name_f.to_string_lossy();
                 if name.ends_with(".eml") {
-                    let path_plus_name = format!("{}/{}", &real_spec, name);
+                    let path_plus_name = format!("{real_spec}/{name}");
                     println!("Import: {path_plus_name}");
                     if poke_eml_file(context, Path::new(&path_plus_name))
                         .await
@@ -133,11 +133,11 @@ async fn poke_spec(context: &Context, spec: Option<&str>) -> bool {
                 }
             }
         } else {
-            eprintln!("Import: Cannot open directory \"{}\".", &real_spec);
+            eprintln!("Import: Cannot open directory {real_spec:?}.");
             return false;
         }
     }
-    println!("Import: {} items read from \"{}\".", read_cnt, &real_spec);
+    println!("Import: {read_cnt} items read from {real_spec:?}.");
     if read_cnt > 0 {
         context.emit_msgs_changed_without_ids();
     }
@@ -179,7 +179,7 @@ async fn log_msg(context: &Context, prefix: impl AsRef<str>, msg: &Message) {
         msg.get_id(),
         if msg.get_showpadlock() { "🔒" } else { "" },
         if msg.has_location() { "📍" } else { "" },
-        &contact_name,
+        contact_name,
         contact_id,
         msgtext,
         if msg.has_html() { "[HAS-HTML]️" } else { "" },
@@ -221,7 +221,7 @@ async fn log_msg(context: &Context, prefix: impl AsRef<str>, msg: &Message) {
         },
         statestr,
         downloadstate,
-        &temp2,
+        temp2,
     );
 }
 
@@ -561,7 +561,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                             .map_or_else(String::new, |prefix| format!("{prefix}: ")),
                         summary.text,
                         statestr,
-                        &timestr,
+                        timestr,
                         if chat.is_sending_locations() {
                             "📍"
                         } else {

@@ -992,7 +992,7 @@ async fn test_wrong_auth_token() -> Result<()> {
     tcm.send_recv(alice, bob, "hi").await;
 
     let alice_qr = get_securejoin_qr(alice, None).await?;
-    println!("{}", &alice_qr);
+    println!("{alice_qr}");
     let invalid_alice_qr = alice_qr.replace("&s=", "&s=INVALIDAUTHTOKEN&someotherkey=");
 
     join_securejoin(bob, &invalid_alice_qr).await?;

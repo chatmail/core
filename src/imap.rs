@@ -1045,15 +1045,12 @@ impl Session {
             if target.is_empty() {
                 self.delete_message_batch(context, &uid_set, rowid_set)
                     .await
-                    .with_context(|| format!("cannot delete batch of messages {:?}", &uid_set))?;
+                    .with_context(|| format!("cannot delete batch of messages {uid_set:?}"))?;
             } else {
                 self.move_message_batch(context, &uid_set, rowid_set, &target)
                     .await
                     .with_context(|| {
-                        format!(
-                            "cannot move batch of messages {:?} to folder {:?}",
-                            &uid_set, target
-                        )
+                        format!("cannot move batch of messages {uid_set:?} to folder {target:?}",)
                     })?;
             }
         }
@@ -1287,9 +1284,10 @@ impl Session {
 
         for (request_uids, set) in build_sequence_sets(&request_uids)? {
             info!(context, "Starting UID FETCH of message set \"{}\".", set);
-            let mut fetch_responses = self.uid_fetch(&set, BODY_FULL).await.with_context(|| {
-                format!("fetching messages {} from folder \"{}\"", &set, folder)
-            })?;
+            let mut fetch_responses = self
+                .uid_fetch(&set, BODY_FULL)
+                .await
+                .with_context(|| format!("fetching messages {set} from folder {folder:?}"))?;
 
             // Map from UIDs to unprocessed FETCH results. We put unprocessed FETCH results here
             // when we want to process other messages first.
