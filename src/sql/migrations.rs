@@ -2378,7 +2378,7 @@ ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
         sql.execute_migration(
             "
 UPDATE msgs SET state=26 WHERE state=28; -- Change OutMdnRcvd to OutDelivered.
-UPDATE msgs SET state=19 WHERE state=24; -- Change OutPreparing to OutFailed.
+UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
             ",
             migration_version,
         )
