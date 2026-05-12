@@ -1939,11 +1939,6 @@ pub(crate) fn render_outer_message(
 /// Takes the encrypted part, wraps it in a MimePart,
 /// and sets the appropriate Content-Type for the outer message
 pub(crate) fn wrap_encrypted_part(encrypted: String) -> MimePart<'static> {
-    // XXX: additional newline is needed
-    // to pass filtermail at
-    // <https://github.com/deltachat/chatmail/blob/4d915f9800435bf13057d41af8d708abd34dbfa8/chatmaild/src/chatmaild/filtermail.py#L84-L86>:
-    let encrypted = encrypted + "\n";
-
     MimePart::new(
         "multipart/encrypted; protocol=\"application/pgp-encrypted\"",
         vec![
