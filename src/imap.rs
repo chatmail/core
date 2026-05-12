@@ -1282,6 +1282,7 @@ impl Session {
             return Ok(());
         }
         let is_chatmail = self.is_chatmail();
+        let transport_id = self.transport_id();
 
         for (request_uids, set) in build_sequence_sets(&request_uids)? {
             info!(context, "Starting UID FETCH of message set \"{}\".", set);
@@ -1381,17 +1382,7 @@ impl Session {
                 );
                 let res = receive_imf_inner(context, rfc724_mid, body, is_seen).await;
 
-                // If the message is not needed anymore on the server, mark it for deletion:
-                if !context.get_config_bool(Config::BccSelf).await? && is_chatmail {
-                    context
-                        .sql
-                        .execute(
-                            "UPDATE imap SET target='' WHERE rfc724_mid=?",
-                            (rfc724_mid,),
-                        )
-                        .await?;
-                    context.scheduler.interrupt_inbox().await;
-                }
+                maybe_mark_for_deletion(is_chatmail, transport_id, rfc724_mid, context).await?;
 
                 // If there was an error receiving the message, show a device message:
                 let received_msg = match res {
@@ -1662,6 +1653,26 @@ impl Session {
 
         Ok(())
     }
+}
+
+async fn maybe_mark_for_deletion(
+    is_chatmail: bool,
+    transport_id: u32,
+    rfc724_mid: &String,
+    context: &Context,
+) -> Result<()> {
+    if !context.get_config_bool(Config::BccSelf).await? && is_chatmail {
+        context
+            .sql
+            .execute(
+                "UPDATE imap SET target='' WHERE rfc724_mid=? AND transport_id=?",
+                (rfc724_mid, transport_id),
+            )
+            .await?;
+        context.scheduler.interrupt_inbox().await;
+    }
+
+    Ok(())
 }
 
 fn format_setmetadata(folder: &str, device_token: &str) -> String {
@@ -1972,6 +1983,15 @@ pub(crate) fn create_message_id() -> String {
 }
 
 /// Determines whether the message should be downloaded based on prefetched headers.
+// We want to call maybe_delete() iff it's not a post-message OR the post-message was already downloaded.
+// I.e. if it's a post-message that is Available, Failure, or InProgress, then we do not want to delete it.
+// WRT InProgress, we do want to delete it later on _all_ relays later, after we downloaded it.
+// So, maybe when choosing what to delete, we should not filter by transport.
+// I'm not sure about checking is_chatmail - maybe it's fine to just remove a message from all transports
+// if it also arrived via a chatmail transport,
+// because generally the only reason why this happens is because the chatpartner has DC with multi-relay.
+//
+// I.e., we want to delete everything for which prefetch_should_download() returns false, EXCEPT for the case where a post-message's download failed or is in progress.
 pub(crate) async fn prefetch_should_download(
     context: &Context,
     headers: &[mailparse::MailHeader<'_>],

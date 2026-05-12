@@ -2220,6 +2220,36 @@ pub(crate) async fn rfc724_mid_download_tried(context: &Context, rfc724_mid: &st
     Ok(res)
 }
 
+/// Returns `true` iff there is a message
+/// with the given `rfc724_mid`
+/// and a download state other than `DownloadState::Available`,
+/// i.e. it was already tried to download the message or it's sent locally.
+pub(crate) async fn rfc724_mid_was_downloaded(context: &Context, rfc724_mid: &str) -> Result<bool> {
+    let rfc724_mid = rfc724_mid.trim_start_matches('<').trim_end_matches('>');
+    if rfc724_mid.is_empty() {
+        warn!(
+            context,
+            "Empty rfc724_mid passed to rfc724_mid_download_tried"
+        );
+        return Ok(false);
+    }
+
+    let res = context
+        .sql
+        .exists(
+            "SELECT COUNT(*) FROM msgs
+             WHERE rfc724_mid=? AND download_state=? OR download_state=?",
+            (
+                rfc724_mid,
+                DownloadState::Done,
+                DownloadState::Undecipherable,
+            ),
+        )
+        .await?;
+
+    Ok(res)
+}
+
 /// Given a list of Message-IDs, returns the most relevant message found in the database.
 ///
 /// Relevance here is `(download_state == Done, index)`, where `index` is an index of Message-ID in
