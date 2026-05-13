@@ -109,8 +109,8 @@ pub(crate) async fn connect_tcp_inner(
 ) -> Result<Pin<Box<TimeoutStream<TcpStream>>>> {
     let tcp_stream = timeout(TIMEOUT, TcpStream::connect(addr))
         .await
-        .context("Connection timeout")?
-        .context("Connection failure")?;
+        .with_context(|| format!("Connection to {addr} timed out"))?
+        .with_context(|| format!("Connection to {addr} failed"))?;
 
     // Disable Nagle's algorithm.
     tcp_stream.set_nodelay(true)?;
@@ -180,7 +180,7 @@ where
         delay_set.spawn(tokio::time::sleep(delay));
     }
 
-    let mut first_error = None;
+    let mut all_errors = Vec::new();
 
     let res = loop {
         if let Some(fut) = futures.next() {
@@ -200,7 +200,7 @@ where
                             }
                             Ok(Err(err)) => {
                                 // Some connection attempt failed.
-                                first_error.get_or_insert(err);
+                                all_errors.push(err);
                             }
                             Err(err) => {
                                 break Err(err);
@@ -211,9 +211,11 @@ where
                         // Out of connection attempts.
                         //
                         // Break out of the loop and return error.
-                        break Err(
-                            first_error.unwrap_or_else(|| format_err!("No connection attempts were made"))
-                        );
+                        break if all_errors.is_empty() {
+                            Err(format_err!("No connection attempts were made"))
+                        } else {
+                            Err(format_err!("All connection attempts failed: {}", all_errors.into_iter().map(|err| format!("{err:#}")).collect::<Vec<String>>().join("; ")))
+                        };
                     }
                 }
             },
