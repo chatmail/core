@@ -650,7 +650,6 @@ pub(crate) async fn ephemeral_loop(context: &Context, interrupt_receiver: Receiv
 }
 
 /// Schedules expired IMAP messages for deletion.
-#[expect(clippy::arithmetic_side_effects)]
 pub(crate) async fn delete_expired_imap_messages(
     context: &Context,
     transport_id: u32,
@@ -661,7 +660,7 @@ pub(crate) async fn delete_expired_imap_messages(
     if !context.get_config_bool(Config::BccSelf).await? && is_chatmail {
         info!(
             context,
-            "dbg marking all as deleted 1 - rfc724_mids: {:#?}",
+            "dbg marking all as deleted 1 - rfc724_mids: {:?}",
             context
                 .sql
                 .query_map_vec(
@@ -675,7 +674,7 @@ pub(crate) async fn delete_expired_imap_messages(
         );
         info!(
             context,
-            "dbg marking all as deleted 1 - pre_rfc724_mids: {:#?}",
+            "dbg marking all as deleted 1 - pre_rfc724_mids: {:?}",
             context
                 .sql
                 .query_map_vec(
@@ -714,7 +713,7 @@ pub(crate) async fn delete_expired_imap_messages(
     } else {
         info!(
             context,
-            "dbg marking ephemeral as deleted 1 - rfc724_mids: {:#?}",
+            "dbg marking ephemeral as deleted 1 - rfc724_mids: {:?}",
             context
                 .sql
                 .query_map_vec(
@@ -727,7 +726,7 @@ pub(crate) async fn delete_expired_imap_messages(
         );
         info!(
             context,
-            "dbg marking ephemeral as deleted 1 - pre_rfc724_mids: {:#?}",
+            "dbg marking ephemeral as deleted 1 - pre_rfc724_mids: {:?}",
             context
                 .sql
                 .query_map_vec(

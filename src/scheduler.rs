@@ -15,7 +15,7 @@ use crate::config::Config;
 use crate::contact::{ContactId, RecentlySeenLoop};
 use crate::context::Context;
 use crate::download::{download_known_post_messages_without_pre_message, download_msgs};
-use crate::ephemeral::{self, delete_expired_imap_messages};
+use crate::ephemeral;
 use crate::events::EventType;
 use crate::imap::{Imap, session::Session};
 use crate::location;
