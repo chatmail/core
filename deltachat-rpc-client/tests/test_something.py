@@ -1240,10 +1240,11 @@ def test_leave_and_delete_group(acfactory, log):
 
 
 def test_immediate_autodelete(acfactory, direct_imap, log):
+    """
+    `bcc_self` is off by default,
+    so that messages are supposed to be immediately autodeleted
+    """
     ac1, ac2 = acfactory.get_online_accounts(2)
-
-    # "1" means delete immediately, while "0" means do not delete
-    ac2.set_config("delete_server_after", "1")
 
     log.section("ac1: create chat with ac2")
     chat1 = ac1.create_chat(ac2)

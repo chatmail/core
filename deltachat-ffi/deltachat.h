@@ -413,11 +413,6 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  *                    Messages in the "saved messages" chat (see dc_chat_is_self_talk()) are skipped.
  *                    Messages are deleted whether they were seen or not, the UI should clearly point that out.
  *                    See also dc_estimate_deletion_cnt().
- * - `delete_server_after` = 0=do not delete messages from server automatically (default),
- *                    1=delete messages directly after receiving from server, mvbox is skipped.
- *                    >1=seconds, after which messages are deleted automatically from the server, mvbox is used as defined.
- *                    "Saved messages" are deleted from the server as well as emails, the UI should clearly point that out.
- *                    See also dc_estimate_deletion_cnt().
  * - `media_quality` = DC_MEDIA_QUALITY_BALANCED (0) =
  *                    good outgoing images/videos/voice quality at reasonable sizes (default)
  *                    DC_MEDIA_QUALITY_WORSE (1)
@@ -1462,16 +1457,16 @@ dc_chatlist_t*     dc_get_similar_chatlist   (dc_context_t* context, uint32_t ch
 
 /**
  * Estimate the number of messages that will be deleted
- * by the dc_set_config()-options `delete_device_after` or `delete_server_after`.
+ * by the dc_set_config()-option `delete_device_after`.
  * This is typically used to show the estimated impact to the user
  * before actually enabling deletion of old messages.
  *
  * @memberof dc_context_t
  * @param context The context object as returned from dc_context_new().
- * @param from_server 1=Estimate deletion count for server, 0=Estimate deletion count for device
+ * @param from_server Deprecated, pass 0 here
  * @param seconds Count messages older than the given number of seconds.
  * @return Number of messages that are older than the given number of seconds.
- *     Messages in the "saved messages" folder are not counted as they will not be deleted automatically.
+ *     Messages in the "Saved Messages" chat are not counted as they will not be deleted automatically.
  */
 int             dc_estimate_deletion_cnt    (dc_context_t* context, int from_server, int64_t seconds);
 

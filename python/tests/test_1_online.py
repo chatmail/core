@@ -15,6 +15,9 @@ def test_basic_imap_api(acfactory, tmp_path):
     ac1, ac2 = acfactory.get_online_accounts(2)
     chat12 = acfactory.get_accepted_chat(ac1, ac2)
 
+    # Make sure that messages are not immediately auto-deleted on the server:
+    ac2.set_config("bcc_self", "1")
+
     imap2 = ac2.direct_imap
 
     with imap2.idle() as idle2:
@@ -161,6 +164,9 @@ def test_html_message(acfactory, lp):
 def test_webxdc_message(acfactory, data, lp):
     ac1, ac2 = acfactory.get_online_accounts(2)
     chat = acfactory.get_accepted_chat(ac1, ac2)
+
+    # Make sure that messages are not immediately auto-deleted on the server:
+    ac2.set_config("bcc_self", "1")
 
     lp.sec("ac1: prepare and send text message to ac2")
     msg1 = chat.send_text("message0")
@@ -362,6 +368,10 @@ def test_send_and_receive_message_markseen(acfactory, lp):
     # make DC's life harder wrt to encodings
     ac1.set_config("displayname", "ä name")
 
+    # Make sure that messages are not immediately auto-deleted on the server:
+    ac1.set_config("bcc_self", "1")
+    ac2.set_config("bcc_self", "1")
+
     # clear any fresh device messages
     ac1.get_device_chat().mark_noticed()
     ac2.get_device_chat().mark_noticed()
@@ -506,8 +516,14 @@ def test_mdn_asymmetric(acfactory, lp):
     ac1.set_config("mdns_enabled", "1")
     ac2.set_config("mdns_enabled", "1")
 
+    # Make sure that the mdn is not immediately auto-deleted on the server:
+    ac1.set_config("bcc_self", "1")
+
     lp.sec("sending text message from ac1 to ac2")
     msg_out = chat.send_text("message1")
+
+    # Wait for the message to be marked as seen on IMAP.
+    ac1._evtracker.get_info_contains("Marked messages [0-9]+ in folder INBOX as seen.")
 
     assert len(chat.get_messages()) == 1 + E2EE_INFO_MSGS
 
@@ -525,7 +541,7 @@ def test_mdn_asymmetric(acfactory, lp):
     lp.sec("ac1: waiting for incoming activity")
     assert len(chat.get_messages()) == 1 + E2EE_INFO_MSGS
 
-    # Wait for the message to be marked as seen on IMAP.
+    # Wait for the mdn to be marked as seen on IMAP.
     ac1._evtracker.get_info_contains("Marked messages [0-9]+ in folder INBOX as seen.")
 
     # MDN is received even though MDNs are already disabled
@@ -1073,6 +1089,8 @@ def test_send_receive_locations(acfactory, lp):
 
 def test_delete_multiple_messages(acfactory, lp):
     ac1, ac2 = acfactory.get_online_accounts(2)
+    # Make sure that messages are not immediately auto-deleted on the server:
+    ac2.set_config("bcc_self", "1")
     chat12 = acfactory.get_accepted_chat(ac1, ac2)
 
     lp.sec("ac1: sending seven messages")

@@ -735,10 +735,19 @@ impl CommandApi {
         Ok(msg_ids)
     }
 
-    /// Estimate the number of messages that will be deleted
-    /// by the set_config()-options `delete_device_after` or `delete_server_after`.
+    /// Estimates the number of messages that will be deleted
+    /// by the `set_config()`-option `delete_device_after`.
+    ///
     /// This is typically used to show the estimated impact to the user
     /// before actually enabling deletion of old messages.
+    ///
+    /// Messages in the "Saved Messages" chat are not counted as they will not be deleted automatically.
+    ///
+    /// Parameters:
+    /// - `from_server`: Deprecated, pass `false` here
+    /// - `seconds`: Count messages older than the given number of seconds.
+    ///
+    /// Returns the number of messages that are older than the given number of seconds.
     async fn estimate_auto_deletion_count(
         &self,
         account_id: u32,

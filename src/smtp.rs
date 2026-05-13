@@ -699,26 +699,22 @@ pub(crate) async fn add_self_recipients(
     recipients: &mut Vec<String>,
     encrypted: bool,
 ) -> Result<()> {
-    // Previous versions of Delta Chat did not send BCC self
-    // if DeleteServerAfter was set to immediately delete messages
-    // from the server. This is not the case anymore
-    // because BCC-self messages are also used to detect
-    // that message was sent if SMTP server is slow to respond
-    // and connection is frequently lost
-    // before receiving status line. NB: This is not a problem for chatmail servers, so `BccSelf`
-    // disabled by default is fine.
-    if context.get_config_delete_server_after().await? != Some(0) || !recipients.is_empty() {
-        // Avoid sending unencrypted messages to all transports, chatmail relays won't accept
-        // them. Normally the user should have a non-chatmail primary transport to send unencrypted
-        // messages.
-        if encrypted {
-            for addr in context.get_published_secondary_self_addrs().await? {
-                recipients.push(addr);
-            }
+    // Avoid sending unencrypted messages to all transports, chatmail relays won't accept
+    // them. Normally the user should have a non-chatmail primary transport to send unencrypted
+    // messages.
+    if encrypted {
+        for addr in context.get_published_secondary_self_addrs().await? {
+            recipients.push(addr);
         }
-        // `from` must be the last addr, see `receive_imf_inner()` why.
-        let from = context.get_primary_self_addr().await?;
-        recipients.push(from);
     }
+    // `from` must be the last addr
+    // because `receive_imf_inner()` marks the message as 'delivered'
+    // if it arrives to the self-server via `bcc_self`.
+    // This helps with marking messages as delivered
+    // if the server is slow and we never get an `OK` response
+    // before the connection times out.
+    let from = context.get_primary_self_addr().await?;
+    recipients.push(from);
+
     Ok(())
 }

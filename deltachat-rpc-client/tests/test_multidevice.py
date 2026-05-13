@@ -4,39 +4,29 @@ from deltachat_rpc_client import EventType
 from deltachat_rpc_client.const import MessageState
 
 
-def test_bcc_self_delete_server_after_defaults(acfactory):
-    """Test default values for bcc_self and delete_server_after."""
+def test_bcc_self_is_enabled_when_setting_up_second_device(acfactory):
     ac = acfactory.get_online_account()
 
     # Initially after getting online
     # the setting bcc_self is set to 0 because there is only one device
-    # and delete_server_after is "1", meaning immediate deletion.
     assert ac.get_config("bcc_self") == "0"
-    assert ac.get_config("delete_server_after") == "1"
 
     # Setup a second device.
     ac_clone = ac.clone()
     ac_clone.bring_online()
 
-    # Second device setup
-    # enables bcc_self and changes default delete_server_after.
+    # Second device setup enables bcc_self.
     assert ac.get_config("bcc_self") == "1"
-    assert ac.get_config("delete_server_after") == "0"
-
     assert ac_clone.get_config("bcc_self") == "1"
-    assert ac_clone.get_config("delete_server_after") == "0"
 
-    # Manually disabling bcc_self
-    # also restores the default for delete_server_after.
+    # Test manually disabling bcc_self
     ac.set_config("bcc_self", "0")
     assert ac.get_config("bcc_self") == "0"
-    assert ac.get_config("delete_server_after") == "1"
 
-    # Cloning the account again enables bcc_self
+    # Cloning the account again enables bcc_self again
     # even though it was manually disabled.
     ac_clone = ac.clone()
     assert ac.get_config("bcc_self") == "1"
-    assert ac.get_config("delete_server_after") == "0"
 
 
 def test_one_account_send_bcc_setting(acfactory, log, direct_imap):

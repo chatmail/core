@@ -484,14 +484,6 @@ async fn fetch_idle(ctx: &Context, connection: &mut Imap, mut session: Session) 
         .await
         .context("fetch_move_delete")?;
 
-    // Mark expired messages for deletion. Marked messages will be deleted from the server
-    // on the next iteration of `fetch_move_delete`. `delete_expired_imap_messages` is not
-    // called right before `fetch_move_delete` because it is not well optimized and would
-    // otherwise slow down message fetching.
-    delete_expired_imap_messages(ctx)
-        .await
-        .context("delete_expired_imap_messages")?;
-
     download_known_post_messages_without_pre_message(ctx, &mut session).await?;
     download_msgs(ctx, &mut session)
         .await

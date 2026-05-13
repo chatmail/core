@@ -21,9 +21,6 @@ use futures_lite::FutureExt;
 use ratelimit::Ratelimit;
 use url::Url;
 
-use crate::calls::{
-    UnresolvedIceServer, create_fallback_ice_servers, create_ice_servers_from_metadata,
-};
 use crate::chat::{self, ChatId, ChatIdBlocked, add_device_msg};
 use crate::chatlist_events;
 use crate::config::Config;
@@ -48,6 +45,10 @@ use crate::stock_str;
 use crate::tools::{self, create_id, duration_to_str, time};
 use crate::transport::{
     ConfiguredLoginParam, ConfiguredServerLoginParam, prioritize_server_login_params,
+};
+use crate::{
+    calls::{UnresolvedIceServer, create_fallback_ice_servers, create_ice_servers_from_metadata},
+    ephemeral::delete_expired_imap_messages,
 };
 
 pub(crate) mod capabilities;
@@ -524,6 +525,12 @@ impl Imap {
             // as noticed.
             context.scheduler.interrupt_ephemeral_task().await;
         }
+
+        // Mark expired messages for deletion. Note that `delete_expired_imap_messages` is not
+        // not well optimized and should not be called before fetching.
+        delete_expired_imap_messages(context, session.transport_id(), session.is_chatmail())
+            .await
+            .context("delete_expired_imap_messages")?;
 
         session
             .move_delete_messages(context, watch_folder)
@@ -1379,6 +1386,21 @@ impl Session {
                     "Passing message UID {} to receive_imf().", request_uid
                 );
                 let res = receive_imf_inner(context, rfc724_mid, body, is_seen).await;
+
+                // TODO I don't think this code is needed anymore:
+                // // If the message is not needed anymore on the server, mark it for deletion:
+                // if !context.get_config_bool(Config::BccSelf).await? && is_chatmail {
+                //     context
+                //         .sql
+                //         .execute(
+                //             "UPDATE imap SET target='' WHERE rfc724_mid=?",
+                //             (rfc724_mid,),
+                //         )
+                //         .await?;
+                //     context.scheduler.interrupt_inbox().await;
+                // }
+
+                // If there was an error receiving the message, show a device message:
                 let received_msg = match res {
                     Err(err) => {
                         warn!(context, "receive_imf error: {err:#}.");

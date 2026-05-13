@@ -142,28 +142,6 @@ async fn test_mdns_default_behaviour() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_delete_server_after_default() -> Result<()> {
-    let t = &TestContext::new_alice().await;
-
-    // Check that the settings are displayed correctly.
-    assert_eq!(t.get_config(Config::BccSelf).await?, Some("1".to_string()));
-    assert_eq!(
-        t.get_config(Config::DeleteServerAfter).await?,
-        Some("0".to_string())
-    );
-
-    // Leaving emails on the server even w/o `BccSelf` is a good default at least because other
-    // MUAs do so even if the server doesn't save sent messages to some sentbox (like Gmail
-    // does).
-    t.set_config_bool(Config::BccSelf, false).await?;
-    assert_eq!(
-        t.get_config(Config::DeleteServerAfter).await?,
-        Some("0".to_string())
-    );
-    Ok(())
-}
-
 const SAVED_MESSAGES_DEDUPLICATED_FILE: &str = "969142cb84015bc135767bc2370934a.png";
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

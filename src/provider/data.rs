@@ -890,16 +890,10 @@ static P_NAUTA_CU: Provider = Provider {
         strict_tls: false,
         ..ProviderOptions::new()
     },
-    config_defaults: Some(&[
-        ConfigDefault {
-            key: Config::DeleteServerAfter,
-            value: "1",
-        },
-        ConfigDefault {
-            key: Config::MediaQuality,
-            value: "1",
-        },
-    ]),
+    config_defaults: Some(&[ConfigDefault {
+        key: Config::MediaQuality,
+        value: "1",
+    }]),
     oauth2_authorizer: None,
 };
 
@@ -2382,4 +2376,4 @@ pub(crate) static PROVIDER_IDS: LazyLock<HashMap<&'static str, &'static Provider
     });
 
 pub static _PROVIDER_UPDATED: LazyLock<chrono::NaiveDate> =
-    LazyLock::new(|| chrono::NaiveDate::from_ymd_opt(2026, 4, 21).unwrap());
+    LazyLock::new(|| chrono::NaiveDate::from_ymd_opt(2026, 5, 6).unwrap());
