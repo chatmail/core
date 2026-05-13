@@ -3,7 +3,7 @@ name = "deltachat"
 version = "2.50.0-dev"
 edition = "2024"
 license = "MPL-2.0"
-rust-version = "1.89"
+rust-version = "1.91"
 repository = "https://github.com/chatmail/core"
 
 [profile.dev]
