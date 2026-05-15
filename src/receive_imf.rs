@@ -2358,71 +2358,75 @@ async fn handle_edit_delete(
     from_id: ContactId,
 ) -> Result<()> {
     if let Some(rfc724_mid) = mime_parser.get_header(HeaderDef::ChatEdit) {
-        if let Some(original_msg_id) = rfc724_mid_exists(context, rfc724_mid).await? {
-            if let Some(mut original_msg) =
-                Message::load_from_db_optional(context, original_msg_id).await?
-            {
-                if original_msg.from_id == from_id {
-                    if let Some(part) = mime_parser.parts.first() {
-                        let edit_msg_showpadlock = part
-                            .param
-                            .get_bool(Param::GuaranteeE2ee)
-                            .unwrap_or_default();
-                        if edit_msg_showpadlock || !original_msg.get_showpadlock() {
-                            let new_text =
-                                part.msg.strip_prefix(EDITED_PREFIX).unwrap_or(&part.msg);
-                            chat::save_text_edit_to_db(context, &mut original_msg, new_text)
-                                .await?;
-                        } else {
-                            warn!(context, "Edit message: Not encrypted.");
-                        }
-                    }
-                } else {
-                    warn!(context, "Edit message: Bad sender.");
-                }
-            } else {
-                warn!(context, "Edit message: Database entry does not exist.");
-            }
-        } else {
+        let Some(original_msg_id) = rfc724_mid_exists(context, rfc724_mid).await? else {
             warn!(
                 context,
                 "Edit message: rfc724_mid {rfc724_mid:?} not found."
             );
+            return Ok(());
+        };
+        let Some(mut original_msg) =
+            Message::load_from_db_optional(context, original_msg_id).await?
+        else {
+            warn!(context, "Edit message: Database entry does not exist.");
+            return Ok(());
+        };
+        if original_msg.from_id != from_id {
+            warn!(context, "Edit message: Bad sender.");
+            return Ok(());
         }
+        let Some(part) = mime_parser.parts.first() else {
+            return Ok(());
+        };
+
+        let edit_msg_showpadlock = part
+            .param
+            .get_bool(Param::GuaranteeE2ee)
+            .unwrap_or_default();
+        if !edit_msg_showpadlock && original_msg.get_showpadlock() {
+            warn!(context, "Edit message: Not encrypted.");
+            return Ok(());
+        }
+
+        let new_text = part.msg.strip_prefix(EDITED_PREFIX).unwrap_or(&part.msg);
+        chat::save_text_edit_to_db(context, &mut original_msg, new_text).await?;
     } else if let Some(rfc724_mid_list) = mime_parser.get_header(HeaderDef::ChatDelete)
         && let Some(part) = mime_parser.parts.first()
     {
         // See `message::delete_msgs_ex()`, unlike edit requests, DC doesn't send unencrypted
         // deletion requests, so there's no need to support them.
-        if part.param.get_bool(Param::GuaranteeE2ee).unwrap_or(false) {
-            let mut modified_chat_ids = BTreeSet::new();
-            let mut msg_ids = Vec::new();
-
-            let rfc724_mid_vec: Vec<&str> = rfc724_mid_list.split_whitespace().collect();
-            for rfc724_mid in rfc724_mid_vec {
-                let rfc724_mid = rfc724_mid.trim_start_matches('<').trim_end_matches('>');
-                if let Some(msg_id) = message::rfc724_mid_exists(context, rfc724_mid).await? {
-                    if let Some(msg) = Message::load_from_db_optional(context, msg_id).await? {
-                        if msg.from_id == from_id {
-                            message::delete_msg_locally(context, &msg).await?;
-                            msg_ids.push(msg.id);
-                            modified_chat_ids.insert(msg.chat_id);
-                        } else {
-                            warn!(context, "Delete message: Bad sender.");
-                        }
-                    } else {
-                        warn!(context, "Delete message: Database entry does not exist.");
-                    }
-                } else {
-                    warn!(context, "Delete message: {rfc724_mid:?} not found.");
-                    // Insert a tombstone so that the message will be ignored if it arrives later within a period specified in prune_tombstones().
-                    insert_tombstone(context, rfc724_mid).await?;
-                }
-            }
-            message::delete_msgs_locally_done(context, &msg_ids, modified_chat_ids).await?;
-        } else {
+        if part.param.get_bool(Param::GuaranteeE2ee) != Some(true) {
             warn!(context, "Delete message: Not encrypted.");
+            return Ok(());
         }
+
+        let mut modified_chat_ids = BTreeSet::new();
+        let mut msg_ids = Vec::new();
+
+        let rfc724_mid_vec: Vec<&str> = rfc724_mid_list.split_whitespace().collect();
+        for rfc724_mid in rfc724_mid_vec {
+            let rfc724_mid = rfc724_mid.trim_start_matches('<').trim_end_matches('>');
+            let Some(msg_id) = message::rfc724_mid_exists(context, rfc724_mid).await? else {
+                warn!(context, "Delete message: {rfc724_mid:?} not found.");
+                // Insert a tombstone so that the message will be ignored if it arrives later within a period specified in prune_tombstones().
+                insert_tombstone(context, rfc724_mid).await?;
+                continue;
+            };
+
+            let Some(msg) = Message::load_from_db_optional(context, msg_id).await? else {
+                warn!(context, "Delete message: Database entry does not exist.");
+                continue;
+            };
+            if msg.from_id != from_id {
+                warn!(context, "Delete message: Bad sender.");
+                continue;
+            }
+
+            message::delete_msg_locally(context, &msg).await?;
+            msg_ids.push(msg.id);
+            modified_chat_ids.insert(msg.chat_id);
+        }
+        message::delete_msgs_locally_done(context, &msg_ids, modified_chat_ids).await?;
     }
     Ok(())
 }
