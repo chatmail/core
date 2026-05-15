@@ -304,7 +304,7 @@ mod tests {
 <html><head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <meta name="color-scheme" content="light dark" />
-</head><body>
+</head><body dir="auto" style="unicode-bidi: plaintext">
 This message does not have Content-Type nor Subject.<br/>
 </body></html>
 "#
@@ -322,7 +322,7 @@ This message does not have Content-Type nor Subject.<br/>
 <html><head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <meta name="color-scheme" content="light dark" />
-</head><body>
+</head><body dir="auto" style="unicode-bidi: plaintext">
 message with a non-UTF-8 encoding: äöüßÄÖÜ<br/>
 </body></html>
 "#
@@ -341,7 +341,7 @@ message with a non-UTF-8 encoding: äöüßÄÖÜ<br/>
 <html><head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <meta name="color-scheme" content="light dark" />
-</head><body>
+</head><body dir="auto" style="unicode-bidi: plaintext">
 This line ends with a space and will be merged with the next one due to format=flowed.<br/>
 <br/>
 This line does not end with a space<br/>
@@ -362,7 +362,7 @@ and will be wrapped as usual.<br/>
 <html><head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <meta name="color-scheme" content="light dark" />
-</head><body>
+</head><body dir="auto" style="unicode-bidi: plaintext">
 mime-modified should not be set set as there is no html and no special stuff;<br/>
 although not being a delta-message.<br/>
 test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x27; :)<br/>
