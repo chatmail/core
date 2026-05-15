@@ -3,13 +3,13 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use anyhow::{Context as _, Result, anyhow};
+use anyhow::{Context as _, Result};
 use async_imap::types::{Quota, QuotaResource};
 
+use crate::EventType;
 use crate::context::Context;
 use crate::imap::session::Session as ImapSession;
 use crate::tools::{self, time_elapsed};
-use crate::{EventType, stock_str};
 
 /// quota icon in connectivity is "yellow".
 pub const QUOTA_WARN_THRESHOLD_PERCENTAGE: u64 = 80;
@@ -17,13 +17,25 @@ pub const QUOTA_WARN_THRESHOLD_PERCENTAGE: u64 = 80;
 /// quota icon in connectivity is "red".
 pub const QUOTA_ERROR_THRESHOLD_PERCENTAGE: u64 = 95;
 
+/// [QuotaInfo] error.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    /// Quota info not supported by the provider
+    #[error("Quota info not supported by the provider")]
+    NotSupportedByProvider,
+
+    /// Any other error: network, parsing, etc.
+    #[error("{0:#}")]
+    Other(#[from] anyhow::Error),
+}
+
 /// Server quota information with an update timestamp.
 #[derive(Debug)]
 pub struct QuotaInfo {
     /// Recently loaded quota information.
     /// set to `Err()` if the provider does not support quota or on other errors,
     /// set to `Ok()` for valid quota information.
-    pub(crate) recent: Result<BTreeMap<String, Vec<QuotaResource>>>,
+    pub(crate) recent: Result<BTreeMap<String, Vec<QuotaResource>>, Error>,
 
     /// When the structure was modified.
     pub(crate) modified: tools::Time,
@@ -76,9 +88,11 @@ impl Context {
         info!(self, "Transport {transport_id}: Updating quota.");
 
         let quota = if session.can_check_quota() {
-            get_unique_quota_roots_and_usage(session, folder).await
+            get_unique_quota_roots_and_usage(session, folder)
+                .await
+                .map_err(Error::Other)
         } else {
-            Err(anyhow!(stock_str::not_supported_by_provider(self)))
+            Err(Error::NotSupportedByProvider)
         };
 
         self.quota.write().await.insert(

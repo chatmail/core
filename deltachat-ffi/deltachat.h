@@ -7057,11 +7057,6 @@ void dc_event_unref(dc_event_t* event);
 /// `%1$s` will be replaced by a possibly more detailed, typically english, error description.
 #define DC_STR_ERROR                      112
 
-/// "Not supported by your provider."
-///
-/// Used in the connectivity view.
-#define DC_STR_NOT_SUPPORTED_BY_PROVIDER  113
-
 /// "Messages"
 ///
 /// Used as a subtitle in quota context; can be plural always.

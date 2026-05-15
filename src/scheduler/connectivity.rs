@@ -418,7 +418,11 @@ impl Context {
             };
             match &quota.recent {
                 Err(e) => {
-                    ret += &escaper::encode_minimal(&e.to_string());
+                    // If not supported by the provider,
+                    // just skip the "quota" section.
+                    if !matches!(e, crate::quota::Error::NotSupportedByProvider) {
+                        ret += &escaper::encode_minimal(&e.to_string());
+                    }
                 }
                 Ok(quota) => {
                     if quota.is_empty() {

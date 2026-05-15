@@ -189,9 +189,6 @@ pub enum StockMessage {
     #[strum(props(fallback = "Error: %1$s"))]
     Error = 112,
 
-    #[strum(props(fallback = "Not supported by your provider."))]
-    NotSupportedByProvider = 113,
-
     #[strum(props(fallback = "Messages"))]
     Messages = 114,
 
@@ -1135,11 +1132,6 @@ pub(crate) fn last_msg_sent_successfully(context: &Context) -> String {
 /// `%1$s` will be replaced by a possibly more detailed, typically english, error description.
 pub(crate) fn error(context: &Context, error: &str) -> String {
     translated(context, StockMessage::Error).replace1(error)
-}
-
-/// Stock string: `Not supported by your provider.`.
-pub(crate) fn not_supported_by_provider(context: &Context) -> String {
-    translated(context, StockMessage::NotSupportedByProvider)
 }
 
 /// Stock string: `Messages`.
