@@ -28,6 +28,7 @@ jobs:
         uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-bin: false
       - name: npm install
         working-directory: deltachat-jsonrpc/typescript
         run: npm install
