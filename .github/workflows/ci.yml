@@ -183,7 +183,7 @@ jobs:
           cache-bin: false
 
       - name: Build C library
-        run: cargo build -p deltachat_ffi
+        run: cargo build -p deltachat_ffi --locked
 
       - name: Upload C library
         uses: actions/upload-artifact@v7
@@ -212,7 +212,7 @@ jobs:
           cache-bin: false
 
       - name: Build deltachat-rpc-server
-        run: cargo build -p deltachat-rpc-server
+        run: cargo build -p deltachat-rpc-server --locked
 
       - name: Upload deltachat-rpc-server
         uses: actions/upload-artifact@v7
