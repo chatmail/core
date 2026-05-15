@@ -43,6 +43,7 @@ jobs:
         uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-bin: false
       - name: Run rustfmt
         run: cargo fmt --all -- --check
       - name: Run clippy
@@ -96,6 +97,7 @@ jobs:
         uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-bin: false
       - name: Rustdoc
         run: cargo doc --document-private-items --no-deps
 
@@ -141,6 +143,7 @@ jobs:
         uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-bin: false
 
       - name: Install nextest
         uses: taiki-e/install-action@cca35edeb1d01366c2843b68fc3ca441446d73d3
@@ -177,6 +180,7 @@ jobs:
         uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-bin: false
 
       - name: Build C library
         run: cargo build -p deltachat_ffi
@@ -205,6 +209,7 @@ jobs:
         uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-bin: false
 
       - name: Build deltachat-rpc-server
         run: cargo build -p deltachat-rpc-server
