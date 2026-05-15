@@ -2344,8 +2344,6 @@ INSERT INTO msgs
 
 /// Checks for "Chat-Edit" and "Chat-Delete" headers,
 /// and edits/deletes existing messages accordingly.
-///
-/// Returns `true` if this message is an edit/deletion request.
 async fn handle_edit_delete(
     context: &Context,
     mime_parser: &MimeMessage,
