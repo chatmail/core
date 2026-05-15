@@ -16,7 +16,7 @@ def test_install_venv_and_use_other_core(tmp_path, get_core_python_env):
 
 
 @pytest.mark.parametrize("version", ["2.24.0"])
-def test_qr_setup_contact(alice_and_remote_bob, version) -> None:
+def test_qr_setup_contact(acfactory, alice_and_remote_bob, version) -> None:
     """Test other-core Bob profile can do securejoin with Alice on current core."""
     alice, alice_contact_bob, remote_eval = alice_and_remote_bob(version)
 
@@ -32,6 +32,15 @@ def test_qr_setup_contact(alice_and_remote_bob, version) -> None:
 
     # Test that Bob verified Alice's profile.
     assert remote_eval("bob_contact_alice.get_snapshot().is_verified")
+
+    # Test that Bob can also scan a QR code
+    # of Alice for which the key is not known yet.
+    # For the test above Bob already knew the key from a vCard.
+    alice2 = acfactory.get_online_account()
+    qr_code = alice2.get_qr_code()
+    remote_eval(f"bob.secure_join({qr_code!r})")
+    remote_eval("bob.wait_for_securejoin_joiner_success()")
+    alice2.wait_for_securejoin_inviter_success()
 
 
 def test_send_and_receive_message(alice_and_remote_bob) -> None:
