@@ -710,6 +710,41 @@ async fn test_secure_join_broadcast_ex(v3: bool, remove_invite: bool) -> Result<
     Ok(())
 }
 
+/// Tests that a channel name taken from a stale QR invite (its `b=` parameter
+/// carries an outdated name) gets reconciled with the actual channel name once
+/// a regular channel message arrives, even though the channel was never renamed.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_secure_join_broadcast_reconciles_stale_name() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_chat_id = chat::create_broadcast(alice, "Real Name".to_string()).await?;
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
+
+    // Simulate a stale invite link: replace the `b=` parameter (always last in
+    // the QR) with an outdated channel name, as if the link was shared before
+    // the channel was renamed.
+    let stale_qr = Regex::new("&b=.*$")
+        .unwrap()
+        .replace(&qr, "&b=Stale%20Name");
+    assert!(stale_qr != *qr);
+    let qr = stale_qr.to_string();
+
+    let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
+
+    // A regular channel post, without any rename, must be enough for Bob to
+    // learn the actual channel name.
+    let sent = alice.send_text(alice_chat_id, "Hi channel").await;
+    let rcvd = bob.recv_msg(&sent).await;
+    assert_eq!(rcvd.chat_id, bob_chat_id);
+
+    let bob_chat = Chat::load_from_db(bob, bob_chat_id).await?;
+    assert_eq!(bob_chat.name, "Real Name");
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_setup_contact_compatibility_legacy() -> Result<()> {
     test_setup_contact_compatibility_ex(false, false).await

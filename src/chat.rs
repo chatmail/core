@@ -3633,6 +3633,16 @@ pub(crate) async fn create_out_broadcast_ex(
     }
 
     let timestamp = create_smeared_timestamp(context);
+
+    // Stamp the channel name with a timestamp right from creation so that every
+    // outgoing message carries a `Chat-Group-Name-Timestamp` header. Without it,
+    // a member that joined via a QR invite (and therefore took the channel name
+    // from the invite's `b=` parameter) could never reconcile a stale name with
+    // the actual channel name, see `apply_chat_name_avatar_and_description_changes()`.
+    let mut params = Params::new();
+    params.set_i64(Param::GroupNameTimestamp, timestamp);
+    let param = params.to_string();
+
     let trans_fn = |t: &mut rusqlite::Transaction| -> Result<ChatId> {
         let cnt: u32 = t.query_row(
             "SELECT COUNT(*) FROM chats WHERE grpid=?",
@@ -3643,13 +3653,14 @@ pub(crate) async fn create_out_broadcast_ex(
 
         t.execute(
             "INSERT INTO chats
-            (type, name, name_normalized, grpid, created_timestamp)
-            VALUES(?, ?, ?, ?, ?)",
+            (type, name, name_normalized, grpid, param, created_timestamp)
+            VALUES(?, ?, ?, ?, ?, ?)",
             (
                 Chattype::OutBroadcast,
                 &chat_name,
                 normalize_text(&chat_name),
                 &grpid,
+                &param,
                 timestamp,
             ),
         )?;

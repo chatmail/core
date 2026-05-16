@@ -2385,6 +2385,24 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 153)?;
+    if dbversion < migration_version {
+        // Backfill `Param::GroupNameTimestamp` ('g') for existing outgoing broadcast
+        // channels (type 160 == `Chattype::OutBroadcast`). They were created without it,
+        // so their messages lacked a `Chat-Group-Name-Timestamp` header and joiners
+        // could not reconcile a channel name taken from a stale QR invite.
+        sql.execute_migration(
+            "UPDATE chats
+             SET param = CASE WHEN COALESCE(param, '') = '' THEN '' ELSE param || char(10) END
+                         || 'g=' || created_timestamp
+             WHERE type = 160
+               AND COALESCE(param, '') NOT LIKE 'g=%'
+               AND COALESCE(param, '') NOT LIKE '%' || char(10) || 'g=%'",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
