@@ -18,7 +18,7 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::fmt;
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 
 use crate::chat::{Chat, ChatId, send_msg};
@@ -259,9 +259,8 @@ pub(crate) async fn set_msg_reaction(
             });
         }
     } else {
-        info!(
-            context,
-            "Can't assign reaction to unknown message with Message-ID {}", in_reply_to
+        bail!(
+            "Can't assign reaction to unknown message with Message-ID {in_reply_to} (SKIP_DEVICE_MSG)"
         );
     }
     Ok(())
@@ -516,6 +515,54 @@ Content-Disposition: reaction\n\
         let reactions = get_msg_reactions(&alice, msg.id).await?;
         assert_eq!(reactions.to_string(), "👍1");
 
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_reaction_and_multitransport() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let device_chat_id = ChatId::get_for_contact(alice, ContactId::DEVICE).await?;
+        let n_device_msgs = get_chat_msgs(alice, device_chat_id).await?.len();
+
+        let reaction_bytes = "To: alice@example.org, claire@example.org\n\
+From: bob@example.net\n\
+Date: Today, 29 February 2021 00:00:10 -800\n\
+Message-ID: 56789@example.net\n\
+In-Reply-To: 12345@example.org\n\
+Content-Type: text/plain; charset=utf-8\n\
+Content-Disposition: reaction\n\
+\n\
+\u{1F44D}"
+            .as_bytes();
+        // Alice receives a reaction to Claire's message from Bob earler than the message itself
+        // because Bob knows about Alice's new transport.
+        assert!(receive_imf(alice, reaction_bytes, false).await.is_err());
+
+        let msg_id = receive_imf(
+            alice,
+            "To: alice@example.org, bob@example.net\n\
+From: claire@example.org\n\
+Date: Today, 29 February 2021 00:00:00 -800\n\
+Message-ID: 12345@example.org\n\
+\n\
+Can we chat at 1pm pacific, today?"
+                .as_bytes(),
+            false,
+        )
+        .await?
+        .unwrap()
+        .msg_ids[0];
+
+        // Finally the reaction arrives on Alice's older transport.
+        receive_imf(alice, reaction_bytes, false).await?;
+        let reactions = get_msg_reactions(alice, msg_id).await?;
+        assert_eq!(reactions.to_string(), "👍1");
+
+        assert_eq!(
+            get_chat_msgs(alice, device_chat_id).await?.len(),
+            n_device_msgs
+        );
         Ok(())
     }
 
