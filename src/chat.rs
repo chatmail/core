@@ -688,6 +688,7 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
         context.emit_event(EventType::ChatDeleted { chat_id: self });
         context.emit_msgs_changed_without_ids();
 
+        context.scheduler.interrupt_inbox().await;
         if let Some(id) = sync_id {
             self::sync(context, id, SyncAction::Delete)
                 .await
@@ -704,8 +705,6 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
         context
             .set_config_internal(Config::LastHousekeeping, None)
             .await?;
-        context.scheduler.interrupt_smtp().await;
-
         Ok(())
     }
 
