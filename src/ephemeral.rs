@@ -454,11 +454,14 @@ WHERE
     Ok(rows)
 }
 
-/// Deletes messages which are expired according to
+/// Locally deletes messages which are expired according to
 /// `delete_device_after` setting or `ephemeral_timestamp` column.
 ///
 /// Emits relevant `MsgsChanged` and `WebxdcInstanceDeleted` events
 /// if messages are deleted.
+///
+/// Also see [`delete_expired_imap_messages`],
+/// which marks the messages for deletion on the IMAP server.
 pub(crate) async fn delete_expired_messages(context: &Context, now: i64) -> Result<()> {
     let rows = select_expired_messages(context, now).await?;
 
@@ -649,13 +652,18 @@ pub(crate) async fn ephemeral_loop(context: &Context, interrupt_receiver: Receiv
     }
 }
 
-/// Schedules expired IMAP messages for deletion.
+/// Schedules expired IMAP messages for deletion on the server.
+///
+/// Also see [`delete_expired_imap_messages`],
+/// which locally deletes expired messages.
 pub(crate) async fn delete_expired_imap_messages(
     context: &Context,
     transport_id: u32,
     is_chatmail: bool,
 ) -> Result<()> {
     let now = time();
+
+    // TODO probably I should add `id>9` to all the `FROM msgs` queries
 
     if !context.get_config_bool(Config::BccSelf).await? && is_chatmail {
         info!(
@@ -665,8 +673,8 @@ pub(crate) async fn delete_expired_imap_messages(
                 .sql
                 .query_map_vec(
                     "SELECT rfc724_mid FROM msgs
-                    WHERE (ephemeral_timestamp!=0 AND ephemeral_timestamp<=?)
-                    OR download_state=?",
+                    WHERE ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR download_state=?3)
+                    AND id>9",
                     (now, DownloadState::Done),
                     |row| Ok(row.get::<_, String>(0)?)
                 )
@@ -679,7 +687,8 @@ pub(crate) async fn delete_expired_imap_messages(
                 .sql
                 .query_map_vec(
                     "SELECT pre_rfc724_mid FROM msgs
-                    WHERE pre_rfc724_mid!=''",
+                    WHERE pre_rfc724_mid!=''
+                    AND id>9",
                     (),
                     |row| Ok(row.get::<_, String>(0)?)
                 )
@@ -701,11 +710,12 @@ pub(crate) async fn delete_expired_imap_messages(
                 WHERE transport_id=?1
                 AND rfc724_mid IN (
                     SELECT rfc724_mid FROM msgs
-                    WHERE (ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2)
-                    OR download_state=?3
+                    WHERE ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR download_state=?3)
+                    AND id>9
                     UNION
                     SELECT pre_rfc724_mid FROM msgs
                     WHERE pre_rfc724_mid!=''
+                    AND id>9
                 )",
                 (transport_id, now, DownloadState::Done),
             )
@@ -718,7 +728,7 @@ pub(crate) async fn delete_expired_imap_messages(
                 .sql
                 .query_map_vec(
                     "SELECT rfc724_mid FROM msgs
-                    WHERE (ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2)",
+                    WHERE ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9",
                     (transport_id, now),
                     |row| Ok(row.get::<_, String>(0)?)
                 )
@@ -732,7 +742,7 @@ pub(crate) async fn delete_expired_imap_messages(
                 .query_map_vec(
                     "SELECT pre_rfc724_mid FROM msgs
                     WHERE pre_rfc724_mid!=''
-                    AND (ephemeral_timestamp!=0 AND ephemeral_timestamp<=?)",
+                    AND ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9",
                     (now,),
                     |row| Ok(row.get::<_, String>(0)?)
                 )
@@ -749,11 +759,11 @@ pub(crate) async fn delete_expired_imap_messages(
                 WHERE transport_id=?1
                 AND rfc724_mid IN (
                     SELECT rfc724_mid FROM msgs
-                    WHERE (ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2)
+                    WHERE ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9
                     UNION
                     SELECT pre_rfc724_mid FROM msgs
                     WHERE pre_rfc724_mid!=''
-                    AND (ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2)
+                    AND ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9
                 )",
                 (transport_id, now),
             )

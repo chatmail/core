@@ -452,11 +452,11 @@ async fn check_msg_is_deleted(t: &TestContext, chat: &Chat, msg_id: MsgId) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_delete_expired_imap_messages() -> Result<()> {
     let t = TestContext::new_alice().await;
-    const HOUR: i64 = 60 * 60;
+    const HOUR: i64 = 60 * 60; // TODO could probably be 1
     let now = time();
     let transport_id: u32 = 1;
-    let other_transport_id: u32 = 2;
     let uidvalidity = 12345u32;
+    t.set_config_bool(Config::BccSelf, false).await?;
 
     async fn is_deleted(context: &Context, mid: &str) -> Result<bool> {
         Ok(context
@@ -477,155 +477,133 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
             .unwrap();
     }
 
-    // ── Test messages ────────────────────────────────────────────────────────
+    // Test messages:
     //
-    // (id, rfc724_mid, ephemeral_timestamp, download_state, pre_rfc724_mid)
+    // Three messages that were not split into pre- and post- message:
+    //  "expired@localhost"     - expired ephemeral message
+    //  "no_expire@localhost"   - non-ephemeral message
+    //  "future@localhost"      - will expire in the future, but not yet
     //
-    //  "expired"          – expired ephemeral, no pre-msg
-    //  "no_expire"        – ephemeral_timestamp=0, not Done  → never deleted
-    //  "future"           – future ephemeral, not Done       → never deleted
-    //  "done"             – Done, no ephemeral               → branch 1 only
-    //  "pre_no_expire_*"  – has pre-msg, but no expiry/Done
-    //  "pre_expired_*"    – has pre-msg, expired ephemeral
-    //  "pre_future_*"     – has pre-msg, future ephemeral
-    //  "wrong_tid"        – expired+Done, but wrong transport_id in imap
-    let msgs: &[(&str, i64, DownloadState, &str)] = &[
-        ("expired", now - HOUR, DownloadState::Available, ""),
-        ("no_expire", 0, DownloadState::Available, ""),
-        ("future", now + HOUR, DownloadState::Available, ""),
-        ("done", 0, DownloadState::Done, ""),
+    // And four messages that were split into pre- and post-message.
+    //  "expired_*@localhost"   - has pre-msg, expired ephemeral message, not downloaded yet
+    //  "no_expire_*@localhost" - has pre-msg, non-ephemeral, not downloaded yet
+    //  "future_*@localhost"    - has pre-msg, not expired yet, not downloaded yet
+    //  "done_*@localhost"      - Fully downloaded -> post- message can be deleted
+    //
+    // The tuple is (rfc724_mid, ephemeral_timestamp, download_state, pre_rfc724_mid)
+    let msgs: [(&str, i64, DownloadState, &str); 7] = [
+        ("expired@localhost", now - HOUR, DownloadState::Done, ""),
+        ("no_expire@localhost", 0, DownloadState::Done, ""),
+        ("future@localhost", now + HOUR, DownloadState::Done, ""),
         (
-            "pre_no_expire_post",
-            0,
-            DownloadState::Available,
-            "pre_no_expire_pre",
-        ),
-        (
-            "pre_expired_post",
+            "expired_post@localhost",
             now - HOUR,
             DownloadState::Available,
-            "pre_expired_pre",
+            "expired_pre@localhost",
         ),
         (
-            "pre_future_post",
+            "no_expire_post@localhost",
+            0,
+            DownloadState::Available,
+            "no_expire_pre@localhost",
+        ),
+        (
+            "future_post@localhost",
             now + HOUR,
             DownloadState::Available,
-            "pre_future_pre",
+            "future_pre@localhost",
         ),
-        ("wrong_tid", now - HOUR, DownloadState::Done, ""),
+        (
+            "done_pre@localhost",
+            0,
+            DownloadState::Done,
+            "done_post@localhost",
+        ),
     ];
-    for (mid, eph_ts, dl_state, pre_mid) in msgs {
+    for (rfc724_mid, ephemeral_timestamp, download_state, pre_rfc724_mid) in msgs {
         t.sql
             .execute(
                 "INSERT INTO msgs \
                  (rfc724_mid, timestamp, ephemeral_timestamp, download_state, pre_rfc724_mid) \
-                 VALUES (?,?,0,?,?,?)",
-                (*mid, *eph_ts, *dl_state, *pre_mid),
+                 VALUES (?,?,?,?,?)",
+                (
+                    rfc724_mid,
+                    now,
+                    ephemeral_timestamp,
+                    download_state,
+                    pre_rfc724_mid,
+                ),
             )
             .await?;
     }
+    let rfc724_mids: Vec<&str> = msgs
+        .iter()
+        .flat_map(|(rfc724_mid, _, _, pre_rfc724_mid)| [*rfc724_mid, *pre_rfc724_mid])
+        .filter(|s| !s.is_empty())
+        .collect();
 
-    // One imap row per mid (including separate rows for pre-messages),
-    // plus "wrong_tid" on a different transport_id.
-    let imap_rows: &[(&str, u32)] = &[
-        ("expired", transport_id),
-        ("no_expire", transport_id),
-        ("future", transport_id),
-        ("done", transport_id),
-        ("pre_no_expire_post", transport_id),
-        ("pre_no_expire_pre", transport_id), // the pre-message's own imap row
-        ("pre_expired_post", transport_id),
-        ("pre_expired_pre", transport_id),
-        ("pre_future_post", transport_id),
-        ("pre_future_pre", transport_id),
-        ("wrong_tid", other_transport_id), // transport_id filter test
-    ];
-    for (i, (mid, tid)) in imap_rows.iter().enumerate() {
+    for (i, rfc724_mid) in rfc724_mids.iter().enumerate() {
         t.sql
             .execute(
                 "INSERT INTO imap \
                  (transport_id, rfc724_mid, folder, uid, target, uidvalidity) \
                  VALUES (?,?,'INBOX',?,'INBOX',?)",
-                (*tid, *mid, (i + 1) as u32, uidvalidity),
+                (transport_id, *rfc724_mid, (i + 1) as u32, uidvalidity),
             )
             .await?;
     }
 
-    // ── Branch 1: is_chatmail=true, BccSelf=false (default) ─────────────────
-    //
-    // SQL deletes: (ephemeral_timestamp!=0 AND <=now) OR download_state=Done
-    // Pre-messages: ALL with pre_rfc724_mid!='' unconditionally.
+    for (is_chatmail, other_transport) in
+        [(false, false), (false, true), (true, false), (true, true)]
+    {
+        println!(
+            "Testing combination is_chatmail={is_chatmail}, other_transport={other_transport}"
+        );
+
+        delete_expired_imap_messages(
+            &t,
+            if other_transport {
+                transport_id + 1
+            } else {
+                transport_id
+            },
+            is_chatmail,
+        )
+        .await?;
+
+        if other_transport {
+            // Nothing should be deleted on another transport
+            for rfc724_mid in &rfc724_mids {
+                assert_eq!(is_deleted(&t, *rfc724_mid).await?, false);
+            }
+            continue;
+        }
+
+        assert_eq!(is_deleted(&t, "expired@localhost").await?, true);
+        assert_eq!(is_deleted(&t, "no_expire@localhost").await?, is_chatmail);
+        assert_eq!(is_deleted(&t, "future@localhost").await?, is_chatmail);
+        assert_eq!(is_deleted(&t, "expired_post@localhost").await?, true);
+        assert_eq!(is_deleted(&t, "expired_pre@localhost").await?, true);
+        assert_eq!(is_deleted(&t, "no_expire_post@localhost").await?, false);
+        assert_eq!(
+            is_deleted(&t, "no_expire_pre@localhost").await?,
+            is_chatmail
+        );
+        assert_eq!(is_deleted(&t, "future_post@localhost").await?, false);
+        assert_eq!(is_deleted(&t, "future_pre@localhost").await?, is_chatmail);
+        assert_eq!(is_deleted(&t, "done_pre@localhost").await?, is_chatmail);
+        assert_eq!(is_deleted(&t, "done_post@localhost").await?, is_chatmail);
+
+        reset_targets(&t).await;
+    }
+
+    // With BccSelf=true, non-expired messages are kept even if `is_chatmail` is true
+    t.set_config_bool(Config::BccSelf, true).await?;
     delete_expired_imap_messages(&t, transport_id, true).await?;
-
-    // Tests (ephemeral_timestamp!=0 AND ephemeral_timestamp<=now) path.
-    assert!(is_deleted(&t, "expired").await?);
-    // Tests the ephemeral_timestamp!=0 guard: timestamp=0 satisfies <=now but must not match.
-    assert!(!is_deleted(&t, "no_expire").await?);
-    // Tests the ephemeral_timestamp<=now guard.
-    assert!(!is_deleted(&t, "future").await?);
-    // Tests the OR download_state=Done clause.
-    assert!(is_deleted(&t, "done").await?);
-    // Post-message: no expiry, not Done → not deleted.
-    assert!(!is_deleted(&t, "pre_no_expire_post").await?);
-    // Pre-message: deleted unconditionally (tests UNION SELECT pre_rfc724_mid ... WHERE pre_rfc724_mid!='').
-    assert!(is_deleted(&t, "pre_no_expire_pre").await?);
-    // Post-message with expired ephemeral → deleted.
-    assert!(is_deleted(&t, "pre_expired_post").await?);
-    // Pre-message of expired post → deleted (unconditional pre path).
-    assert!(is_deleted(&t, "pre_expired_pre").await?);
-    // Post-message with future ephemeral → not deleted.
-    assert!(!is_deleted(&t, "pre_future_post").await?);
-    // Pre-message of future post → still deleted (branch 1 pre path has NO ephemeral condition).
-    // If the pre UNION clause gains an ephemeral condition, this would wrongly not be deleted.
-    assert!(is_deleted(&t, "pre_future_pre").await?);
-    // Tests transport_id=?1: expired+Done but on wrong transport_id → not deleted.
-    assert!(!is_deleted(&t, "wrong_tid").await?);
-
-    reset_targets(&t).await;
-
-    // ── Branch 2: is_chatmail=false ──────────────────────────────────────────
-    //
-    // SQL deletes: ephemeral_timestamp!=0 AND <=now only (no Done).
-    // Pre-messages: only when the post also satisfies the ephemeral condition.
-    delete_expired_imap_messages(&t, transport_id, false).await?;
-
-    // Expired ephemeral → deleted.
-    assert!(is_deleted(&t, "expired").await?);
-    // ephemeral_timestamp=0 → not deleted (tests !=0 guard in branch 2).
-    assert!(!is_deleted(&t, "no_expire").await?);
-    // Future ephemeral → not deleted (tests <=now guard in branch 2).
-    assert!(!is_deleted(&t, "future").await?);
-    // Done without expired ephemeral → NOT deleted (key branch 1 vs 2 difference).
-    // If download_state=Done were added to branch 2, this would wrongly be deleted.
-    assert!(!is_deleted(&t, "done").await?);
-    // Post-message: no expiry → not deleted.
-    assert!(!is_deleted(&t, "pre_no_expire_post").await?);
-    // Pre-message of non-expiring post → NOT deleted
-    // (tests ephemeral_timestamp!=0 in branch 2's pre subquery).
-    assert!(!is_deleted(&t, "pre_no_expire_pre").await?);
-    // Post-message with expired ephemeral → deleted.
-    assert!(is_deleted(&t, "pre_expired_post").await?);
-    // Pre-message of expired post → deleted (tests full ephemeral condition in pre subquery).
-    assert!(is_deleted(&t, "pre_expired_pre").await?);
-    // Post-message with future ephemeral → not deleted.
-    assert!(!is_deleted(&t, "pre_future_post").await?);
-    // Pre-message of future post → NOT deleted
-    // (tests ephemeral_timestamp<=now in branch 2's pre subquery).
-    // If the <=now guard were removed there, this would wrongly be deleted.
-    assert!(!is_deleted(&t, "pre_future_pre").await?);
-    // Wrong transport_id → not deleted.
-    assert!(!is_deleted(&t, "wrong_tid").await?);
-
-    reset_targets(&t).await;
-
-    // ── BccSelf=true forces branch 2 even when is_chatmail=true ─────────────
-    //
-    // Tests the `!BccSelf` part of the Rust condition.
-    // If `!BccSelf` were dropped, Done would be deleted here (branch 1 behaviour).
-    t.set_config(Config::BccSelf, Some("1")).await?;
-    delete_expired_imap_messages(&t, transport_id, true).await?;
-    assert!(!is_deleted(&t, "done").await?); // must stay on branch 2
-    assert!(is_deleted(&t, "expired").await?); // branch 2 still runs normally
+    assert_eq!(is_deleted(&t, "expired@localhost").await?, true);
+    assert_eq!(is_deleted(&t, "no_expire@localhost").await?, false);
+    assert_eq!(is_deleted(&t, "done_pre@localhost").await?, false);
+    assert_eq!(is_deleted(&t, "done_post@localhost").await?, false);
 
     Ok(())
 }
