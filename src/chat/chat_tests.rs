@@ -2924,8 +2924,17 @@ async fn test_broadcast_change_name() -> Result<()> {
     let broadcast_id = create_broadcast(alice, "Channel".to_string()).await?;
     let qr = get_securejoin_qr(alice, Some(broadcast_id)).await.unwrap();
 
-    tcm.section("Alice invites Bob to her channel");
-    tcm.exec_securejoin_qr(bob, alice, &qr).await;
+    tcm.section("Alice changes the chat name after creating the QR code, but before someone joins");
+    set_chat_name(alice, broadcast_id, "Updated name after creating QR code").await?;
+    alice.pop_sent_msg().await;
+
+    {
+        tcm.section("Alice invites Bob to her channel");
+        let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
+        let bob_chat = Chat::load_from_db(bob, bob_chat_id).await?;
+        assert_eq!(bob_chat.name, "Updated name after creating QR code");
+    }
+
     tcm.section("Alice invites Fiona to her channel");
     tcm.exec_securejoin_qr(fiona, alice, &qr).await;
 
