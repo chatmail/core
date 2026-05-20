@@ -663,17 +663,15 @@ pub(crate) async fn delete_expired_imap_messages(
 ) -> Result<()> {
     let now = time();
 
-    // TODO probably I should add `id>9` to all the `FROM msgs` queries
-
-    if !context.get_config_bool(Config::BccSelf).await? && is_chatmail {
+    if should_delete_all_downloaded_messages(context, is_chatmail).await? {
         info!(
             context,
-            "dbg marking all as deleted 1 - rfc724_mids: {:?}",
+            "dbg marking all as deleted 2 - rfc724_mids: {:?}",
             context
                 .sql
                 .query_map_vec(
                     "SELECT rfc724_mid FROM msgs
-                    WHERE ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR download_state=?3)
+                    WHERE ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?) OR download_state=?)
                     AND id>9",
                     (now, DownloadState::Done),
                     |row| Ok(row.get::<_, String>(0)?)
@@ -682,7 +680,7 @@ pub(crate) async fn delete_expired_imap_messages(
         );
         info!(
             context,
-            "dbg marking all as deleted 1 - pre_rfc724_mids: {:?}",
+            "dbg marking all as deleted 2 - pre_rfc724_mids: {:?}",
             context
                 .sql
                 .query_map_vec(
@@ -771,6 +769,13 @@ pub(crate) async fn delete_expired_imap_messages(
     }
 
     Ok(())
+}
+
+pub(crate) async fn should_delete_all_downloaded_messages(
+    context: &Context,
+    is_chatmail: bool,
+) -> Result<bool> {
+    Ok(!context.get_config_bool(Config::BccSelf).await? && is_chatmail)
 }
 
 /// Start ephemeral timers for seen messages if they are not started
