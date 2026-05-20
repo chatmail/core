@@ -599,7 +599,7 @@ async fn send_mdn_rfc724_mid(
                 .ok()
         })
         .collect();
-
+    message::insert_tombstone(context, &rendered_msg.rfc724_mid).await?;
     match smtp_send(context, &recipients, &body, smtp, None).await {
         SendResult::Success => {
             if !recipients.is_empty() {
