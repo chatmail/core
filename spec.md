@@ -28,7 +28,6 @@ to implement typical messenger functions.
 - [Voice messages](#voice-messages)
 - [Reactions](#reactions)
 - [Attaching a contact to a message](#attaching-a-contact-to-a-message)
-- [Transitioning to a new e-mail address (AEAP)](#transitioning-to-a-new-e-mail-address-aeap)
 - [Miscellaneous](#miscellaneous)
     - [Sync messages](#sync-messages)
 
@@ -613,23 +612,6 @@ When receiving such `Autocrypt-Gossip` header
 in a message signed by a verified key,
 chatmail clients mark the gossiped key
 as indirectly verified.
-
-
-# Transitioning to a new e-mail address (AEAP)
-
-When receiving a message:
-- If the key exists, but belongs to another address
-- AND there is a `Chat-Version` header
-- AND the message is signed correctly
-- AND the From address is (also) in the encrypted (and therefore signed) headers 
-- AND the message timestamp is newer than the contact's `lastseen`
-  (to prevent changing the address back when messages arrive out of order)
-  (this condition is not that important
-  since we will have eventual consistency even without it):
-
-  Replace the contact in _all_ groups,
-  possibly deduplicate the members list,
-  and add a system message to all of these chats.
 
 
 # Miscellaneous
