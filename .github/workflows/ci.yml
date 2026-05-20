@@ -281,17 +281,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Currently used Rust version.
+          # Currently used Python version.
           - os: ubuntu-latest
-            python: 3.14
-          - os: macos-latest
-            python: 3.14
-
-          # PyPy tests
-          - os: ubuntu-latest
-            python: pypy3.10
-          - os: macos-latest
-            python: pypy3.10
+            python: "3.14"
 
           # Minimum Supported Python Version = 3.10
           # This is the minimum version for which manylinux Python wheels are
