@@ -9,6 +9,7 @@ use crate::headerdef::HeaderDef;
 use crate::imex::{ImexMode, has_backup, imex};
 use crate::message::{Message, MessengerMessage, delete_msgs};
 use crate::mimeparser::{self, MimeMessage};
+use crate::qr::{Qr, check_qr};
 use crate::receive_imf::receive_imf;
 use crate::securejoin::{get_securejoin_qr, join_securejoin};
 use crate::test_utils;
