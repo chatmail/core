@@ -62,7 +62,7 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: EmbarkStudios/cargo-deny-action@91bf2b620e09e18d6eb78b92e7861937469acedb
+      - uses: EmbarkStudios/cargo-deny-action@6c8f9facfa5047ec02d8485b6bf52b587b7777d1
         with:
           arguments: --workspace --all-features --locked
           command: check
