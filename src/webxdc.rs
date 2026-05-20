@@ -1022,19 +1022,27 @@ impl Message {
         // We could do the following to increase privacy:
         // - remove displayname (not that big of a deal in reality)
         // - only show people in the list that send an status update before in the group (would decrease usefulness, but would still bring enough benefit, if only as internal function to match avatars)
-        let contacts = chat::get_chat_contacts(context, self.get_chat_id()).await?;
+        let mut contacts = chat::get_chat_contacts(context, self.get_chat_id()).await?;
         let mut memberlist = Vec::with_capacity(contacts.len());
+        // DM chats don't include self contact
+        // also webxdc may still need it even when you were removed from a group,
+        // so we re-add the self contact here.
+        if !contacts.contains(&ContactId::SELF) {
+            contacts.push(ContactId::SELF);
+        }
         for contact_id in contacts {
             let contact = contact::Contact::get_by_id(context, contact_id).await?;
             if let Some(fingerprint) = contact.fingerprint() {
                 memberlist.push((contact, self.get_webxdc_user_id(&fingerprint.hex())));
+            } else if contact_id == ContactId::SELF {
+                memberlist.push((contact, self.get_webxdc_self_addr(context).await?));
             }
         }
         Ok(memberlist)
     }
 
     /// Returns webxdc memberlist, each member is a tuple (hashed user id/addr, display_name)
-    /// Only includes members that have a known public key in the database and does not include self contact.
+    /// Only includes members that have a known public key in the database and it also includes self contact.
     pub async fn get_webxdc_memberlist(&self, context: &Context) -> Result<Vec<(String, String)>> {
         // We could do the following to increase privacy:
         // - remove displayname (not that big of a deal in reality)
