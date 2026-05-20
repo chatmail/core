@@ -221,6 +221,30 @@ def test_account(acfactory) -> None:
     alice.stop_io()
 
 
+def test_mark_fresh_vs_self_mdn(acfactory) -> None:
+    alice, bob = acfactory.get_online_accounts(2)
+    bob.set_config("bcc_self", "1")
+
+    alice_contact_bob = alice.create_contact(bob)
+    alice_chat = alice_contact_bob.create_chat()
+    alice_chat.send_text("Hello!")
+
+    event = bob.wait_for_incoming_msg_event()
+    chat_id = event.chat_id
+    msg_id = event.msg_id
+
+    bob_chat = bob.get_chat_by_id(chat_id)
+    message = bob.get_message_by_id(msg_id)
+    bob_chat.accept()
+    bob.mark_seen_messages([message])
+    bob_chat.mark_fresh()
+    assert bob_chat.get_fresh_message_count() == 1
+    alice.wait_for_event(EventType.MSG_READ)
+    alice_chat.send_text("You've read 'Hello!'")
+    bob.wait_for_incoming_msg_event()
+    assert bob_chat.get_fresh_message_count() == 2
+
+
 def test_chat(acfactory) -> None:
     alice, bob = acfactory.get_online_accounts(2)
 

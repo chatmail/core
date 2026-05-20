@@ -1374,6 +1374,18 @@ async fn test_markfresh_chat() -> Result<()> {
     assert_eq!(bob_chat_id.get_fresh_msg_cnt(bob).await?, 0);
     assert_eq!(bob.get_fresh_msgs().await?.len(), 0);
 
+    // Marking a message as seen results to sending an MDN to the contact and self.
+    message::markseen_msgs(bob, vec![bob_msg2.id]).await?;
+    assert_eq!(
+        bob.sql
+            .count(
+                "SELECT COUNT(*) FROM smtp_mdns WHERE from_id=?",
+                (bob_msg2.from_id,)
+            )
+            .await?,
+        1
+    );
+
     // bob marks the chat as fresh again, fresh count is 1 again
     markfresh_chat(bob, bob_chat_id).await?;
     let bob_msg1 = Message::load_from_db(bob, bob_msg1.id).await?;
