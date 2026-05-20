@@ -462,6 +462,10 @@ async fn get_to_and_past_contact_ids(
 /// downloaded again, sets `chat_id=DC_CHAT_ID_TRASH` and returns `Ok(Some(…))`.
 /// If the message is so wrong that we didn't even create a database entry,
 /// returns `Ok(None)`.
+///
+/// The caller must emit [`EventType::IncomingMsgBunch`]
+/// if this function returned `Ok(Some)`, because that usually (but not always)
+/// means that this function emitted [`EventType::IncomingMsg`].
 pub(crate) async fn receive_imf_inner(
     context: &Context,
     rfc724_mid: &str,

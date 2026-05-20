@@ -779,10 +779,6 @@ impl Imap {
 
         info!(context, "{} mails read from \"{}\".", read_cnt, folder);
 
-        if !received_msgs.is_empty() {
-            context.emit_event(EventType::IncomingMsgBunch);
-        }
-
         chat::mark_old_messages_as_noticed(context, received_msgs).await?;
 
         if fetch_res.is_ok() {
@@ -1269,7 +1265,6 @@ impl Session {
     ///
     /// If the message is incorrect or there is a failure to write a message to the database,
     /// it is skipped and the error is logged.
-    #[expect(clippy::arithmetic_side_effects)]
     pub(crate) async fn fetch_many_msgs(
         &mut self,
         context: &Context,
@@ -1277,6 +1272,36 @@ impl Session {
         request_uids: Vec<u32>,
         uid_message_ids: &BTreeMap<u32, String>,
         received_msgs_channel: Sender<(u32, Option<ReceivedMsg>)>,
+    ) -> Result<()> {
+        let mut received_at_least_one = false;
+        let res = self
+            ._fetch_many_msgs(
+                context,
+                folder,
+                request_uids,
+                uid_message_ids,
+                async |uid, msg| {
+                    if msg.is_some() {
+                        received_at_least_one = true;
+                    }
+                    received_msgs_channel.send((uid, msg)).await?;
+                    Ok(())
+                },
+            )
+            .await;
+        if received_at_least_one {
+            context.emit_event(EventType::IncomingMsgBunch);
+        }
+        return res;
+    }
+    #[expect(clippy::arithmetic_side_effects)]
+    async fn _fetch_many_msgs(
+        &mut self,
+        context: &Context,
+        folder: &str,
+        request_uids: Vec<u32>,
+        uid_message_ids: &BTreeMap<u32, String>,
+        mut on_msg_received: impl AsyncFnMut(u32, Option<ReceivedMsg>) -> Result<()>,
     ) -> Result<()> {
         if request_uids.is_empty() {
             return Ok(());
@@ -1348,7 +1373,7 @@ impl Session {
 
                 if is_deleted {
                     info!(context, "Not processing deleted msg {}.", request_uid);
-                    received_msgs_channel.send((request_uid, None)).await?;
+                    on_msg_received(request_uid, None).await?;
                     continue;
                 }
 
@@ -1359,7 +1384,7 @@ impl Session {
                         context,
                         "Not processing message {} without a BODY.", request_uid
                     );
-                    received_msgs_channel.send((request_uid, None)).await?;
+                    on_msg_received(request_uid, None).await?;
                     continue;
                 };
 
@@ -1392,9 +1417,7 @@ impl Session {
                     }
                     Ok(msg) => msg,
                 };
-                received_msgs_channel
-                    .send((request_uid, received_msg))
-                    .await?;
+                on_msg_received(request_uid, received_msg).await?;
             }
 
             // If we don't process the whole response, IMAP client is left in a broken state where
