@@ -3660,17 +3660,20 @@ pub(crate) async fn create_out_broadcast_ex(
             |row| row.get(0),
         )?;
         ensure!(cnt == 0, "{cnt} chats exist with grpid {grpid}");
+        let mut params: Params = Params::new();
+        params.update_timestamp(Param::GroupNameTimestamp, time())?;
 
         t.execute(
             "INSERT INTO chats
-            (type, name, name_normalized, grpid, created_timestamp)
-            VALUES(?, ?, ?, ?, ?)",
+            (type, name, name_normalized, grpid, created_timestamp, param)
+            VALUES(?, ?, ?, ?, ?, ?)",
             (
                 Chattype::OutBroadcast,
                 &chat_name,
                 normalize_text(&chat_name),
                 &grpid,
                 timestamp,
+                params.to_string(),
             ),
         )?;
         let chat_id = ChatId::new(t.last_insert_rowid().try_into()?);
