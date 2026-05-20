@@ -452,7 +452,6 @@ async fn check_msg_is_deleted(t: &TestContext, chat: &Chat, msg_id: MsgId) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_delete_expired_imap_messages() -> Result<()> {
     let t = TestContext::new_alice().await;
-    const HOUR: i64 = 60 * 60; // TODO could probably be 1
     let now = time();
     let transport_id: u32 = 1;
     let uidvalidity = 12345u32;
@@ -492,12 +491,12 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
     //
     // The tuple is (rfc724_mid, ephemeral_timestamp, download_state, pre_rfc724_mid)
     let msgs: [(&str, i64, DownloadState, &str); 7] = [
-        ("expired@localhost", now - HOUR, DownloadState::Done, ""),
+        ("expired@localhost", now - 1, DownloadState::Done, ""),
         ("no_expire@localhost", 0, DownloadState::Done, ""),
-        ("future@localhost", now + HOUR, DownloadState::Done, ""),
+        ("future@localhost", now + 1, DownloadState::Done, ""),
         (
             "expired_post@localhost",
-            now - HOUR,
+            now - 1,
             DownloadState::Available,
             "expired_pre@localhost",
         ),
@@ -509,7 +508,7 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
         ),
         (
             "future_post@localhost",
-            now + HOUR,
+            now + 1,
             DownloadState::Available,
             "future_pre@localhost",
         ),
@@ -574,7 +573,7 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
         if other_transport {
             // Nothing should be deleted on another transport
             for rfc724_mid in &rfc724_mids {
-                assert_eq!(is_deleted(&t, *rfc724_mid).await?, false);
+                assert_eq!(is_deleted(&t, rfc724_mid).await?, false);
             }
             continue;
         }

@@ -664,34 +664,6 @@ pub(crate) async fn delete_expired_imap_messages(
     let now = time();
 
     if should_delete_all_downloaded_messages(context, is_chatmail).await? {
-        info!(
-            context,
-            "dbg marking all as deleted 2 - rfc724_mids: {:?}",
-            context
-                .sql
-                .query_map_vec(
-                    "SELECT rfc724_mid FROM msgs
-                    WHERE ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?) OR download_state=?)
-                    AND id>9",
-                    (now, DownloadState::Done),
-                    |row| Ok(row.get::<_, String>(0)?)
-                )
-                .await
-        );
-        info!(
-            context,
-            "dbg marking all as deleted 2 - pre_rfc724_mids: {:?}",
-            context
-                .sql
-                .query_map_vec(
-                    "SELECT pre_rfc724_mid FROM msgs
-                    WHERE pre_rfc724_mid!=''
-                    AND id>9",
-                    (),
-                    |row| Ok(row.get::<_, String>(0)?)
-                )
-                .await
-        );
         // This the only device using this relay.
         // Mark all downloaded messages for deletion, because they are not needed anymore.
         //
@@ -719,33 +691,6 @@ pub(crate) async fn delete_expired_imap_messages(
             )
             .await?;
     } else {
-        info!(
-            context,
-            "dbg marking ephemeral as deleted 1 - rfc724_mids: {:?}",
-            context
-                .sql
-                .query_map_vec(
-                    "SELECT rfc724_mid FROM msgs
-                    WHERE ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9",
-                    (transport_id, now),
-                    |row| Ok(row.get::<_, String>(0)?)
-                )
-                .await
-        );
-        info!(
-            context,
-            "dbg marking ephemeral as deleted 1 - pre_rfc724_mids: {:?}",
-            context
-                .sql
-                .query_map_vec(
-                    "SELECT pre_rfc724_mid FROM msgs
-                    WHERE pre_rfc724_mid!=''
-                    AND ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9",
-                    (now,),
-                    |row| Ok(row.get::<_, String>(0)?)
-                )
-                .await
-        );
         // There may be other devices using this relay,
         // either because there is multi-relay or because this is a classical email server.
         // Only delete expired ephemeral messages.

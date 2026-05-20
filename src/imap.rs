@@ -1387,19 +1387,6 @@ impl Session {
                 );
                 let res = receive_imf_inner(context, rfc724_mid, body, is_seen).await;
 
-                // TODO I don't think this code is needed anymore:
-                // // If the message is not needed anymore on the server, mark it for deletion:
-                // if !context.get_config_bool(Config::BccSelf).await? && is_chatmail {
-                //     context
-                //         .sql
-                //         .execute(
-                //             "UPDATE imap SET target='' WHERE rfc724_mid=?",
-                //             (rfc724_mid,),
-                //         )
-                //         .await?;
-                //     context.scheduler.interrupt_inbox().await;
-                // }
-
                 // If there was an error receiving the message, show a device message:
                 let received_msg = match res {
                     Err(err) => {
