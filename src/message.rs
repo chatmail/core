@@ -2119,7 +2119,7 @@ pub async fn estimate_deletion_cnt(
 ) -> Result<usize> {
     ensure!(
         !from_server,
-        "The `delete_server_after` config option was removed. You need to pass `false` for `from_server`."
+        "The `delete_server_after` config option was removed. You need to pass `false` for `from_server`"
     );
 
     let self_chat_id = ChatIdBlocked::lookup_by_contact(context, ContactId::SELF)

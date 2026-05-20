@@ -681,18 +681,18 @@ pub(crate) async fn delete_expired_imap_messages(
                 AND rfc724_mid IN (
                     SELECT rfc724_mid FROM msgs
                     WHERE ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR download_state=?3)
-                    AND id>9
+                        AND id>9
                     UNION
                     SELECT pre_rfc724_mid FROM msgs
                     WHERE pre_rfc724_mid!=''
-                    AND id>9
+                        AND id>9
                 )",
                 (transport_id, now, DownloadState::Done),
             )
             .await?;
     } else {
         // There may be other devices using this relay,
-        // either because there is multi-relay or because this is a classical email server.
+        // either because there is multi-device or because this is a classical email server.
         // Only delete expired ephemeral messages.
         context
             .sql
@@ -706,7 +706,7 @@ pub(crate) async fn delete_expired_imap_messages(
                     UNION
                     SELECT pre_rfc724_mid FROM msgs
                     WHERE pre_rfc724_mid!=''
-                    AND ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9
+                        AND ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9
                 )",
                 (transport_id, now),
             )
