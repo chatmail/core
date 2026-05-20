@@ -590,6 +590,7 @@ async fn send_mdn_rfc724_mid(
     if context.get_config_bool(Config::BccSelf).await? {
         add_self_recipients(context, &mut recipients, encrypted).await?;
     }
+    message::insert_tombstone(context, &rendered_msg.rfc724_mid).await?;
     #[cfg(not(test))]
     {
         use crate::log::LogExt;
