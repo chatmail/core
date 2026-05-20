@@ -2925,10 +2925,16 @@ async fn test_broadcast_change_name() -> Result<()> {
     let mut qr = get_securejoin_qr(alice, Some(broadcast_id)).await.unwrap();
     // Something goes wrong with the title, e.g. maybe it gets ellipsized
     // Note that the title always comes at the end for human readability
-    qr += "+wrong+title";
+    qr += "+modified+title";
 
     {
         tcm.section("Alice invites Bob to her channel");
+        let Qr::AskJoinBroadcast { name, .. } = check_qr(bob, &qr).await? else {
+            panic!();
+        };
+        assert_eq!(name, "Channel modified title");
+
+        // The channel's name gets fixed after actually joining the channel:
         let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
         let bob_chat = Chat::load_from_db(bob, bob_chat_id).await?;
         assert_eq!(bob_chat.name, "Channel");
