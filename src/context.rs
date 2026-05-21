@@ -21,7 +21,6 @@ use crate::contact::{Contact, ContactId};
 use crate::debug_logging::DebugLogging;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::imap::{Imap, ServerMetadata};
-use crate::key::self_fingerprint;
 use crate::log::warn;
 use crate::logged_debug_assert;
 use crate::message::{self, MessageState, MsgId};
@@ -843,7 +842,6 @@ impl Context {
 
     /// Returns information about the context as key-value pairs.
     pub async fn get_info(&self) -> Result<BTreeMap<&'static str, String>> {
-        let all_self_addrs = self.get_all_self_addrs().await?.join(", ");
         let all_transports: Vec<String> = ConfiguredLoginParam::load_all(self)
             .await?
             .into_iter()
@@ -941,7 +939,6 @@ impl Context {
             }
         }
 
-        res.insert("all_self_addrs", all_self_addrs);
         res.insert(
             "who_can_call_me",
             self.get_config_int(Config::WhoCanCallMe).await?.to_string(),

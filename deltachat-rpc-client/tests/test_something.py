@@ -91,7 +91,15 @@ def test_lowercase_address(acfactory) -> None:
     assert account.list_transports()[0]["addr"] == addr
 
     param = account.get_info()["used_transport_settings"]
-    assert addr in param
+
+    domain = addr.rsplit("@")[-1]
+    domain_upper = addr_upper.rsplit("@")[-1]
+    assert domain in param
+    assert domain_upper not in param
+
+    # Whole address should not appear in the info,
+    # does not matter if uppercase or lowercase.
+    assert addr not in param
     assert addr_upper not in param
 
 
