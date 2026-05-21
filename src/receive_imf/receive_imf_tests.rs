@@ -2720,6 +2720,44 @@ async fn test_read_receipts_dont_unmark_bots() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_self_mdn_vs_delayed_msg() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob1 = &tcm.bob().await;
+    let bob2 = &tcm.bob().await;
+
+    let alice_chat = alice.create_chat(bob1).await;
+    let sent1 = alice.send_text(alice_chat.id, "1").await;
+    SystemTime::shift(Duration::from_secs(1));
+    let sent2 = alice.send_text(alice_chat.id, "2").await;
+
+    let msg2_id = bob1.recv_msg(&sent2).await.id;
+    let msg1_id = bob1.recv_msg(&sent1).await.id;
+    let bob2_chat_id = bob2.recv_msg(&sent2).await.chat_id;
+    bob2.recv_msg(&sent1).await;
+
+    message::markseen_msgs(bob1, vec![msg2_id]).await?;
+    assert_eq!(msg1_id.get_state(bob1).await?, MessageState::InFresh);
+    let sent = bob1.get_sent_mdn().await;
+
+    bob2.recv_msg_trash(&sent).await;
+    let mut msgs = get_chat_msgs(bob2, bob2_chat_id).await?;
+    let ChatItem::Message { msg_id } = msgs.pop().unwrap() else {
+        unreachable!();
+    };
+    let msg = Message::load_from_db(bob2, msg_id).await?;
+    assert_eq!(msg.text, "2");
+    assert_eq!(msg.state, MessageState::InSeen);
+    let ChatItem::Message { msg_id } = msgs.pop().unwrap() else {
+        unreachable!();
+    };
+    let msg = Message::load_from_db(bob2, msg_id).await?;
+    assert_eq!(msg.text, "1");
+    assert_eq!(msg.state, MessageState::InFresh);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_gmx_forwarded_msg() -> Result<()> {
     let t = TestContext::new_alice().await;
     t.allow_unencrypted().await?;
