@@ -1,7 +1,7 @@
 //! # Chat module.
 
 use std::cmp;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::io::Cursor;
 use std::marker::Sync;
@@ -3325,39 +3325,41 @@ pub(crate) async fn mark_old_messages_as_noticed(
         return Ok(());
     }
 
-    let mut msgs_by_chat: HashMap<ChatId, ReceivedMsg> = HashMap::new();
+    let mut updated_chats = BTreeMap::new();
     for msg in msgs {
-        let chat_id = msg.chat_id;
-        if let Some(existing_msg) = msgs_by_chat.get(&chat_id) {
-            if msg.sort_timestamp > existing_msg.sort_timestamp {
-                msgs_by_chat.insert(chat_id, msg);
-            }
-        } else {
-            msgs_by_chat.insert(chat_id, msg);
-        }
+        let Some(&msg_id) = msg.msg_ids.last() else {
+            continue;
+        };
+        updated_chats
+            .entry(msg.chat_id)
+            .and_modify(|val| *val = cmp::max(*val, (msg.sort_timestamp, msg_id)))
+            .or_insert((msg.sort_timestamp, msg_id));
     }
 
     let changed_chats = context
         .sql
         .transaction(|transaction| {
             let mut changed_chats = Vec::new();
-            for (_, msg) in msgs_by_chat {
+            for (chat_id, (timestamp, msg_id)) in updated_chats {
                 let changed_rows = transaction.execute(
+                    // Do the same as in receive_imf_inner().
                     "UPDATE msgs
             SET state=?
           WHERE state=?
             AND hidden=0
             AND chat_id=?
-            AND timestamp<=?;",
+            AND timestamp<=?
+            AND id<?",
                     (
                         MessageState::InNoticed,
                         MessageState::InFresh,
-                        msg.chat_id,
-                        msg.sort_timestamp,
+                        chat_id,
+                        timestamp,
+                        msg_id,
                     ),
                 )?;
                 if changed_rows > 0 {
-                    changed_chats.push(msg.chat_id);
+                    changed_chats.push(chat_id);
                 }
             }
             Ok(changed_chats)

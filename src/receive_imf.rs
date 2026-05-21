@@ -982,12 +982,18 @@ UPDATE config SET value=? WHERE keyname='configured_addr' AND value!=?1
                 context
                     .sql
                     .execute(
+                        // Don't mark messages added to the db later as noticed, regardless of
+                        // `timestamp` -- the device which issued the MDN might not have these
+                        // messages at that moment. Still, additionally filter messages by timestamp
+                        // to protect from multi-relay message reordering and overall rely less on
+                        // the server side. We assume that all clocks in the chat are synchronized.
                         "
 UPDATE msgs SET state=? WHERE
     state=? AND
     hidden=0 AND
     chat_id=? AND
-    (timestamp,id)<(?,?)",
+    timestamp<=? AND
+    id<?",
                         (
                             MessageState::InNoticed,
                             MessageState::InFresh,
