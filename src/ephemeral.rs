@@ -664,7 +664,7 @@ pub(crate) async fn delete_expired_imap_messages(
     let now = time();
 
     if should_delete_all_downloaded_messages(context, is_chatmail).await? {
-        // This the only device using this relay.
+        // This is the only device using this relay.
         // Mark all downloaded messages for deletion, because they are not needed anymore.
         //
         // For pre- and post-messages, `rfc724_mid` contains the post-message's Message-Id.

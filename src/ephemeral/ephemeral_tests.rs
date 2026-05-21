@@ -493,7 +493,9 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
     let msgs: [(&str, i64, DownloadState, &str); 7] = [
         ("expired@localhost", now - 1, DownloadState::Done, ""),
         ("no_expire@localhost", 0, DownloadState::Done, ""),
-        ("future@localhost", now + 1, DownloadState::Done, ""),
+        // Use "now + 3600" rather than "now + 1", otherwise the test may be flaky
+        // if it is slow and the message expires in a second
+        ("future@localhost", now + 3600, DownloadState::Done, ""),
         (
             "expired_post@localhost",
             now - 1,
@@ -508,7 +510,7 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
         ),
         (
             "future_post@localhost",
-            now + 1,
+            now + 3600,
             DownloadState::Available,
             "future_pre@localhost",
         ),

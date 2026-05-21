@@ -1245,6 +1245,7 @@ def test_immediate_autodelete(acfactory, direct_imap, log):
     so that messages are supposed to be immediately autodeleted
     """
     ac1, ac2 = acfactory.get_online_accounts(2)
+    assert ac1.get_config("bcc_self") == "0"
 
     log.section("ac1: create chat with ac2")
     chat1 = ac1.create_chat(ac2)
