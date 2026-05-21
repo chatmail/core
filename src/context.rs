@@ -880,10 +880,6 @@ impl Context {
             .sql
             .count("SELECT COUNT(*) FROM public_keys;", ())
             .await?;
-        let fingerprint_str = match self_fingerprint(self).await {
-            Ok(fp) => fp.to_string(),
-            Err(err) => format!("<key failure: {err}>"),
-        };
 
         let mut res = get_info();
 
@@ -962,7 +958,6 @@ impl Context {
         res.insert("disable_idle", disable_idle.to_string());
         res.insert("private_key_count", prv_key_cnt.to_string());
         res.insert("public_key_count", pub_key_cnt.to_string());
-        res.insert("fingerprint", fingerprint_str);
         res.insert(
             "media_quality",
             self.get_config_int(Config::MediaQuality).await?.to_string(),
