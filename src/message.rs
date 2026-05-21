@@ -602,6 +602,31 @@ impl Message {
         Ok(msg)
     }
 
+    /// Loads the message with given Message-ID from the database.
+    ///
+    /// Cannot return a trashed message.
+    pub async fn load_by_rfc724_mid_optional(
+        context: &Context,
+        rfc724_mid: &str,
+    ) -> Result<Option<Message>> {
+        if let Some(msg_id) = context
+            .sql
+            .query_row_optional(
+                "SELECT id FROM msgs WHERE rfc724_mid=? AND chat_id != ?",
+                (rfc724_mid, DC_CHAT_ID_TRASH),
+                |row| {
+                    let msg_id: MsgId = row.get(0)?;
+                    Ok(msg_id)
+                },
+            )
+            .await?
+        {
+            Self::load_from_db_optional(context, msg_id).await
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Returns additional text which is appended to the message's text field
     /// when it is loaded from the database.
     /// Currently this is used to add infomation to pre-messages of what the download will be and how large it is
