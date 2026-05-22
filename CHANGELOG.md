@@ -1,5 +1,158 @@
 # Changelog
 
+## [2.50.0] - 2026-05-22
+
+### API-Changes
+
+- Add JSON-RPC APIs for location streaming.
+- [**breaking**] Remove unused config `smtp_certificate_checks`.
+- Deprecate old server config keys that were replaced by `add_or_update_transport()`.
+- [**breaking**] remove `dc_delete_all_locations`.
+- [**breaking**] Remove unused `info_only` option when loading a chatlist ([#8171](https://github.com/chatmail/core/pull/8171)).
+- [**breaking**] location: avoid repeating module name in function names
+- [**breaking**] deltachat-rpc-client: remove deprecated `get_fresh_messages_in_arrival_order()`.
+- Remove unused `set_draft_vcard()` JSON-RPC API.
+- Remove mostly-unused `sign_unencrypted` config ([#8190](https://github.com/chatmail/core/pull/8190)).
+
+### Features / Changes
+
+- [**breaking**] Remove `mvbox_move` and `only_fetch_mvbox` configs. Transports have `folder` configuration to watch the folder other than `INBOX` as a replacement for `only_fetch_mvbox`. Non-chatmail transports no longer watch mvbox, each transport watches exactly one folder now.
+- Add `force_encryption` config to ignore incoming unencrypted messages and enforce encryption for outgoing messages.
+- Remove "Delete Messages from Server" (`delete_server_after`) config ([#8240](https://github.com/chatmail/core/pull/8240)).
+- Remove `show_emails` config.
+- Remove non-sticker heuristics and `force_sticker()`. UIs should make sure not to send images from gallery such as screenshots as stickers.
+- Enable PQC (Post-Quantum Cryptography) support for OpenPGP. We do not generate PQC keys yet, this step is needed for forward compatibility.
+- Resend the last 10 messages to new broadcast member ([#8151](https://github.com/chatmail/core/pull/8151)).
+- Allow TLS connections with invalid certificate if the key is unchanged.
+- Add `is_app_sender` and `is_broadcast` contexts for webxdc.
+- Increase the resolution-limit `WORSE_AVATAR_SIZE` from 128 to 256.
+- Change multiplier to 7/8 when scaling down avatars.
+- Add error cause to connectivity view for IMAP errors.
+- Remove the largely-unused ability to send multiple reactions to one message ([#8131](https://github.com/chatmail/core/pull/8131)).
+- Don't show non-delivery-notfications in broadcast channels ([#8159](https://github.com/chatmail/core/pull/8159)).
+- Adapt quota warning to automatic cleanup.
+- Remove `Content-Description` and `Content-Disposition` from `multipart/encrypted` parts.
+- Log all connection attempt errors instead of the first one.
+- Remove workaround for old filtermail (part of chatmail relay) which expected exact number of newlines in OpenPGP messages.
+- Remove key fingerprint from `Context.get_info()`.
+- Mask local part of email addresses in `used_transport_settings`.
+
+### Fixes
+
+- Trash no-op messages about self being added to groups.
+- `decide_chat_assignment`: Log correct `post_msg_exists` value.
+- Don't send `Chat-Group-Name*` headers for InBroadcast-s.
+- Restart io on transport deletion.
+- Never remove primary transport when applying `SyncTransports` message.
+- Set Param::GuaranteeE2ee before preparing message blob ([#8090](https://github.com/chatmail/core/pull/8090)).
+- `fetch_single_msg()`: Lock `fetch_msgs_mutex` before fetching.
+- Set dir to "auto" in body tag when converting plain-text to HTML ([#8227](https://github.com/chatmail/core/pull/8227)).
+- Scale up contacts messaged in groups to `IncomingTo`.
+- Do not sort prefetched messages by INTERNALDATE.
+- Don't resort re-sent message to the bottom ([#8145](https://github.com/chatmail/core/pull/8145)).
+- Ensure that message being sent is added to the bottom ([#8027](https://github.com/chatmail/core/pull/8027)).
+- Don't receive message if a deletion request was received before ([#8143](https://github.com/chatmail/core/pull/8143)).
+- Emit `MsgsChanged`, not `IncomingMsg`, for messages only having special parts ([#8157](https://github.com/chatmail/core/pull/8157)).
+- Generate new pre-message `Message-ID` when forwarding.
+- use correct dir converting plaintext to HTML ([#8248](https://github.com/chatmail/core/pull/8248)).
+- hide connectivity HTML quota if not supported.
+- Delete pre-messages on the server for single-device chatmail transports ([#8240](https://github.com/chatmail/core/pull/8240)).
+
+### Build system
+
+- Upgrade rustls-webpki to 0.103.12.
+- Remove coredeps `Dockerfile`.
+- Increase MSRV to 1.89.
+
+### CI
+
+- Remove Concourse CI pipelines.
+- Update Rust to 1.95.0.
+- Do not store Rust cache from PRs.
+- Set cache-bin to "false" for `swatinem/rust-cache` action.
+- Use `--locked` flag with `cargo build`.
+- Upgrade `cargo-deny-action` to v2.0.17.
+
+### Documentation
+
+- Update `echobot_no_hooks.py` example.
+- Discourage  `into()`, `try_into()` and `parse()` ([#8180](https://github.com/chatmail/core/pull/8180)).
+- Remove outdated comment about "quota warning" device message.
+- Update README.md: Use ci-chatmail instead of nine ([#8238](https://github.com/chatmail/core/pull/8238)).
+- spec: remove AEAP section.
+
+### Performance
+
+- Enable `clippy::large_futures` lint.
+- Stop sending locations concurrently.
+- Set location for all accounts in parallel.
+- `is_self_addr()`: Employ the config cache to optimize for `ConfiguredAddr` passed.
+
+### Refactor
+
+- Get rid of `MessageState::{OutPreparing,OutMdnRcvd}` in the db.
+- Make HTML parser non-async.
+- Replace `HashSet` with `BTreeSet`.
+- Rename `EnteredLoginParam::load()` and save() to `load_legacy()` and `save_legacy()`.
+- Remove unnecessary async block in `dc_set_location`.
+- Remove unused Authentication-Results parsing ([#8172](https://github.com/chatmail/core/pull/8172)).
+- Remove mostly-unused function `get_secondary_self_addrs()` ([#8173](https://github.com/chatmail/core/pull/8173)).
+- Use `self_fingerprint()` where it makes sense ([#8174](https://github.com/chatmail/core/pull/8174)).
+- Split `is_sending_locations_to_chat()` into two functions.
+- Use regular functions rather than FromStr impls ([#8178](https://github.com/chatmail/core/pull/8178)).
+- Make `Fingerprint` not implement `Display` ([#8177](https://github.com/chatmail/core/pull/8177)).
+- Don't temporarily extend `signatures` for signed-only messages.
+- Use some more let..else.
+- Remove outdated comment.
+- Un-nest `handle_edit_delete`.
+- Drop support for replacing partial download stubs.
+
+### Tests
+
+- Use `displayname` instead of `show_emails` for config cache test.
+- Remove unused test data related to Authentication-Result parsing ([#8175](https://github.com/chatmail/core/pull/8175)).
+- `EventTracker::get_matching_opt`: Return the first matching event, not last.
+- Set email addresses explicitly for the test accounts.
+- Use encrypted messages in more tests.
+- Add `TestContext.allow_unencrypted()`.
+- Online test for legacy Secure-Join key request.
+
+### Miscellaneous Tasks
+
+- cargo: bump rand from 0.9.2 to 0.9.3.
+- deps: bump taiki-e/install-action from 2.64.0 to 2.74.0.
+- add exception for RUSTSEC-2026-0097.
+- deps: bump swatinem/rust-cache from 2.8.2 to 2.9.1.
+- cargo: upgrade rand 0.8.5 to rand 0.8.6.
+- deps: bump zizmorcore/zizmor-action from 0.5.2 to 0.5.3.
+- deps: bump pypa/gh-action-pypi-publish from 1.13.0 to 1.14.0.
+- update provider database.
+- cargo: update rustls-webpki to 0.103.13.
+- cargo: bump openssl from 0.10.72 to 0.10.78.
+- Apply rustmft after the previous commit.
+- json-rpc: deprecate `send_sticker` ([#8189](https://github.com/chatmail/core/pull/8189)).
+- deps: bump cachix/install-nix-action from 31.9.1 to 31.10.5.
+- deps: bump taiki-e/install-action from 2.75.10 to 2.75.19.
+- update astral-tokio-tar from 0.6.0 to 0.6.1.
+- add exceptions for hickory-proto 0.25.2 in deny.toml.
+- cargo: bump blake3 from 1.8.3 to 1.8.5.
+- deny.toml: add cpufeatures duplicate dependency exception.
+- cargo: bump hyper from 1.8.1 to 1.9.0.
+- cargo: bump tokio from 1.50.0 to 1.52.1.
+- cargo: bump libc from 0.2.184 to 0.2.186.
+- cargo: bump colorutils-rs from 0.7.6 to 0.8.0.
+- cargo: bump data-encoding from 2.10.0 to 2.11.0.
+- cargo: bump openssl from 0.10.78 to 0.10.79.
+- deps: bump taiki-e/install-action from 2.75.19 to 2.77.1.
+- deps: bump cachix/install-nix-action from 31.10.5 to 31.10.6.
+- allow passing arguments to scripts/clippy.sh.
+- clippy::useless-borrows-in-formatting fixes.
+- update zerocopy from 0.7.32 to 0.7.35.
+- upgrade astral-tokio-tar to 0.6.2 ([#8255](https://github.com/chatmail/core/pull/8255)).
+- deps: bump EmbarkStudios/cargo-deny-action from 2.0.17 to 2.0.18.
+- cargo: bump openssl from 0.10.79 to 0.10.80.
+- deps: bump taiki-e/install-action from 2.77.1 to 2.78.1.
+
 ## [2.49.0] - 2026-04-13
 
 ### Features / Changes
@@ -8103,3 +8256,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.47.0]: https://github.com/chatmail/core/compare/v2.46.0..v2.47.0
 [2.48.0]: https://github.com/chatmail/core/compare/v2.47.0..v2.48.0
 [2.49.0]: https://github.com/chatmail/core/compare/v2.48.0..v2.49.0
+[2.50.0]: https://github.com/chatmail/core/compare/v2.49.0..v2.50.0
