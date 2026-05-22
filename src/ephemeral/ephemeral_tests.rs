@@ -515,10 +515,10 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
             "future_pre@localhost",
         ),
         (
-            "done_pre@localhost",
+            "done_post@localhost",
             0,
             DownloadState::Done,
-            "done_post@localhost",
+            "done_pre@localhost",
         ),
     ];
     for (rfc724_mid, ephemeral_timestamp, download_state, pre_rfc724_mid) in msgs {
