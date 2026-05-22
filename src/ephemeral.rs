@@ -23,16 +23,15 @@
 //! ## Device settings
 //!
 //! In addition to per-chat ephemeral message setting, each device has
-//! two global user-configured settings that complement per-chat
-//! settings: `delete_device_after` and `delete_server_after`. These
-//! settings are not synchronized among devices and apply to all
+//! a global user-configured setting that complements per-chat
+//! settings, `delete_device_after`.
+//! This setting is not synchronized among devices and applies to all
 //! messages known to the device, including messages sent or received
 //! before configuring the setting.
 //!
 //! `delete_device_after` configures the maximum time device is
-//! storing the messages locally. `delete_server_after` configures the
-//! time after which device will delete the messages it knows about
-//! from the server.
+//! storing the messages locally,
+//! but does not delete messages from the server.
 //!
 //! ## How messages are deleted
 //!
@@ -60,9 +59,8 @@
 //!
 //! Server deletion happens by updating the `imap` table based on
 //! the database entries which are expired either according to their
-//! ephemeral message timers or global `delete_server_after` setting.
+//! ephemeral message timers.
 
-use std::cmp::max;
 use std::collections::BTreeSet;
 use std::fmt;
 use std::num::ParseIntError;
@@ -75,10 +73,11 @@ use serde::{Deserialize, Serialize};
 use tokio::time::timeout;
 
 use crate::chat::{ChatId, ChatIdBlocked, send_msg};
+use crate::config::Config;
 use crate::constants::{DC_CHAT_ID_LAST_SPECIAL, DC_CHAT_ID_TRASH};
 use crate::contact::ContactId;
 use crate::context::Context;
-use crate::download::MIN_DELETE_SERVER_AFTER;
+use crate::download::DownloadState;
 use crate::events::EventType;
 use crate::log::{LogExt, warn};
 use crate::message::{Message, MessageState, MsgId, Viewtype};
@@ -455,11 +454,14 @@ WHERE
     Ok(rows)
 }
 
-/// Deletes messages which are expired according to
+/// Locally deletes messages which are expired according to
 /// `delete_device_after` setting or `ephemeral_timestamp` column.
 ///
 /// Emits relevant `MsgsChanged` and `WebxdcInstanceDeleted` events
 /// if messages are deleted.
+///
+/// Also see [`delete_expired_imap_messages`],
+/// which marks the messages for deletion on the IMAP server.
 pub(crate) async fn delete_expired_messages(context: &Context, now: i64) -> Result<()> {
     let rows = select_expired_messages(context, now).await?;
 
@@ -650,40 +652,75 @@ pub(crate) async fn ephemeral_loop(context: &Context, interrupt_receiver: Receiv
     }
 }
 
-/// Schedules expired IMAP messages for deletion.
-#[expect(clippy::arithmetic_side_effects)]
-pub(crate) async fn delete_expired_imap_messages(context: &Context) -> Result<()> {
+/// Schedules expired IMAP messages for deletion on the server.
+///
+/// Also see [`delete_expired_imap_messages`],
+/// which locally deletes expired messages.
+pub(crate) async fn delete_expired_imap_messages(
+    context: &Context,
+    transport_id: u32,
+    is_chatmail: bool,
+) -> Result<()> {
     let now = time();
 
-    let (threshold_timestamp, threshold_timestamp_extended) =
-        match context.get_config_delete_server_after().await? {
-            None => (0, 0),
-            Some(delete_server_after) => (
-                match delete_server_after {
-                    // Guarantee immediate deletion.
-                    0 => i64::MAX,
-                    _ => now - delete_server_after,
-                },
-                now - max(delete_server_after, MIN_DELETE_SERVER_AFTER),
-            ),
-        };
-
-    context
-        .sql
-        .execute(
-            "UPDATE imap
-             SET target=''
-             WHERE rfc724_mid IN (
-               SELECT rfc724_mid FROM msgs
-               WHERE ((download_state = 0 AND timestamp < ?) OR
-                      (download_state != 0 AND timestamp < ?) OR
-                      (ephemeral_timestamp != 0 AND ephemeral_timestamp <= ?))
-             )",
-            (threshold_timestamp, threshold_timestamp_extended, now),
-        )
-        .await?;
+    if should_delete_all_downloaded_messages(context, is_chatmail).await? {
+        // This is the only device using this relay.
+        // Mark all downloaded messages for deletion, because they are not needed anymore.
+        //
+        // For pre- and post-messages, `rfc724_mid` contains the post-message's Message-Id.
+        // The pre-message's Message-Id is in pre_rfc724_mid, if it exists.
+        //
+        // Pre-messages can be deleted even if the message wasn't fully downloaded yet,
+        // because it's only the post-message that hasn't been downloaded.
+        context
+            .sql
+            .execute(
+                "UPDATE imap
+                SET target=''
+                WHERE transport_id=?1
+                AND rfc724_mid IN (
+                    SELECT rfc724_mid FROM msgs
+                    WHERE ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR download_state=?3)
+                        AND id>9
+                    UNION
+                    SELECT pre_rfc724_mid FROM msgs
+                    WHERE pre_rfc724_mid!=''
+                        AND id>9
+                )",
+                (transport_id, now, DownloadState::Done),
+            )
+            .await?;
+    } else {
+        // There may be other devices using this relay,
+        // either because there is multi-device or because this is a classical email server.
+        // Only delete expired ephemeral messages.
+        context
+            .sql
+            .execute(
+                "UPDATE imap
+                SET target=''
+                WHERE transport_id=?1
+                AND rfc724_mid IN (
+                    SELECT rfc724_mid FROM msgs
+                    WHERE ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9
+                    UNION
+                    SELECT pre_rfc724_mid FROM msgs
+                    WHERE pre_rfc724_mid!=''
+                        AND ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9
+                )",
+                (transport_id, now),
+            )
+            .await?;
+    }
 
     Ok(())
+}
+
+pub(crate) async fn should_delete_all_downloaded_messages(
+    context: &Context,
+    is_chatmail: bool,
+) -> Result<bool> {
+    Ok(!context.get_config_bool(Config::BccSelf).await? && is_chatmail)
 }
 
 /// Start ephemeral timers for seen messages if they are not started

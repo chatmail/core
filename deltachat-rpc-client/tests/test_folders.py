@@ -14,10 +14,13 @@ def test_moved_markseen(acfactory, direct_imap, log):
     ac2.add_or_update_transport({"addr": addr, "password": password})
     ac2.bring_online()
 
+    # Make sure that messages are not immediately auto-deleted on the server:
+    ac1.set_config("bcc_self", "1")
+    ac2.set_config("bcc_self", "1")
+
     log.section("ac2: creating DeltaChat folder")
     ac2_direct_imap = direct_imap(ac2)
     ac2_direct_imap.create_folder("DeltaChat")
-    ac2.set_config("delete_server_after", "0")
     ac2.set_config("sync_msgs", "0")  # Do not send a sync message when accepting a contact request.
 
     ac2.add_or_update_transport({"addr": addr, "password": password, "imapFolder": "DeltaChat"})
@@ -57,11 +60,9 @@ def test_moved_markseen(acfactory, direct_imap, log):
 def test_markseen_message_and_mdn(acfactory, direct_imap):
     ac1, ac2 = acfactory.get_online_accounts(2)
 
-    for ac in ac1, ac2:
-        ac.set_config("delete_server_after", "0")
-
-    # Do not send BCC to self, we only want to test MDN on ac1.
-    ac1.set_config("bcc_self", "0")
+    # Make sure that messages are not immediately auto-deleted on the server:
+    ac1.set_config("bcc_self", "1")
+    ac2.set_config("bcc_self", "1")
 
     acfactory.get_accepted_chat(ac1, ac2).send_text("hi")
     msg = ac2.wait_for_incoming_msg()
@@ -81,17 +82,18 @@ def test_markseen_message_and_mdn(acfactory, direct_imap):
     ac1_direct_imap.select_folder("INBOX")
     ac2_direct_imap.select_folder("INBOX")
 
-    # Check that the mdn is marked as seen
-    assert len(list(ac1_direct_imap.conn.fetch(AND(seen=True), mark_seen=False))) == 1
-    # Check original message is marked as seen
-    assert len(list(ac2_direct_imap.conn.fetch(AND(seen=True), mark_seen=False))) == 1
+    # Check that the mdn and original message is marked as seen
+    assert len(list(ac1_direct_imap.conn.fetch(AND(seen=True), mark_seen=False))) == 2
+    assert len(list(ac2_direct_imap.conn.fetch(AND(seen=True), mark_seen=False))) == 2
 
 
 def test_trash_multiple_messages(acfactory, direct_imap, log):
     ac1, ac2 = acfactory.get_online_accounts(2)
     ac2.stop_io()
 
-    ac2.set_config("delete_server_after", "0")
+    # Make sure that messages are not immediately auto-deleted on the server:
+    ac2.set_config("bcc_self", "1")
+
     ac2.set_config("sync_msgs", "0")
 
     ac2.start_io()

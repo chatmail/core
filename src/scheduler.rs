@@ -15,7 +15,7 @@ use crate::config::Config;
 use crate::contact::{ContactId, RecentlySeenLoop};
 use crate::context::Context;
 use crate::download::{download_known_post_messages_without_pre_message, download_msgs};
-use crate::ephemeral::{self, delete_expired_imap_messages};
+use crate::ephemeral;
 use crate::events::EventType;
 use crate::imap::{Imap, session::Session};
 use crate::location;
@@ -483,14 +483,6 @@ async fn fetch_idle(ctx: &Context, connection: &mut Imap, mut session: Session) 
         .fetch_move_delete(ctx, &mut session, &watch_folder)
         .await
         .context("fetch_move_delete")?;
-
-    // Mark expired messages for deletion. Marked messages will be deleted from the server
-    // on the next iteration of `fetch_move_delete`. `delete_expired_imap_messages` is not
-    // called right before `fetch_move_delete` because it is not well optimized and would
-    // otherwise slow down message fetching.
-    delete_expired_imap_messages(ctx)
-        .await
-        .context("delete_expired_imap_messages")?;
 
     download_known_post_messages_without_pre_message(ctx, &mut session).await?;
     download_msgs(ctx, &mut session)

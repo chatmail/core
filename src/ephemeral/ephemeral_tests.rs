@@ -452,107 +452,159 @@ async fn check_msg_is_deleted(t: &TestContext, chat: &Chat, msg_id: MsgId) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_delete_expired_imap_messages() -> Result<()> {
     let t = TestContext::new_alice().await;
-    const HOUR: i64 = 60 * 60;
     let now = time();
-    let transport_id = 1;
-    let uidvalidity = 12345;
-    for (id, timestamp, ephemeral_timestamp) in &[
-        (900, now - 2 * HOUR, 0),
-        (1000, now - 23 * HOUR - MIN_DELETE_SERVER_AFTER, 0),
-        (1010, now - 23 * HOUR, 0),
-        (1020, now - 21 * HOUR, 0),
-        (1030, now - 19 * HOUR, 0),
-        (2000, now - 18 * HOUR, now - HOUR),
-        (2020, now - 17 * HOUR, now + HOUR),
-        (3000, now + HOUR, 0),
-    ] {
-        let message_id = id.to_string();
-        t.sql
-               .execute(
-                   "INSERT INTO msgs (id, rfc724_mid, timestamp, ephemeral_timestamp) VALUES (?,?,?,?);",
-                   (id, &message_id, timestamp, ephemeral_timestamp),
-               )
-               .await?;
+    let transport_id: u32 = 1;
+    let uidvalidity = 12345u32;
+    t.set_config_bool(Config::BccSelf, false).await?;
+
+    async fn is_deleted(context: &Context, mid: &str) -> Result<bool> {
+        Ok(context
+            .sql
+            .count(
+                "SELECT COUNT(*) FROM imap WHERE target='' AND rfc724_mid=?",
+                (mid,),
+            )
+            .await?
+            == 1)
+    }
+
+    async fn reset_targets(context: &Context) {
+        context
+            .sql
+            .execute("UPDATE imap SET target='INBOX'", ())
+            .await
+            .unwrap();
+    }
+
+    // Test messages:
+    //
+    // Three messages that were not split into pre- and post- message:
+    //  "expired@localhost"     - expired ephemeral message
+    //  "no_expire@localhost"   - non-ephemeral message
+    //  "future@localhost"      - will expire in the future, but not yet
+    //
+    // And four messages that were split into pre- and post-message.
+    //  "expired_*@localhost"   - has pre-msg, expired ephemeral message, not downloaded yet
+    //  "no_expire_*@localhost" - has pre-msg, non-ephemeral, not downloaded yet
+    //  "future_*@localhost"    - has pre-msg, not expired yet, not downloaded yet
+    //  "done_*@localhost"      - Fully downloaded -> post- message can be deleted
+    //
+    // The tuple is (rfc724_mid, ephemeral_timestamp, download_state, pre_rfc724_mid)
+    let msgs: [(&str, i64, DownloadState, &str); 7] = [
+        ("expired@localhost", now - 1, DownloadState::Done, ""),
+        ("no_expire@localhost", 0, DownloadState::Done, ""),
+        // Use "now + 3600" rather than "now + 1", otherwise the test may be flaky
+        // if it is slow and the message expires in a second
+        ("future@localhost", now + 3600, DownloadState::Done, ""),
+        (
+            "expired_post@localhost",
+            now - 1,
+            DownloadState::Available,
+            "expired_pre@localhost",
+        ),
+        (
+            "no_expire_post@localhost",
+            0,
+            DownloadState::Available,
+            "no_expire_pre@localhost",
+        ),
+        (
+            "future_post@localhost",
+            now + 3600,
+            DownloadState::Available,
+            "future_pre@localhost",
+        ),
+        (
+            "done_post@localhost",
+            0,
+            DownloadState::Done,
+            "done_pre@localhost",
+        ),
+    ];
+    for (rfc724_mid, ephemeral_timestamp, download_state, pre_rfc724_mid) in msgs {
         t.sql
             .execute(
-                "INSERT INTO imap (transport_id, rfc724_mid, folder, uid, target, uidvalidity) VALUES (?, ?,'INBOX',?, 'INBOX', ?);",
-                (transport_id, &message_id, id, uidvalidity),
+                "INSERT INTO msgs \
+                 (rfc724_mid, timestamp, ephemeral_timestamp, download_state, pre_rfc724_mid) \
+                 VALUES (?,?,?,?,?)",
+                (
+                    rfc724_mid,
+                    now,
+                    ephemeral_timestamp,
+                    download_state,
+                    pre_rfc724_mid,
+                ),
+            )
+            .await?;
+    }
+    let rfc724_mids: Vec<&str> = msgs
+        .iter()
+        .flat_map(|(rfc724_mid, _, _, pre_rfc724_mid)| [*rfc724_mid, *pre_rfc724_mid])
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    for (i, rfc724_mid) in rfc724_mids.iter().enumerate() {
+        t.sql
+            .execute(
+                "INSERT INTO imap \
+                 (transport_id, rfc724_mid, folder, uid, target, uidvalidity) \
+                 VALUES (?,?,'INBOX',?,'INBOX',?)",
+                (transport_id, *rfc724_mid, (i + 1) as u32, uidvalidity),
             )
             .await?;
     }
 
-    async fn test_marked_for_deletion(context: &Context, id: u32) -> Result<()> {
-        assert_eq!(
-            context
-                .sql
-                .count(
-                    "SELECT COUNT(*) FROM imap WHERE target='' AND rfc724_mid=?",
-                    (id.to_string(),),
-                )
-                .await?,
-            1
+    for (is_chatmail, other_transport) in
+        [(false, false), (false, true), (true, false), (true, true)]
+    {
+        println!(
+            "Testing combination is_chatmail={is_chatmail}, other_transport={other_transport}"
         );
-        Ok(())
+
+        delete_expired_imap_messages(
+            &t,
+            if other_transport {
+                transport_id + 1
+            } else {
+                transport_id
+            },
+            is_chatmail,
+        )
+        .await?;
+
+        if other_transport {
+            // Nothing should be deleted on another transport
+            for rfc724_mid in &rfc724_mids {
+                assert_eq!(is_deleted(&t, rfc724_mid).await?, false);
+            }
+            continue;
+        }
+
+        assert_eq!(is_deleted(&t, "expired@localhost").await?, true);
+        assert_eq!(is_deleted(&t, "no_expire@localhost").await?, is_chatmail);
+        assert_eq!(is_deleted(&t, "future@localhost").await?, is_chatmail);
+        assert_eq!(is_deleted(&t, "expired_post@localhost").await?, true);
+        assert_eq!(is_deleted(&t, "expired_pre@localhost").await?, true);
+        assert_eq!(is_deleted(&t, "no_expire_post@localhost").await?, false);
+        assert_eq!(
+            is_deleted(&t, "no_expire_pre@localhost").await?,
+            is_chatmail
+        );
+        assert_eq!(is_deleted(&t, "future_post@localhost").await?, false);
+        assert_eq!(is_deleted(&t, "future_pre@localhost").await?, is_chatmail);
+        assert_eq!(is_deleted(&t, "done_pre@localhost").await?, is_chatmail);
+        assert_eq!(is_deleted(&t, "done_post@localhost").await?, is_chatmail);
+
+        reset_targets(&t).await;
     }
 
-    async fn remove_uid(context: &Context, id: u32) -> Result<()> {
-        context
-            .sql
-            .execute("DELETE FROM imap WHERE rfc724_mid=?", (id.to_string(),))
-            .await?;
-        Ok(())
-    }
-
-    // This should mark message 2000 for deletion.
-    delete_expired_imap_messages(&t).await?;
-    test_marked_for_deletion(&t, 2000).await?;
-    remove_uid(&t, 2000).await?;
-    // No other messages are marked for deletion.
-    assert_eq!(
-        t.sql
-            .count("SELECT COUNT(*) FROM imap WHERE target=''", ())
-            .await?,
-        0
-    );
-
-    t.set_config(Config::DeleteServerAfter, Some(&*(25 * HOUR).to_string()))
-        .await?;
-    delete_expired_imap_messages(&t).await?;
-    test_marked_for_deletion(&t, 1000).await?;
-
-    MsgId::new(1000)
-        .update_download_state(&t, DownloadState::Available)
-        .await?;
-    t.sql
-        .execute("UPDATE imap SET target=folder WHERE rfc724_mid='1000'", ())
-        .await?;
-    delete_expired_imap_messages(&t).await?;
-    test_marked_for_deletion(&t, 1000).await?; // Delete downloadable anyway.
-    remove_uid(&t, 1000).await?;
-
-    t.set_config(Config::DeleteServerAfter, Some(&*(22 * HOUR).to_string()))
-        .await?;
-    delete_expired_imap_messages(&t).await?;
-    test_marked_for_deletion(&t, 1010).await?;
-    t.sql
-        .execute("UPDATE imap SET target=folder WHERE rfc724_mid='1010'", ())
-        .await?;
-
-    MsgId::new(1010)
-        .update_download_state(&t, DownloadState::Available)
-        .await?;
-    delete_expired_imap_messages(&t).await?;
-    // Keep downloadable for now.
-    assert_eq!(
-        t.sql
-            .count("SELECT COUNT(*) FROM imap WHERE target=''", ())
-            .await?,
-        0
-    );
-
-    t.set_config(Config::DeleteServerAfter, Some("1")).await?;
-    delete_expired_imap_messages(&t).await?;
-    test_marked_for_deletion(&t, 3000).await?;
+    // With BccSelf=true, non-expired messages are kept even if `is_chatmail` is true
+    t.set_config_bool(Config::BccSelf, true).await?;
+    delete_expired_imap_messages(&t, transport_id, true).await?;
+    assert_eq!(is_deleted(&t, "expired@localhost").await?, true);
+    assert_eq!(is_deleted(&t, "no_expire@localhost").await?, false);
+    assert_eq!(is_deleted(&t, "done_pre@localhost").await?, false);
+    assert_eq!(is_deleted(&t, "done_post@localhost").await?, false);
 
     Ok(())
 }

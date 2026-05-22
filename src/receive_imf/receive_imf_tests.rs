@@ -2033,15 +2033,10 @@ async fn test_no_smtp_job_for_self_chat() -> Result<()> {
     assert!(bob.pop_sent_msg_opt(Duration::ZERO).await.is_none());
 
     bob.set_config_bool(Config::BccSelf, true).await?;
-    bob.set_config(Config::DeleteServerAfter, Some("1")).await?;
-    let mut msg = Message::new_text("Happy birthday to me".to_string());
-    chat::send_msg(bob, chat_id, &mut msg).await?;
-    assert!(bob.pop_sent_msg_opt(Duration::ZERO).await.is_none());
-
-    bob.set_config(Config::DeleteServerAfter, None).await?;
     let mut msg = Message::new_text("Happy birthday to me".to_string());
     chat::send_msg(bob, chat_id, &mut msg).await?;
     assert!(bob.pop_sent_msg_opt(Duration::ZERO).await.is_some());
+
     Ok(())
 }
 
