@@ -452,11 +452,6 @@ pub enum Config {
     /// storing the same token multiple times on the server.
     EncryptedDeviceToken,
 
-    /// Enables running test hooks, e.g. see `InnerContext::pre_encrypt_mime_hook`.
-    /// This way is better than conditional compilation, i.e. `#[cfg(test)]`, because tests not
-    /// using this still run unmodified code.
-    TestHooks,
-
     /// Return an error from `receive_imf_inner()`. For tests.
     SimulateReceiveImfError,
 

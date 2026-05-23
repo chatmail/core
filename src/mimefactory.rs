@@ -1168,12 +1168,6 @@ impl MimeFactory {
                 _ => None,
             };
 
-            if context.get_config_bool(Config::TestHooks).await?
-                && let Some(hook) = &*context.pre_encrypt_mime_hook.lock()
-            {
-                message = hook(context, message);
-            }
-
             let encrypted = if let Some(shared_secret) = shared_secret {
                 let sign = true;
                 encrypt_helper
