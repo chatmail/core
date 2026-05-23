@@ -50,7 +50,7 @@ impl ShadowsocksConfig {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpConfig {
     /// HTTP proxy host.
-    pub host: String,
+    pub host: url::Host,
 
     /// HTTP proxy port.
     pub port: u16,
@@ -63,10 +63,7 @@ pub struct HttpConfig {
 
 impl HttpConfig {
     fn from_url(url: Url) -> Result<Self> {
-        let host = url
-            .host_str()
-            .context("HTTP proxy URL has no host")?
-            .to_string();
+        let host = url.host().context("HTTP proxy URL has no host")?.to_owned();
         let port = url
             .port_or_known_default()
             .context("HTTP(S) URLs are guaranteed to return Some port")?;
@@ -104,7 +101,8 @@ impl HttpConfig {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Socks5Config {
-    pub host: String,
+    /// Hostname or IP address.
+    pub host: url::Host,
     pub port: u16,
     pub user_password: Option<(String, String)>,
 }
@@ -117,7 +115,13 @@ impl Socks5Config {
         target_port: u16,
         load_dns_cache: bool,
     ) -> Result<Socks5Stream<Pin<Box<TimeoutStream<TcpStream>>>>> {
-        let tcp_stream = connect_tcp(context, &self.host, self.port, load_dns_cache)
+        let hostname = match &self.host {
+            url::Host::Domain(domain) => domain.to_string(),
+            url::Host::Ipv4(addr) => addr.to_string(),
+            url::Host::Ipv6(addr) => addr.to_string(),
+        };
+
+        let tcp_stream = connect_tcp(context, &hostname, self.port, load_dns_cache)
             .await
             .context("Failed to connect to SOCKS5 proxy")?;
 
@@ -273,10 +277,7 @@ impl ProxyConfig {
             // Because of this we do not distinguish
             // between `socks5` and `socks5h`.
             "socks5" => {
-                let host = url
-                    .host_str()
-                    .context("socks5 URL has no host")?
-                    .to_string();
+                let host = url.host().context("socks5 URL has no host")?.to_owned();
                 let port = url.port().unwrap_or(DEFAULT_SOCKS_PORT);
                 let user_password = if let Some(password) = url.password() {
                     let username = percent_encoding::percent_decode_str(url.username())
@@ -402,13 +403,14 @@ impl ProxyConfig {
         match self {
             ProxyConfig::Http(http_config) => {
                 let load_cache = false;
-                let tcp_stream = crate::net::connect_tcp(
-                    context,
-                    &http_config.host,
-                    http_config.port,
-                    load_cache,
-                )
-                .await?;
+                let hostname = match &http_config.host {
+                    url::Host::Domain(domain) => domain.to_string(),
+                    url::Host::Ipv4(addr) => addr.to_string(),
+                    url::Host::Ipv6(addr) => addr.to_string(),
+                };
+                let tcp_stream =
+                    crate::net::connect_tcp(context, &hostname, http_config.port, load_cache)
+                        .await?;
                 let auth = if let Some((username, password)) = &http_config.user_password {
                     Some((username.as_str(), password.as_str()))
                 } else {
@@ -419,16 +421,18 @@ impl ProxyConfig {
             }
             ProxyConfig::Https(https_config) => {
                 let load_cache = true;
-                let tcp_stream = crate::net::connect_tcp(
-                    context,
-                    &https_config.host,
-                    https_config.port,
-                    load_cache,
-                )
-                .await?;
+                let hostname = match &https_config.host {
+                    url::Host::Domain(domain) => domain.to_string(),
+                    url::Host::Ipv4(addr) => addr.to_string(),
+                    url::Host::Ipv6(addr) => addr.to_string(),
+                };
+
+                let tcp_stream =
+                    crate::net::connect_tcp(context, &hostname, https_config.port, load_cache)
+                        .await?;
                 let use_sni = true;
                 let tls_stream = wrap_rustls(
-                    &https_config.host,
+                    &hostname,
                     https_config.port,
                     use_sni,
                     "",
@@ -500,6 +504,7 @@ mod tests {
     use super::*;
     use crate::config::Config;
     use crate::test_utils::TestContext;
+    use std::net::{Ipv4Addr, Ipv6Addr};
 
     #[test]
     fn test_socks5_url() {
@@ -507,17 +512,35 @@ mod tests {
         assert_eq!(
             proxy_config,
             ProxyConfig::Socks5(Socks5Config {
-                host: "127.0.0.1".to_string(),
+                // IPv4 address is parsed as a domain and not url::Host::Ipv4.
+                // This is expected: <https://github.com/servo/rust-url/issues/767>.
+                // We only need a distinction for IPv6 to remove square brackets
+                // before passing the address to `lookup_host()`.
+                host: url::Host::Domain("127.0.0.1".to_string()),
                 port: 9050,
                 user_password: None
             })
         );
+        assert_eq!(proxy_config.to_url(), "socks5://127.0.0.1:9050".to_string());
+
+        let proxy_config = ProxyConfig::from_url("socks5://[::1]:9050").unwrap();
+        assert_eq!(
+            proxy_config,
+            ProxyConfig::Socks5(Socks5Config {
+                // IPv6 address should be recognized as IPv6 address and not "[::1]" hostname.
+                // Otherwise we may try to resolve "[::1]" and fail to connect.
+                host: url::Host::Ipv6(Ipv6Addr::LOCALHOST),
+                port: 9050,
+                user_password: None
+            })
+        );
+        assert_eq!(proxy_config.to_url(), "socks5://[::1]:9050".to_string());
 
         let proxy_config = ProxyConfig::from_url("socks5://foo:bar@127.0.0.1:9150").unwrap();
         assert_eq!(
             proxy_config,
             ProxyConfig::Socks5(Socks5Config {
-                host: "127.0.0.1".to_string(),
+                host: url::Host::Domain("127.0.0.1".to_string()),
                 port: 9150,
                 user_password: Some(("foo".to_string(), "bar".to_string()))
             })
@@ -527,7 +550,7 @@ mod tests {
         assert_eq!(
             proxy_config,
             ProxyConfig::Socks5(Socks5Config {
-                host: "127.0.0.1".to_string(),
+                host: url::Host::Domain("127.0.0.1".to_string()),
                 port: 9150,
                 user_password: Some(("foo".to_string(), "bar".to_string()))
             })
@@ -537,7 +560,7 @@ mod tests {
         assert_eq!(
             proxy_config,
             ProxyConfig::Socks5(Socks5Config {
-                host: "127.0.0.1".to_string(),
+                host: url::Host::Domain("127.0.0.1".to_string()),
                 port: 80,
                 user_password: None
             })
@@ -547,7 +570,7 @@ mod tests {
         assert_eq!(
             proxy_config,
             ProxyConfig::Socks5(Socks5Config {
-                host: "127.0.0.1".to_string(),
+                host: url::Host::Domain("127.0.0.1".to_string()),
                 port: 1080,
                 user_password: None
             })
@@ -557,7 +580,7 @@ mod tests {
         assert_eq!(
             proxy_config,
             ProxyConfig::Socks5(Socks5Config {
-                host: "127.0.0.1".to_string(),
+                host: url::Host::Domain("127.0.0.1".to_string()),
                 port: 1080,
                 user_password: None
             })
@@ -567,7 +590,7 @@ mod tests {
         assert_eq!(
             proxy_config,
             ProxyConfig::Socks5(Socks5Config {
-                host: "my-proxy.example.org".to_string(),
+                host: url::Host::Domain("my-proxy.example.org".to_string()),
                 port: 1080,
                 user_password: None
             })
@@ -584,7 +607,7 @@ mod tests {
         assert_eq!(
             proxy_config,
             ProxyConfig::Http(HttpConfig {
-                host: "127.0.0.1".to_string(),
+                host: url::Host::Ipv4(Ipv4Addr::LOCALHOST),
                 port: 80,
                 user_password: None
             })
@@ -594,7 +617,7 @@ mod tests {
         assert_eq!(
             proxy_config,
             ProxyConfig::Http(HttpConfig {
-                host: "127.0.0.1".to_string(),
+                host: url::Host::Ipv4(Ipv4Addr::LOCALHOST),
                 port: 80,
                 user_password: None
             })
@@ -604,7 +627,7 @@ mod tests {
         assert_eq!(
             proxy_config,
             ProxyConfig::Http(HttpConfig {
-                host: "127.0.0.1".to_string(),
+                host: url::Host::Ipv4(Ipv4Addr::LOCALHOST),
                 port: 443,
                 user_password: None
             })
@@ -614,7 +637,7 @@ mod tests {
         assert_eq!(
             proxy_config,
             ProxyConfig::Http(HttpConfig {
-                host: "my-proxy.example.org".to_string(),
+                host: url::Host::Domain("my-proxy.example.org".to_string()),
                 port: 80,
                 user_password: None
             })
@@ -631,7 +654,7 @@ mod tests {
         assert_eq!(
             proxy_config,
             ProxyConfig::Https(HttpConfig {
-                host: "127.0.0.1".to_string(),
+                host: url::Host::Ipv4(Ipv4Addr::LOCALHOST),
                 port: 443,
                 user_password: None
             })
@@ -641,7 +664,7 @@ mod tests {
         assert_eq!(
             proxy_config,
             ProxyConfig::Https(HttpConfig {
-                host: "127.0.0.1".to_string(),
+                host: url::Host::Ipv4(Ipv4Addr::LOCALHOST),
                 port: 80,
                 user_password: None
             })
@@ -651,7 +674,7 @@ mod tests {
         assert_eq!(
             proxy_config,
             ProxyConfig::Https(HttpConfig {
-                host: "127.0.0.1".to_string(),
+                host: url::Host::Ipv4(Ipv4Addr::LOCALHOST),
                 port: 443,
                 user_password: None
             })
@@ -661,7 +684,7 @@ mod tests {
         assert_eq!(
             proxy_config,
             ProxyConfig::Https(HttpConfig {
-                host: "my-proxy.example.org".to_string(),
+                host: url::Host::Domain("my-proxy.example.org".to_string()),
                 port: 443,
                 user_password: None
             })
