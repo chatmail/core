@@ -613,6 +613,17 @@ mod tests {
             })
         );
 
+        let proxy_config = ProxyConfig::from_url("http://[::1]").unwrap();
+        assert_eq!(
+            proxy_config,
+            ProxyConfig::Http(HttpConfig {
+                host: url::Host::Ipv6(Ipv6Addr::LOCALHOST),
+                port: 80,
+                user_password: None
+            })
+        );
+        assert_eq!(proxy_config.to_url(), "http://[::1]:80".to_string());
+
         let proxy_config = ProxyConfig::from_url("http://127.0.0.1:80").unwrap();
         assert_eq!(
             proxy_config,
@@ -622,6 +633,18 @@ mod tests {
                 user_password: None
             })
         );
+        assert_eq!(proxy_config.to_url(), "http://127.0.0.1:80".to_string());
+
+        let proxy_config = ProxyConfig::from_url("http://[::1]:80").unwrap();
+        assert_eq!(
+            proxy_config,
+            ProxyConfig::Http(HttpConfig {
+                host: url::Host::Ipv6(Ipv6Addr::LOCALHOST),
+                port: 80,
+                user_password: None
+            })
+        );
+        assert_eq!(proxy_config.to_url(), "http://[::1]:80".to_string());
 
         let proxy_config = ProxyConfig::from_url("http://127.0.0.1:443").unwrap();
         assert_eq!(
@@ -632,6 +655,7 @@ mod tests {
                 user_password: None
             })
         );
+        assert_eq!(proxy_config.to_url(), "http://127.0.0.1:443".to_string());
 
         let proxy_config = ProxyConfig::from_url("http://my-proxy.example.org").unwrap();
         assert_eq!(
@@ -670,6 +694,16 @@ mod tests {
             })
         );
 
+        let proxy_config = ProxyConfig::from_url("https://[::1]:80").unwrap();
+        assert_eq!(
+            proxy_config,
+            ProxyConfig::Https(HttpConfig {
+                host: url::Host::Ipv6(Ipv6Addr::LOCALHOST),
+                port: 80,
+                user_password: None
+            })
+        );
+
         let proxy_config = ProxyConfig::from_url("https://127.0.0.1:443").unwrap();
         assert_eq!(
             proxy_config,
@@ -679,6 +713,18 @@ mod tests {
                 user_password: None
             })
         );
+        assert_eq!(proxy_config.to_url(), "https://127.0.0.1:443".to_string());
+
+        let proxy_config = ProxyConfig::from_url("https://[::1]:443").unwrap();
+        assert_eq!(
+            proxy_config,
+            ProxyConfig::Https(HttpConfig {
+                host: url::Host::Ipv6(Ipv6Addr::LOCALHOST),
+                port: 443,
+                user_password: None
+            })
+        );
+        assert_eq!(proxy_config.to_url(), "https://[::1]:443".to_string());
 
         let proxy_config = ProxyConfig::from_url("https://my-proxy.example.org").unwrap();
         assert_eq!(
