@@ -69,7 +69,7 @@ pub struct BackupProvider {
     _endpoint: Endpoint,
 
     /// iroh address.
-    node_addr: iroh::NodeAddr,
+    node_addr: iroh::EndpointAddr,
 
     /// Authentication token that should be submitted
     /// to retrieve the backup.
@@ -95,13 +95,12 @@ impl BackupProvider {
     /// [`Accounts::stop_io`]: crate::accounts::Accounts::stop_io
     pub async fn prepare(context: &Context) -> Result<Self> {
         let relay_mode = RelayMode::Disabled;
-        let endpoint = Endpoint::builder()
-            .tls_x509() // For compatibility with iroh <0.34.0
+        let endpoint = Endpoint::builder(iroh::endpoint::presets::Minimal)
             .alpns(vec![BACKUP_ALPN.to_vec()])
             .relay_mode(relay_mode)
             .bind()
             .await?;
-        let node_addr = endpoint.node_addr().await?;
+        let node_addr = endpoint.addr();
 
         // Acquire global "ongoing" mutex.
         let cancel_token = context.alloc_ongoing().await?;
@@ -168,7 +167,7 @@ impl BackupProvider {
 
     async fn handle_connection(
         context: Context,
-        conn: iroh::endpoint::Connecting,
+        conn: iroh::endpoint::Accepting,
         auth_token: String,
         dbfile: Arc<TempPathGuard>,
     ) -> Result<()> {
@@ -299,13 +298,12 @@ impl Future for BackupProvider {
 
 pub async fn get_backup2(
     context: &Context,
-    node_addr: iroh::NodeAddr,
+    node_addr: iroh::EndpointAddr,
     auth_token: String,
 ) -> Result<()> {
     let relay_mode = RelayMode::Disabled;
 
-    let endpoint = Endpoint::builder()
-        .tls_x509() // For compatibility with iroh <0.34.0
+    let endpoint = Endpoint::builder(iroh::endpoint::presets::Minimal)
         .relay_mode(relay_mode)
         .bind()
         .await?;
@@ -353,7 +351,7 @@ pub async fn get_backup2(
 /// This is a long running operation which will return only when completed.
 ///
 /// Using [`Qr`] as argument is a bit odd as it only accepts specific variant of it.  It
-/// does avoid having [`iroh::NodeAddr`] in the primary API however, without
+/// does avoid having [`iroh::EndpointAddr`] in the primary API however, without
 /// having to revert to untyped bytes.
 pub async fn get_backup(context: &Context, qr: Qr) -> Result<()> {
     match qr {

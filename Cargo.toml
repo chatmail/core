@@ -3,7 +3,7 @@ name = "deltachat"
 version = "2.51.0-dev"
 edition = "2024"
 license = "MPL-2.0"
-rust-version = "1.89"
+rust-version = "1.91"
 repository = "https://github.com/chatmail/core"
 
 [profile.dev]
@@ -66,8 +66,8 @@ humansize = "2"
 hyper = "1"
 hyper-util = "0.1.16"
 image = { version = "0.25.6", default-features=false, features = ["gif", "jpeg", "ico", "png", "pnm", "webp", "bmp"] }
-iroh-gossip = { version = "0.35", default-features = false, features = ["net"] }
-iroh = { version = "0.35", default-features = false }
+iroh-gossip = { version = "0.99.0", default-features = false, features = ["net"] }
+iroh = { version = "1.0.0-rc.0", default-features = false, features = ["tls-ring"] }
 kamadak-exif = "0.6.1"
 libc = { workspace = true }
 mail-builder = { version = "0.4.4", default-features = false }
@@ -101,7 +101,7 @@ tagger = "4.3.4"
 textwrap = "0.16.2"
 thiserror = { workspace = true }
 tokio-io-timeout = "1.2.1"
-tokio-rustls = { version = "0.26.2", default-features = false }
+tokio-rustls = { version = "0.26.2", default-features = false, features = ["ring"] }
 tokio-stream = { version = "0.1.17", features = ["fs"] }
 astral-tokio-tar = { version = "0.6.2", default-features = false }
 tokio-util = { workspace = true }
