@@ -338,32 +338,7 @@
             "deltachat-rpc-server-${arch}-android" = rpc-server;
             "deltachat-repl-${arch}-android" = mkAndroidRustPackage arch "deltachat-repl";
             "deltachat-rpc-server-${arch}-android-wheel" =
-              pkgs.stdenv.mkDerivation {
-                pname = "deltachat-rpc-server-${arch}-android-wheel";
-                version = manifest.version;
-                src = nix-filter.lib {
-                  root = ./.;
-                  include = [
-                    "scripts/wheel-rpc-server.py"
-                    "deltachat-rpc-server/README.md"
-                    "LICENSE"
-                    "Cargo.toml"
-                  ];
-                };
-                nativeBuildInputs = [
-                  pkgs.python3
-                  pkgs.python3Packages.wheel
-                ];
-                buildInputs = [
-                  rpc-server
-                ];
-                buildPhase = ''
-                  mkdir tmp
-                  cp ${rpc-server}/bin/deltachat-rpc-server tmp/deltachat-rpc-server
-                  python3 scripts/wheel-rpc-server.py ${arch}-android tmp/deltachat-rpc-server
-                '';
-                installPhase = ''mkdir -p $out; cp -av deltachat_rpc_server-*.whl $out'';
-              };
+              mkWheel { inherit rpc-server; arch = "${arch}-android"; };
           };
 
         mkRustPackages = arch:
@@ -373,34 +348,10 @@
           {
             "deltachat-repl-${arch}" = mkCrossRustPackage arch "deltachat-repl";
             "deltachat-rpc-server-${arch}" = rpc-server;
-            "deltachat-rpc-server-${arch}-wheel" =
-              pkgs.stdenv.mkDerivation {
-                pname = "deltachat-rpc-server-${arch}-wheel";
-                version = manifest.version;
-                src = nix-filter.lib {
-                  root = ./.;
-                  include = [
-                    "scripts/wheel-rpc-server.py"
-                    "deltachat-rpc-server/README.md"
-                    "LICENSE"
-                    "Cargo.toml"
-                  ];
-                };
-                nativeBuildInputs = [
-                  pkgs.python3
-                  pkgs.python3Packages.wheel
-                ];
-                buildInputs = [
-                  rpc-server
-                ];
-                buildPhase = ''
-                  mkdir tmp
-                  cp ${rpc-server}/bin/deltachat-rpc-server tmp/deltachat-rpc-server
-                  python3 scripts/wheel-rpc-server.py ${arch} tmp/deltachat-rpc-server
-                '';
-                installPhase = ''mkdir -p $out; cp -av deltachat_rpc_server-*.whl $out'';
-              };
+            "deltachat-rpc-server-${arch}-wheel" = mkWheel { inherit rpc-server; arch = "${arch}"; };
           };
+
+        mkWheel = pkgs.callPackage ./nix/wheel.nix { inherit nix-filter; version = manifest.version; root = ./.; };
       in
       {
         formatter = pkgs.nixpkgs-fmt;
@@ -424,62 +375,14 @@
             deltachat-repl-win64 = mkWin64RustPackage "deltachat-repl";
             deltachat-rpc-server-win64 = mkWin64RustPackage "deltachat-rpc-server";
             deltachat-rpc-server-win64-wheel =
-              pkgs.stdenv.mkDerivation {
-                pname = "deltachat-rpc-server-win64-wheel";
-                version = manifest.version;
-                src = nix-filter.lib {
-                  root = ./.;
-                  include = [
-                    "scripts/wheel-rpc-server.py"
-                    "deltachat-rpc-server/README.md"
-                    "LICENSE"
-                    "Cargo.toml"
-                  ];
-                };
-                nativeBuildInputs = [
-                  pkgs.python3
-                  pkgs.python3Packages.wheel
-                ];
-                buildInputs = [
-                  deltachat-rpc-server-win64
-                ];
-                buildPhase = ''
-                  mkdir tmp
-                  cp ${deltachat-rpc-server-win64}/bin/deltachat-rpc-server.exe tmp/deltachat-rpc-server.exe
-                  python3 scripts/wheel-rpc-server.py win64 tmp/deltachat-rpc-server.exe
-                '';
-                installPhase = ''mkdir -p $out; cp -av deltachat_rpc_server-*.whl $out'';
-              };
+              mkWheel { rpc-server = deltachat-rpc-server-win64; arch = "win64"; binaryName = "deltachat-rpc-server.exe"; };
 
             deltachat-repl-win32 = mkWin32RustPackage "deltachat-repl";
             deltachat-rpc-server-win32 = mkWin32RustPackage "deltachat-rpc-server";
             deltachat-rpc-server-win32-wheel =
-              pkgs.stdenv.mkDerivation {
-                pname = "deltachat-rpc-server-win32-wheel";
-                version = manifest.version;
-                src = nix-filter.lib {
-                  root = ./.;
-                  include = [
-                    "scripts/wheel-rpc-server.py"
-                    "deltachat-rpc-server/README.md"
-                    "LICENSE"
-                    "Cargo.toml"
-                  ];
-                };
-                nativeBuildInputs = [
-                  pkgs.python3
-                  pkgs.python3Packages.wheel
-                ];
-                buildInputs = [
-                  deltachat-rpc-server-win32
-                ];
-                buildPhase = ''
-                  mkdir tmp
-                  cp ${deltachat-rpc-server-win32}/bin/deltachat-rpc-server.exe tmp/deltachat-rpc-server.exe
-                  python3 scripts/wheel-rpc-server.py win32 tmp/deltachat-rpc-server.exe
-                '';
-                installPhase = ''mkdir -p $out; cp -av deltachat_rpc_server-*.whl $out'';
-              };
+              mkWheel
+                { rpc-server = deltachat-rpc-server-win32; arch = "win32"; binaryName = "deltachat-rpc-server.exe"; };
+
             # Run `nix build .#docs` to get C docs generated in `./result/`.
             docs =
               pkgs.stdenv.mkDerivation {
