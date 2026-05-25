@@ -86,6 +86,7 @@ rand = { workspace = true }
 regex = { workspace = true }
 rusqlite = { workspace = true, features = ["sqlcipher"] }
 sanitize-filename = { workspace = true }
+scopeguard = "1"
 serde_json = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 sha-1 = "0.10"
