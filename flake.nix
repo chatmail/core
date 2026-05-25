@@ -2,11 +2,16 @@
   description = "Chatmail core";
   inputs = {
     fenix.url = "github:nix-community/fenix";
+    fenix.inputs.nixpkgs.follows = "nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
-    naersk.url = "github:nix-community/naersk";
+    naersk.url = "github:nix-community/naersk/pull/391/head";
+    naersk.inputs.nixpkgs.follows = "nixpkgs";
+    naersk.inputs.fenix.follows = "fenix";
     nix-filter.url = "github:numtide/nix-filter";
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/master";
     android.url = "github:tadfisher/android-nixpkgs";
+    android.inputs.nixpkgs.follows = "nixpkgs";
+    android.inputs.flake-utils.follows = "flake-utils";
   };
   outputs = { self, nixpkgs, flake-utils, nix-filter, naersk, fenix, android }:
     flake-utils.lib.eachDefaultSystem (system:
@@ -133,6 +138,8 @@
             ];
             depsBuildBuild = [
               pkgsWin64.stdenv.cc
+            ];
+            buildInputs = [
               pkgsWin64.windows.pthreads
             ];
             auditable = false; # Avoid cargo-auditable failures.
@@ -143,6 +150,8 @@
             CARGO_BUILD_RUSTFLAGS = [
               "-C"
               "linker=${TARGET_CC}"
+              "-L"
+              "native=${pkgsWin64.windows.pthreads}/lib"
             ];
 
             CC = "${pkgsWin64.stdenv.cc}/bin/${pkgsWin64.stdenv.cc.targetPrefix}cc";
@@ -180,7 +189,8 @@
                   };
                 })).overrideAttrs (oldAttr: {
                 configureFlags = oldAttr.configureFlags ++ [
-                  "--disable-sjlj-exceptions --with-dwarf2"
+                  "--disable-sjlj-exceptions"
+                  "--with-dwarf2"
                 ];
               })
             );
@@ -196,6 +206,8 @@
             ];
             depsBuildBuild = [
               winCC
+            ];
+            buildInputs = [
               pkgsWin32.windows.pthreads
             ];
             auditable = false; # Avoid cargo-auditable failures.
@@ -206,6 +218,8 @@
             CARGO_BUILD_RUSTFLAGS = [
               "-C"
               "linker=${TARGET_CC}"
+              "-L"
+              "native=${pkgsWin32.windows.pthreads}/lib"
             ];
 
             CC = "${winCC}/bin/${winCC.targetPrefix}cc";
@@ -562,7 +576,7 @@
                   deltachat-python
                   deltachat-rpc-client
                   pkgs.python3Packages.breathe
-                  pkgs.python3Packages.sphinx_rtd_theme
+                  pkgs.python3Packages.sphinx-rtd-theme
                 ];
                 nativeBuildInputs = [ pkgs.sphinx ];
                 buildPhase = ''sphinx-build -b html -a python/doc/ dist/html'';
