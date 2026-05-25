@@ -5,11 +5,13 @@ on:
     paths:
       - flake.nix
       - flake.lock
+      - nix/**
       - .github/workflows/nix.yml
   push:
     paths:
       - flake.nix
       - flake.lock
+      - nix/**
       - .github/workflows/nix.yml
     branches:
       - main
@@ -26,7 +28,7 @@ jobs:
           show-progress: false
           persist-credentials: false
       - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
-      - run: nix fmt flake.nix -- --check
+      - run: nix fmt flake.nix nix/ -- --check
 
   build:
     name: nix build
