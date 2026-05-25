@@ -1375,6 +1375,7 @@ dependencies = [
  "regex",
  "rusqlite",
  "sanitize-filename",
+ "scopeguard",
  "sdp",
  "serde",
  "serde_json",

@@ -754,8 +754,7 @@ impl Imap {
         };
 
         let actually_download_messages_future = async {
-            session
-                .fetch_many_msgs(context, folder, uids_fetch, &uid_message_ids, sender)
+            Box::pin(session.fetch_many_msgs(context, folder, uids_fetch, &uid_message_ids, sender))
                 .await
                 .context("fetch_many_msgs")
         };
@@ -785,11 +784,6 @@ impl Imap {
         }
 
         info!(context, "{} mails read from \"{}\".", read_cnt, folder);
-
-        if !received_msgs.is_empty() {
-            context.emit_event(EventType::IncomingMsgBunch);
-        }
-
         chat::mark_old_messages_as_noticed(context, received_msgs).await?;
 
         if fetch_res.is_ok() {
@@ -1288,7 +1282,11 @@ impl Session {
         if request_uids.is_empty() {
             return Ok(());
         }
-
+        let mut received_any = scopeguard::guard(false, |v| {
+            if v {
+                context.emit_event(EventType::IncomingMsgBunch);
+            }
+        });
         for (request_uids, set) in build_sequence_sets(&request_uids)? {
             info!(context, "Starting UID FETCH of message set \"{}\".", set);
             let mut fetch_responses = self
@@ -1401,6 +1399,7 @@ impl Session {
                     }
                     Ok(msg) => msg,
                 };
+                *received_any |= received_msg.is_some();
                 received_msgs_channel
                     .send((request_uid, received_msg))
                     .await?;
