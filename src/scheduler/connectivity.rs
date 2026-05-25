@@ -421,7 +421,6 @@ impl Context {
                     // If not supported by the provider,
                     // just skip the "quota" section.
                     if !matches!(e, crate::quota::Error::NotSupportedByProvider) {
-                        // TODO translate "Quota".
                         ret += &format!("Quota: {}", &*escaper::encode_minimal(&e.to_string()));
                     }
                 }
