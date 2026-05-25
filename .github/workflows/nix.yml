@@ -73,10 +73,9 @@ jobs:
           - libdeltachat
           - python-docs
 
-          # Fails to build
-          #- deltachat-repl-x86_64-android
+          - deltachat-repl-x86_64-android
+          - deltachat-rpc-server-x86_64-android
           #- deltachat-repl-x86-android
-          #- deltachat-rpc-server-x86_64-android
           #- deltachat-rpc-server-x86-android
     steps:
       - uses: actions/checkout@v6
