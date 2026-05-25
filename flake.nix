@@ -162,8 +162,6 @@
         mkWin32RustPackage = packageName:
           let
             rustTarget = "i686-pc-windows-gnu";
-          in
-          let
             toolchainWin = fenixPkgs.combine [
               fenixPkgs.stable.rustc
               fenixPkgs.stable.cargo
@@ -234,8 +232,6 @@
               system = system;
               crossSystem.config = crossTarget;
             };
-          in
-          let
             toolchain = fenixPkgs.combine [
               fenixPkgs.stable.rustc
               fenixPkgs.stable.cargo
