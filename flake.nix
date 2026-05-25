@@ -241,9 +241,11 @@
               fenixPkgs.stable.cargo
               fenixPkgs.targets.${rustTarget}.stable.rust-std
             ];
-            naersk-lib = pkgs.callPackage naersk {
+            naersk-lib = (pkgs.callPackage naersk {
               cargo = toolchain;
               rustc = toolchain;
+            }).override {
+              pkgs = pkgsCross;
             };
           in
           naersk-lib.buildPackage rec {
@@ -253,7 +255,7 @@
             strictDeps = true;
             src = rustSrc;
             nativeBuildInputs = [
-              pkgs.perl # Needed to build vendored OpenSSL.
+              pkgsCross.buildPackages.perl # Needed to build vendored OpenSSL.
             ];
             auditable = false; # Avoid cargo-auditable failures.
             doCheck = false; # Disable test as it requires network access.
