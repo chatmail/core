@@ -146,7 +146,7 @@ jobs:
           cache-bin: false
 
       - name: Install nextest
-        uses: taiki-e/install-action@184183c2401be73c3bf42c2e61268aa5855379c1
+        uses: taiki-e/install-action@213ccc1a076163c093f914550b94feb90fab916d
         with:
           tool: nextest
 
