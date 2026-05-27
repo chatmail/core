@@ -23,6 +23,7 @@ pub(crate) mod session;
 pub(crate) mod tls;
 
 use dns::lookup_host_with_cache;
+pub(crate) use http::read_url_with_tls;
 pub use http::{Response as HttpResponse, read_url, read_url_blob};
 use tls::wrap_tls;
 

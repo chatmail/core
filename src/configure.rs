@@ -680,6 +680,8 @@ async fn get_autoconfig(
     param: &EnteredLoginParam,
     param_domain: &str,
 ) -> Option<Vec<ServerParams>> {
+    let accept_invalid_certificates = param.certificate_checks.accept_invalid_certificates();
+
     // Make sure to not encode `.` as `%2E` here.
     // Some servers like murena.io on 2024-11-01 produce incorrect autoconfig XML
     // when address is encoded.
@@ -696,6 +698,7 @@ async fn get_autoconfig(
             "https://autoconfig.{param_domain}/mail/config-v1.1.xml?emailaddress={param_addr_urlencoded}"
         ),
         &param.addr,
+        accept_invalid_certificates,
     )
     .await
     {
@@ -710,6 +713,7 @@ async fn get_autoconfig(
             "https://{param_domain}/.well-known/autoconfig/mail/config-v1.1.xml?emailaddress={param_addr_urlencoded}"
         ),
         &param.addr,
+        accept_invalid_certificates,
     )
     .await
     {
@@ -721,6 +725,7 @@ async fn get_autoconfig(
     if let Ok(res) = outlk_autodiscover(
         ctx,
         format!("https://{param_domain}/autodiscover/autodiscover.xml"),
+        accept_invalid_certificates,
     )
     .await
     {
@@ -731,6 +736,7 @@ async fn get_autoconfig(
     if let Ok(res) = outlk_autodiscover(
         ctx,
         format!("https://autodiscover.{param_domain}/autodiscover/autodiscover.xml",),
+        accept_invalid_certificates,
     )
     .await
     {
@@ -743,6 +749,7 @@ async fn get_autoconfig(
         ctx,
         &format!("https://autoconfig.thunderbird.net/v1.1/{param_domain}"),
         &param.addr,
+        accept_invalid_certificates,
     )
     .await
     {
