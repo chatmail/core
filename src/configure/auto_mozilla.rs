@@ -10,7 +10,7 @@ use quick_xml::events::{BytesStart, Event};
 use super::{Error, ServerParams};
 use crate::context::Context;
 use crate::log::warn;
-use crate::net::read_url;
+use crate::net::read_url_with_tls;
 use crate::provider::{Protocol, Socket};
 
 #[derive(Debug)]
@@ -249,8 +249,9 @@ pub(crate) async fn moz_autoconfigure(
     context: &Context,
     url: &str,
     addr: &str,
+    accept_invalid_certificates: bool,
 ) -> Result<Vec<ServerParams>, Error> {
-    let xml_raw = read_url(context, url).await?;
+    let xml_raw = read_url_with_tls(context, url, !accept_invalid_certificates).await?;
 
     let res = parse_serverparams(addr, &xml_raw);
     if let Err(err) = &res {

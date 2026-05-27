@@ -56,6 +56,15 @@ pub enum EnteredCertificateChecks {
     AcceptInvalidCertificates2 = 3,
 }
 
+impl EnteredCertificateChecks {
+    pub(crate) fn accept_invalid_certificates(self) -> bool {
+        matches!(
+            self,
+            Self::AcceptInvalidCertificates | Self::AcceptInvalidCertificates2
+        )
+    }
+}
+
 /// Login parameters for a single IMAP server.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EnteredImapLoginParam {

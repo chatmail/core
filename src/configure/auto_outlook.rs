@@ -10,7 +10,7 @@ use quick_xml::events::Event;
 use super::{Error, ServerParams};
 use crate::context::Context;
 use crate::log::warn;
-use crate::net::read_url;
+use crate::net::read_url_with_tls;
 use crate::provider::{Protocol, Socket};
 
 /// Result of parsing a single `Protocol` tag.
@@ -196,10 +196,11 @@ fn protocols_to_serverparams(protocols: Vec<ProtocolTag>) -> Vec<ServerParams> {
 pub(crate) async fn outlk_autodiscover(
     context: &Context,
     mut url: String,
+    accept_invalid_certificates: bool,
 ) -> Result<Vec<ServerParams>, Error> {
     /* Follow up to 10 xml-redirects (http-redirects are followed in read_url() */
     for _i in 0..10 {
-        let xml_raw = read_url(context, &url).await?;
+        let xml_raw = read_url_with_tls(context, &url, !accept_invalid_certificates).await?;
         let res = parse_xml(&xml_raw);
         if let Err(err) = &res {
             warn!(context, "{}", err);

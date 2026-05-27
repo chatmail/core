@@ -13,7 +13,7 @@ use crate::context::Context;
 use crate::log::warn;
 use crate::net::proxy::ProxyConfig;
 use crate::net::session::SessionStream;
-use crate::net::tls::wrap_rustls;
+use crate::net::tls::wrap_tls;
 use crate::tools::time;
 
 /// User-Agent for HTTP requests if a resource usage policy requires it.
@@ -35,7 +35,16 @@ pub struct Response {
 
 /// Retrieves the text contents of URL using HTTP GET request.
 pub async fn read_url(context: &Context, url: &str) -> Result<String> {
-    let response = read_url_blob(context, url).await?;
+    read_url_with_tls(context, url, true).await
+}
+
+/// Retrieves the text contents of URL using HTTP GET request.
+pub(crate) async fn read_url_with_tls(
+    context: &Context,
+    url: &str,
+    strict_tls: bool,
+) -> Result<String> {
+    let response = read_url_blob_with_tls(context, url, strict_tls).await?;
     let text = String::from_utf8_lossy(&response.blob);
     Ok(text.to_string())
 }
@@ -43,6 +52,7 @@ pub async fn read_url(context: &Context, url: &str) -> Result<String> {
 async fn get_http_sender<B>(
     context: &Context,
     parsed_url: hyper::Uri,
+    strict_tls: bool,
 ) -> Result<hyper::client::conn::http1::SendRequest<B>>
 where
     B: hyper::body::Body + 'static + Send,
@@ -76,37 +86,29 @@ where
             let port = parsed_url.port_u16().unwrap_or(443);
             let (use_sni, load_cache) = (true, true);
 
-            if let Some(proxy_config) = proxy_config_opt {
+            let tcp_stream: Box<dyn SessionStream> = if let Some(proxy_config) = proxy_config_opt {
                 let proxy_stream = proxy_config
                     .connect(context, host, port, load_cache)
                     .await?;
-                let tls_stream = wrap_rustls(
-                    host,
-                    port,
-                    use_sni,
-                    "",
-                    proxy_stream,
-                    &context.tls_session_store,
-                    &context.spki_hash_store,
-                    &context.sql,
-                )
-                .await?;
-                Box::new(tls_stream)
+                Box::new(proxy_stream)
             } else {
                 let tcp_stream = crate::net::connect_tcp(context, host, port, load_cache).await?;
-                let tls_stream = wrap_rustls(
-                    host,
-                    port,
-                    use_sni,
-                    "",
-                    tcp_stream,
-                    &context.tls_session_store,
-                    &context.spki_hash_store,
-                    &context.sql,
-                )
-                .await?;
-                Box::new(tls_stream)
-            }
+                Box::new(tcp_stream)
+            };
+
+            let tls_stream = wrap_tls(
+                strict_tls,
+                host,
+                port,
+                use_sni,
+                "",
+                tcp_stream,
+                &context.tls_session_store,
+                &context.spki_hash_store,
+                &context.sql,
+            )
+            .await?;
+            Box::new(tls_stream)
         }
         _ => bail!("Unknown URL scheme"),
     };
@@ -260,7 +262,7 @@ pub(crate) async fn http_cache_cleanup(context: &Context) -> Result<()> {
 /// Fetches URL and updates the cache.
 ///
 /// URL is fetched regardless of whether there is an existing result in the cache.
-async fn fetch_url(context: &Context, original_url: &str) -> Result<Response> {
+async fn fetch_url(context: &Context, original_url: &str, strict_tls: bool) -> Result<Response> {
     let mut url = original_url.to_string();
 
     // Follow up to 10 http-redirects
@@ -269,7 +271,7 @@ async fn fetch_url(context: &Context, original_url: &str) -> Result<Response> {
             .parse::<hyper::Uri>()
             .with_context(|| format!("Failed to parse URL {url:?}"))?;
 
-        let mut sender = get_http_sender(context, parsed_url.clone()).await?;
+        let mut sender = get_http_sender(context, parsed_url.clone(), strict_tls).await?;
         let authority = parsed_url
             .authority()
             .context("URL has no authority")?
@@ -339,8 +341,10 @@ async fn fetch_url(context: &Context, original_url: &str) -> Result<Response> {
             mimetype,
             encoding,
         };
-        info!(context, "Inserting {original_url:?} into cache.");
-        http_cache_put(context, &url, &response).await?;
+        if strict_tls {
+            info!(context, "Inserting {original_url:?} into cache.");
+            http_cache_put(context, &url, &response).await?;
+        }
         return Ok(response);
     }
 
@@ -349,6 +353,23 @@ async fn fetch_url(context: &Context, original_url: &str) -> Result<Response> {
 
 /// Retrieves the binary contents of URL using HTTP GET request.
 pub async fn read_url_blob(context: &Context, url: &str) -> Result<Response> {
+    read_url_blob_with_tls(context, url, true).await
+}
+
+/// Retrieves the binary contents of URL using HTTP GET request.
+pub(crate) async fn read_url_blob_with_tls(
+    context: &Context,
+    url: &str,
+    strict_tls: bool,
+) -> Result<Response> {
+    if !strict_tls {
+        info!(
+            context,
+            "Fetching {url:?} without HTTP cache due to relaxed TLS."
+        );
+        return fetch_url(context, url, strict_tls).await;
+    }
+
     if let Some((response, is_stale)) = http_cache_get(context, url).await? {
         info!(context, "Returning {url:?} from cache.");
         if is_stale {
@@ -357,7 +378,7 @@ pub async fn read_url_blob(context: &Context, url: &str) -> Result<Response> {
             tokio::spawn(async move {
                 // Fetch URL in background to update the cache.
                 info!(context, "Fetching stale {url:?} in background.");
-                if let Err(err) = fetch_url(&context, &url).await {
+                if let Err(err) = fetch_url(&context, &url, true).await {
                     warn!(context, "Failed to revalidate {url:?}: {err:#}.");
                 }
             });
@@ -366,7 +387,7 @@ pub async fn read_url_blob(context: &Context, url: &str) -> Result<Response> {
     }
 
     info!(context, "Not found {url:?} in cache, fetching.");
-    let response = fetch_url(context, url).await?;
+    let response = fetch_url(context, url, true).await?;
     Ok(response)
 }
 
@@ -384,7 +405,7 @@ pub(crate) async fn post_empty(context: &Context, url: &str) -> Result<(String, 
         bail!("POST requests to non-HTTPS URLs are not allowed");
     }
 
-    let mut sender = get_http_sender(context, parsed_url.clone()).await?;
+    let mut sender = get_http_sender(context, parsed_url.clone(), true).await?;
     let authority = parsed_url
         .authority()
         .context("URL has no authority")?
@@ -418,7 +439,7 @@ pub(crate) async fn post_string(context: &Context, url: &str, body: String) -> R
         bail!("POST requests to non-HTTPS URLs are not allowed");
     }
 
-    let mut sender = get_http_sender(context, parsed_url.clone()).await?;
+    let mut sender = get_http_sender(context, parsed_url.clone(), true).await?;
     let authority = parsed_url
         .authority()
         .context("URL has no authority")?
@@ -449,7 +470,7 @@ pub(crate) async fn post_form<T: Serialize + ?Sized>(
     }
 
     let encoded_body = serde_urlencoded::to_string(form).context("Failed to encode data")?;
-    let mut sender = get_http_sender(context, parsed_url.clone()).await?;
+    let mut sender = get_http_sender(context, parsed_url.clone(), true).await?;
     let authority = parsed_url
         .authority()
         .context("URL has no authority")?
