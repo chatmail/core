@@ -388,32 +388,10 @@
             # Run `nix build .#docs` to get C docs generated in `./result/`.
             docs = pkgs.callPackage ./nix/c-docs.nix { version = manifest.version; };
 
-            libdeltachat =
-              let
-                rustPlatform = (pkgs.makeRustPlatform {
-                  cargo = fenixToolchain;
-                  rustc = fenixToolchain;
-                });
-              in
-              pkgs.stdenv.mkDerivation {
-                pname = "libdeltachat";
-                version = manifest.version;
-                src = rustSrc;
-                cargoDeps = pkgs.rustPlatform.importCargoLock cargoLock;
-
-                nativeBuildInputs = [
-                  pkgs.perl # Needed to build vendored OpenSSL.
-                  pkgs.cmake
-                  rustPlatform.cargoSetupHook
-                  fenixPkgs.stable.rustc
-                  fenixPkgs.stable.cargo
-                ];
-
-                postInstall = ''
-                  substituteInPlace $out/include/deltachat.h \
-                    --replace __FILE__ '"${placeholder "out"}/include/deltachat.h"'
-                '';
-              };
+            libdeltachat = pkgs.callPackage ./nix/libdeltachat.nix {
+              inherit fenixToolchain rustSrc cargoLock fenixPkgs;
+              version = manifest.version;
+            };
 
             deltachat-rpc-client =
               pkgs.python3Packages.buildPythonPackage {
