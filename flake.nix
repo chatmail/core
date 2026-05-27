@@ -29,6 +29,7 @@
           rustc = fenixToolchain;
         };
         manifest = (pkgs.lib.importTOML ./Cargo.toml).package;
+        version = manifest.version;
 
         rustSrc = nix-filter.lib {
           root = ./.;
@@ -78,7 +79,7 @@
           naersk'.buildPackage {
             pname = packageName;
             cargoBuildOptions = x: x ++ [ "--package" packageName ];
-            version = manifest.version;
+            inherit version;
             src = pkgs.lib.cleanSource ./.;
             nativeBuildInputs = [
               pkgs.perl # Needed to build vendored OpenSSL.
@@ -87,23 +88,19 @@
             doCheck = false; # Disable test as it requires network access.
           };
         mkWin64RustPackage = pkgs.callPackage ./nix/win64-package.nix {
-          inherit naersk system fenixPkgs;
-          version = manifest.version;
+          inherit naersk system fenixPkgs version;
         };
 
         mkWin32RustPackage = pkgs.callPackage ./nix/win32-package.nix {
-          inherit naersk system fenixPkgs;
-          version = manifest.version;
+          inherit naersk system fenixPkgs version;
         };
 
         mkCrossRustPackage = pkgs.callPackage ./nix/cross-rust-package.nix {
-          inherit nixpkgs arch2targets naersk fenixPkgs system rustSrc;
-          version = manifest.version;
+          inherit nixpkgs arch2targets naersk fenixPkgs system rustSrc version;
         };
 
         mkAndroidRustPackage = pkgs.callPackage ./nix/android-package.nix {
-          inherit naersk fenixPkgs system rustSrc android;
-          version = manifest.version;
+          inherit naersk fenixPkgs system rustSrc android version;
         };
 
         mkAndroidPackages = arch:
@@ -127,7 +124,7 @@
             "deltachat-rpc-server-${arch}-wheel" = mkWheel { inherit rpc-server; arch = "${arch}"; };
           };
 
-        mkWheel = pkgs.callPackage ./nix/wheel.nix { inherit nix-filter; version = manifest.version; root = ./.; };
+        mkWheel = pkgs.callPackage ./nix/wheel.nix { inherit nix-filter version; root = ./.; };
       in
       {
         formatter = pkgs.nixpkgs-fmt;
@@ -160,21 +157,20 @@
                 { rpc-server = deltachat-rpc-server-win32; arch = "win32"; binaryName = "deltachat-rpc-server.exe"; };
 
             # Run `nix build .#docs` to get C docs generated in `./result/`.
-            docs = pkgs.callPackage ./nix/c-docs.nix { version = manifest.version; };
+            docs = pkgs.callPackage ./nix/c-docs.nix { inherit version; };
 
             libdeltachat = pkgs.callPackage ./nix/libdeltachat.nix {
-              inherit fenixToolchain rustSrc cargoLock fenixPkgs;
-              version = manifest.version;
+              inherit fenixToolchain rustSrc cargoLock fenixPkgs version;
             };
 
             deltachat-rpc-client = pkgs.callPackage ./nix/deltachat-rpc-client.nix {
-              version = manifest.version;
+              inherit version;
             };
 
             deltachat-python =
               pkgs.python3Packages.buildPythonPackage {
                 pname = "deltachat-python";
-                version = manifest.version;
+                inherit version;
                 src = pkgs.lib.cleanSource ./python;
                 format = "pyproject";
                 buildInputs = [
@@ -193,8 +189,7 @@
                 ];
               };
             python-docs = pkgs.callPackage ./nix/python-docs.nix {
-              inherit deltachat-python deltachat-rpc-client;
-              version = manifest.version;
+              inherit deltachat-python deltachat-rpc-client version;
             };
           };
 
