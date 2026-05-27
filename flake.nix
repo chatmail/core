@@ -393,17 +393,9 @@
               version = manifest.version;
             };
 
-            deltachat-rpc-client =
-              pkgs.python3Packages.buildPythonPackage {
-                pname = "deltachat-rpc-client";
-                version = manifest.version;
-                src = pkgs.lib.cleanSource ./deltachat-rpc-client;
-                format = "pyproject";
-                propagatedBuildInputs = [
-                  pkgs.python3Packages.setuptools
-                  pkgs.python3Packages.imap-tools
-                ];
-              };
+            deltachat-rpc-client = pkgs.callPackage ./nix/deltachat-rpc-client.nix {
+              version = manifest.version;
+            };
 
             deltachat-python =
               pkgs.python3Packages.buildPythonPackage {
