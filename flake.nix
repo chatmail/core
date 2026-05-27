@@ -386,15 +386,7 @@
                 { rpc-server = deltachat-rpc-server-win32; arch = "win32"; binaryName = "deltachat-rpc-server.exe"; };
 
             # Run `nix build .#docs` to get C docs generated in `./result/`.
-            docs =
-              pkgs.stdenv.mkDerivation {
-                pname = "docs";
-                version = manifest.version;
-                src = pkgs.lib.cleanSource ./.;
-                nativeBuildInputs = [ pkgs.doxygen ];
-                buildPhase = ''scripts/run-doxygen.sh'';
-                installPhase = ''mkdir -p $out; cp -av deltachat-ffi/html deltachat-ffi/xml $out'';
-              };
+            docs = pkgs.callPackage ./nix/c-docs.nix { version = manifest.version; };
 
             libdeltachat =
               let
