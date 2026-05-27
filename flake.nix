@@ -518,22 +518,6 @@
                 '';
               };
 
-            # Source package for deltachat-rpc-server.
-            # Fake package that downloads Linux version,
-            # needed to install deltachat-rpc-server on Android with `pip`.
-            deltachat-rpc-server-source =
-              pkgs.stdenv.mkDerivation {
-                pname = "deltachat-rpc-server-source";
-                version = manifest.version;
-                src = pkgs.lib.cleanSource ./.;
-                nativeBuildInputs = [
-                  pkgs.python3
-                  pkgs.python3Packages.wheel
-                ];
-                buildPhase = ''python3 scripts/wheel-rpc-server.py source deltachat_rpc_server-${manifest.version}.tar.gz'';
-                installPhase = ''mkdir -p $out; cp -av deltachat_rpc_server-${manifest.version}.tar.gz $out'';
-              };
-
             deltachat-rpc-client =
               pkgs.python3Packages.buildPythonPackage {
                 pname = "deltachat-rpc-client";
