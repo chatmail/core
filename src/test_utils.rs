@@ -38,7 +38,7 @@ use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::key::{self, DcKey, self_fingerprint};
 use crate::log::warn;
 use crate::login_param::EnteredLoginParam;
-use crate::message::{Message, MessageState, MsgId, update_msg_state};
+use crate::message::{Message, MessageState, MsgId};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::pgp::SeipdVersion;
 use crate::receive_imf::{ReceivedMsg, receive_imf};
@@ -692,10 +692,11 @@ ORDER BY id"
         if !msg_has_pending_smtp_job(self, msg_id)
             .await
             .expect("Failed to check for more jobs")
-        {
-            update_msg_state(&self.ctx, msg_id, MessageState::OutDelivered)
+            && msg_id
+                .set_delivered(self)
                 .await
-                .expect("failed to update message state");
+                .expect("MsgId::set_delivered")
+        {
             self.sql
                 .execute(
                     "UPDATE msgs SET timestamp_sent=? WHERE id=?",
@@ -772,16 +773,19 @@ ORDER BY id"
             .execute("DELETE FROM smtp WHERE msg_id=?", (msg_id,))
             .await
             .expect("Delete smtp jobs");
-        update_msg_state(&self.ctx, msg_id, MessageState::OutDelivered)
+        if msg_id
+            .set_delivered(self)
             .await
-            .expect("Update message state");
-        self.sql
-            .execute(
-                "UPDATE msgs SET timestamp_sent=? WHERE id=?",
-                (time(), msg_id),
-            )
-            .await
-            .expect("Update timestamp_sent");
+            .expect("MsgId::set_delivered")
+        {
+            self.sql
+                .execute(
+                    "UPDATE msgs SET timestamp_sent=? WHERE id=?",
+                    (time(), msg_id),
+                )
+                .await
+                .expect("Update timestamp_sent");
+        }
         sent_msgs
     }
 
