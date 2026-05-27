@@ -83,6 +83,7 @@ jobs:
           show-progress: false
           persist-credentials: false
       - uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3 # v31.10.6
+      - uses: DeterminateSystems/magic-nix-cache-action@565684385bcd71bad329742eefe8d12f2e765b39 # v13
       - run: nix build .#${{ matrix.installable }}
 
   build-macos:
@@ -101,4 +102,5 @@ jobs:
           show-progress: false
           persist-credentials: false
       - uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3 # v31.10.6
+      - uses: DeterminateSystems/magic-nix-cache-action@565684385bcd71bad329742eefe8d12f2e765b39 # v13
       - run: nix build .#${{ matrix.installable }}
