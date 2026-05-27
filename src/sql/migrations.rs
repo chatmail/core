@@ -2346,7 +2346,7 @@ ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
                     transaction.execute(
                         "UPDATE transports
                          SET entered_param=json_set(entered_param, '$.imap.folder', ?1),
-                             configured_param=json_set(configured_param', '$.imap_folder', ?1)",
+                             configured_param=json_set(configured_param, '$.imap_folder', ?1)",
                         (mvbox_folder,),
                     )?;
                 }
