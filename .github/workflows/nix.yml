@@ -63,7 +63,6 @@ jobs:
           - deltachat-rpc-server-armv7l-linux-wheel
           - deltachat-rpc-server-i686-linux
           - deltachat-rpc-server-i686-linux-wheel
-          - deltachat-rpc-server-source
           - deltachat-rpc-server-win32
           - deltachat-rpc-server-win32-wheel
           - deltachat-rpc-server-win64

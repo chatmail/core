@@ -20,86 +20,6 @@ Description-Content-Type: text/markdown
 """
 
 
-def build_source_package(version, filename):
-    with tarfile.open(filename, "w:gz") as pkg:
-
-        def pack(name, contents):
-            contents = contents.encode()
-            tar_info = tarfile.TarInfo(f"deltachat_rpc_server-{version}/{name}")
-            tar_info.mode = 0o644
-            tar_info.size = len(contents)
-            pkg.addfile(tar_info, BytesIO(contents))
-
-        pack("PKG-INFO", metadata_contents(version))
-        pack(
-            "pyproject.toml",
-            f"""[build-system]
-requires = ["setuptools==68.2.2", "pip"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "deltachat-rpc-server"
-version = "{version}"
-
-[project.scripts]
-deltachat-rpc-server = "deltachat_rpc_server:main"
-""",
-        )
-        pack(
-            "setup.py",
-            f"""
-import sys
-from setuptools import setup, find_packages
-from distutils.cmd import Command
-from setuptools.command.install import install
-from setuptools.command.build import build
-import subprocess
-import platform
-import tempfile
-from zipfile import ZipFile
-from pathlib import Path
-import shutil
-
-
-class BuildCommand(build):
-    def run(self):
-        tmpdir = tempfile.mkdtemp()
-        subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "pip",
-                "download",
-                "--no-input",
-                "--timeout",
-                "1000",
-                "--platform",
-                "musllinux_1_1_" + platform.machine(),
-                "--only-binary=:all:",
-                "deltachat-rpc-server=={version}",
-            ],
-            cwd=tmpdir,
-        )
-
-        wheel_path = next(Path(tmpdir).glob("*.whl"))
-        with ZipFile(wheel_path, "r") as wheel:
-            exe_path = wheel.extract("deltachat_rpc_server/deltachat-rpc-server", "src")
-            Path(exe_path).chmod(0o700)
-            wheel.extract("deltachat_rpc_server/__init__.py", "src")
-
-        shutil.rmtree(tmpdir)
-        return super().run()
-
-
-setup(
-    cmdclass={{"build": BuildCommand}},
-    package_data={{"deltachat_rpc_server": ["deltachat-rpc-server"]}},
-)
-""",
-        )
-        pack("src/deltachat_rpc_server/__init__.py", "")
-
-
 def build_wheel(version, binary, tag, windows=False):
     filename = f"deltachat_rpc_server-{version}-{tag}.whl"
 
@@ -168,23 +88,19 @@ def main():
     with Path("Cargo.toml").open("rb") as fp:
         cargo_manifest = tomllib.load(fp)
     version = cargo_manifest["package"]["version"]
-    if sys.argv[1] == "source":
-        filename = f"deltachat_rpc_server-{version}.tar.gz"
-        build_source_package(version, filename)
-    else:
-        arch = sys.argv[1]
-        executable = sys.argv[2]
-        tags = arch2tags[arch]
+    arch = sys.argv[1]
+    executable = sys.argv[2]
+    tags = arch2tags[arch]
 
-        if arch in ["win32", "win64"]:
-            build_wheel(
-                version,
-                executable,
-                f"py3-none-{tags}",
-                windows=True,
-            )
-        else:
-            build_wheel(version, executable, f"py3-none-{tags}")
+    if arch in ["win32", "win64"]:
+        build_wheel(
+            version,
+            executable,
+            f"py3-none-{tags}",
+            windows=True,
+        )
+    else:
+        build_wheel(version, executable, f"py3-none-{tags}")
 
 
 main()
