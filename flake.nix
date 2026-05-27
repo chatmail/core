@@ -351,21 +351,10 @@
                   pkgs.python3Packages.requests
                 ];
               };
-            python-docs =
-              pkgs.stdenv.mkDerivation {
-                pname = "docs";
-                version = manifest.version;
-                src = pkgs.lib.cleanSource ./.;
-                buildInputs = [
-                  deltachat-python
-                  deltachat-rpc-client
-                  pkgs.python3Packages.breathe
-                  pkgs.python3Packages.sphinx-rtd-theme
-                ];
-                nativeBuildInputs = [ pkgs.sphinx ];
-                buildPhase = ''sphinx-build -b html -a python/doc/ dist/html'';
-                installPhase = ''mkdir -p $out; cp -av dist/html $out'';
-              };
+            python-docs = pkgs.callPackage ./nix/python-docs.nix {
+              inherit deltachat-python deltachat-rpc-client;
+              version = manifest.version;
+            };
           };
 
         devShells.default = import ./nix/devshell.nix { inherit nixpkgs fenix system; };
