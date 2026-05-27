@@ -66,37 +66,15 @@
           ];
         };
 
-        # Map from architecture name to rust targets and nixpkgs targets.
+        # Map from architecture name to nixpkgs targets.
         arch2targets = {
-          "x86_64-linux" = {
-            rustTarget = "x86_64-unknown-linux-musl";
-            crossTarget = "x86_64-unknown-linux-musl";
-          };
-          "armv7l-linux" = {
-            rustTarget = "armv7-unknown-linux-musleabihf";
-            crossTarget = "armv7l-unknown-linux-musleabihf";
-          };
-          "armv6l-linux" = {
-            rustTarget = "arm-unknown-linux-musleabihf";
-            crossTarget = "armv6l-unknown-linux-musleabihf";
-          };
-          "aarch64-linux" = {
-            rustTarget = "aarch64-unknown-linux-musl";
-            crossTarget = "aarch64-unknown-linux-musl";
-          };
-          "i686-linux" = {
-            rustTarget = "i686-unknown-linux-musl";
-            crossTarget = "i686-unknown-linux-musl";
-          };
-
-          "x86_64-darwin" = {
-            rustTarget = "x86_64-apple-darwin";
-            crossTarget = "x86_64-darwin";
-          };
-          "aarch64-darwin" = {
-            rustTarget = "aarch64-apple-darwin";
-            crossTarget = "aarch64-darwin";
-          };
+          "x86_64-linux" = "x86_64-unknown-linux-musl";
+          "armv7l-linux" = "armv7l-unknown-linux-musleabihf";
+          "armv6l-linux" = "armv6l-unknown-linux-musleabihf";
+          "aarch64-linux" = "aarch64-unknown-linux-musl";
+          "i686-linux" = "i686-unknown-linux-musl";
+          "x86_64-darwin" = "x86_64-darwin";
+          "aarch64-darwin" = "aarch64-darwin";
         };
         cargoLock = {
           lockFile = ./Cargo.lock;
@@ -113,10 +91,10 @@
             auditable = false; # Avoid cargo-auditable failures.
             doCheck = false; # Disable test as it requires network access.
           };
-        pkgsWin64 = pkgs.pkgsCross.mingwW64;
         mkWin64RustPackage = packageName:
           let
-            rustTarget = "x86_64-pc-windows-gnu";
+            pkgsWin64 = pkgs.pkgsCross.mingwW64;
+            rustTarget = pkgsWin64.stdenv.hostPlatform.rust.rustcTarget;
             toolchainWin = fenixPkgs.combine [
               fenixPkgs.stable.rustc
               fenixPkgs.stable.cargo
@@ -158,10 +136,10 @@
             LD = "${pkgsWin64.stdenv.cc}/bin/${pkgsWin64.stdenv.cc.targetPrefix}cc";
           };
 
-        pkgsWin32 = pkgs.pkgsCross.mingw32;
         mkWin32RustPackage = packageName:
           let
-            rustTarget = "i686-pc-windows-gnu";
+            pkgsWin32 = pkgs.pkgsCross.mingw32;
+            rustTarget = pkgsWin32.stdenv.hostPlatform.rust.rustcTarget;
             toolchainWin = fenixPkgs.combine [
               fenixPkgs.stable.rustc
               fenixPkgs.stable.cargo
@@ -226,8 +204,7 @@
 
         mkCrossRustPackage = arch: packageName:
           let
-            rustTarget = arch2targets."${arch}".rustTarget;
-            crossTarget = arch2targets."${arch}".crossTarget;
+            crossTarget = arch2targets."${arch}";
             pkgsCross =
               if crossTarget == system then
                 import nixpkgs { inherit system; }
@@ -236,6 +213,7 @@
                   system = system;
                   crossSystem.config = crossTarget;
                 };
+            rustTarget = pkgsCross.stdenv.hostPlatform.rust.rustcTarget;
             toolchain = fenixPkgs.combine [
               fenixPkgs.stable.rustc
               fenixPkgs.stable.cargo
