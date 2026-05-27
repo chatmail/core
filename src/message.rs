@@ -312,6 +312,7 @@ SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ?, ? FROM msgs WHERE id=?1
         if duration != 0 {
             ret += &format!("Duration: {duration} ms\n",);
         }
+        ret += &format!("\nDatabase ID: {}", msg.id);
         if !msg.rfc724_mid.is_empty() {
             ret += &format!("\nMessage-ID: {}", msg.rfc724_mid);
 
