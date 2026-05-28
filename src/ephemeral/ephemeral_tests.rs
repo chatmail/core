@@ -478,9 +478,10 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
 
     // Test messages:
     //
-    // Three messages that were not split into pre- and post- message:
+    // Four messages that were not split into pre- and post- message:
     //  "expired@localhost"     - expired ephemeral message
     //  "no_expire@localhost"   - non-ephemeral message
+    //  "no_expire_unencrypted@localhost"   - non-ephemeral message, not encrypted
     //  "future@localhost"      - will expire in the future, but not yet
     //
     // And four messages that were split into pre- and post-message.
@@ -489,57 +490,81 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
     //  "future_*@localhost"    - has pre-msg, not expired yet, not downloaded yet
     //  "done_*@localhost"      - Fully downloaded -> post- message can be deleted
     //
-    // The tuple is (rfc724_mid, ephemeral_timestamp, download_state, pre_rfc724_mid)
-    let msgs: [(&str, i64, DownloadState, &str); 7] = [
-        ("expired@localhost", now - 1, DownloadState::Done, ""),
-        ("no_expire@localhost", 0, DownloadState::Done, ""),
+    // The tuple is (rfc724_mid, ephemeral_timestamp, download_state, pre_rfc724_mid, is_encrypted)
+    let msgs: [(&str, i64, DownloadState, &str, bool); 8] = [
+        ("expired@localhost", now - 1, DownloadState::Done, "", true),
+        ("no_expire@localhost", 0, DownloadState::Done, "", true),
+        (
+            "no_expire_unencrypted@localhost",
+            0,
+            DownloadState::Done,
+            "",
+            false,
+        ),
         // Use "now + 3600" rather than "now + 1", otherwise the test may be flaky
         // if it is slow and the message expires in a second
-        ("future@localhost", now + 3600, DownloadState::Done, ""),
+        (
+            "future@localhost",
+            now + 3600,
+            DownloadState::Done,
+            "",
+            true,
+        ),
         (
             "expired_post@localhost",
             now - 1,
             DownloadState::Available,
             "expired_pre@localhost",
+            true,
         ),
         (
             "no_expire_post@localhost",
             0,
             DownloadState::Available,
             "no_expire_pre@localhost",
+            true,
         ),
         (
             "future_post@localhost",
             now + 3600,
             DownloadState::Available,
             "future_pre@localhost",
+            true,
         ),
         (
             "done_post@localhost",
             0,
             DownloadState::Done,
             "done_pre@localhost",
+            true,
         ),
     ];
-    for (rfc724_mid, ephemeral_timestamp, download_state, pre_rfc724_mid) in msgs {
+    for (rfc724_mid, ephemeral_timestamp, download_state, pre_rfc724_mid, is_encrypted) in msgs {
         t.sql
             .execute(
                 "INSERT INTO msgs \
-                 (rfc724_mid, timestamp, ephemeral_timestamp, download_state, pre_rfc724_mid) \
-                 VALUES (?,?,?,?,?)",
+                 (rfc724_mid, timestamp, ephemeral_timestamp, download_state, pre_rfc724_mid, param) \
+                 VALUES (?,?,?,?,?,?)",
                 (
                     rfc724_mid,
                     now,
                     ephemeral_timestamp,
                     download_state,
                     pre_rfc724_mid,
+                    if is_encrypted {
+                        "c=1"
+                    } else {
+                        ""
+                    }
                 ),
             )
             .await?;
     }
     let rfc724_mids: Vec<&str> = msgs
         .iter()
-        .flat_map(|(rfc724_mid, _, _, pre_rfc724_mid)| [*rfc724_mid, *pre_rfc724_mid])
+        .flat_map(|(rfc724_mid, _, _, pre_rfc724_mid, _is_encrypted)| {
+            [*rfc724_mid, *pre_rfc724_mid]
+        })
         .filter(|s| !s.is_empty())
         .collect();
 
@@ -590,34 +615,20 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
         }
 
         assert_eq!(is_deleted(&t, "expired@localhost").await?, true);
+        assert_eq!(is_deleted(&t, "no_expire@localhost").await?, !bcc_self);
         assert_eq!(
-            is_deleted(&t, "no_expire@localhost").await?,
+            is_deleted(&t, "no_expire_unencrypted@localhost").await?,
             is_chatmail && !bcc_self
         );
-        assert_eq!(
-            is_deleted(&t, "future@localhost").await?,
-            is_chatmail && !bcc_self
-        );
+        assert_eq!(is_deleted(&t, "future@localhost").await?, !bcc_self);
         assert_eq!(is_deleted(&t, "expired_post@localhost").await?, true);
         assert_eq!(is_deleted(&t, "expired_pre@localhost").await?, true);
         assert_eq!(is_deleted(&t, "no_expire_post@localhost").await?, false);
-        assert_eq!(
-            is_deleted(&t, "no_expire_pre@localhost").await?,
-            is_chatmail && !bcc_self
-        );
+        assert_eq!(is_deleted(&t, "no_expire_pre@localhost").await?, !bcc_self);
         assert_eq!(is_deleted(&t, "future_post@localhost").await?, false);
-        assert_eq!(
-            is_deleted(&t, "future_pre@localhost").await?,
-            is_chatmail && !bcc_self
-        );
-        assert_eq!(
-            is_deleted(&t, "done_pre@localhost").await?,
-            is_chatmail && !bcc_self
-        );
-        assert_eq!(
-            is_deleted(&t, "done_post@localhost").await?,
-            is_chatmail && !bcc_self
-        );
+        assert_eq!(is_deleted(&t, "future_pre@localhost").await?, !bcc_self);
+        assert_eq!(is_deleted(&t, "done_pre@localhost").await?, !bcc_self);
+        assert_eq!(is_deleted(&t, "done_post@localhost").await?, !bcc_self);
 
         reset_targets(&t).await;
     }
