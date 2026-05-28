@@ -654,7 +654,7 @@ pub(crate) async fn ephemeral_loop(context: &Context, interrupt_receiver: Receiv
 
 /// Schedules expired IMAP messages for deletion on the server.
 ///
-/// Also see [`delete_expired_imap_messages`],
+/// Also see [`delete_expired_messages`],
 /// which locally deletes expired messages.
 pub(crate) async fn delete_expired_imap_messages(
     context: &Context,
