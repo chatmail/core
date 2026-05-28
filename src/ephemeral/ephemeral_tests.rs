@@ -554,12 +554,21 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
             .await?;
     }
 
-    for (is_chatmail, other_transport) in
-        [(false, false), (false, true), (true, false), (true, true)]
-    {
+    for (is_chatmail, other_transport, bcc_self) in [
+        (false, false, false),
+        (false, false, true),
+        (false, true, false),
+        (false, true, true),
+        (true, false, false),
+        (true, false, true),
+        (true, true, false),
+        (true, true, true),
+    ] {
         println!(
-            "Testing combination is_chatmail={is_chatmail}, other_transport={other_transport}"
+            "Testing combination is_chatmail={is_chatmail}, other_transport={other_transport}, bcc_self={bcc_self}"
         );
+
+        t.set_config_bool(Config::BccSelf, bcc_self).await?;
 
         delete_expired_imap_messages(
             &t,
@@ -581,19 +590,34 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
         }
 
         assert_eq!(is_deleted(&t, "expired@localhost").await?, true);
-        assert_eq!(is_deleted(&t, "no_expire@localhost").await?, is_chatmail);
-        assert_eq!(is_deleted(&t, "future@localhost").await?, is_chatmail);
+        assert_eq!(
+            is_deleted(&t, "no_expire@localhost").await?,
+            is_chatmail && !bcc_self
+        );
+        assert_eq!(
+            is_deleted(&t, "future@localhost").await?,
+            is_chatmail && !bcc_self
+        );
         assert_eq!(is_deleted(&t, "expired_post@localhost").await?, true);
         assert_eq!(is_deleted(&t, "expired_pre@localhost").await?, true);
         assert_eq!(is_deleted(&t, "no_expire_post@localhost").await?, false);
         assert_eq!(
             is_deleted(&t, "no_expire_pre@localhost").await?,
-            is_chatmail
+            is_chatmail && !bcc_self
         );
         assert_eq!(is_deleted(&t, "future_post@localhost").await?, false);
-        assert_eq!(is_deleted(&t, "future_pre@localhost").await?, is_chatmail);
-        assert_eq!(is_deleted(&t, "done_pre@localhost").await?, is_chatmail);
-        assert_eq!(is_deleted(&t, "done_post@localhost").await?, is_chatmail);
+        assert_eq!(
+            is_deleted(&t, "future_pre@localhost").await?,
+            is_chatmail && !bcc_self
+        );
+        assert_eq!(
+            is_deleted(&t, "done_pre@localhost").await?,
+            is_chatmail && !bcc_self
+        );
+        assert_eq!(
+            is_deleted(&t, "done_post@localhost").await?,
+            is_chatmail && !bcc_self
+        );
 
         reset_targets(&t).await;
     }
