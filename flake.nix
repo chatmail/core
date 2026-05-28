@@ -4,16 +4,13 @@
     fenix.url = "github:nix-community/fenix";
     fenix.inputs.nixpkgs.follows = "nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
-    naersk.url = "github:nix-community/naersk/pull/391/head";
-    naersk.inputs.nixpkgs.follows = "nixpkgs";
-    naersk.inputs.fenix.follows = "fenix";
     nix-filter.url = "github:numtide/nix-filter";
     nixpkgs.url = "github:nixos/nixpkgs/master";
     android.url = "github:tadfisher/android-nixpkgs";
     android.inputs.nixpkgs.follows = "nixpkgs";
     android.inputs.flake-utils.follows = "flake-utils";
   };
-  outputs = { self, nixpkgs, flake-utils, nix-filter, naersk, fenix, android }:
+  outputs = { self, nixpkgs, flake-utils, nix-filter, fenix, android }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
@@ -24,7 +21,7 @@
           fenixPkgs.stable.cargo
           fenixPkgs.stable.rust-std
         ];
-        naersk' = pkgs.callPackage naersk {
+        rustPlatform = pkgs.makeRustPlatform {
           cargo = fenixToolchain;
           rustc = fenixToolchain;
         };
@@ -102,86 +99,26 @@
           lockFile = ./Cargo.lock;
         };
         mkRustPackage = packageName:
-          naersk'.buildPackage {
+          rustPlatform.buildRustPackage {
             pname = packageName;
-            cargoBuildOptions = x: x ++ [ "--package" packageName ];
+            cargoDeps = rustPlatform.importCargoLock cargoLock;
+            cargoBuildFlags = [ "--package" packageName ];
             version = manifest.version;
             src = pkgs.lib.cleanSource ./.;
             nativeBuildInputs = [
               pkgs.perl # Needed to build vendored OpenSSL.
             ];
-            auditable = false; # Avoid cargo-auditable failures.
             doCheck = false; # Disable test as it requires network access.
           };
-        pkgsWin64 = pkgs.pkgsCross.mingwW64;
         mkWin64RustPackage = packageName:
           let
+            pkgsWinStatic = import nixpkgs {
+              inherit system;
+              crossSystem = { config = "x86_64-w64-mingw32"; isStatic = true; };
+            };
             rustTarget = "x86_64-pc-windows-gnu";
-            toolchainWin = fenixPkgs.combine [
-              fenixPkgs.stable.rustc
-              fenixPkgs.stable.cargo
-              fenixPkgs.targets.${rustTarget}.stable.rust-std
-            ];
-            naerskWin = pkgs.callPackage naersk {
-              cargo = toolchainWin;
-              rustc = toolchainWin;
-            };
-          in
-          naerskWin.buildPackage rec {
-            pname = packageName;
-            cargoBuildOptions = x: x ++ [ "--package" packageName ];
-            version = manifest.version;
-            strictDeps = true;
-            src = pkgs.lib.cleanSource ./.;
-            nativeBuildInputs = [
-              pkgs.perl # Needed to build vendored OpenSSL.
-            ];
-            depsBuildBuild = [
-              pkgsWin64.stdenv.cc
-            ];
-            buildInputs = [
-              pkgsWin64.windows.pthreads
-            ];
-            auditable = false; # Avoid cargo-auditable failures.
-            doCheck = false; # Disable test as it requires network access.
-
-            CARGO_BUILD_TARGET = rustTarget;
-            TARGET_CC = "${pkgsWin64.stdenv.cc}/bin/${pkgsWin64.stdenv.cc.targetPrefix}cc";
-            CARGO_BUILD_RUSTFLAGS = [
-              "-C"
-              "linker=${TARGET_CC}"
-              "-L"
-              "native=${pkgsWin64.windows.pthreads}/lib"
-            ];
-
-            CC = "${pkgsWin64.stdenv.cc}/bin/${pkgsWin64.stdenv.cc.targetPrefix}cc";
-            LD = "${pkgsWin64.stdenv.cc}/bin/${pkgsWin64.stdenv.cc.targetPrefix}cc";
-          };
-
-        pkgsWin32 = pkgs.pkgsCross.mingw32;
-        mkWin32RustPackage = packageName:
-          let
-            rustTarget = "i686-pc-windows-gnu";
-          in
-          let
-            toolchainWin = fenixPkgs.combine [
-              fenixPkgs.stable.rustc
-              fenixPkgs.stable.cargo
-              fenixPkgs.targets.${rustTarget}.stable.rust-std
-            ];
-            naerskWin = pkgs.callPackage naersk {
-              cargo = toolchainWin;
-              rustc = toolchainWin;
-            };
-
-            # Get rid of MCF Gthread library.
-            # See <https://github.com/NixOS/nixpkgs/issues/156343>
-            # and <https://discourse.nixos.org/t/statically-linked-mingw-binaries/38395>
-            # for details.
-            #
-            # Use DWARF-2 instead of SJLJ for exception handling.
-            winCC = pkgsWin32.buildPackages.wrapCC (
-              (pkgsWin32.buildPackages.gcc-unwrapped.override
+            winCC = pkgsWinStatic.buildPackages.wrapCC (
+              (pkgsWinStatic.buildPackages.gcc-unwrapped.override
                 ({
                   threadsCross = {
                     model = "win32";
@@ -189,15 +126,24 @@
                   };
                 })).overrideAttrs (oldAttr: {
                 configureFlags = oldAttr.configureFlags ++ [
-                  "--disable-sjlj-exceptions"
-                  "--with-dwarf2"
+                  "--enable-sjlj-exceptions"
                 ];
               })
             );
+            toolchainWin = fenixPkgs.combine [
+              fenixPkgs.stable.rustc
+              fenixPkgs.stable.cargo
+              fenixPkgs.targets.${rustTarget}.stable.rust-std
+            ];
+            winRustPlatform = pkgsWinStatic.makeRustPlatform {
+              cargo = toolchainWin;
+              rustc = toolchainWin;
+            };
           in
-          naerskWin.buildPackage rec {
+          winRustPlatform.buildRustPackage rec {
             pname = packageName;
-            cargoBuildOptions = x: x ++ [ "--package" packageName ];
+            cargoDeps = winRustPlatform.importCargoLock cargoLock;
+            cargoBuildFlags = [ "--package" packageName ];
             version = manifest.version;
             strictDeps = true;
             src = pkgs.lib.cleanSource ./.;
@@ -208,18 +154,85 @@
               winCC
             ];
             buildInputs = [
-              pkgsWin32.windows.pthreads
+              pkgsWinStatic.windows.pthreads
             ];
-            auditable = false; # Avoid cargo-auditable failures.
             doCheck = false; # Disable test as it requires network access.
 
-            CARGO_BUILD_TARGET = rustTarget;
+            cargoBuildTarget = rustTarget;
+            TARGET_CC = "${pkgsWinStatic.stdenv.cc}/bin/${pkgsWinStatic.stdenv.cc.targetPrefix}cc";
+            CARGO_BUILD_RUSTFLAGS = [
+              "-C"
+              "linker=${TARGET_CC}"
+              "-L"
+              "native=${pkgsWinStatic.windows.pthreads}/lib"
+            ];
+
+            CC = "${winCC}/bin/${winCC.targetPrefix}cc";
+            LD = "${winCC}/bin/${winCC.targetPrefix}cc";
+          };
+
+        mkWin32RustPackage = packageName:
+          let
+            pkgsWinStatic = import nixpkgs {
+              inherit system;
+              crossSystem = { config = "i686-w64-mingw32"; isStatic = true; };
+            };
+            rustTarget = "i686-pc-windows-gnu";
+            toolchainWin = fenixPkgs.combine [
+              fenixPkgs.stable.rustc
+              fenixPkgs.stable.cargo
+              fenixPkgs.targets.${rustTarget}.stable.rust-std
+            ];
+            winRustPlatform = pkgsWinStatic.makeRustPlatform {
+              cargo = toolchainWin;
+              rustc = toolchainWin;
+            };
+
+            # Get rid of MCF Gthread library.
+            # See <https://github.com/NixOS/nixpkgs/issues/156343>
+            # and <https://discourse.nixos.org/t/statically-linked-mingw-binaries/38395>
+            # for details.
+            #
+            # Use DWARF-2 instead of SJLJ for exception handling.
+            winCC = pkgsWinStatic.buildPackages.wrapCC (
+              (pkgsWinStatic.buildPackages.gcc-unwrapped.override
+                ({
+                  threadsCross = {
+                    model = "win32";
+                    package = null;
+                  };
+                })).overrideAttrs (oldAttr: {
+                configureFlags = oldAttr.configureFlags ++ [
+                  "--enable-sjlj-exceptions"
+                ];
+              })
+            );
+          in
+          winRustPlatform.buildRustPackage rec {
+            pname = packageName;
+            cargoDeps = winRustPlatform.importCargoLock cargoLock;
+            cargoBuildFlags = [ "--package" packageName ];
+            version = manifest.version;
+            strictDeps = true;
+            src = pkgs.lib.cleanSource ./.;
+            nativeBuildInputs = [
+              pkgs.perl # Needed to build vendored OpenSSL.
+            ];
+            depsBuildBuild = [
+              winCC
+            ];
+            buildInputs = [
+              pkgsWinStatic.windows.pthreads
+            ];
+            doCheck = false; # Disable test as it requires network access.
+
+            cargoBuildTarget = rustTarget;
             TARGET_CC = "${winCC}/bin/${winCC.targetPrefix}cc";
             CARGO_BUILD_RUSTFLAGS = [
               "-C"
               "linker=${TARGET_CC}"
               "-L"
-              "native=${pkgsWin32.windows.pthreads}/lib"
+              "native=${pkgsWinStatic.windows.pthreads}/lib"
             ];
 
             CC = "${winCC}/bin/${winCC.targetPrefix}cc";
@@ -234,6 +247,7 @@
               system = system;
               crossSystem.config = crossTarget;
             };
+            pkgsCrossStatic = pkgsCross.pkgsStatic;
           in
           let
             toolchain = fenixPkgs.combine [
@@ -241,35 +255,35 @@
               fenixPkgs.stable.cargo
               fenixPkgs.targets.${rustTarget}.stable.rust-std
             ];
-            naersk-lib = pkgs.callPackage naersk {
+            crossRustPlatform = pkgsCrossStatic.makeRustPlatform {
               cargo = toolchain;
               rustc = toolchain;
             };
           in
-          naersk-lib.buildPackage rec {
+          crossRustPlatform.buildRustPackage rec {
             pname = packageName;
-            cargoBuildOptions = x: x ++ [ "--package" packageName ];
+            cargoDeps = crossRustPlatform.importCargoLock cargoLock;
+            cargoBuildFlags = [ "--package" packageName ];
             version = manifest.version;
             strictDeps = true;
             src = rustSrc;
             nativeBuildInputs = [
               pkgs.perl # Needed to build vendored OpenSSL.
             ];
-            auditable = false; # Avoid cargo-auditable failures.
             doCheck = false; # Disable test as it requires network access.
 
-            CARGO_TARGET_X86_64_APPLE_DARWIN_RUSTFLAGS = "-Clink-args=-L${pkgsCross.libiconv}/lib";
-            CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS = "-Clink-args=-L${pkgsCross.libiconv}/lib";
+            CARGO_TARGET_X86_64_APPLE_DARWIN_RUSTFLAGS = "-Clink-args=-L${pkgsCrossStatic.libiconv}/lib";
+            CARGO_TARGET_AARCH64_APPLE_DARWIN_RUSTFLAGS = "-Clink-args=-L${pkgsCrossStatic.libiconv}/lib";
 
-            CARGO_BUILD_TARGET = rustTarget;
-            TARGET_CC = "${pkgsCross.stdenv.cc}/bin/${pkgsCross.stdenv.cc.targetPrefix}cc";
+            cargoBuildTarget = rustTarget;
+            TARGET_CC = "${pkgsCrossStatic.stdenv.cc}/bin/${pkgsCrossStatic.stdenv.cc.targetPrefix}cc";
             CARGO_BUILD_RUSTFLAGS = [
               "-C"
               "linker=${TARGET_CC}"
             ];
 
-            CC = "${pkgsCross.stdenv.cc}/bin/${pkgsCross.stdenv.cc.targetPrefix}cc";
-            LD = "${pkgsCross.stdenv.cc}/bin/${pkgsCross.stdenv.cc.targetPrefix}cc";
+            CC = "${pkgsCrossStatic.stdenv.cc}/bin/${pkgsCrossStatic.stdenv.cc.targetPrefix}cc";
+            LD = "${pkgsCrossStatic.stdenv.cc}/bin/${pkgsCrossStatic.stdenv.cc.targetPrefix}cc";
           };
 
         androidAttrs = {
@@ -299,7 +313,7 @@
               fenixPkgs.stable.cargo
               fenixPkgs.targets.${rustTarget}.stable.rust-std
             ];
-            naersk-lib = pkgs.callPackage naersk {
+            androidRustPlatform = pkgs.makeRustPlatform {
               cargo = toolchain;
               rustc = toolchain;
             };
@@ -307,19 +321,19 @@
             targetCcName = androidAttrs.${arch}.cc;
             targetCc = "${targetToolchain}/bin/${targetCcName}";
           in
-          naersk-lib.buildPackage rec {
+          androidRustPlatform.buildRustPackage rec {
             pname = packageName;
-            cargoBuildOptions = x: x ++ [ "--package" packageName ];
+            cargoDeps = androidRustPlatform.importCargoLock cargoLock;
+            cargoBuildFlags = [ "--package" packageName ];
             version = manifest.version;
-            strictDeps = true;
             src = rustSrc;
             nativeBuildInputs = [
               pkgs.perl # Needed to build vendored OpenSSL.
             ];
-            auditable = false; # Avoid cargo-auditable failures.
             doCheck = false; # Disable test as it requires network access.
 
-            CARGO_BUILD_TARGET = rustTarget;
+            cargoBuildTarget = rustTarget;
+            dontPatchelf = true;
             TARGET_CC = "${targetCc}";
             CARGO_BUILD_RUSTFLAGS = [
               "-C"

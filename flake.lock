@@ -84,30 +84,6 @@
         "type": "github"
       }
     },
-    "naersk": {
-      "inputs": {
-        "fenix": [
-          "fenix"
-        ],
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1779912356,
-        "narHash": "sha256-yj5O6vmAj+OfhTQMiUwhmQRP0HAII3BxEI6zuY6h/5k=",
-        "owner": "nix-community",
-        "repo": "naersk",
-        "rev": "33eaf5c72a67db15073322d26cd342c443556214",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nix-community",
-        "ref": "pull/391/head",
-        "repo": "naersk",
-        "type": "github"
-      }
-    },
     "nix-filter": {
       "locked": {
         "lastModified": 1757882181,
@@ -144,7 +120,6 @@
         "android": "android",
         "fenix": "fenix",
         "flake-utils": "flake-utils",
-        "naersk": "naersk",
         "nix-filter": "nix-filter",
         "nixpkgs": "nixpkgs"
       }
