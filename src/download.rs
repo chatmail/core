@@ -6,6 +6,7 @@ use anyhow::{Result, anyhow, bail, ensure};
 use deltachat_derive::{FromSql, ToSql};
 use serde::{Deserialize, Serialize};
 
+use crate::config::Config;
 use crate::context::Context;
 use crate::imap::session::Session;
 use crate::log::warn;
@@ -169,7 +170,8 @@ pub(crate) async fn download_msg(
     }
     Box::pin(session.fetch_single_msg(context, &server_folder, server_uid, rfc724_mid)).await?;
 
-    if ephemeral::should_delete_all_downloaded_messages(context, session.is_chatmail()).await? {
+    let bcc_self = context.get_config_bool(Config::BccSelf).await?;
+    if ephemeral::should_delete_all_downloaded_messages(bcc_self, session.is_chatmail()) {
         // Now that the message was downloaded, it likely needs to be deleted;
         // trigger a re-check by interrupting the inbox folder.
         // This is mainly needed to make the tests pass;
