@@ -663,7 +663,8 @@ pub(crate) async fn delete_expired_imap_messages(
 ) -> Result<()> {
     let now = time();
 
-    if should_delete_all_downloaded_messages(context, is_chatmail).await? {
+    let bcc_self = context.get_config_bool(Config::BccSelf).await?;
+    if should_delete_all_downloaded_messages(bcc_self, is_chatmail) {
         // This is the only device using this relay.
         // Mark all downloaded messages for deletion, because they are not needed anymore.
         //
@@ -716,11 +717,8 @@ pub(crate) async fn delete_expired_imap_messages(
     Ok(())
 }
 
-pub(crate) async fn should_delete_all_downloaded_messages(
-    context: &Context,
-    is_chatmail: bool,
-) -> Result<bool> {
-    Ok(!context.get_config_bool(Config::BccSelf).await? && is_chatmail)
+pub(crate) fn should_delete_all_downloaded_messages(bcc_self: bool, is_chatmail: bool) -> bool {
+    !bcc_self && is_chatmail
 }
 
 /// Start ephemeral timers for seen messages if they are not started
