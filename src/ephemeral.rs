@@ -691,7 +691,7 @@ pub(crate) async fn delete_expired_imap_messages(
                 (transport_id, now, DownloadState::Done),
             )
             .await?;
-    } else {
+    } else if bcc_self {
         // There may be other devices using this relay,
         // either because there is multi-device or because this is a classical email server.
         // Only delete expired ephemeral messages.
@@ -710,6 +710,30 @@ pub(crate) async fn delete_expired_imap_messages(
                         AND ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9
                 )",
                 (transport_id, now),
+            )
+            .await?;
+    } else {
+        // Single device.
+        // Delete all expired and encrypted messages.
+        context
+            .sql
+            .execute(
+                "UPDATE imap
+                 SET target=''
+                 WHERE transport_id=?1
+                 AND rfc724_mid IN (
+                    SELECT rfc724_mid FROM msgs
+                    WHERE id>9
+                      AND ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR
+                           ((param GLOB '*\nc=1*' OR param GLOB 'c=1*') AND download_state=?3))
+                    UNION
+                    SELECT pre_rfc724_mid FROM msgs
+                    WHERE pre_rfc724_mid!=''
+                      AND id>9
+                      AND ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR
+                           (param GLOB '*\nc=1*' OR param GLOB 'c=1*'))
+                )",
+                (transport_id, now, DownloadState::Done),
             )
             .await?;
     }
