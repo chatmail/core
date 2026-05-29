@@ -1,5 +1,44 @@
 # Changelog
 
+## [2.51.0] - 2026-05-29
+
+### Features / Changes
+
+- Follow certificate check parameter in autoconfig.
+- Immediately remove all encrypted messages from the server in single-device mode.
+
+### Fixes
+
+- Fix syntax error in `only_fetch_mvbox` migration 150 resulting in failure to upgrade for `only_fetch_mvbox` users.
+- Do not try to resolve proxy IPv6 addresses in square brackets.
+- Do not fail to receive post-message with status updates for deleted webxdc.
+- Don't make message `OutDelivered` after successful resending to new broadcast member.
+
+### Build system
+
+- nix: fix downloads from crates.io in nix builds.
+
+### Documentation
+
+- Fix reference in `delete_expired_imap_messages` comment.
+
+### Refactor
+
+- Remove `pre_encrypt_mime_hook`.
+- Make `should_delete_all_downloaded_messages` non-async.
+
+### Tests
+
+- Test IPv6 addresses in HTTP(S) proxies.
+- Test `bcc_self` in `test_delete_expired_imap_messages`.
+- Test encrypted messages in `test_delete_expired_imap_messages`.
+
+### Miscellaneous Tasks
+
+- Bump version to 2.51.0-dev.
+- deps: bump zizmorcore/zizmor-action from 0.5.3 to 0.5.6.
+- deps: bump taiki-e/install-action from 2.78.1 to 2.79.2.
+
 ## [2.50.0] - 2026-05-22
 
 ### API-Changes
@@ -8257,3 +8296,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.48.0]: https://github.com/chatmail/core/compare/v2.47.0..v2.48.0
 [2.49.0]: https://github.com/chatmail/core/compare/v2.48.0..v2.49.0
 [2.50.0]: https://github.com/chatmail/core/compare/v2.49.0..v2.50.0
+[2.51.0]: https://github.com/chatmail/core/compare/v2.50.0..v2.51.0
