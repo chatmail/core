@@ -2042,13 +2042,6 @@ pub(crate) async fn update_msg_state(
     Ok(())
 }
 
-// as we do not cut inside words, this results in about 32-42 characters.
-// Do not use too long subjects - we add a tag after the subject which gets truncated by the clients otherwise.
-// It should also be very clear, the subject is _not_ the whole message.
-// The value is also used for CC:-summaries
-
-// Context functions to work with messages
-
 pub(crate) async fn set_msg_failed(
     context: &Context,
     msg: &mut Message,
