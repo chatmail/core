@@ -63,7 +63,6 @@ jobs:
           - deltachat-rpc-server-armv7l-linux-wheel
           - deltachat-rpc-server-i686-linux
           - deltachat-rpc-server-i686-linux-wheel
-          - deltachat-rpc-server-source
           - deltachat-rpc-server-win32
           - deltachat-rpc-server-win32-wheel
           - deltachat-rpc-server-win64
@@ -74,10 +73,9 @@ jobs:
           - libdeltachat
           - python-docs
 
-          # Fails to build
-          #- deltachat-repl-x86_64-android
+          - deltachat-repl-x86_64-android
+          - deltachat-rpc-server-x86_64-android
           #- deltachat-repl-x86-android
-          #- deltachat-rpc-server-x86_64-android
           #- deltachat-rpc-server-x86-android
     steps:
       - uses: actions/checkout@v6
@@ -85,6 +83,7 @@ jobs:
           show-progress: false
           persist-credentials: false
       - uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3 # v31.10.6
+      - uses: DeterminateSystems/magic-nix-cache-action@565684385bcd71bad329742eefe8d12f2e765b39 # v13
       - run: nix build .#${{ matrix.installable }}
 
   build-macos:
@@ -96,14 +95,12 @@ jobs:
         installable:
           - deltachat-rpc-server
           - deltachat-rpc-server-x86_64-darwin
-
-          # Fails to build
-          # because of <https://github.com/NixOS/nixpkgs/issues/413910>.
-          # - deltachat-rpc-server-aarch64-darwin
+          - deltachat-rpc-server-aarch64-darwin
     steps:
       - uses: actions/checkout@v6
         with:
           show-progress: false
           persist-credentials: false
       - uses: cachix/install-nix-action@8aa03977d8d733052d78f4e008a241fd1dbf36b3 # v31.10.6
+      - uses: DeterminateSystems/magic-nix-cache-action@565684385bcd71bad329742eefe8d12f2e765b39 # v13
       - run: nix build .#${{ matrix.installable }}
