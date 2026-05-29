@@ -6,6 +6,7 @@ use crate::chatlist::Chatlist;
 use crate::config::Config;
 use crate::reaction::send_reaction;
 use crate::receive_imf::receive_imf;
+use crate::smtp;
 use crate::test_utils;
 use crate::test_utils::{E2EE_INFO_MSGS, TestContext, TestContextManager};
 
@@ -449,6 +450,13 @@ async fn test_get_state() -> Result<()> {
 
     markseen_msgs(&bob, vec![bob_msg.id]).await?;
     assert_state(&bob, bob_msg.id, MessageState::InSeen).await;
+
+    smtp::queue_mdn(&bob).await?;
+    let sent = bob.pop_sent_msg().await;
+    alice.recv_msg_trash(&sent).await;
+    let alice_msg = Message::load_from_db(&alice, alice_msg.id).await?;
+    assert_eq!(alice_msg.get_state(), MessageState::OutMdnRcvd);
+    assert_eq!(alice_msg.error().unwrap(), "badly failed");
 
     Ok(())
 }
