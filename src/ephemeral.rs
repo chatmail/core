@@ -744,13 +744,20 @@ pub(crate) async fn delete_expired_imap_messages(
 }
 
 pub(crate) async fn is_nauta(context: &Context, transport_id: u32) -> Result<bool> {
+    let nauta_id = "nauta.cu";
+    debug_assert!({
+        // Check that the "nauta.cu" ID was spelled correctly:
+        let nauta = crate::provider::get_provider_by_id(nauta_id);
+        nauta.is_some_and(|p| p.id == nauta_id)
+    });
+
     let is_nauta = crate::transport::ConfiguredLoginParam::load_all(context)
         .await?
         .iter()
         .filter(|(tid, _)| *tid == transport_id)
         .filter_map(|(_, param)| param.provider)
         .next()
-        .is_some_and(|provider| provider.id == "nauta.cu");
+        .is_some_and(|provider| provider.id == nauta_id);
     Ok(is_nauta)
 }
 
