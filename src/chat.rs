@@ -1782,9 +1782,7 @@ impl Chat {
                 );
                 bail!("Cannot set message, contact for {} not found.", self.id);
             }
-        } else if matches!(self.typ, Chattype::Group | Chattype::OutBroadcast)
-            && self.param.get_int(Param::Unpromoted).unwrap_or_default() == 1
-        {
+        } else if self.param.get_int(Param::Unpromoted).unwrap_or_default() == 1 {
             msg.param.set_int(Param::AttachChatAvatarAndDescription, 1);
             self.param
                 .remove(Param::Unpromoted)
