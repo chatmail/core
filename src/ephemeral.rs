@@ -664,7 +664,9 @@ pub(crate) async fn delete_expired_imap_messages(
     let now = time();
 
     let bcc_self = context.get_config_bool(Config::BccSelf).await?;
-    if should_delete_all_downloaded_messages(bcc_self, is_chatmail) {
+    let is_nauta = is_nauta(context, transport_id).await?;
+
+    if should_delete_all_downloaded_messages(bcc_self, is_chatmail, is_nauta) {
         // This is the only device using this relay.
         // Mark all downloaded messages for deletion, because they are not needed anymore.
         //
@@ -741,8 +743,23 @@ pub(crate) async fn delete_expired_imap_messages(
     Ok(())
 }
 
-pub(crate) fn should_delete_all_downloaded_messages(bcc_self: bool, is_chatmail: bool) -> bool {
-    !bcc_self && is_chatmail
+pub(crate) async fn is_nauta(context: &Context, transport_id: u32) -> Result<bool> {
+    let is_nauta = crate::transport::ConfiguredLoginParam::load_all(context)
+        .await?
+        .iter()
+        .filter(|(tid, _)| *tid == transport_id)
+        .filter_map(|(_, param)| param.provider)
+        .next()
+        .is_some_and(|provider| provider.id == "nauta.cu");
+    Ok(is_nauta)
+}
+
+pub(crate) fn should_delete_all_downloaded_messages(
+    bcc_self: bool,
+    is_chatmail: bool,
+    is_nauta: bool,
+) -> bool {
+    !bcc_self && (is_chatmail || is_nauta)
 }
 
 /// Start ephemeral timers for seen messages if they are not started

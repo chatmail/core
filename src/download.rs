@@ -171,7 +171,8 @@ pub(crate) async fn download_msg(
     Box::pin(session.fetch_single_msg(context, &server_folder, server_uid, rfc724_mid)).await?;
 
     let bcc_self = context.get_config_bool(Config::BccSelf).await?;
-    if ephemeral::should_delete_all_downloaded_messages(bcc_self, session.is_chatmail()) {
+    let is_nauta = ephemeral::is_nauta(context, transport_id).await?;
+    if ephemeral::should_delete_all_downloaded_messages(bcc_self, session.is_chatmail(), is_nauta) {
         // Now that the message was downloaded, it likely needs to be deleted;
         // trigger a re-check by interrupting the inbox folder.
         // This is mainly needed to make the tests pass;
