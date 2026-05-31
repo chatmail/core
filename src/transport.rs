@@ -252,7 +252,11 @@ impl fmt::Display for ConfiguredLoginParam {
             write!(f, "{imap}")?;
             first = false;
         }
-        write!(f, "] smtp:[")?;
+        write!(f, "]")?;
+        if let Some(folder) = &self.imap_folder {
+            write!(f, " folder:{folder:?}")?;
+        }
+        write!(f, " smtp:[")?;
         let mut first = true;
         for smtp in &self.smtp {
             if !first {

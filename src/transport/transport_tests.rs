@@ -34,7 +34,7 @@ async fn test_save_load_login_param() -> Result<()> {
             },
             user: "alice".to_string(),
         }],
-        imap_folder: None,
+        imap_folder: Some("Folder".to_string()),
         imap_user: "".to_string(),
         imap_password: "foo".to_string(),
         smtp: vec![ConfiguredServerLoginParam {
@@ -56,7 +56,7 @@ async fn test_save_load_login_param() -> Result<()> {
         .clone()
         .save_to_transports_table(&t, &EnteredLoginParam::default(), time())
         .await?;
-    let expected_param = r#"{"addr":"alice@example.org","imap":[{"connection":{"host":"imap.example.com","port":123,"security":"Starttls"},"user":"alice"}],"imap_user":"","imap_password":"foo","smtp":[{"connection":{"host":"smtp.example.com","port":456,"security":"Tls"},"user":"alice@example.org"}],"smtp_user":"","smtp_password":"bar","provider_id":null,"certificate_checks":"Strict","oauth2":false}"#;
+    let expected_param = r#"{"addr":"alice@example.org","imap":[{"connection":{"host":"imap.example.com","port":123,"security":"Starttls"},"user":"alice"}],"imap_folder":"Folder","imap_user":"","imap_password":"foo","smtp":[{"connection":{"host":"smtp.example.com","port":456,"security":"Tls"},"user":"alice@example.org"}],"smtp_user":"","smtp_password":"bar","provider_id":null,"certificate_checks":"Strict","oauth2":false}"#;
     assert_eq!(
         t.sql
             .query_get_value::<String>("SELECT configured_param FROM transports", ())
@@ -67,6 +67,14 @@ async fn test_save_load_login_param() -> Result<()> {
     assert_eq!(t.is_configured().await?, true);
     let (_transport_id, loaded) = ConfiguredLoginParam::load(&t).await?.unwrap();
     assert_eq!(param, loaded);
+
+    let formatted = format!(" {loaded}");
+    assert!(formatted.contains(" ***@example.org"));
+    assert!(formatted.contains(" imap:[imap.example.com:123:starttls]"));
+    assert!(formatted.contains(" folder:\"Folder\""));
+    assert!(formatted.contains(" smtp:[smtp.example.com:456:tls]"));
+    assert!(formatted.contains(" provider:none"));
+    assert!(formatted.contains(" cert_strict"));
 
     // Legacy ConfiguredImapCertificateChecks config is ignored
     t.set_config(Config::ConfiguredImapCertificateChecks, Some("999"))
