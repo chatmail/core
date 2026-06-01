@@ -18,7 +18,7 @@ use crate::config::Config;
 use crate::constants::{Chattype, DC_VERSION_STR};
 use crate::contact::{Contact, ContactId, Origin, import_vcard, mark_contact_id_as_verified};
 use crate::context::Context;
-use crate::key::{DcKey, load_self_public_key, load_self_public_keyring};
+use crate::key::{DcKey, load_self_public_key};
 use crate::log::LogExt;
 use crate::message::{Message, Viewtype};
 use crate::securejoin::QrInvite;

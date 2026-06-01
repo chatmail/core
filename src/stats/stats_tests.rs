@@ -595,3 +595,36 @@ async fn test_stats_enable_disable_timestamps() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+
+async fn test_cryptography_stats() -> Result<()> {
+    let alice = &TestContext::new_alice().await;
+    let stats = get_stats(alice).await.unwrap();
+    let stats: serde_json::Value = serde_json::from_str(&stats)?;
+
+    let number_of_transports: u64 = stats.get("number_of_transports").unwrap().as_u64().unwrap();
+    assert_eq!(number_of_transports, 1);
+
+    let key_version = stats.get("key_version").unwrap().as_u64().unwrap();
+    // Alice's key is v4
+    assert_eq!(key_version, 4);
+
+    let key_algorithm = stats.get("key_algorithm").unwrap().as_str().unwrap();
+    assert_eq!(key_algorithm, "EdDSALegacy");
+
+    let key_size = stats.get("key_size").unwrap().as_u64().unwrap();
+
+    // The key is encoded as base64, i.e. 6 bits per byte
+    assert_eq!(key_size, 583);
+
+    let t = &TestContext::new().await;
+    let stats = get_stats(t).await.unwrap();
+    let stats: serde_json::Value = serde_json::from_str(&stats)?;
+
+    let number_of_transports: u64 = stats.get("number_of_transports").unwrap().as_u64().unwrap();
+    // An empty TestContext doesn't have any transport configured
+    assert_eq!(number_of_transports, 0);
+
+    Ok(())
+}
