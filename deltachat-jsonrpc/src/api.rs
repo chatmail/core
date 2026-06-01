@@ -1106,9 +1106,6 @@ impl CommandApi {
     /// because the word "channel" already appears a lot in the code,
     /// which would make it hard to grep for it.
     ///
-    /// After creation, the chat contains no recipients and is in _unpromoted_ state;
-    /// see [`CommandApi::create_group_chat`] for more information on the unpromoted state.
-    ///
     /// Returns the created chat's id.
     async fn create_broadcast(&self, account_id: u32, chat_name: String) -> Result<u32> {
         let ctx = self.get_context(account_id).await?;

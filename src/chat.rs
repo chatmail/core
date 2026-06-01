@@ -32,6 +32,7 @@ use crate::debug_logging::maybe_set_logging_xdc;
 use crate::download::{
     DownloadState, PRE_MSG_ATTACHMENT_SIZE_THRESHOLD, PRE_MSG_SIZE_WARNING_THRESHOLD,
 };
+use crate::ensure_and_debug_assert_eq;
 use crate::ephemeral::{Timer as EphemeralTimer, start_chat_ephemeral_timers};
 use crate::events::EventType;
 use crate::key::{Fingerprint, self_fingerprint};
@@ -1782,9 +1783,8 @@ impl Chat {
                 );
                 bail!("Cannot set message, contact for {} not found.", self.id);
             }
-        } else if matches!(self.typ, Chattype::Group | Chattype::OutBroadcast)
-            && self.param.get_int(Param::Unpromoted).unwrap_or_default() == 1
-        {
+        } else if self.param.get_int(Param::Unpromoted).unwrap_or_default() == 1 {
+            ensure_and_debug_assert_eq!(self.typ, Chattype::Group,);
             msg.param.set_int(Param::AttachChatAvatarAndDescription, 1);
             self.param
                 .remove(Param::Unpromoted)
@@ -3626,9 +3626,6 @@ pub(crate) async fn create_group_ex(
 /// because the word "channel" already appears a lot in the code,
 /// which would make it hard to grep for it.
 ///
-/// After creation, the chat contains no recipients and is in _unpromoted_ state;
-/// see [`create_group`] for more information on the unpromoted state.
-///
 /// Returns the created chat's id.
 pub async fn create_broadcast(context: &Context, chat_name: String) -> Result<ChatId> {
     let grpid = create_id();
@@ -3660,17 +3657,20 @@ pub(crate) async fn create_out_broadcast_ex(
             |row| row.get(0),
         )?;
         ensure!(cnt == 0, "{cnt} chats exist with grpid {grpid}");
+        let mut params: Params = Params::new();
+        params.update_timestamp(Param::GroupNameTimestamp, time())?;
 
         t.execute(
             "INSERT INTO chats
-            (type, name, name_normalized, grpid, created_timestamp)
-            VALUES(?, ?, ?, ?, ?)",
+            (type, name, name_normalized, grpid, created_timestamp, param)
+            VALUES(?, ?, ?, ?, ?, ?)",
             (
                 Chattype::OutBroadcast,
                 &chat_name,
                 normalize_text(&chat_name),
                 &grpid,
                 timestamp,
+                params.to_string(),
             ),
         )?;
         let chat_id = ChatId::new(t.last_insert_rowid().try_into()?);
