@@ -32,6 +32,7 @@ use crate::debug_logging::maybe_set_logging_xdc;
 use crate::download::{
     DownloadState, PRE_MSG_ATTACHMENT_SIZE_THRESHOLD, PRE_MSG_SIZE_WARNING_THRESHOLD,
 };
+use crate::ensure_and_debug_assert_eq;
 use crate::ephemeral::{Timer as EphemeralTimer, start_chat_ephemeral_timers};
 use crate::events::EventType;
 use crate::key::{Fingerprint, self_fingerprint};
@@ -1783,6 +1784,7 @@ impl Chat {
                 bail!("Cannot set message, contact for {} not found.", self.id);
             }
         } else if self.param.get_int(Param::Unpromoted).unwrap_or_default() == 1 {
+            ensure_and_debug_assert_eq!(self.typ, Chattype::Group,);
             msg.param.set_int(Param::AttachChatAvatarAndDescription, 1);
             self.param
                 .remove(Param::Unpromoted)
