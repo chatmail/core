@@ -612,8 +612,8 @@ async fn test_cryptography_stats() -> Result<()> {
     let key_algorithm = stats.get("key_algorithm").unwrap().as_str().unwrap();
     assert_eq!(key_algorithm, "EdDSALegacy");
 
-    let key_size = stats.get("key_size").unwrap().as_u64().unwrap();
-    assert_eq!(key_size, 583);
+    let pubkey_size = stats.get("pubkey_size").unwrap().as_u64().unwrap();
+    assert_eq!(pubkey_size, 583);
 
     crate::transport::add_pseudo_transport(alice, "alice@ten.testrun.org").await?;
 

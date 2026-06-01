@@ -35,9 +35,11 @@ struct Statistics {
     core_version: String,
     number_of_transports: usize,
     key_create_timestamps: Vec<u32>,
+    /// OpenPGP version of the key.
     key_version: u8,
     key_algorithm: String,
-    key_size: usize,
+    /// Size of the public key in bytes (encoded in binary, not base64).
+    pubkey_size: usize,
     stats_id: String,
     is_chatmail: bool,
     contact_stats: Vec<ContactStat>,
@@ -365,7 +367,7 @@ async fn get_stats(context: &Context) -> Result<String> {
         key_create_timestamps,
         key_version: self_public_key.primary_key.version().into(),
         key_algorithm: format!("{:?}", self_public_key.algorithm()),
-        key_size: DcKey::to_bytes(&self_public_key).len(),
+        pubkey_size: DcKey::to_bytes(&self_public_key).len(),
         stats_id: stats_id(context).await?,
         is_chatmail: context.is_chatmail().await?,
         contact_stats: get_contact_stats(context, last_old_contact).await?,
