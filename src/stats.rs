@@ -18,7 +18,7 @@ use crate::config::Config;
 use crate::constants::{Chattype, DC_VERSION_STR};
 use crate::contact::{Contact, ContactId, Origin, import_vcard, mark_contact_id_as_verified};
 use crate::context::Context;
-use crate::key::load_self_public_keyring;
+use crate::key::{DcKey, load_self_public_key, load_self_public_keyring};
 use crate::log::LogExt;
 use crate::message::{Message, Viewtype};
 use crate::securejoin::QrInvite;
@@ -33,7 +33,11 @@ const MESSAGE_STATS_UPDATE_INTERVAL_SECONDS: i64 = 4 * 60; // 4 minutes (less th
 #[derive(Serialize)]
 struct Statistics {
     core_version: String,
+    number_of_transports: usize,
     key_create_timestamps: Vec<u32>,
+    key_version: u8,
+    key_algorithm: String,
+    key_size: usize,
     stats_id: String,
     is_chatmail: bool,
     contact_stats: Vec<ContactStat>,
@@ -345,11 +349,10 @@ async fn get_stats(context: &Context) -> Result<String> {
         .get_config_u32(Config::StatsLastOldContactId)
         .await?;
 
-    let key_create_timestamps: Vec<u32> = load_self_public_keyring(context)
-        .await?
-        .iter()
-        .map(|k| k.created_at().as_secs())
-        .collect();
+    let self_public_key = load_self_public_key(context).await?;
+    // `key_create_timestamps` is a `Vec` for historical reasons,
+    // support for using multiple keys is being phased out.
+    let key_create_timestamps: Vec<u32> = vec![self_public_key.created_at().as_secs()];
 
     let sending_enabled_timestamps =
         get_timestamps(context, "stats_sending_enabled_events").await?;
@@ -358,7 +361,11 @@ async fn get_stats(context: &Context) -> Result<String> {
 
     let stats = Statistics {
         core_version: DC_VERSION_STR.to_string(),
+        number_of_transports: context.count_transports().await?,
         key_create_timestamps,
+        key_version: self_public_key.primary_key.version().into(),
+        key_algorithm: format!("{:?}", self_public_key.algorithm()),
+        key_size: DcKey::to_bytes(&self_public_key).len(),
         stats_id: stats_id(context).await?,
         is_chatmail: context.is_chatmail().await?,
         contact_stats: get_contact_stats(context, last_old_contact).await?,
