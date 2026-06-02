@@ -17,13 +17,17 @@ use pgp::packet::{
 };
 use pgp::ser::Serialize;
 use pgp::types::SigningKey as _;
+use pgp::types::Timestamp as PgpTimestamp;
 use pgp::types::{CompressionAlgorithm, KeyDetails, KeyVersion};
 use rand_old::thread_rng;
 use rusqlite::OptionalExtension as _;
 use tokio::runtime::Handle;
 
+use crate::config::Config;
 use crate::context::Context;
 use crate::events::EventType;
+use crate::pgp::autocrypt2::Autocrypt2Tsk;
+use crate::pgp::pgp_time;
 use crate::tools::{self, time_elapsed};
 
 fn key_armor_options() -> pgp::composed::ArmorOptions<'static> {
@@ -316,6 +320,13 @@ pub(crate) async fn load_self_public_key_opt(context: &Context) -> Result<Option
         return Ok(None);
     };
     let signed_secret_key = SignedSecretKey::from_slice(&secret_key_bytes)?;
+    let signed_secret_key = match Autocrypt2Tsk::try_from(signed_secret_key) {
+        Ok(mut autocrypt2_tsk) => {
+            autocrypt2_tsk.ratchet_until(pgp_time())?;
+            autocrypt2_tsk.into_inner()
+        }
+        Err(tsk) => tsk,
+    };
     let timestamp = context
         .sql
         .query_get_value::<u32>(
@@ -421,12 +432,21 @@ pub(crate) async fn load_self_secret_key(context: &Context) -> Result<SignedSecr
             },
         )
         .await?;
-    match private_key {
-        Some(bytes) => SignedSecretKey::from_slice(&bytes),
-        None => {
-            let secret = generate_keypair(context).await?;
-            Ok(secret)
+    let tsk = match private_key {
+        Some(bytes) => SignedSecretKey::from_slice(&bytes)?,
+        None => generate_keypair(context).await?,
+    };
+    match Autocrypt2Tsk::try_from(tsk) {
+        Ok(mut autocrypt2_tsk) => {
+            // For secret key we ratchet it into the future
+            // so we can decrypt messages in case we have another device
+            // that has clock running ahead of our device and advertising a key created in the future.
+            // We don't do this for the public key that we advertise ourselves in Autocrypt header.
+            let t = PgpTimestamp::from_secs(pgp_time().as_secs().saturating_add(24 * 10 * 3600));
+            autocrypt2_tsk.ratchet_until(t)?;
+            Ok(autocrypt2_tsk.into_inner())
         }
+        Err(tsk) => Ok(tsk),
     }
 }
 
@@ -487,9 +507,17 @@ async fn generate_keypair(context: &Context) -> Result<SignedSecretKey> {
         None => {
             let start = tools::Time::now();
             info!(context, "Generating keypair.");
-            let keypair = Handle::current()
-                .spawn_blocking(move || crate::pgp::create_keypair(addr))
-                .await??;
+            let keypair = if context.get_config_bool(Config::Autocrypt2).await? {
+                let now = pgp_time();
+                let autocrypt2_tsk = Handle::current()
+                    .spawn_blocking(move || Autocrypt2Tsk::new(now))
+                    .await??;
+                autocrypt2_tsk.into_inner()
+            } else {
+                Handle::current()
+                    .spawn_blocking(move || crate::pgp::create_keypair(addr))
+                    .await??
+            };
 
             let keypair = store_self_keypair(context, keypair).await?;
             info!(

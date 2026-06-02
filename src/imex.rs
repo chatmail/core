@@ -20,6 +20,7 @@ use crate::context::Context;
 use crate::events::EventType;
 use crate::key::{self, DcKey, SignedSecretKey, self_fingerprint};
 use crate::log::{LogExt, warn};
+use crate::pgp::{autocrypt2, pgp_time};
 use crate::qr::DCBACKUP_VERSION;
 use crate::sql;
 use crate::tools::{
@@ -402,6 +403,11 @@ async fn import_backup_stream_inner<R: tokio::io::AsyncRead + Unpin>(
     }
     if res.is_ok() {
         delete_and_reset_all_device_msgs(context)
+            .await
+            .log_err(context)
+            .ok();
+
+        autocrypt2::ratchet_after_import(context, pgp_time())
             .await
             .log_err(context)
             .ok();
