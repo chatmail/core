@@ -468,6 +468,17 @@ pub enum Config {
     /// and incoming unencrypted messages are not fetched and not processed.
     #[strum(props(default = "1"))]
     ForceEncryption,
+
+    /// Generate Autocrypt 2 instead of Autocrypt 1 key.
+    #[strum(props(default = "1"))]
+    Autocrypt2,
+
+    /// Timestamp of the last Autocrypt2 key housekeeping.
+    ///
+    /// We limit the frequency of running housekeeping
+    /// to avoid deleting too many old subkeys at once
+    /// if the user temporarily sets the time in the future.
+    LastAutocrypt2Housekeeping,
 }
 
 impl Config {
