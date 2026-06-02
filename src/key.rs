@@ -163,7 +163,7 @@ pub(crate) fn secret_key_to_public_key(
         };
 
         Ok(vec![
-            Subpacket::regular(SubpacketData::SignatureCreationTime(timestamp))?,
+            Subpacket::critical(SubpacketData::SignatureCreationTime(timestamp))?,
             Subpacket::regular(SubpacketData::IssuerFingerprint(
                 signed_secret_key.fingerprint(),
             ))?,
