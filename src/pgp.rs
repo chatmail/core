@@ -16,6 +16,7 @@ use pgp::crypto::ecc_curve::ECCCurve;
 use pgp::crypto::hash::HashAlgorithm;
 use pgp::crypto::sym::SymmetricKeyAlgorithm;
 use pgp::packet::{Signature, Subpacket, SubpacketData};
+use pgp::types::Timestamp as PgpTimestamp;
 use pgp::types::{
     CompressionAlgorithm, Imprint, KeyDetails, KeyVersion, Password, SignedUser, SigningKey as _,
     StringToKey,
@@ -25,9 +26,14 @@ use sha2::Sha256;
 
 use crate::configure::MAX_RELAYS;
 use crate::key::{DcKey, Fingerprint};
+use crate::tools::time;
 
 /// Preferred symmetric encryption algorithm.
 const SYMMETRIC_KEY_ALGORITHM: SymmetricKeyAlgorithm = SymmetricKeyAlgorithm::AES128;
+
+pub(crate) fn pgp_time() -> PgpTimestamp {
+    PgpTimestamp::from_secs(time() as u32)
+}
 
 /// Create a new key pair.
 ///
@@ -89,7 +95,10 @@ pub(crate) fn create_keypair(addr: EmailAddress) -> Result<SignedSecretKey> {
 /// If multiple keys are available, the one that will expire sooner is selected.
 ///
 /// Returns `None` if the public key cannot be used for encryption.
-fn select_pk_for_encryption(now: u32, key: &SignedPublicKey) -> Option<&SignedPublicSubKey> {
+fn select_pk_for_encryption(
+    now: PgpTimestamp,
+    key: &SignedPublicKey,
+) -> Option<&SignedPublicSubKey> {
     key.public_subkeys
         .iter()
         .filter(|subkey| subkey.algorithm().can_encrypt())
@@ -106,7 +115,7 @@ fn select_pk_for_encryption(now: u32, key: &SignedPublicKey) -> Option<&SignedPu
             if let Some(expiration_duration) = signature
                 .key_expiration_time()
                 .filter(|duration| duration.as_secs() != 0)
-                && now
+                && now.as_secs()
                     > subkey
                         .created_at()
                         .as_secs()
@@ -162,7 +171,7 @@ pub enum SeipdVersion {
 /// encrypted to `public_keys_for_encryption`.
 #[expect(clippy::arithmetic_side_effects)]
 fn signature_subpackets(
-    now: pgp::types::Timestamp,
+    now: PgpTimestamp,
     private_key_for_signing: &SignedSecretKey,
     public_keys_for_encryption: &[SignedPublicKey],
 ) -> Result<SubpacketConfig> {
@@ -204,11 +213,11 @@ pub fn pk_encrypt(
 ) -> Result<String> {
     tokio::task::block_in_place(|| {
         let mut rng = thread_rng();
-        let now = pgp::types::Timestamp::now();
+        let now = pgp_time();
 
         let pkeys = public_keys_for_encryption
             .iter()
-            .filter_map(|key| select_pk_for_encryption(now.as_secs(), key));
+            .filter_map(|key| select_pk_for_encryption(now, key));
 
         let msg = MessageBuilder::from_bytes("", plain);
         let encoded_msg = match seipd_version {
@@ -543,8 +552,7 @@ pub(crate) fn relay_addrs(public_key: &SignedPublicKey, addr: &str) -> Vec<Strin
 
 /// Returns true if the key can be encrypted to, i.e. has an encryption subkey.
 pub(crate) fn pubkey_can_encrypt(public_key: &SignedPublicKey) -> bool {
-    let now = pgp::types::Timestamp::now();
-    select_pk_for_encryption(now.as_secs(), public_key).is_some()
+    select_pk_for_encryption(pgp_time(), public_key).is_some()
 }
 
 /// Returns true if public key advertises SEIPDv2 feature.

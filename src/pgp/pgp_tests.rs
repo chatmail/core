@@ -390,7 +390,7 @@ fn test_merge_openpgp_certificates() {
 #[test]
 fn test_merge_openpgp_certificates_tiebreak() -> Result<()> {
     let secret_key = alice_keypair();
-    let timestamp = pgp::types::Timestamp::now();
+    let timestamp = pgp_time();
 
     let addr = "alice@example.net";
     let relays1 = "alice@example.net,alice@example.org";
@@ -513,8 +513,8 @@ FFoiBQJG99w8AhsMAAoJECcqAms0FFoirSMA/0gVP98sPFga+UhQ3uJxJw5bO2Rs
     ";
 
     let alice_tpk = SignedPublicKey::from_asc(alice_tpk_asc).unwrap();
-    let now = pgp::types::Timestamp::now();
-    let encryption_subkey = select_pk_for_encryption(now.as_secs(), &alice_tpk).unwrap();
+    let now = pgp_time();
+    let encryption_subkey = select_pk_for_encryption(now, &alice_tpk).unwrap();
     assert_eq!(
         encryption_subkey.fingerprint().to_string().as_str(),
         expected_fallback_fingerprint
@@ -522,7 +522,8 @@ FFoiBQJG99w8AhsMAAoJECcqAms0FFoirSMA/0gVP98sPFga+UhQ3uJxJw5bO2Rs
 
     // If we pass 1199149200 as the `now` argument, which was in the beginning of 2008,
     // then the expiring subkey is not yet expired and should be used.
-    let encryption_subkey = select_pk_for_encryption(1199149200, &alice_tpk).unwrap();
+    let encryption_subkey =
+        select_pk_for_encryption(PgpTimestamp::from_secs(1199149200), &alice_tpk).unwrap();
     assert_eq!(
         encryption_subkey.fingerprint().to_string().as_str(),
         expected_expiring_fingerprint
@@ -549,9 +550,9 @@ SOtE3ODLZN9tC3F7k1N9clme1cHXyUiH3EliBQ==
 ";
 
     let alice_tpk = SignedPublicKey::from_asc(alice_tpk_asc).unwrap();
-    let now = pgp::types::Timestamp::now();
+    let now = pgp_time();
 
-    assert_eq!(select_pk_for_encryption(now.as_secs(), &alice_tpk), None);
+    assert_eq!(select_pk_for_encryption(now, &alice_tpk), None);
 }
 
 /// Tests that the key with the closest expiration date is selected.
@@ -602,7 +603,7 @@ JGp8Ag==
                 .timestamp(),
         )
         .unwrap();
-        let subkey = select_pk_for_encryption(ts, &alice_tpk).unwrap();
+        let subkey = select_pk_for_encryption(PgpTimestamp::from_secs(ts), &alice_tpk).unwrap();
         assert_eq!(
             subkey.fingerprint().to_string().as_str(),
             "477650c13fa4842baf2831bc41c2d560be27b38d",
@@ -618,7 +619,7 @@ JGp8Ag==
                 .timestamp(),
         )
         .unwrap();
-        let subkey = select_pk_for_encryption(ts, &alice_tpk).unwrap();
+        let subkey = select_pk_for_encryption(PgpTimestamp::from_secs(ts), &alice_tpk).unwrap();
         assert_eq!(
             subkey.fingerprint().to_string().as_str(),
             "ab92f4afd46ddd7d31fb05151be08a8089f67ca2",
@@ -633,7 +634,7 @@ JGp8Ag==
                 .timestamp(),
         )
         .unwrap();
-        let subkey = select_pk_for_encryption(ts, &alice_tpk).unwrap();
+        let subkey = select_pk_for_encryption(PgpTimestamp::from_secs(ts), &alice_tpk).unwrap();
         assert_eq!(
             subkey.fingerprint().to_string().as_str(),
             "10493ef4dba7ee4d55c826a7634684d9bfeeb890",
@@ -648,7 +649,7 @@ JGp8Ag==
                 .timestamp(),
         )
         .unwrap();
-        let subkey = select_pk_for_encryption(ts, &alice_tpk).unwrap();
+        let subkey = select_pk_for_encryption(PgpTimestamp::from_secs(ts), &alice_tpk).unwrap();
         assert_eq!(
             subkey.fingerprint().to_string().as_str(),
             "ce5fc3fd479e41f08069dce6f6cad4adb9af47f1",
