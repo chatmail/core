@@ -3,7 +3,9 @@ use std::sync::Arc;
 use super::*;
 use crate::Event;
 use crate::chatlist::get_archived_cnt;
-use crate::constants::{DC_GCL_ARCHIVED_ONLY, DC_GCL_NO_SPECIALS, N_MSGS_TO_NEW_BROADCAST_MEMBER};
+use crate::constants::{
+    self, DC_GCL_ARCHIVED_ONLY, DC_GCL_NO_SPECIALS, N_MSGS_TO_NEW_BROADCAST_MEMBER,
+};
 use crate::ephemeral::Timer;
 use crate::headerdef::HeaderDef;
 use crate::imex::{ImexMode, has_backup, imex};
@@ -5734,6 +5736,35 @@ async fn test_send_edit_request() -> Result<()> {
     forward_msgs(&alice2, &[test.id], test.chat_id).await?;
     let forwarded = alice2.get_last_msg().await;
     assert!(!forwarded.is_edited());
+
+    // If a message is too long after editing, it becomes an HTML message on the receiver side. On
+    // the sender side it's still text so that it can be edited again.
+    static REPEAT_TXT: &str = "this text with 42 chars is just repeated.\n";
+    static REPEAT_CNT: usize = constants::DC_DESIRED_TEXT_LEN / REPEAT_TXT.len() + 2;
+    let long_txt = REPEAT_TXT.repeat(REPEAT_CNT);
+    send_edit_request(alice, alice_msg.id, long_txt.clone()).await?;
+    let sent = alice.pop_sent_msg().await;
+    let test = Message::load_from_db(alice, alice_msg.id).await?;
+    assert!(!test.has_html());
+    assert_eq!(test.text, long_txt);
+    bob.recv_msg_opt(&sent).await;
+    let test = Message::load_from_db(bob, bob_msg.id).await?;
+    assert!(test.is_edited());
+    assert!(test.has_html());
+    let html = test.id.get_html(bob).await?.unwrap();
+    assert_eq!(html.matches("just repeated.<br/>").count(), REPEAT_CNT);
+    assert!(test.text.matches("just repeated.").count() > 0);
+
+    // Alice shortens the message back so it's not HTML for Bob anymore.
+    send_edit_request(alice, alice_msg.id, "Text me on Delta.Chat".to_string()).await?;
+    let sent = alice.pop_sent_msg().await;
+    let test = Message::load_from_db(alice, alice_msg.id).await?;
+    assert_eq!(test.text, "Text me on Delta.Chat");
+    bob.recv_msg_opt(&sent).await;
+    let test = Message::load_from_db(bob, bob_msg.id).await?;
+    assert!(test.is_edited());
+    assert!(!test.has_html());
+    assert_eq!(test.text, "Text me on Delta.Chat");
 
     Ok(())
 }
