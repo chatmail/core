@@ -17,10 +17,12 @@ use pgp::packet::{
     SubpacketData,
 };
 use pgp::ser::Serialize;
+use pgp::types::Timestamp as PgpTimestamp;
 use pgp::types::{CompressionAlgorithm, KeyDetails, KeyVersion};
 use rand_old::thread_rng;
 use tokio::runtime::Handle;
 
+use crate::config::Config;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::log::LogExt;
@@ -147,7 +149,7 @@ pub(crate) fn secret_key_to_public_key(
         };
 
         Ok(vec![
-            Subpacket::regular(SubpacketData::SignatureCreationTime(timestamp))?,
+            Subpacket::critical(SubpacketData::SignatureCreationTime(timestamp))?,
             Subpacket::regular(SubpacketData::IssuerFingerprint(
                 signed_secret_key.fingerprint(),
             ))?,
@@ -472,9 +474,16 @@ async fn generate_keypair(context: &Context) -> Result<SignedSecretKey> {
         None => {
             let start = tools::Time::now();
             info!(context, "Generating keypair.");
-            let keypair = Handle::current()
-                .spawn_blocking(move || crate::pgp::create_keypair(addr))
-                .await??;
+            let keypair = if context.get_config_bool(Config::Autocrypt2).await? {
+                let now = PgpTimestamp::now();
+                Handle::current()
+                    .spawn_blocking(move || crate::pgp::autocrypt2::create_autocrypt2_keypair(now))
+                    .await??
+            } else {
+                Handle::current()
+                    .spawn_blocking(move || crate::pgp::create_keypair(addr))
+                    .await??
+            };
 
             store_self_keypair(context, &keypair).await?;
             info!(

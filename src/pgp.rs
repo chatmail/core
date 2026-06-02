@@ -27,6 +27,8 @@ use tokio::runtime::Handle;
 
 use crate::key::{DcKey, Fingerprint};
 
+pub(crate) mod autocrypt2;
+
 /// Preferred symmetric encryption algorithm.
 const SYMMETRIC_KEY_ALGORITHM: SymmetricKeyAlgorithm = SymmetricKeyAlgorithm::AES128;
 
