@@ -1145,6 +1145,49 @@ async fn test_get_webxdc_blob_with_subdirs() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_get_webxdc_blob_indexhtml_fallback() -> Result<()> {
+    let t = &TestContext::new_alice().await;
+    let chat_id = create_group(t, "foo").await?;
+    let instance = {
+        let mut instance = create_webxdc_instance(
+            t,
+            "indexhtml-fallback.xdc",
+            include_bytes!("../../test-data/webxdc/indexhtml-fallback.xdc"),
+        )?;
+        let instance_msg_id = send_msg(t, chat_id, &mut instance).await?;
+        assert_eq!(instance.viewtype, Viewtype::Webxdc);
+        Message::load_from_db(t, instance_msg_id).await?
+    };
+
+    // "../" links that go back should work
+    assert!(instance.get_webxdc_blob(t, "").await.is_ok());
+    // test falling back to index.html
+    assert!(instance.get_webxdc_blob(t, "/alpha").await.is_ok());
+    assert!(instance.get_webxdc_blob(t, "/alpha/").await.is_ok());
+    // test falling back to index.htm
+    assert!(instance.get_webxdc_blob(t, "/beta").await.is_ok());
+    assert!(instance.get_webxdc_blob(t, "/beta/").await.is_ok());
+    // test that original error is still there when there is no index.htm(l) file
+    assert!(instance.get_webxdc_blob(t, "/control").await.is_err());
+    println!("{:?}", instance.get_webxdc_blob(t, "/control/").await);
+    println!(
+        "{:?}",
+        instance.get_webxdc_blob(t, "/control/were.html").await
+    );
+
+    assert!(instance.get_webxdc_blob(t, "/control/").await.is_err());
+    assert!(
+        !instance
+            .get_webxdc_blob(t, "/control/")
+            .await
+            .expect_err("error expected because there is no index.html")
+            .to_string()
+            .contains("control/index.html")
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_parse_webxdc_manifest() -> Result<()> {
     let result = parse_webxdc_manifest(r#"key = syntax error"#.as_bytes());
     assert!(result.is_err());

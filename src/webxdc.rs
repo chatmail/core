@@ -847,8 +847,11 @@ fn parse_webxdc_manifest(bytes: &[u8]) -> Result<WebxdcManifest> {
 }
 
 async fn get_blob(archive: &mut SeekZipFileReader<BufReader<File>>, name: &str) -> Result<Vec<u8>> {
-    let (i, _) =
+    let (i, entry) =
         find_zip_entry(archive.file(), name).ok_or_else(|| anyhow!("no entry found for {name}"))?;
+    if entry.dir()? {
+        bail!("'{name}' is a directory not a file.")
+    }
     let mut reader = archive.reader_with_entry(i).await?;
     let mut buf = Vec::new();
     reader.read_to_end_checked(&mut buf).await?;
@@ -903,7 +906,28 @@ impl Message {
             ));
         }
 
-        get_blob(&mut archive, name).await
+        let result = get_blob(&mut archive, name).await;
+        // not found and no extension, then assume directory and try index.html
+        // this mimics how webservers behave.
+        if result.is_err() && !name.contains('.') {
+            let base = if name.ends_with('/') {
+                name.to_string()
+            } else {
+                format!("{name}/")
+            };
+            // ignore first slash. So that requesting "" for index.html works
+            let base = base.trim_start_matches('/');
+            let fallbacks = [format!("{base}index.html"), format!("{base}index.htm")];
+            for fallback in &fallbacks {
+                let result = get_blob(&mut archive, fallback).await;
+                if result.is_ok() {
+                    return result;
+                }
+            }
+            result // return orginal error to the path that was requested, not the fallback
+        } else {
+            result
+        }
     }
 
     /// Return info from manifest.toml or from fallbacks.
