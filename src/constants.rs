@@ -181,9 +181,14 @@ pub const DC_LP_AUTH_NORMAL: i32 = 0x4;
 /// if none of these flags are set, the default is chosen
 pub const DC_LP_AUTH_FLAGS: i32 = DC_LP_AUTH_OAUTH2 | DC_LP_AUTH_NORMAL;
 
-// max. weight of images to send w/o recoding
+// Max. weight of images to send w/o recoding. However, these aren't strict limits for sending: if
+// after recoding an image is bigger, it's still sent. We don't expect to exceed these limits too
+// much though because we use fixed JPEG quality. However, if recoding fails, the original image is
+// sent if it doesn't contain Exif and doesn't exceed the configured limit multiplied by
+// IMAGE_BYTES_TOLERANCE.
 pub const BALANCED_IMAGE_BYTES: usize = 500_000;
 pub const WORSE_IMAGE_BYTES: usize = 130_000;
+pub const IMAGE_BYTES_TOLERANCE: usize = 2;
 
 // max. width/height and bytes of an avatar
 pub(crate) const BALANCED_AVATAR_SIZE: u32 = 512;
