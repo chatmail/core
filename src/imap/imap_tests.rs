@@ -1,4 +1,5 @@
 use super::*;
+use crate::chat::ChatId;
 use crate::contact::Contact;
 use crate::test_utils::TestContext;
 

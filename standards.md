@@ -13,7 +13,6 @@ Filename encoding                | Encoded Words ([RFC 2047][]), Encoded Word Ex
 Identify server folders          | IMAP LIST Extension ([RFC 6154][])
 Push                             | IMAP IDLE ([RFC 2177][])
 Quota                            | IMAP QUOTA extension ([RFC 2087][])
-Seen status synchronization      | IMAP CONDSTORE extension ([RFC 7162][])
 Client/server identification     | IMAP ID extension ([RFC 2971][])
 Authorization                    | OAuth2 ([RFC 6749][])
 End-to-end encryption            | [Autocrypt Level 1][], OpenPGP ([RFC 4880][]), Security Multiparts for MIME ([RFC 1847][]) and [“Mixed Up” Encryption repairing](https://datatracker.ietf.org/doc/html/draft-dkg-openpgp-pgpmime-message-mangling-00)
