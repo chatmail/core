@@ -35,6 +35,7 @@ struct Statistics {
     core_version: String,
     number_of_transports: usize,
     key_create_timestamps: Vec<u32>,
+    number_of_keys: u32,
     /// OpenPGP version of the key.
     key_version: u8,
     key_algorithm: String,
@@ -355,6 +356,11 @@ async fn get_stats(context: &Context) -> Result<String> {
     // `key_create_timestamps` is a `Vec` for historical reasons,
     // support for using multiple keys is being phased out.
     let key_create_timestamps: Vec<u32> = vec![self_public_key.created_at().as_secs()];
+    let number_of_keys: u32 = context
+        .sql
+        .query_get_value("SELECT COUNT(*) FROM keypairs", ())
+        .await?
+        .unwrap_or(0);
 
     let sending_enabled_timestamps =
         get_timestamps(context, "stats_sending_enabled_events").await?;
@@ -365,6 +371,7 @@ async fn get_stats(context: &Context) -> Result<String> {
         core_version: DC_VERSION_STR.to_string(),
         number_of_transports: context.count_transports().await?,
         key_create_timestamps,
+        number_of_keys,
         key_version: self_public_key.primary_key.version().into(),
         key_algorithm: format!("{:?}", self_public_key.algorithm()),
         pubkey_size: DcKey::to_bytes(&self_public_key).len(),
