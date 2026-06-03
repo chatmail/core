@@ -280,10 +280,18 @@ impl<'a> BlobObject<'a> {
     }
 
     /// Checks or recodes an image pointed by the [BlobObject] so that it fits into limits on the
-    /// image width, height and file size specified by the config.
+    /// image width, height and file size specified by the config, and has Exif removed.
     ///
-    /// Recoding is only done for [`Viewtype::Image`]. For [`Viewtype::File`], if it's a correct
-    /// image, `*viewtype` is set to [`Viewtype::Image`].
+    /// Recoding is only done for [`Viewtype::Image`]. For [`Viewtype::File`], if the image format
+    /// can be guessed from the content or file path, `*viewtype` is set to [`Viewtype::Image`]. NB:
+    /// Decoding isn't performed in this case to save CPU, so the image may be invalid.
+    ///
+    /// If the image needs to be recoded, but that fails, `*viewtype` downgrades to
+    /// [`Viewtype::File`] if the image doesn't contain Exif and doesn't exceed the configured limit
+    /// (see [`Config::MediaQuality`]) multiplied by [`constants::IMAGE_BYTES_TOLERANCE`]. NB: If
+    /// the user chooses [`Viewtype::File`] initially, we end up with [`Viewtype::Image`] in this
+    /// case. This looks inconsistent, but it's unlikely that a failed-to-recode image would be
+    /// displayed by UIs.
     pub async fn check_or_recode_image(
         &mut self,
         context: &Context,
@@ -329,15 +337,20 @@ impl<'a> BlobObject<'a> {
     ) -> Result<String> {
         // Add white background only to avatars to spare the CPU.
         let mut add_white_bg = is_avatar;
-        let mut no_exif = false;
-        let no_exif_ref = &mut no_exif;
+        let mut can_use_original = false;
+        let can_use_original_ref = &mut can_use_original;
         let mut name = name.unwrap_or_else(|| self.name.clone());
         let original_name = name.clone();
         let vt = &mut *viewtype;
         let res: Result<String> = tokio::task::block_in_place(move || {
             let mut file = std::fs::File::open(self.to_abs_path())?;
             let (nr_bytes, exif) = image_metadata(&file)?;
-            *no_exif_ref = exif.is_none();
+            // `max_bytes` isn't a strict limit for non-avatars, still, we don't want to send a
+            // gigabyte if recoding fails.
+            *can_use_original_ref = exif.is_none()
+                && nr_bytes
+                    <= u64::try_from(max_bytes)?
+                        .saturating_mul(constants::IMAGE_BYTES_TOLERANCE.try_into()?);
             // It's strange that BufReader modifies a file position while it takes a non-mut
             // reference. Ok, just rewind it.
             file.rewind()?;
@@ -390,7 +403,7 @@ impl<'a> BlobObject<'a> {
             } else {
                 max(img.width(), img.height())
             };
-            let exceeds_max_bytes = nr_bytes > max_bytes as u64;
+            let exceeds_max_bytes = nr_bytes > u64::try_from(max_bytes)?;
 
             let jpeg_quality = 75;
             let ofmt = match fmt {
@@ -502,11 +515,12 @@ impl<'a> BlobObject<'a> {
         match res {
             Ok(_) => res,
             Err(err) => {
-                if !is_avatar && no_exif {
+                if !is_avatar && can_use_original {
                     error!(
                         context,
                         "Cannot check/recode image, using original data: {err:#}.",
                     );
+                    // See `check_or_recode_image()` docs for reasoning.
                     *viewtype = Viewtype::File;
                     Ok(original_name)
                 } else {
