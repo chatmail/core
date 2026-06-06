@@ -2800,6 +2800,30 @@ async fn test_can_send_group() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_cant_remove_nonmember() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+
+    let alice_broadcast_id = create_broadcast(alice, "Channel".to_string()).await?;
+    let qr = get_securejoin_qr(alice, Some(alice_broadcast_id))
+        .await
+        .unwrap();
+    tcm.exec_securejoin_qr(bob, alice, &qr).await;
+
+    let alice_charlie_id = alice.add_or_lookup_contact_id(charlie).await;
+    remove_contact_from_chat(alice, alice_broadcast_id, alice_charlie_id).await?;
+    assert!(alice.pop_sent_msg_opt(Duration::ZERO).await.is_none());
+    assert!(!remove_from_chat_contacts_table(alice, alice_broadcast_id, alice_charlie_id).await?);
+    assert!(
+        !remove_from_chat_contacts_table_without_trace(alice, alice_broadcast_id, alice_charlie_id)
+            .await?
+    );
+    Ok(())
+}
+
 /// Tests that in a broadcast channel,
 /// the recipients can't see the identity of their fellow recipients.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
