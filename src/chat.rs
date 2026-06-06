@@ -3738,17 +3738,19 @@ pub(crate) async fn update_chat_contacts_table(
     id: ChatId,
     contacts: &BTreeSet<ContactId>,
 ) -> Result<()> {
+    // See add_to_chat_contacts_table() for reasoning.
+    let limit = cmp::max(time().saturating_add(TIMESTAMP_SENT_TOLERANCE), timestamp);
     context
         .sql
         .transaction(move |transaction| {
-            // Bump `remove_timestamp` to at least `now`
-            // even for members from `contacts`.
+            // Bump `remove_timestamp` even for members from `contacts`.
             // We add members from `contacts` back below.
             transaction.execute(
-                "UPDATE chats_contacts
-                 SET remove_timestamp=MAX(add_timestamp+1, ?)
+                "UPDATE chats_contacts SET
+                     add_timestamp=MIN(add_timestamp, ?1),
+                     remove_timestamp=MAX(MIN(remove_timestamp,?1), MIN(add_timestamp,?1)+1, ?)
                  WHERE chat_id=?",
-                (timestamp, id),
+                (limit, timestamp, id),
             )?;
 
             if !contacts.is_empty() {
@@ -3760,9 +3762,8 @@ pub(crate) async fn update_chat_contacts_table(
                 )?;
 
                 for contact_id in contacts {
-                    // We bumped `add_timestamp` for existing rows above,
-                    // so on conflict it is enough to set `add_timestamp = remove_timestamp`
-                    // and this guarantees that `add_timestamp` is no less than `timestamp`.
+                    // We bumped `remove_timestamp` for existing rows above,
+                    // so on conflict it is enough to set `add_timestamp = remove_timestamp`.
                     statement.execute((id, contact_id, timestamp))?;
                 }
             }
@@ -3779,17 +3780,24 @@ pub(crate) async fn add_to_chat_contacts_table(
     chat_id: ChatId,
     contact_ids: &[ContactId],
 ) -> Result<()> {
+    // Our clock may be slow, so limit stored timestamps with `timestamp` if it's bigger. This way
+    // we only cap remote timestamps if, in addition, remote changes arrive reordered or we do local
+    // changes. Also allow some tolerance, moreover, previous removals might lend time from the
+    // future.
+    let limit = cmp::max(time().saturating_add(TIMESTAMP_SENT_TOLERANCE), timestamp);
     context
         .sql
         .transaction(move |transaction| {
             let mut add_statement = transaction.prepare(
                 "INSERT INTO chats_contacts (chat_id, contact_id, add_timestamp) VALUES(?1, ?2, ?3)
                  ON CONFLICT (chat_id, contact_id)
-                 DO UPDATE SET add_timestamp=MAX(remove_timestamp, ?3)",
+                 DO UPDATE SET
+                     remove_timestamp=MIN(remove_timestamp, ?4),
+                     add_timestamp=MIN(MAX(add_timestamp,remove_timestamp,?3), ?4)",
             )?;
 
             for contact_id in contact_ids {
-                add_statement.execute((chat_id, contact_id, timestamp))?;
+                add_statement.execute((chat_id, contact_id, timestamp, limit))?;
             }
             Ok(())
         })
@@ -3808,13 +3816,16 @@ pub(crate) async fn remove_from_chat_contacts_table(
     contact_id: ContactId,
 ) -> Result<bool> {
     let now = time();
+    // See add_to_chat_contacts_table() for reasoning.
+    let limit = now.saturating_add(TIMESTAMP_SENT_TOLERANCE);
     let is_past_member = context
         .sql
         .execute(
-            "UPDATE chats_contacts
-             SET remove_timestamp=MAX(add_timestamp+1, ?)
+            "UPDATE chats_contacts SET
+                 add_timestamp=MIN(add_timestamp, ?1),
+                 remove_timestamp=MAX(MIN(remove_timestamp,?1), MIN(add_timestamp,?1)+1, ?)
              WHERE chat_id=? AND contact_id=?",
-            (now, chat_id, contact_id),
+            (limit, now, chat_id, contact_id),
         )
         .await?
         > 0;
