@@ -395,18 +395,30 @@ impl Imap {
 
             match login_res {
                 Ok(mut session) => {
-                    let capabilities = determine_capabilities(&mut session).await?;
+                    let capabilities = match determine_capabilities(&mut session).await {
+                        Ok(capabilities) => capabilities,
+                        Err(err) => {
+                            warn!(context, "Failed to determine capabilities: {err:#}.");
+                            continue;
+                        }
+                    };
                     let resync_request_sender = self.resync_request_sender.clone();
 
                     let session = if capabilities.can_compress {
                         info!(context, "Enabling IMAP compression.");
-                        let compressed_session = session
+                        let compressed_session = match session
                             .compress(|s| {
                                 let session_stream: Box<dyn SessionStream> = Box::new(s);
                                 session_stream
                             })
                             .await
-                            .context("Failed to enable IMAP compression")?;
+                        {
+                            Ok(compressed_session) => compressed_session,
+                            Err(err) => {
+                                warn!(context, "Failed to enable IMAP compression: {err:#}.");
+                                continue;
+                            }
+                        };
                         Session::new(
                             compressed_session,
                             capabilities,
