@@ -3800,13 +3800,15 @@ pub(crate) async fn add_to_chat_contacts_table(
 
 /// Removes a contact from the chat
 /// by updating the `remove_timestamp`.
+/// Returns whether the contact has been a chat member recently. If so, a removal message should be
+/// sent.
 pub(crate) async fn remove_from_chat_contacts_table(
     context: &Context,
     chat_id: ChatId,
     contact_id: ContactId,
-) -> Result<()> {
+) -> Result<bool> {
     let now = time();
-    context
+    let is_past_member = context
         .sql
         .execute(
             "UPDATE chats_contacts
@@ -3814,12 +3816,15 @@ pub(crate) async fn remove_from_chat_contacts_table(
              WHERE chat_id=? AND contact_id=?",
             (now, chat_id, contact_id),
         )
-        .await?;
-    Ok(())
+        .await?
+        > 0;
+    Ok(is_past_member)
 }
 
 /// Removes a contact from the chat
-/// without leaving a trace.
+/// without leaving a trace in the db.
+/// Returns whether the contact was removed, even if it was a past contact. If so, a removal message
+/// should be sent if the removal is issued by this device.
 ///
 /// Note that if we call this function,
 /// and then receive a message from another device
@@ -3829,17 +3834,17 @@ pub(crate) async fn remove_from_chat_contacts_table_without_trace(
     context: &Context,
     chat_id: ChatId,
     contact_id: ContactId,
-) -> Result<()> {
-    context
+) -> Result<bool> {
+    let removed = context
         .sql
         .execute(
             "DELETE FROM chats_contacts
             WHERE chat_id=? AND contact_id=?",
             (chat_id, contact_id),
         )
-        .await?;
-
-    Ok(())
+        .await?
+        > 0;
+    Ok(removed)
 }
 
 /// Adds a contact to the chat.
@@ -4159,10 +4164,13 @@ pub async fn remove_contact_from_chat(
 
     let mut sync = Nosync;
 
-    if chat.is_promoted() && chat.typ != Chattype::OutBroadcast {
-        remove_from_chat_contacts_table(context, chat_id, contact_id).await?;
+    let removed = if chat.is_promoted() && chat.typ != Chattype::OutBroadcast {
+        remove_from_chat_contacts_table(context, chat_id, contact_id).await?
     } else {
-        remove_from_chat_contacts_table_without_trace(context, chat_id, contact_id).await?;
+        remove_from_chat_contacts_table_without_trace(context, chat_id, contact_id).await?
+    };
+    if !removed {
+        return Ok(());
     }
 
     // We do not return an error if the contact does not exist in the database.

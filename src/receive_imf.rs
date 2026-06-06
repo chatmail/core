@@ -3790,13 +3790,17 @@ async fn apply_out_broadcast_changes(
         } else if from_id == ContactId::SELF
             && let Some(removed_id) = removed_id
         {
-            chat::remove_from_chat_contacts_table_without_trace(context, chat.id, removed_id)
-                .await?;
-
-            better_msg.get_or_insert(
-                stock_str::msg_del_member_local(context, removed_id, ContactId::SELF).await,
-            );
-            added_removed_id = Some(removed_id);
+            if chat::remove_from_chat_contacts_table_without_trace(context, chat.id, removed_id)
+                .await?
+            {
+                better_msg.get_or_insert(
+                    stock_str::msg_del_member_local(context, removed_id, ContactId::SELF).await,
+                );
+                added_removed_id = Some(removed_id);
+            } else {
+                info!(context, "No-op broadcast member removal message (TRASH).");
+                better_msg = Some("".to_string());
+            }
         }
     }
 
@@ -3870,17 +3874,20 @@ async fn apply_in_broadcast_changes(
         }
         chat::delete_broadcast_secret(context, chat.id).await?;
 
-        if from_id == ContactId::SELF {
+        let removed =
+            chat::remove_from_chat_contacts_table_without_trace(context, chat.id, ContactId::SELF)
+                .await?;
+        if !removed {
+            info!(context, "No-op broadcast SELF-removal message (TRASH).");
+            better_msg = Some("".to_string());
+        } else if from_id == ContactId::SELF {
             better_msg.get_or_insert(stock_str::msg_you_left_broadcast(context));
         } else {
             better_msg.get_or_insert(
                 stock_str::msg_del_member_local(context, ContactId::SELF, from_id).await,
             );
         }
-
-        chat::remove_from_chat_contacts_table_without_trace(context, chat.id, ContactId::SELF)
-            .await?;
-        send_event_chat_modified = true;
+        send_event_chat_modified |= removed;
     } else if !chat.is_self_in_chat(context).await? {
         chat::add_to_chat_contacts_table(
             context,
