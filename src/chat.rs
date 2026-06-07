@@ -2687,8 +2687,10 @@ async fn prepare_send_msg(
             .unwrap_or_default(),
         _ => false,
     };
-    if let Some(reason) = chat.why_cant_send_ex(context, &skip_fn).await? {
-        bail!("Cannot send to {chat_id}: {reason}");
+    if msg.param.get_cmd() == SystemMessage::WebxdcStatusUpdate {
+        // Already checked in `send_webxdc_status_update_struct()`.
+    } else if let Some(reason) = chat.why_cant_send_ex(context, &skip_fn).await? {
+        bail!("Cannot prepare sending to {chat_id}: {reason}");
     }
 
     // Check a quote reply is not leaking data from other chats.
