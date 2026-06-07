@@ -1,5 +1,6 @@
 //! OpenPGP helper module using [rPGP facilities](https://github.com/rpgp/rpgp).
 
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::io::Cursor;
 
@@ -83,13 +84,62 @@ pub(crate) fn create_keypair(addr: EmailAddress) -> Result<SignedSecretKey> {
 
 /// Selects a subkey of the public key to use for encryption.
 ///
-/// Returns `None` if the public key cannot be used for encryption.
+/// The key is selected according to
+/// <https://www.ietf.org/archive/id/draft-autocrypt-openpgp-v2-cert-03.html#section-4.3-4>.
+/// If multiple keys are available, the one that will expire sooner is selected.
 ///
-/// TODO: take key flags and expiration dates into account
-fn select_pk_for_encryption(key: &SignedPublicKey) -> Option<&SignedPublicSubKey> {
+/// Returns `None` if the public key cannot be used for encryption.
+fn select_pk_for_encryption(now: u32, key: &SignedPublicKey) -> Option<&SignedPublicSubKey> {
     key.public_subkeys
         .iter()
-        .find(|subkey| subkey.algorithm().can_encrypt())
+        .filter(|subkey| subkey.algorithm().can_encrypt())
+        .filter_map(|subkey| {
+            let signature = subkey.signatures.first()?;
+
+            let key_flags = signature.key_flags();
+            if !key_flags.encrypt_comms() {
+                return None;
+            }
+
+            if let Some(expiration_duration) = signature
+                .key_expiration_time()
+                .filter(|duration| duration.as_secs() != 0)
+                && now
+                    > subkey
+                        .created_at()
+                        .as_secs()
+                        .saturating_add(expiration_duration.as_secs())
+            {
+                // Key is expired.
+                return None;
+            }
+            Some((subkey, signature))
+        })
+        .min_by(|(subkey1, signature1), (subkey2, signature2)| {
+            match (
+                signature1
+                    .key_expiration_time()
+                    .filter(|duration| duration.as_secs() != 0),
+                signature2
+                    .key_expiration_time()
+                    .filter(|duration| duration.as_secs() != 0),
+            ) {
+                (None, None) => Ordering::Equal,
+                (None, Some(_)) => Ordering::Greater,
+                (Some(_), None) => Ordering::Less,
+                (Some(expiration1), Some(expiration2)) => (subkey1
+                    .created_at()
+                    .as_secs()
+                    .saturating_add(expiration1.as_secs()))
+                .cmp(
+                    &(subkey2
+                        .created_at()
+                        .as_secs()
+                        .saturating_add(expiration2.as_secs())),
+                ),
+            }
+        })
+        .map(|(subkey, _signature)| subkey)
 }
 
 /// Version of SEIPD packet to use.
@@ -151,10 +201,11 @@ pub fn pk_encrypt(
 ) -> Result<String> {
     tokio::task::block_in_place(|| {
         let mut rng = thread_rng();
+        let now = pgp::types::Timestamp::now();
 
         let pkeys = public_keys_for_encryption
             .iter()
-            .filter_map(select_pk_for_encryption);
+            .filter_map(|key| select_pk_for_encryption(now.as_secs(), key));
 
         let msg = MessageBuilder::from_bytes("", plain);
         let encoded_msg = match seipd_version {
@@ -485,7 +536,8 @@ pub(crate) fn relay_addrs(public_key: &SignedPublicKey, addr: &str) -> Vec<Strin
 
 /// Returns true if the key can be encrypted to, i.e. has an encryption subkey.
 pub(crate) fn pubkey_can_encrypt(public_key: &SignedPublicKey) -> bool {
-    select_pk_for_encryption(public_key).is_some()
+    let now = pgp::types::Timestamp::now();
+    select_pk_for_encryption(now.as_secs(), public_key).is_some()
 }
 
 /// Returns true if public key advertises SEIPDv2 feature.
