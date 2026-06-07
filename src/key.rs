@@ -124,13 +124,11 @@ pub trait DcKey: Serialize + Deserializable + Clone {
 
 /// Converts secret key to public key.
 pub(crate) fn secret_key_to_public_key(
-    context: &Context,
     mut signed_secret_key: SignedSecretKey,
     timestamp: u32,
     addr: &str,
     relay_addrs: &str,
 ) -> Result<SignedPublicKey> {
-    info!(context, "Converting secret key to public key.");
     let timestamp = pgp::types::Timestamp::from_secs(timestamp);
 
     // Subpackets that we want to share between DKS and User ID signature.
@@ -298,7 +296,7 @@ pub(crate) async fn load_self_public_key_opt(context: &Context) -> Result<Option
     let addr = context.get_primary_self_addr().await?;
     let all_addrs = context.get_published_self_addrs().await?.join(",");
     let signed_public_key =
-        secret_key_to_public_key(context, signed_secret_key, timestamp, &addr, &all_addrs)?;
+        secret_key_to_public_key(signed_secret_key, timestamp, &addr, &all_addrs)?;
     *lock = Some(signed_public_key.clone());
 
     Ok(Some(signed_public_key))
