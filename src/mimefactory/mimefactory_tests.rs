@@ -341,7 +341,6 @@ async fn test_mdn_sent_to_all_relays() -> Result<()> {
     // Bob's key gets a second relay address and Alice merges the newer key.
     let bob_secret_key = load_self_secret_key(bob).await?;
     let bob_public_key = secret_key_to_public_key(
-        bob,
         bob_secret_key,
         u32::try_from(time())? + 100,
         "bob@example.net",
