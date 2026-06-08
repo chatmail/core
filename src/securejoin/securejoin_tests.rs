@@ -483,7 +483,7 @@ async fn test_secure_join_group_ex(v3: bool, remove_invite: bool) -> Result<()> 
         if v3 {
             "vc-request-pubkey"
         } else {
-            "vg-request"
+            "vc-request"
         }
     );
     assert_eq!(msg.get_header(HeaderDef::SecureJoinAuth).is_some(), v3);
@@ -509,7 +509,7 @@ async fn test_secure_join_group_ex(v3: bool, remove_invite: bool) -> Result<()> 
     assert!(msg.was_encrypted());
     assert_eq!(
         msg.get_header(HeaderDef::SecureJoin).unwrap(),
-        if v3 { "vc-pubkey" } else { "vg-auth-required" }
+        if v3 { "vc-pubkey" } else { "vc-auth-required" }
     );
 
     tcm.section("Step 4: Bob receives vc-pubkey or vg-auth-required, sends v*-request-with-auth");
@@ -546,7 +546,7 @@ async fn test_secure_join_group_ex(v3: bool, remove_invite: bool) -> Result<()> 
     assert!(msg.was_encrypted());
     assert_eq!(
         msg.get_header(HeaderDef::SecureJoin).unwrap(),
-        "vg-request-with-auth"
+        "vc-request-with-auth"
     );
     assert!(msg.get_header(HeaderDef::SecureJoinAuth).is_some());
     let bob_fp = self_fingerprint(&bob).await?;
