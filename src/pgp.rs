@@ -1,7 +1,8 @@
 //! OpenPGP helper module using [rPGP facilities](https://github.com/rpgp/rpgp).
 
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::btree_map::Entry as BTreeMapEntry;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::Cursor;
 
 use anyhow::{Context as _, Result, ensure};
@@ -15,7 +16,7 @@ use pgp::crypto::aead::{AeadAlgorithm, ChunkSize};
 use pgp::crypto::ecc_curve::ECCCurve;
 use pgp::crypto::hash::HashAlgorithm;
 use pgp::crypto::sym::SymmetricKeyAlgorithm;
-use pgp::packet::{Signature, Subpacket, SubpacketData};
+use pgp::packet::{Signature, SignatureType, Subpacket, SubpacketData};
 use pgp::types::{
     CompressionAlgorithm, Imprint, KeyDetails, KeyVersion, Password, SignedUser, SigningKey as _,
     StringToKey,
@@ -346,6 +347,76 @@ pub async fn symm_encrypt_message(
     .await?
 }
 
+/// Minimizes the signatures of a subpacket.
+///
+/// Selects the newest subkey binding signature
+/// and the newest revocation signature.
+///
+/// This function does not check if the signatures are valid
+/// and whether there is at least one subkey binding signature.
+/// Such properties should be validated when importing OpenPGP certificates.
+fn minimize_subpacket_signatures(signatures: Vec<Signature>) -> Vec<Signature> {
+    let mut newest_revocation_signature: Option<Signature> = None;
+    let mut newest_binding_signature: Option<Signature> = None;
+    for signature in signatures.into_iter() {
+        let Some(config) = signature.config() else {
+            // Skip unknown signatures.
+            continue;
+        };
+        match config.typ {
+            SignatureType::SubkeyBinding => {
+                if newest_binding_signature.as_ref().is_none_or(|s| {
+                    s.created().map(|ts| ts.as_secs()) < signature.created().map(|ts| ts.as_secs())
+                }) {
+                    newest_binding_signature = Some(signature)
+                }
+            }
+            SignatureType::SubkeyRevocation => {
+                if newest_revocation_signature.as_ref().is_none_or(|s| {
+                    s.created().map(|ts| ts.as_secs()) < signature.created().map(|ts| ts.as_secs())
+                }) {
+                    newest_revocation_signature = Some(signature)
+                }
+            }
+            _ => continue,
+        }
+    }
+    newest_revocation_signature
+        .into_iter()
+        .chain(newest_binding_signature)
+        .collect()
+}
+
+/// Merges two OpenPGP subkeys.
+fn merge_openpgp_subkey(old_subkey: &mut SignedPublicSubKey, new_subkey: SignedPublicSubKey) {
+    debug_assert_eq!(old_subkey.fingerprint(), new_subkey.fingerprint());
+    old_subkey.signatures = minimize_subpacket_signatures(
+        std::mem::take(&mut old_subkey.signatures)
+            .into_iter()
+            .chain(new_subkey.signatures)
+            .collect(),
+    );
+}
+
+/// Merges OpenPGP subkey vectors.
+pub fn merge_openpgp_subkeys(
+    subkeys: impl IntoIterator<Item = SignedPublicSubKey>,
+) -> Result<Vec<SignedPublicSubKey>> {
+    let mut merged_subkeys: BTreeMap<_, SignedPublicSubKey> = BTreeMap::new();
+    for subkey in subkeys.into_iter() {
+        let imprint = subkey.imprint::<Sha256>()?;
+        match merged_subkeys.entry(imprint) {
+            BTreeMapEntry::Vacant(entry) => {
+                entry.insert(subkey);
+            }
+            BTreeMapEntry::Occupied(entry) => {
+                merge_openpgp_subkey(entry.into_mut(), subkey);
+            }
+        }
+    }
+    Ok(merged_subkeys.into_values().collect())
+}
+
 /// Merges and minimizes OpenPGP certificates.
 ///
 /// Keeps at most one direct key signature and
@@ -382,7 +453,7 @@ pub fn merge_openpgp_certificates(
     let SignedPublicKey {
         primary_key: new_primary_key,
         details: new_details,
-        public_subkeys: _new_public_subkeys,
+        public_subkeys: new_public_subkeys,
     } = new_certificate;
 
     // Public keys may be serialized differently, e.g. using old and new packet type,
@@ -463,7 +534,50 @@ pub fn merge_openpgp_certificates(
         });
     let users: Vec<SignedUser> = best_user.into_iter().collect();
 
-    let public_subkeys = old_public_subkeys;
+    let (fallback_subkeys, rotating_subkeys): (Vec<_>, Vec<_>) =
+        merge_openpgp_subkeys(old_public_subkeys.into_iter().chain(new_public_subkeys))?
+            .into_iter()
+            .filter_map(|subkey| {
+                // Select the newest subkey binding signature.
+                //
+                // There is at most one subkey binding signature at this point
+                // because older subkey binding signatures are removed during merging.
+                let signature = subkey.signatures.iter().find(|signature| {
+                    signature
+                        .config()
+                        .is_some_and(|config| config.typ == SignatureType::SubkeyBinding)
+                })?;
+
+                let created_at_secs = signature.created().unwrap_or(subkey.created_at()).as_secs();
+                let expires_at_secs: Option<u32> = signature
+                    .key_expiration_time()
+                    .map(|duration| duration.as_secs())
+                    .filter(|duration_secs| *duration_secs != 0)
+                    .map(|duration_secs| {
+                        subkey.created_at().as_secs().saturating_add(duration_secs)
+                    });
+
+                Some((subkey, created_at_secs, expires_at_secs))
+            })
+            .partition(|(_subkey, _created_at_secs, expires_at_secs)| expires_at_secs.is_none());
+    let fallback_subkey: Option<SignedPublicSubKey> = fallback_subkeys
+        .into_iter()
+        .max_by_key(|(_subkey, created_at_secs, _)| *created_at_secs)
+        .map(|(subkey, _, _)| subkey);
+
+    // Keep 10 newest rotating subkeys to avoid storing indefinitely growing number of subkeys locally.
+    rotating_subkeys
+        .sort_by_key(|(_subkey, created_at_secs, _)| std::cmp::Reverse(created_at_secs));
+    rotating_subkeys.truncate(10);
+
+    let mut public_subkeys = rotating_subkeys;
+    if let Some(fallback_subkey) = fallback_subkey {
+        // Put the fallback subkey first so it is gossiped first.
+        //
+        // We want to always gossip non-expiring key first
+        // for older versions that always encrypted to the first subkey.
+        public_subkeys.insert(0, fallback_subkey);
+    }
 
     Ok(SignedPublicKey {
         primary_key: old_primary_key,
