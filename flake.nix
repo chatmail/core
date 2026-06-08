@@ -4,7 +4,7 @@
     fenix.url = "github:nix-community/fenix";
     fenix.inputs.nixpkgs.follows = "nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
-    naersk.url = "github:nix-community/naersk/pull/391/head";
+    naersk.url = "github:nix-community/naersk";
     naersk.inputs.nixpkgs.follows = "nixpkgs";
     naersk.inputs.fenix.follows = "fenix";
     nix-filter.url = "github:numtide/nix-filter";
