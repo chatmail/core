@@ -1,5 +1,37 @@
 # Changelog
 
+## [2.52.0] - 2026-06-09
+
+### Fixes
+
+- Update the channel title after joining if the QR code included a wrong title ([#8260](https://github.com/chatmail/core/pull/8260)).
+- Don't send removal message to contact that hasn't been a chat member ([#8298](https://github.com/chatmail/core/pull/8298)).
+
+### Features / Changes
+
+- Add cryptography-related statistics (`number_of_transports`, `key_version`, `key_algorithm`, `pubkey_size`, `number_of_keys`) ([#8293](https://github.com/chatmail/core/pull/8293), [#8297](https://github.com/chatmail/core/pull/8297)).
+- Add IMAP folder to `Context::get_info()` ([#8285](https://github.com/chatmail/core/pull/8285)).
+
+### Miscellaneous Tasks
+
+- Update preloaded DNS cache.
+- Use default aws-lc-rs cryptography provider for rustls.
+- Add exception for unmaintained proc-macro-error2 to deny.toml.
+- cargo: bump `pin-project` from 1.1.11 to 1.1.13.
+- cargo: bump `tokio` from 1.52.1 to 1.52.3.
+- cargo: bump `log` from 0.4.29 to 0.4.30.
+- cargo: bump `serde_json` from 1.0.149 to 1.0.150.
+- deps: bump EmbarkStudios/cargo-deny-action from 2.0.18 to 2.0.19.
+- deps: bump taiki-e/install-action from 2.79.2 to 2.79.10.
+
+### Build system
+
+- nix: fix windows cross-compilation by adding pthreads includes.
+
+### Refactor
+
+- Remove support for building "source" packages for deltachat-rpc-server.
+
 ## [2.51.0] - 2026-05-29
 
 ### Features / Changes
@@ -8297,3 +8329,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.49.0]: https://github.com/chatmail/core/compare/v2.48.0..v2.49.0
 [2.50.0]: https://github.com/chatmail/core/compare/v2.49.0..v2.50.0
 [2.51.0]: https://github.com/chatmail/core/compare/v2.50.0..v2.51.0
+[2.52.0]: https://github.com/chatmail/core/compare/v2.51.0..v2.52.0
