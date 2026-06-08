@@ -147,6 +147,7 @@
 
             CARGO_BUILD_TARGET = rustTarget;
             TARGET_CC = "${pkgsWin64.stdenv.cc}/bin/${pkgsWin64.stdenv.cc.targetPrefix}cc";
+            CFLAGS_x86_64_pc_windows_gnu = "-I${pkgsWin64.windows.pthreads}/include";
             CARGO_BUILD_RUSTFLAGS = [
               "-C"
               "linker=${TARGET_CC}"
@@ -203,6 +204,7 @@
             src = pkgs.lib.cleanSource ./.;
             nativeBuildInputs = [
               pkgs.perl # Needed to build vendored OpenSSL.
+              pkgs.nasm # aws-lc-sys requires it
             ];
             depsBuildBuild = [
               winCC
@@ -215,6 +217,7 @@
 
             CARGO_BUILD_TARGET = rustTarget;
             TARGET_CC = "${winCC}/bin/${winCC.targetPrefix}cc";
+            CFLAGS_i686_pc_windows_gnu = "-I${pkgsWin32.windows.pthreads}/include";
             CARGO_BUILD_RUSTFLAGS = [
               "-C"
               "linker=${TARGET_CC}"
