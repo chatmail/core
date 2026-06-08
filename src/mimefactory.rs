@@ -331,9 +331,10 @@ pub(crate) fn render_queued_mail(
     outer_headers.extend(b"MIME-Version: 1.0\r\n");
 
     if should_attach_pubkey {
+        let public_key = crate::pgp::minimize_autocrypt_certificate(public_key);
         let aheader = Aheader {
             addr: from_addr,
-            public_key: public_key.clone(),
+            public_key,
             prefer_encrypt: EncryptPreference::Mutual,
         };
         let autocrypt_header = mail_builder::headers::raw::Raw::new(aheader.to_string());
@@ -1472,9 +1473,11 @@ impl MimeFactory {
                                 continue;
                             }
 
+                            let public_key = crate::pgp::minimize_autocrypt_certificate(key);
+
                             let header = Aheader {
                                 addr: addr.clone(),
-                                public_key: key.clone(),
+                                public_key,
                                 // Autocrypt 1.1.0 specification says that
                                 // `prefer-encrypt` attribute SHOULD NOT be included.
                                 prefer_encrypt: EncryptPreference::NoPreference,
