@@ -2079,7 +2079,7 @@ async fn add_parts(
         }
     }
 
-    handle_edit_delete(context, mime_parser, from_id).await?;
+    handle_edit_delete(context, mime_parser, from_id, &mime_headers).await?;
     handle_post_message(context, mime_parser, from_id, state).await?;
 
     if mime_parser.is_system_message == SystemMessage::CallAccepted
@@ -2349,6 +2349,7 @@ async fn handle_edit_delete(
     context: &Context,
     mime_parser: &MimeMessage,
     from_id: ContactId,
+    mime_headers: &[u8],
 ) -> Result<()> {
     if let Some(rfc724_mid) = mime_parser.get_header(HeaderDef::ChatEdit) {
         let Some(original_msg_id) = rfc724_mid_exists(context, rfc724_mid).await? else {
@@ -2382,7 +2383,7 @@ async fn handle_edit_delete(
         }
 
         let new_text = part.msg.strip_prefix(EDITED_PREFIX).unwrap_or(&part.msg);
-        chat::save_text_edit_to_db(context, &mut original_msg, new_text).await?;
+        chat::save_text_edit_to_db(context, &mut original_msg, new_text, mime_headers).await?;
     } else if let Some(rfc724_mid_list) = mime_parser.get_header(HeaderDef::ChatDelete)
         && let Some(part) = mime_parser.parts.first()
     {

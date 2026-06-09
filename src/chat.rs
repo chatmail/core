@@ -3046,7 +3046,7 @@ pub async fn send_edit_request(context: &Context, msg_id: MsgId, new_text: Strin
         return Ok(());
     }
 
-    save_text_edit_to_db(context, &mut original_msg, &new_text).await?;
+    save_text_edit_to_db(context, &mut original_msg, &new_text, &[]).await?;
 
     let mut edit_msg = Message::new_text(EDITED_PREFIX.to_owned() + &new_text); // prefix only set for nicer display in Non-Delta-MUAs
     edit_msg.set_quote(context, Some(&original_msg)).await?; // quote only set for nicer display in Non-Delta-MUAs
@@ -3065,16 +3065,20 @@ pub(crate) async fn save_text_edit_to_db(
     context: &Context,
     original_msg: &mut Message,
     new_text: &str,
+    mime_headers: &[u8],
 ) -> Result<()> {
     original_msg.param.set_int(Param::IsEdited, 1);
     context
         .sql
         .execute(
-            "UPDATE msgs SET txt=?, txt_normalized=?, param=? WHERE id=?",
+            "
+UPDATE msgs SET txt=?, txt_normalized=?, param=?, mime_headers=?, mime_modified=? WHERE id=?",
             (
                 new_text,
                 normalize_text(new_text),
                 original_msg.param.to_string(),
+                mime_headers,
+                !mime_headers.is_empty(),
                 original_msg.id,
             ),
         )
