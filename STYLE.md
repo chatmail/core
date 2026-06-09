@@ -59,6 +59,13 @@ If column is already declared without `NOT NULL`, use `IFNULL` function to provi
 Use `HAVING COUNT(*) > 0` clause
 to [prevent aggregate functions such as `MIN` and `MAX` from returning `NULL`](https://stackoverflow.com/questions/66527856/aggregate-functions-max-etc-return-null-instead-of-no-rows).
 
+List columns explicitly in `INSERT` statements:
+```
+INSERT OR IGNORE INTO download (rfc724_mid, msg_id) VALUES (?,0);
+```
+Otherwise if a new column with default value is added in a future DB version, an upgraded DB can't
+be used with the old code, e.g. after transferring a DB from a device running a newer version.
+
 Don't delete unused columns too early, but maybe after several months/releases, unused columns are
 still used by older versions, so deleting them breaks downgrading the core or importing a backup in
 an older version. Also don't change the column type, consider adding a new column with another name
