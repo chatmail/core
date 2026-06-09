@@ -171,14 +171,19 @@ pub enum EventType {
         msg_id: MsgId,
     },
 
-    /// A single message is read by the receiver. State changed from DC_STATE_OUT_DELIVERED to
-    /// DC_STATE_OUT_MDN_RCVD, see dc_msg_get_state().
+    /// A single message is read by a receiver.
     MsgRead {
         /// ID of the chat which the message belongs to.
         chat_id: ChatId,
 
         /// ID of the message that was read.
         msg_id: MsgId,
+
+        /// Read for the first time (e.g. by just one group member
+        /// / channel subscriber).
+        /// State changed from DC_STATE_OUT_DELIVERED to
+        /// DC_STATE_OUT_MDN_RCVD, see dc_msg_get_state().
+        first_time: bool,
     },
 
     /// A single message was deleted.

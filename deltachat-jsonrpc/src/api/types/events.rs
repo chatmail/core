@@ -192,8 +192,7 @@ pub enum EventType {
         msg_id: u32,
     },
 
-    /// A single message is read by the receiver. State changed from DC_STATE_OUT_DELIVERED to
-    /// DC_STATE_OUT_MDN_RCVD, see `Message.state`.
+    /// A single message is read by a receiver.
     #[serde(rename_all = "camelCase")]
     MsgRead {
         /// ID of the chat which the message belongs to.
@@ -201,6 +200,12 @@ pub enum EventType {
 
         /// ID of the message that was read.
         msg_id: u32,
+
+        /// Read for the first time (e.g. by just one group member
+        /// / channel subscriber).
+        /// State changed from DC_STATE_OUT_DELIVERED to
+        /// DC_STATE_OUT_MDN_RCVD, see dc_msg_get_state().
+        first_time: bool,
     },
 
     /// A single message was deleted.
@@ -542,9 +547,14 @@ impl From<CoreEventType> for EventType {
                 chat_id: chat_id.to_u32(),
                 msg_id: msg_id.to_u32(),
             },
-            CoreEventType::MsgRead { chat_id, msg_id } => MsgRead {
+            CoreEventType::MsgRead {
+                chat_id,
+                msg_id,
+                first_time,
+            } => MsgRead {
                 chat_id: chat_id.to_u32(),
                 msg_id: msg_id.to_u32(),
+                first_time,
             },
             CoreEventType::MsgDeleted { chat_id, msg_id } => MsgDeleted {
                 chat_id: chat_id.to_u32(),
