@@ -873,10 +873,6 @@ def test_delete_fully_downloaded_msg(acfactory, tmp_path, direct_imap):
 
     msg = bob.wait_for_incoming_msg()
     msg_snapshot = msg.get_snapshot()
-    assert msg_snapshot.download_state == DownloadState.AVAILABLE
-    msgs_changed_event = bob.wait_for_msgs_changed_event()
-    assert msgs_changed_event.msg_id == msg.id
-    msg_snapshot = msg.get_snapshot()
     assert msg_snapshot.download_state == DownloadState.DONE
 
     bob_direct_imap = direct_imap(bob)
@@ -906,10 +902,6 @@ def test_imap_autodelete_fully_downloaded_msg(acfactory, tmp_path, direct_imap):
     chat_alice.send_file(str(path))
 
     msg = bob.wait_for_incoming_msg()
-    msg_snapshot = msg.get_snapshot()
-    assert msg_snapshot.download_state == DownloadState.AVAILABLE
-    msgs_changed_event = bob.wait_for_msgs_changed_event()
-    assert msgs_changed_event.msg_id == msg.id
     msg_snapshot = msg.get_snapshot()
     assert msg_snapshot.download_state == DownloadState.DONE
 
@@ -1389,7 +1381,5 @@ def test_large_message(acfactory) -> None:
     )
 
     msg = bob.wait_for_incoming_msg()
-    msgs_changed_event = bob.wait_for_msgs_changed_event()
-    assert msg.id == msgs_changed_event.msg_id
     snapshot = msg.get_snapshot()
     assert snapshot.text == "Hello World, this message is bigger than 5 bytes"

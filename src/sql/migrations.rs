@@ -2434,6 +2434,8 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
         .await?;
     }
 
+    sql.execute("DELETE FROM available_post_msgs", ()).await?;
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?

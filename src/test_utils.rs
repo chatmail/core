@@ -743,12 +743,14 @@ ORDER BY id"
         })
     }
 
+    /// Returns `SentMessage` instances representing `smtp` rows for the given message. Returned
+    /// items go in reverse order for historical reasons.
     pub async fn get_smtp_rows_for_msg<'a>(&'a self, msg_id: MsgId) -> Vec<SentMessage<'a>> {
         let sent_msgs = self
             .ctx
             .sql
             .query_map_vec(
-                "SELECT id, msg_id, mime, recipients FROM smtp WHERE msg_id=?",
+                "SELECT id, msg_id, mime, recipients FROM smtp WHERE msg_id=? ORDER BY id DESC",
                 (msg_id,),
                 |row| {
                     let _id: MsgId = row.get(0)?;
@@ -1076,9 +1078,17 @@ ORDER BY id"
     /// This is not hooked up to any SMTP-IMAP pipeline, so the other account must call
     /// [`TestContext::recv_msg`] with the returned [`SentMessage`] if it wants to receive
     /// the message.
+    ///
+    /// Removes SMTP jobs existed before and marks the corresponding messages as delivered, as
+    /// tracking of these jobs is probably already lost by the test code.
     pub async fn send_msg(&self, chat_id: ChatId, msg: &mut Message) -> SentMessage<'_> {
+        while self.pop_sent_msg_opt(Duration::ZERO).await.is_some() {}
         let msg_id = chat::send_msg(self, chat_id, msg).await.unwrap();
-        let res = self.pop_sent_msg().await;
+        let rev_order = false;
+        let res = self
+            .pop_sent_msg_ex(rev_order, Duration::ZERO)
+            .await
+            .unwrap();
         assert_eq!(
             res.sender_msg_id, msg_id,
             "Apparently the message was not actually sent out"

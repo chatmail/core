@@ -257,7 +257,7 @@ async fn test_lost_pre_msg() -> Result<()> {
     let _pre_msg = alice.pop_sent_msg().await;
     let msg = bob.recv_msg(&full_msg).await;
     assert_eq!(msg.download_state, DownloadState::Done);
-    assert_eq!(msg.text, "");
+    assert_eq!(msg.text, "populate");
     Ok(())
 }
 
@@ -547,8 +547,8 @@ async fn test_webxdc_updates_in_post_message_after_pre_message() -> Result<()> {
         .await?;
 
     send_msg(alice, alice_chat_id, &mut alice_instance).await?;
-    let post_message = alice.pop_sent_msg().await;
     let pre_message = alice.pop_sent_msg().await;
+    let post_message = alice.pop_sent_msg().await;
 
     let bob_instance = bob.recv_msg(&pre_message).await;
     assert_eq!(bob_instance.download_state, DownloadState::Available);
@@ -585,8 +585,8 @@ async fn test_webxdc_updates_in_post_message_after_deleted_pre_message() -> Resu
         .await?;
 
     send_msg(alice, alice_chat_id, &mut alice_instance).await?;
-    let post_message = alice.pop_sent_msg().await;
     let pre_message = alice.pop_sent_msg().await;
+    let post_message = alice.pop_sent_msg().await;
 
     let bob_instance = bob.recv_msg(&pre_message).await;
     assert_eq!(bob_instance.download_state, DownloadState::Available);
@@ -627,8 +627,8 @@ async fn test_webxdc_updates_in_post_message_without_pre_message() -> Result<()>
         .await?;
 
     send_msg(alice, alice_chat_id, &mut alice_instance).await?;
-    let post_message = alice.pop_sent_msg().await;
     let pre_message = alice.pop_sent_msg().await;
+    let post_message = alice.pop_sent_msg().await;
 
     // Bob receives post-message first.
     let bob_instance = bob.recv_msg(&post_message).await;

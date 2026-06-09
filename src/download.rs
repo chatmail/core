@@ -160,7 +160,6 @@ pub(crate) async fn download_msg(
 
     let Some((server_uid, server_folder, msg_transport_id)) = row else {
         // No IMAP record found, we don't know the UID and folder.
-        delete_from_available_post_msgs(context, &rfc724_mid).await?;
         return Err(anyhow!(
             "IMAP location for {rfc724_mid:?} post-message is unknown"
         ));
@@ -234,31 +233,6 @@ async fn set_state_to_failure(context: &Context, rfc724_mid: &str) -> Result<()>
     Ok(())
 }
 
-async fn available_post_msgs_contains_rfc724_mid(
-    context: &Context,
-    rfc724_mid: &str,
-) -> Result<bool> {
-    Ok(context
-        .sql
-        .query_get_value::<String>(
-            "SELECT rfc724_mid FROM available_post_msgs WHERE rfc724_mid=?",
-            (&rfc724_mid,),
-        )
-        .await?
-        .is_some())
-}
-
-async fn delete_from_available_post_msgs(context: &Context, rfc724_mid: &str) -> Result<()> {
-    context
-        .sql
-        .execute(
-            "DELETE FROM available_post_msgs WHERE rfc724_mid=?",
-            (&rfc724_mid,),
-        )
-        .await?;
-    Ok(())
-}
-
 async fn delete_from_downloads(context: &Context, rfc724_mid: &str) -> Result<()> {
     context
         .sql
@@ -286,7 +260,6 @@ pub(crate) async fn download_msgs(context: &Context, session: &mut Session) -> R
         let res = download_msg(context, rfc724_mid.clone(), session).await;
         if let Ok(Some(())) = res {
             delete_from_downloads(context, rfc724_mid).await?;
-            delete_from_available_post_msgs(context, rfc724_mid).await?;
         }
         if let Err(err) = res {
             warn!(
@@ -300,60 +273,17 @@ pub(crate) async fn download_msgs(context: &Context, session: &mut Session) -> R
                     "{rfc724_mid} download failed and there is no downloaded pre-message."
                 );
                 delete_from_downloads(context, rfc724_mid).await?;
-            } else if available_post_msgs_contains_rfc724_mid(context, rfc724_mid).await? {
+            } else {
                 warn!(
                     context,
-                    "{rfc724_mid} is in available_post_msgs table but we failed to fetch it,
-                    so set the message to DownloadState::Failure - probably it was deleted on the server in the meantime"
+                    "Failed to fetch {rfc724_mid}, setting DownloadState to Failure."
                 );
                 set_state_to_failure(context, rfc724_mid).await?;
                 delete_from_downloads(context, rfc724_mid).await?;
-                delete_from_available_post_msgs(context, rfc724_mid).await?;
-            } else {
-                // leave the message in DownloadState::InProgress;
-                // it will be downloaded once it arrives.
             }
         }
     }
 
-    Ok(())
-}
-
-/// Downloads known post-messages without pre-messages
-/// in order to guard against lost pre-messages.
-pub(crate) async fn download_known_post_messages_without_pre_message(
-    context: &Context,
-    session: &mut Session,
-) -> Result<()> {
-    let rfc724_mids = context
-        .sql
-        .query_map_vec("SELECT rfc724_mid FROM available_post_msgs", (), |row| {
-            let rfc724_mid: String = row.get(0)?;
-            Ok(rfc724_mid)
-        })
-        .await?;
-    for rfc724_mid in &rfc724_mids {
-        if msg_is_downloaded_for(context, rfc724_mid).await? {
-            delete_from_available_post_msgs(context, rfc724_mid).await?;
-            continue;
-        }
-
-        // Download the Post-Message unconditionally,
-        // because the Pre-Message got lost.
-        // The message may be in the wrong order,
-        // but at least we have it at all.
-        let res = download_msg(context, rfc724_mid.clone(), session).await;
-        if let Ok(Some(())) = res {
-            delete_from_available_post_msgs(context, rfc724_mid).await?;
-        }
-        if let Err(err) = res {
-            warn!(
-                context,
-                "download_known_post_messages_without_pre_message: Failed to download message rfc724_mid={rfc724_mid}: {:#}.",
-                err
-            );
-        }
-    }
     Ok(())
 }
 
