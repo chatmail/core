@@ -534,6 +534,17 @@ async fn test_webxdc_updates_in_post_message_after_pre_message() -> Result<()> {
 
     let alice_chat_id = alice.create_chat_id(bob).await;
 
+    // regression test where updates get assigned to an unrelated prior webxdc message
+    let mut unrelated_xdc = Message::new(Viewtype::Webxdc);
+    unrelated_xdc.set_file_from_bytes(
+        alice,
+        "first.xdc",
+        include_bytes!("../../../test-data/webxdc/minimal.xdc"),
+        None,
+    )?;
+    send_msg(alice, alice_chat_id, &mut unrelated_xdc).await?;
+    let bob_unrelated_webxdc = bob.recv_msg(&alice.pop_sent_msg().await).await;
+
     let big_webxdc_app = big_webxdc_app().await?;
 
     let mut alice_instance = Message::new(Viewtype::Webxdc);
@@ -552,6 +563,14 @@ async fn test_webxdc_updates_in_post_message_after_pre_message() -> Result<()> {
 
     let bob_instance = bob.recv_msg(&pre_message).await;
     assert_eq!(bob_instance.download_state, DownloadState::Available);
+
+    // don't accidentally assign updates from a pre-message to parent message
+    assert_eq!(
+        bob.get_webxdc_status_updates(bob_unrelated_webxdc.id, StatusUpdateSerial::new(0))
+            .await?,
+        "[]"
+    );
+
     bob.recv_msg_trash(&post_message).await;
     let bob_instance = Message::load_from_db(bob, bob_instance.id).await?;
     assert_eq!(bob_instance.download_state, DownloadState::Done);

@@ -826,7 +826,9 @@ UPDATE config SET value=? WHERE keyname='configured_addr' AND value!=?1
         }
     }
 
-    if let Some(ref status_update) = mime_parser.webxdc_status_update {
+    if let Some(ref status_update) = mime_parser.webxdc_status_update
+        && !matches!(mime_parser.pre_message, PreMessageMode::Pre { .. })
+    {
         let can_info_msg;
         let instance = if mime_parser
             .parts
