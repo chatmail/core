@@ -1813,14 +1813,15 @@ impl MimeFactory {
                 HeaderDef::IrohGossipTopic.get_headername(),
                 mail_builder::headers::raw::Raw::new(topic).into(),
             ));
-            if let (Some(json), _) = context
-                .render_webxdc_status_update_object(
-                    msg.id,
-                    StatusUpdateSerial::MIN,
-                    StatusUpdateSerial::MAX,
-                    None,
-                )
-                .await?
+            if !matches!(self.pre_message_mode, PreMessageMode::Pre { .. })
+                && let (Some(json), _) = context
+                    .render_webxdc_status_update_object(
+                        msg.id,
+                        StatusUpdateSerial::MIN,
+                        StatusUpdateSerial::MAX,
+                        None,
+                    )
+                    .await?
             {
                 parts.push(context.build_status_update_part(&json));
             }
