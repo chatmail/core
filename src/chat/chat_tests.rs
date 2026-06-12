@@ -5099,6 +5099,80 @@ async fn test_broadcast_contacts_are_hidden() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_blocked_bob_cant_join_chat() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice1 = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    for a in [alice1, alice2] {
+        a.set_config_bool(Config::SyncMsgs, true).await?;
+    }
+    // The observing device has Bob blocked from the early start.
+    let alice2_bob_id = alice2.add_or_lookup_contact_id(bob).await;
+    Contact::block(alice2, alice2_bob_id).await?;
+
+    let alice1_chat_id = create_group(alice1, "").await?;
+    sync(alice1, alice2).await;
+    let alice1_chat = Chat::load_from_db(alice1, alice1_chat_id).await?;
+    let (alice2_chat_id, _blocked) = get_chat_id_by_grpid(alice2, &alice1_chat.grpid)
+        .await?
+        .unwrap();
+    let qr = get_securejoin_qr(alice1, Some(alice1_chat_id)).await?;
+    sync(alice1, alice2).await;
+
+    tcm.exec_securejoin_qr_multi_device(bob, &[alice1, alice2], &qr)
+        .await;
+    let alice1_bob_id = alice1.add_or_lookup_contact_id(bob).await;
+    assert_eq!(get_chat_contacts(alice1, alice1_chat_id).await?.len(), 2);
+    // "vg-member-added" from alice1 adds bob for alice2 to provide membership consistency on
+    // devices.
+    assert_eq!(get_chat_contacts(alice2, alice2_chat_id).await?.len(), 2);
+    remove_contact_from_chat(alice1, alice1_chat_id, alice1_bob_id).await?;
+    bob.recv_msg(&alice1.pop_sent_msg().await).await;
+    tcm.exec_securejoin_qr(bob, alice1, &qr).await;
+    // Bob can join again if he isn't blocked.
+    assert_eq!(get_chat_contacts(alice1, alice1_chat_id).await?.len(), 2);
+    Contact::block(alice1, alice1_bob_id).await?;
+    remove_contact_from_chat(alice1, alice1_chat_id, alice1_bob_id).await?;
+    bob.recv_msg(&alice1.pop_sent_msg().await).await;
+    tcm.exec_securejoin_qr(bob, alice1, &qr).await;
+    let members = get_chat_contacts(alice1, alice1_chat_id).await?;
+    assert_eq!(members.len(), 1);
+    assert!(members.contains(&ContactId::SELF));
+    let past_members = get_past_chat_contacts(alice1, alice1_chat_id).await?;
+    assert_eq!(past_members.len(), 1);
+    assert!(past_members.contains(&alice1_bob_id));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_blocked_bob_cant_create_11_chat_via_securejoin() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice1 = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    for a in [alice1, alice2] {
+        a.set_config_bool(Config::SyncMsgs, true).await?;
+    }
+    // The observing device has Bob blocked.
+    let alice2_bob_id = alice2.add_or_lookup_contact_id(bob).await;
+    Contact::block(alice2, alice2_bob_id).await?;
+
+    let qr = get_securejoin_qr(alice1, None).await?;
+    sync(alice1, alice2).await;
+
+    let chat_cnt = get_chat_cnt(alice1).await?;
+    assert_eq!(get_chat_cnt(alice2).await?, chat_cnt);
+    tcm.exec_securejoin_qr_multi_device(bob, &[alice1, alice2], &qr)
+        .await;
+    assert_eq!(get_chat_cnt(alice1).await?, chat_cnt + 1);
+    assert_eq!(get_chat_cnt(alice2).await?, chat_cnt);
+    Ok(())
+}
+
 /// Tests sending JPEG image with .png extension.
 ///
 /// This is a regression test, previously sending failed
