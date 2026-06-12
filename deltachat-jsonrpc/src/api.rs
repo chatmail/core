@@ -157,7 +157,7 @@ impl CommandApi {
     }
 }
 
-#[rpc(all_positional, ts_outdir = "typescript/generated")]
+#[rpc(all_positional, ts_outdir = "typescript/generated", qt_outdir = "qt/generated")]
 impl CommandApi {
     /// Test function.
     async fn sleep(&self, delay: f64) {
