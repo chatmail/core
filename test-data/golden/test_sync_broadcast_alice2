@@ -2,6 +2,6 @@ OutBroadcast#Chat#1001: Channel [0 member(s)]
 --------------------------------------------------------------------------------
 Msg#1002: info (Contact#Contact#Info): Messages are end-to-end encrypted. [NOTICED][INFO]
 Msg#1006🔒: Me (Contact#Contact#Self): Member bob@example.net added. [INFO] √
-Msg#1008🔒: Me (Contact#Contact#Self): hi  √
-Msg#1009🔒: Me (Contact#Contact#Self): You removed member bob@example.net. [INFO] √
+Msg#1009🔒: Me (Contact#Contact#Self): hi  √
+Msg#1010🔒: Me (Contact#Contact#Self): You removed member bob@example.net. [INFO] √
 --------------------------------------------------------------------------------
