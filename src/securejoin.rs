@@ -533,6 +533,18 @@ pub(crate) async fn handle_securejoin_handshake(
                 warn!(context, "Secure-join denied (bad auth).");
                 return Ok(HandshakeMessage::Ignore);
             }
+            if Contact::lookup_id_by_addr_ex(
+                context,
+                &mime_message.from.addr,
+                Origin::Unknown,
+                Some(Blocked::Yes),
+            )
+            .await?
+            .is_some()
+            {
+                warn!(context, "Ignoring {step} message: {contact_id} is blocked.");
+                return Ok(HandshakeMessage::Ignore);
+            }
 
             let rfc724_mid = create_outgoing_rfc724_mid();
             let addr = ContactAddress::new(&mime_message.from.addr)?;
@@ -639,6 +651,10 @@ pub(crate) async fn handle_securejoin_handshake(
             // Mark the contact as verified if auth code is less than VERIFICATION_TIMEOUT_SECONDS seconds old.
             if time() < timestamp + VERIFICATION_TIMEOUT_SECONDS {
                 mark_contact_id_as_verified(context, contact_id, Some(ContactId::SELF)).await?;
+            }
+            if sender_contact.blocked {
+                warn!(context, "Ignoring {step} message: {contact_id} is blocked.");
+                return Ok(HandshakeMessage::Ignore);
             }
             contact_id.regossip_keys(context).await?;
             // for setup-contact, make Alice's one-to-one chat with Bob visible
@@ -811,6 +827,12 @@ pub(crate) async fn observe_securejoin_on_other_device(
     }
 
     mark_contact_id_as_verified(context, contact_id, Some(ContactId::SELF)).await?;
+    if contact.blocked && step != SecureJoinStep::MemberAdded {
+        // Contact might be blocked after another device had issued the message. Still, to avoid
+        // membership inconsistency on devices, don't ignore "vg-member-added".
+        warn!(context, "Observing {step}: {contact_id} is blocked.");
+        return Ok(HandshakeMessage::Ignore);
+    }
 
     if matches!(
         step,
