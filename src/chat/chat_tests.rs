@@ -1372,11 +1372,23 @@ async fn test_markfresh_chat() -> Result<()> {
     assert_eq!(bob_chat_id.get_fresh_msg_cnt(bob).await?, 0);
     assert_eq!(bob.get_fresh_msgs().await?.len(), 0);
 
+    // Marking a message as seen results to sending an MDN to the contact and self.
+    message::markseen_msgs(bob, vec![bob_msg2.id]).await?;
+    smtp::queue_mdn(bob).await?;
+    let sent_mdn = bob.pop_sent_msg().await;
+
     // bob marks the chat as fresh again, fresh count is 1 again
     markfresh_chat(bob, bob_chat_id).await?;
     let bob_msg1 = Message::load_from_db(bob, bob_msg1.id).await?;
     let bob_msg2 = Message::load_from_db(bob, bob_msg2.id).await?;
     assert_ne!(bob_msg1.state, MessageState::InFresh);
+    assert_eq!(bob_msg2.state, MessageState::InFresh);
+    assert_eq!(bob_chat_id.get_fresh_msg_cnt(bob).await?, 1);
+    assert_eq!(bob.get_fresh_msgs().await?.len(), 1);
+
+    // The MDN appears on IMAP, but it shalln't affect the chat.
+    assert!(bob.recv_msg_opt(&sent_mdn).await.is_none());
+    let bob_msg2 = Message::load_from_db(bob, bob_msg2.id).await?;
     assert_eq!(bob_msg2.state, MessageState::InFresh);
     assert_eq!(bob_chat_id.get_fresh_msg_cnt(bob).await?, 1);
     assert_eq!(bob.get_fresh_msgs().await?.len(), 1);
