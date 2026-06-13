@@ -1,4 +1,6 @@
 //! Tests about receiving Pre-Messages and Post-Message
+use std::time::Duration;
+
 use anyhow::{Context as _, Result};
 use pretty_assertions::assert_eq;
 
@@ -8,16 +10,18 @@ use crate::chat::send_msg;
 use crate::config::Config;
 use crate::contact;
 use crate::download::{DownloadState, PRE_MSG_ATTACHMENT_SIZE_THRESHOLD, PostMsgMetadata};
-use crate::message::{Message, MessageState, Viewtype, delete_msgs, markseen_msgs};
+use crate::message::{self, Message, MessageState, Viewtype, delete_msgs, markseen_msgs};
 use crate::mimeparser::MimeMessage;
 use crate::param::Param;
 use crate::reaction::{get_msg_reactions, send_reaction};
 use crate::receive_imf::receive_imf;
+use crate::smtp;
 use crate::summary::assert_summary_texts;
 use crate::test_utils::TestContextManager;
 use crate::tests::pre_messages::util::{
     big_webxdc_app, send_large_file_message, send_large_image_message, send_large_webxdc_message,
 };
+use crate::tools::{SystemTime, time};
 use crate::webxdc::StatusUpdateSerial;
 
 /// Test that mimeparser can correctly detect and parse pre-messages and Post-Messages
@@ -258,6 +262,62 @@ async fn test_lost_pre_msg() -> Result<()> {
     let msg = bob.recv_msg(&full_msg).await;
     assert_eq!(msg.download_state, DownloadState::Done);
     assert_eq!(msg.text, "");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_pre_msg_mdn_before_sending_full() -> Result<()> {
+    pre_msg_mdn_before_sending_full("").await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_pre_msg_mdn_before_sending_full_with_text() -> Result<()> {
+    pre_msg_mdn_before_sending_full("text").await
+}
+
+async fn pre_msg_mdn_before_sending_full(text: &str) -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let alice_chat_id = alice.create_group_with_members("", &[bob]).await;
+
+    let file_bytes = include_bytes!("../../../test-data/image/screenshot.gif");
+    let mut msg = Message::new(Viewtype::Image);
+    msg.set_file_from_bytes(alice, "a.jpg", file_bytes, None)?;
+    msg.set_text(text.to_string());
+    chat::send_msg(alice, alice_chat_id, &mut msg).await?;
+    let pre_msg = alice.pop_sent_msg_ex(Default::default()).await.unwrap();
+    let alice_msg_id = msg.id;
+
+    let msg = bob.recv_msg(&pre_msg).await;
+    assert_eq!(msg.download_state, DownloadState::Available);
+    assert_eq!(msg.id.get_state(bob).await?, MessageState::InFresh);
+    assert_eq!(msg.text, text);
+    assert!(msg.param.get_bool(Param::WantsMdn).unwrap_or_default());
+    msg.chat_id.accept(bob).await?;
+    markseen_msgs(bob, vec![msg.id]).await?;
+    assert_eq!(msg.id.get_state(bob).await?, MessageState::InSeen);
+    assert_eq!(
+        bob.sql
+            .count(
+                "SELECT COUNT(*) FROM smtp_mdns WHERE from_id=?",
+                (msg.from_id,)
+            )
+            .await?,
+        1
+    );
+    smtp::queue_mdn(bob).await;
+    alice.recv_msg_trash(&bob.pop_sent_msg().await).await;
+    assert_eq!(
+        alice_msg_id.get_state(alice).await?,
+        MessageState::OutPending
+    );
+
+    let _full_msg = alice.pop_sent_msg().await;
+    assert_eq!(
+        alice_msg_id.get_state(alice).await?,
+        MessageState::OutMdnRcvd
+    );
     Ok(())
 }
 
@@ -728,7 +788,7 @@ async fn test_markseen_pre_msg() -> Result<()> {
     alice.create_chat(bob).await; // Make sure the chat is accepted.
 
     tcm.section("Bob sends a large message to Alice");
-    let (pre_message, post_message, _bob_msg_id) =
+    let (pre_message, post_message, bob_msg_id) =
         send_large_file_message(bob, bob_chat_id, Viewtype::File, &vec![0u8; 1_000_000]).await?;
 
     tcm.section("Alice receives a pre-message message from Bob");
@@ -743,10 +803,23 @@ async fn test_markseen_pre_msg() -> Result<()> {
     assert_eq!(
         alice
             .sql
-            .count("SELECT COUNT(*) FROM smtp_mdns", ())
+            .count(
+                "SELECT COUNT(*) FROM smtp_mdns WHERE from_id=?",
+                (msg.from_id,)
+            )
             .await?,
         1
     );
+    smtp::queue_mdn(alice).await;
+    SystemTime::shift(Duration::from_secs(3600));
+    bob.recv_msg_trash(&alice.pop_sent_msg().await).await;
+    let bob_msg = Message::load_from_db(bob, bob_msg_id).await?;
+    assert_eq!(bob_msg.get_state(), MessageState::OutMdnRcvd);
+    let read_receipts = message::get_msg_read_receipts(bob, bob_msg_id).await?;
+    assert_eq!(read_receipts.len(), 1);
+    let (contact_id, ts) = read_receipts[0];
+    assert_eq!(contact_id, bob.add_or_lookup_contact_id(alice).await);
+    assert!(ts + 3600 - 60 < time());
 
     tcm.section("Alice downloads message");
     alice.recv_msg_trash(&post_message).await;
