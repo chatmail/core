@@ -261,6 +261,12 @@ impl Sql {
         info!(context, "Opened database {:?}.", self.dbfile);
         *self.is_encrypted.write().await = Some(passphrase_nonempty);
 
+        // Some migrations want housekeeping to run. Also if housekeeping failed before, fixing the
+        // reason and restarting the program is the most natural way to retry it.
+        context
+            .set_config_internal(Config::LastHousekeeping, None)
+            .await?;
+
         // setup debug logging if there is an entry containing its id
         if let Some(xdc_id) = self
             .get_raw_config_u32(Config::DebugLogging.as_ref())
@@ -660,8 +666,16 @@ impl Sql {
         &self.config_cache
     }
 
-    /// Attempts to truncate the WAL file.
-    pub(crate) async fn wal_checkpoint(&self, context: &Context) -> Result<()> {
+    /// Runs a WAL checkpoint operation.
+    ///
+    /// * `force_truncate` - Force TRUNCATE mode to truncate the WAL file to 0 bytes, otherwise only
+    ///   run PASSIVE mode if the WAL isn't too large. NB: Truncating blocks all db connections for
+    ///   some time.
+    pub(crate) async fn wal_checkpoint(
+        &self,
+        context: &Context,
+        force_truncate: bool,
+    ) -> Result<()> {
         let lock = self.pool.read().await;
         let Some(pool) = lock.as_ref() else {
             // No db connections, nothing to checkpoint.
@@ -674,7 +688,7 @@ impl Sql {
             readers_blocked_duration,
             pages_total,
             pages_checkpointed,
-        } = pool.wal_checkpoint().await?;
+        } = pool.wal_checkpoint(force_truncate).await?;
         if pages_checkpointed < pages_total {
             warn!(
                 context,
@@ -705,6 +719,7 @@ fn new_connection(path: &Path, passphrase: &str) -> Result<Connection> {
          PRAGMA secure_delete=on;
          PRAGMA soft_heap_limit = 8388608; -- 8 MiB limit, same as set in Android SQLiteDatabase.
          PRAGMA foreign_keys=on;
+         PRAGMA wal_autocheckpoint=N;
          ",
     )?;
 
@@ -834,7 +849,8 @@ pub async fn housekeeping(context: &Context) -> Result<()> {
     // bigger than 200M) and also make sure we truncate the WAL periodically. Auto-checkponting does
     // not normally truncate the WAL (unless the `journal_size_limit` pragma is set), see
     // https://www.sqlite.org/wal.html.
-    if let Err(err) = Sql::wal_checkpoint(&context.sql, context).await {
+    let force_truncate = true;
+    if let Err(err) = Sql::wal_checkpoint(&context.sql, context, force_truncate).await {
         warn!(context, "wal_checkpoint() failed: {err:#}.");
         debug_assert!(false);
     }
