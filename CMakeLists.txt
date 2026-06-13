@@ -40,6 +40,28 @@ add_custom_target(
 	"${CMAKE_BINARY_DIR}/target/release/pkgconfig/deltachat.pc"
 )
 
+add_custom_command(
+    OUTPUT
+    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc/qt/generated/types.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc/qt/generated/client.hpp"
+    COMMAND ${CARGO} test -p deltachat-jsonrpc
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+add_custom_target(
+    rpc_headers
+    DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc/qt/generated/types.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc/qt/generated/client.hpp"
+)
+
+install(FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc/qt/generated/types.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc/qt/generated/client.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc/qt/transport.hpp"
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/deltachat-jsonrpc
+)
+
 install(FILES "deltachat-ffi/deltachat.h" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(FILES "${CMAKE_BINARY_DIR}/target/${ARCH_DIR}/release/libdeltachat.a" DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(FILES "${CMAKE_BINARY_DIR}/target/${ARCH_DIR}/release/libdeltachat.${DYNAMIC_EXT}" DESTINATION ${CMAKE_INSTALL_LIBDIR})

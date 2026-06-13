@@ -7507,8 +7507,7 @@ dependencies = [
 [[package]]
 name = "yerpc"
 version = "0.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1dc24983fbe850227bfc1de89bf8cbfb3e2463afc322e0de2f155c4c23d06445"
+source = "git+https://github.com/d2weber/yerpc.git?branch=qt_bindings#9805617aa38fcfcacf00c601c7a267cd5aa2c8a2"
 dependencies = [
  "anyhow",
  "async-channel 1.9.0",
@@ -7526,9 +7525,8 @@ dependencies = [
 
 [[package]]
 name = "yerpc_derive"
-version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d8560d021437420316370db865e44c000bf86380b47cf05e49be9d652042bf5"
+version = "0.6.4"
+source = "git+https://github.com/d2weber/yerpc.git?branch=qt_bindings#9805617aa38fcfcacf00c601c7a267cd5aa2c8a2"
 dependencies = [
  "convert_case",
  "darling",
