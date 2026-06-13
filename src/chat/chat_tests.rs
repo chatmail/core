@@ -1281,7 +1281,7 @@ async fn test_marknoticed_all_chats() -> Result<()> {
 
     tcm.section("bob: receive messages, accept all chats and send a reply to each messsage");
 
-    while let Some(sent_msg) = alice.pop_sent_msg_opt(Duration::default()).await {
+    while let Some(sent_msg) = alice.pop_sent_msg_opt().await {
         let bob_message = bob.recv_msg(&sent_msg).await;
         let bob_chat_id = bob_message.chat_id;
         bob_chat_id.accept(bob).await?;
@@ -1289,7 +1289,7 @@ async fn test_marknoticed_all_chats() -> Result<()> {
     }
 
     tcm.section("alice: receive replies from bob");
-    while let Some(sent_msg) = bob.pop_sent_msg_opt(Duration::default()).await {
+    while let Some(sent_msg) = bob.pop_sent_msg_opt().await {
         alice.recv_msg(&sent_msg).await;
     }
     // ensure chats have unread messages
@@ -2816,7 +2816,7 @@ async fn test_cant_remove_nonmember() -> Result<()> {
 
     let alice_charlie_id = alice.add_or_lookup_contact_id(charlie).await;
     remove_contact_from_chat(alice, alice_broadcast_id, alice_charlie_id).await?;
-    assert!(alice.pop_sent_msg_opt(Duration::ZERO).await.is_none());
+    assert!(alice.pop_sent_msg_opt().await.is_none());
     assert!(!remove_from_chat_contacts_table(alice, alice_broadcast_id, alice_charlie_id).await?);
     assert!(
         !remove_from_chat_contacts_table_without_trace(alice, alice_broadcast_id, alice_charlie_id)
@@ -3067,10 +3067,7 @@ async fn test_broadcast_resend_to_new_member() -> Result<()> {
     }
     for i in 0..N_MSGS_TO_NEW_BROADCAST_MEMBER {
         let rev_order = false;
-        let resent_msg = alice
-            .pop_sent_msg_ex(rev_order, Duration::ZERO)
-            .await
-            .unwrap();
+        let resent_msg = alice.pop_sent_msg_ex(rev_order).await.unwrap();
         let fiona_msg = fiona.recv_msg(&resent_msg).await;
         assert_eq!(fiona_msg.chat_id, fiona_bc_id);
         assert_eq!(fiona_msg.text, (i + 1).to_string());
@@ -3087,7 +3084,7 @@ async fn test_broadcast_resend_to_new_member() -> Result<()> {
         );
         bob.recv_msg_trash(&resent_msg).await;
     }
-    assert!(alice.pop_sent_msg_opt(Duration::ZERO).await.is_none());
+    assert!(alice.pop_sent_msg_opt().await.is_none());
     Ok(())
 }
 
@@ -3552,12 +3549,7 @@ async fn test_chat_description(
 
     tcm.section("Alice calls set_chat_description() without actually changing the description");
     set_chat_description(alice, alice_chat_id, "ä ẟ 😂").await?;
-    assert!(
-        alice
-            .pop_sent_msg_opt(Duration::from_secs(0))
-            .await
-            .is_none()
-    );
+    assert!(alice.pop_sent_msg_opt().await.is_none());
 
     Ok(())
 }
@@ -3582,12 +3574,7 @@ async fn test_setting_empty_chat_description() -> Result<()> {
     let _hi = alice.send_text(alice_chat_id, "hi").await;
 
     set_chat_description(alice, alice_chat_id, "").await?;
-    assert!(
-        alice
-            .pop_sent_msg_opt(Duration::from_secs(0))
-            .await
-            .is_none()
-    );
+    assert!(alice.pop_sent_msg_opt().await.is_none());
 
     Ok(())
 }
