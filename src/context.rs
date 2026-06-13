@@ -1033,6 +1033,10 @@ impl Context {
                 .await?
                 .to_string(),
         );
+        res.insert(
+            "autocrypt2",
+            self.get_config_bool(Config::Autocrypt2).await?.to_string(),
+        );
 
         let elapsed = time_elapsed(&self.creation_time);
         res.insert("uptime", duration_to_str(elapsed));

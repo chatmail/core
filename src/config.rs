@@ -477,6 +477,10 @@ pub enum Config {
     /// and incoming unencrypted messages are not fetched and not processed.
     #[strum(props(default = "1"))]
     ForceEncryption,
+
+    /// Generate Autocrypt 2 instead of Autocrypt 1 key.
+    #[strum(props(default = "1"))]
+    Autocrypt2,
 }
 
 impl Config {

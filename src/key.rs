@@ -17,10 +17,12 @@ use pgp::packet::{
     SubpacketData,
 };
 use pgp::ser::Serialize;
+use pgp::types::Timestamp as PgpTimestamp;
 use pgp::types::{CompressionAlgorithm, KeyDetails, KeyVersion};
 use rand_old::thread_rng;
 use tokio::runtime::Handle;
 
+use crate::config::Config;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::log::LogExt;
@@ -124,13 +126,11 @@ pub trait DcKey: Serialize + Deserializable + Clone {
 
 /// Converts secret key to public key.
 pub(crate) fn secret_key_to_public_key(
-    context: &Context,
     mut signed_secret_key: SignedSecretKey,
     timestamp: u32,
     addr: &str,
     relay_addrs: &str,
 ) -> Result<SignedPublicKey> {
-    info!(context, "Converting secret key to public key.");
     let timestamp = pgp::types::Timestamp::from_secs(timestamp);
 
     // Subpackets that we want to share between DKS and User ID signature.
@@ -149,7 +149,7 @@ pub(crate) fn secret_key_to_public_key(
         };
 
         Ok(vec![
-            Subpacket::regular(SubpacketData::SignatureCreationTime(timestamp))?,
+            Subpacket::critical(SubpacketData::SignatureCreationTime(timestamp))?,
             Subpacket::regular(SubpacketData::IssuerFingerprint(
                 signed_secret_key.fingerprint(),
             ))?,
@@ -298,7 +298,7 @@ pub(crate) async fn load_self_public_key_opt(context: &Context) -> Result<Option
     let addr = context.get_primary_self_addr().await?;
     let all_addrs = context.get_published_self_addrs().await?.join(",");
     let signed_public_key =
-        secret_key_to_public_key(context, signed_secret_key, timestamp, &addr, &all_addrs)?;
+        secret_key_to_public_key(signed_secret_key, timestamp, &addr, &all_addrs)?;
     *lock = Some(signed_public_key.clone());
 
     Ok(Some(signed_public_key))
@@ -463,9 +463,16 @@ async fn generate_keypair(context: &Context) -> Result<SignedSecretKey> {
         None => {
             let start = tools::Time::now();
             info!(context, "Generating keypair.");
-            let keypair = Handle::current()
-                .spawn_blocking(move || crate::pgp::create_keypair(addr))
-                .await??;
+            let keypair = if context.get_config_bool(Config::Autocrypt2).await? {
+                let now = PgpTimestamp::now();
+                Handle::current()
+                    .spawn_blocking(move || crate::pgp::autocrypt2::create_autocrypt2_keypair(now))
+                    .await??
+            } else {
+                Handle::current()
+                    .spawn_blocking(move || crate::pgp::create_keypair(addr))
+                    .await??
+            };
 
             store_self_keypair(context, &keypair).await?;
             info!(
