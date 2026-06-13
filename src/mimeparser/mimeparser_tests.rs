@@ -1,6 +1,5 @@
 use mailparse::ParsedMail;
 use std::mem;
-use std::time::Duration;
 
 use super::*;
 use crate::{
@@ -1435,7 +1434,7 @@ async fn test_intended_recipient_fingerprint() -> Result<()> {
     let chat_id = chat::create_group(t, "").await?;
 
     chat::send_text_msg(t, chat_id, "hi!".to_string()).await?;
-    assert!(t.pop_sent_msg_opt(Duration::ZERO).await.is_none());
+    assert!(t.pop_sent_msg_opt().await.is_none());
 
     for (i, member) in members.iter().enumerate() {
         let contact = t.add_or_lookup_contact(member).await;

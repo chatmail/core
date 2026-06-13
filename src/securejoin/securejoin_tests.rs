@@ -950,7 +950,7 @@ async fn test_parallel_setup_contact(bob_deletes_fiona_contact: bool) -> Result<
         Contact::delete(bob, bob_fiona_contact_id).await?;
 
         bob.recv_msg_trash(&sent_fiona_vc_auth_required).await;
-        let sent = bob.pop_sent_msg_opt(Duration::ZERO).await;
+        let sent = bob.pop_sent_msg_opt().await;
         assert!(sent.is_none());
     } else {
         bob.recv_msg_trash(&sent_fiona_vc_auth_required).await;
@@ -1235,7 +1235,7 @@ async fn test_rejoin_group() -> Result<()> {
     assert_eq!(progress, 1000);
 
     // Bob does not send any more messages by scanning the QR code.
-    assert!(bob.pop_sent_msg_opt(Duration::ZERO).await.is_none());
+    assert!(bob.pop_sent_msg_opt().await.is_none());
 
     Ok(())
 }

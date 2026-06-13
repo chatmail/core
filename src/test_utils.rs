@@ -8,7 +8,7 @@ use std::ops::{Deref, DerefMut};
 use std::panic;
 use std::path::Path;
 use std::sync::{Arc, LazyLock};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use anyhow::Result;
 use async_channel::{self as channel, Receiver, Sender};
@@ -283,10 +283,10 @@ impl TestContextManager {
         inviters: &[&TestContext],
         qr: &str,
     ) -> ChatId {
-        assert!(joiner.pop_sent_msg_opt(Duration::ZERO).await.is_none());
+        assert!(joiner.pop_sent_msg_opt().await.is_none());
         let inviter_addr = inviters[0].get_primary_self_addr().await.unwrap();
         for inviter in inviters {
-            assert!(inviter.pop_sent_msg_opt(Duration::ZERO).await.is_none());
+            assert!(inviter.pop_sent_msg_opt().await.is_none());
             assert_eq!(inviter.get_primary_self_addr().await.unwrap(), inviter_addr);
         }
 
@@ -295,14 +295,14 @@ impl TestContextManager {
         for _ in 0..2 {
             let mut something_sent = false;
             let rev_order = false;
-            if let Some(sent) = joiner.pop_sent_msg_ex(rev_order, Duration::ZERO).await {
+            if let Some(sent) = joiner.pop_sent_msg_ex(rev_order).await {
                 for inviter in inviters {
                     inviter.recv_msg_opt(&sent).await;
                 }
                 something_sent = true;
             }
             for inviter in inviters {
-                if let Some(sent) = inviter.pop_sent_msg_ex(rev_order, Duration::ZERO).await {
+                if let Some(sent) = inviter.pop_sent_msg_ex(rev_order).await {
                     if sent.recipients.split(' ').any(|addr| addr == inviter_addr) {
                         for observer in inviters {
                             // `imap::prefetch_should_download()` returns false on the sender side.
@@ -649,22 +649,17 @@ impl TestContext {
     ///
     /// Panics if there is no message or on any error.
     pub async fn pop_sent_msg(&self) -> SentMessage<'_> {
-        self.pop_sent_msg_opt(Duration::from_secs(3))
+        self.pop_sent_msg_opt()
             .await
             .expect("no sent message found in jobs table")
     }
 
-    pub async fn pop_sent_msg_opt(&self, timeout: Duration) -> Option<SentMessage<'_>> {
+    pub async fn pop_sent_msg_opt(&self) -> Option<SentMessage<'_>> {
         let rev_order = true;
-        self.pop_sent_msg_ex(rev_order, timeout).await
+        self.pop_sent_msg_ex(rev_order).await
     }
 
-    pub async fn pop_sent_msg_ex(
-        &self,
-        rev_order: bool,
-        timeout: Duration,
-    ) -> Option<SentMessage<'_>> {
-        let start = Instant::now();
+    pub async fn pop_sent_msg_ex(&self, rev_order: bool) -> Option<SentMessage<'_>> {
         let mut query = "
 SELECT id, msg_id, mime, recipients
 FROM smtp
@@ -673,28 +668,18 @@ ORDER BY id"
         if rev_order {
             query += " DESC";
         }
-        let (rowid, msg_id, payload, recipients) = loop {
-            let row = self
-                .ctx
-                .sql
-                .query_row_optional(&query, (), |row| {
-                    let rowid: i64 = row.get(0)?;
-                    let msg_id: MsgId = row.get(1)?;
-                    let mime: String = row.get(2)?;
-                    let recipients: String = row.get(3)?;
-                    Ok((rowid, msg_id, mime, recipients))
-                })
-                .await
-                .expect("query_row_optional failed");
-            if let Some(row) = row {
-                break row;
-            }
-            if start.elapsed() < timeout {
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            } else {
-                return None;
-            }
-        };
+        let (rowid, msg_id, payload, recipients) = self
+            .ctx
+            .sql
+            .query_row_optional(&query, (), |row| {
+                let rowid: i64 = row.get(0)?;
+                let msg_id: MsgId = row.get(1)?;
+                let mime: String = row.get(2)?;
+                let recipients: String = row.get(3)?;
+                Ok((rowid, msg_id, mime, recipients))
+            })
+            .await
+            .expect("query_row_optional failed")?;
         self.ctx
             .sql
             .execute("DELETE FROM smtp WHERE id=?;", (rowid,))

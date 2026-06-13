@@ -171,7 +171,7 @@ async fn test_ephemeral_unpromoted() -> Result<()> {
     chat_id
         .set_ephemeral_timer(&alice, Timer::Enabled { duration: 60 })
         .await?;
-    let sent = alice.pop_sent_msg_opt(Duration::from_secs(1)).await;
+    let sent = alice.pop_sent_msg_opt().await;
     assert!(sent.is_none());
     assert_eq!(
         chat_id.get_ephemeral_timer(&alice).await?,
@@ -181,13 +181,13 @@ async fn test_ephemeral_unpromoted() -> Result<()> {
     // Promote the group.
     send_text_msg(&alice, chat_id, "hi!".to_string()).await?;
     assert!(chat_id.is_promoted(&alice).await?);
-    let sent = alice.pop_sent_msg_opt(Duration::from_secs(1)).await;
+    let sent = alice.pop_sent_msg_opt().await;
     assert!(sent.is_some());
 
     chat_id
         .set_ephemeral_timer(&alice.ctx, Timer::Disabled)
         .await?;
-    let sent = alice.pop_sent_msg_opt(Duration::from_secs(1)).await;
+    let sent = alice.pop_sent_msg_opt().await;
     assert!(sent.is_some());
     assert_eq!(chat_id.get_ephemeral_timer(&alice).await?, Timer::Disabled);
 
