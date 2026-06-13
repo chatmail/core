@@ -2971,6 +2971,7 @@ async fn test_broadcast_change_name() -> Result<()> {
 
     {
         tcm.section("Alice changes the chat name");
+        SystemTime::shift(Duration::from_secs(1));
         set_chat_name(alice, broadcast_id, "My great broadcast").await?;
         let sent = alice.pop_sent_msg().await;
 
@@ -2989,6 +2990,7 @@ async fn test_broadcast_change_name() -> Result<()> {
 
     {
         tcm.section("Alice changes the chat name again, but the system message is lost somehow");
+        SystemTime::shift(Duration::from_secs(1));
         set_chat_name(alice, broadcast_id, "Broadcast channel").await?;
 
         let chat = Chat::load_from_db(alice, broadcast_id).await?;
@@ -3343,6 +3345,7 @@ async fn test_broadcasts_name_and_avatar() -> Result<()> {
     assert_eq!(bob_chat.get_profile_image(bob).await?, None);
 
     tcm.section("Change broadcast channel name, and check that receivers see it");
+    SystemTime::shift(Duration::from_secs(1));
     set_chat_name(alice, alice_chat_id, "New Channel name").await?;
     let sent = alice.pop_sent_msg().await;
     let rcvd = bob.recv_msg(&sent).await;
