@@ -6,13 +6,16 @@ use std::io::Cursor;
 
 use anyhow::{Context as _, Result, bail};
 use mailparse::ParsedMail;
+use pgp::composed::DecryptionOptions;
 use pgp::composed::Esk;
 use pgp::composed::Message;
 use pgp::composed::PlainSessionKey;
 use pgp::composed::SignedSecretKey;
+use pgp::composed::TheRing;
 use pgp::composed::decrypt_session_key_with_password;
 use pgp::packet::SymKeyEncryptedSessionKey;
 use pgp::types::Password;
+use pgp::types::Seipdv1ReadMode;
 use pgp::types::StringToKey;
 
 use crate::chat::ChatId;
@@ -61,8 +64,14 @@ pub(crate) async fn decrypt(
         expected_sender_fingerprint = fingerprint;
 
         tokio::task::spawn_blocking(move || -> Result<Message<'_>> {
-            let plain = msg
-                .decrypt_with_session_key(psk)
+            let ring = TheRing {
+                session_keys: vec![psk],
+                decrypt_options: DecryptionOptions::new()
+                    .set_seipdv1_read_mode(Seipdv1ReadMode::Streaming),
+                ..Default::default()
+            };
+            let (plain, _) = msg
+                .decrypt_the_ring(ring, true)
                 .context("decrypt_with_session_key")?;
 
             let plain: Message<'static> = plain.decompress()?;
