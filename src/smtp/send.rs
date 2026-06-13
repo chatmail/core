@@ -40,31 +40,28 @@ impl Smtp {
         }
 
         let message_len_bytes = message.len();
-        let recipients_display = recipients
-            .iter()
-            .map(|x| x.as_ref())
-            .collect::<Vec<&str>>()
-            .join(",");
 
         let envelope =
             Envelope::new(self.from.clone(), recipients.to_vec()).map_err(Error::Envelope)?;
         let mail = SendableEmail::new(envelope, message);
 
-        if let Some(ref mut transport) = self.transport {
-            transport.send(mail).await.map_err(Error::SmtpSend)?;
-
-            let info_msg =
-                format!("Message len={message_len_bytes} was SMTP-sent to {recipients_display}");
-            info!(context, "{info_msg}.");
-            context.emit_event(EventType::SmtpMessageSent(info_msg));
-            self.last_success = Some(tools::Time::now());
-        } else {
+        let Some(ref mut transport) = self.transport else {
             warn!(
                 context,
-                "uh? SMTP has no transport, failed to send to {}", recipients_display
+                "Failed to send a message because SMTP client has no SmtpTransport."
             );
             return Err(Error::NoTransport);
-        }
+        };
+
+        transport.send(mail).await.map_err(Error::SmtpSend)?;
+
+        let info_msg = format!(
+            "Message len={message_len_bytes} was SMTP-sent to {} recipients.",
+            recipients.len()
+        );
+        info!(context, "{info_msg}.");
+        context.emit_event(EventType::SmtpMessageSent(info_msg));
+        self.last_success = Some(tools::Time::now());
         Ok(())
     }
 }
