@@ -1,0 +1,13 @@
+[package]
+name = "deltachat-jsonrpc-bindings"
+version = "2.51.0"
+edition = "2024"
+
+[dependencies]
+
+[build-dependencies]
+deltachat-jsonrpc.workspace = true
+
+[features]
+default = ["vendored"]
+vendored = ["deltachat-jsonrpc/vendored"]

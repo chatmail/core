@@ -130,6 +130,7 @@ members = [
   "deltachat-ffi",
   "deltachat_derive",
   "deltachat-jsonrpc",
+  "deltachat-jsonrpc-bindings",
   "deltachat-rpc-server",
   "deltachat-ratelimit",
   "deltachat-repl",

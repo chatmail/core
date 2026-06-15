@@ -42,23 +42,23 @@ add_custom_target(
 
 add_custom_command(
     OUTPUT
-    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc/qt/generated/types.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc/qt/generated/client.hpp"
-    COMMAND ${CARGO} test -p deltachat-jsonrpc
+    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc-bindings/qt/generated/types.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc-bindings/qt/generated/client.hpp"
+    COMMAND ${CARGO} build -p deltachat-jsonrpc-bindings
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 add_custom_target(
     rpc_headers
     DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc/qt/generated/types.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc/qt/generated/client.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc-bindings/qt/generated/types.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc-bindings/qt/generated/client.hpp"
 )
 
 install(FILES
-    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc/qt/generated/types.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc/qt/generated/client.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc/qt/transport.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc-bindings/qt/generated/types.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc-bindings/qt/generated/client.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc-bindings/qt/transport.hpp"
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/deltachat-jsonrpc
 )
 

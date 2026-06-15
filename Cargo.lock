@@ -1445,6 +1445,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "deltachat-jsonrpc-bindings"
+version = "2.51.0"
+dependencies = [
+ "deltachat-jsonrpc",
+]
+
+[[package]]
 name = "deltachat-repl"
 version = "2.51.0"
 dependencies = [
