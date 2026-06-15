@@ -2,10 +2,17 @@
 arch: packageName:
 let
   crossTarget = arch2targets."${arch}";
-  pkgsCross = import nixpkgs {
-    system = system;
-    crossSystem.config = crossTarget;
-  };
+  pkgsCross =
+    if system == crossSystem then
+      import nixpkgs
+        {
+          inherit system;
+        };
+    else
+      import nixpkgs {
+        inherit system;
+        crossSystem.config = crossTarget;
+      };
   rustTarget = pkgsCross.stdenv.hostPlatform.rust.rustcTarget;
   toolchain = fenixPkgs.combine [
     fenixPkgs.stable.rustc
