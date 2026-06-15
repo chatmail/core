@@ -203,6 +203,17 @@ pub enum EventType {
         msg_id: u32,
     },
 
+    /// Like [`EventType::MsgRead`], but also fires on subsequent MDNs,
+    /// if there are multiple receivers, i.e. in groups and channels.
+    #[serde(rename_all = "camelCase")]
+    MsgReadCountChanged {
+        /// ID of the chat which the message belongs to.
+        chat_id: u32,
+
+        /// ID of the message that was read.
+        msg_id: u32,
+    },
+
     /// A single message was deleted.
     ///
     /// This event means that the message will no longer appear in the messagelist.
@@ -543,6 +554,10 @@ impl From<CoreEventType> for EventType {
                 msg_id: msg_id.to_u32(),
             },
             CoreEventType::MsgRead { chat_id, msg_id } => MsgRead {
+                chat_id: chat_id.to_u32(),
+                msg_id: msg_id.to_u32(),
+            },
+            CoreEventType::MsgReadCountChanged { chat_id, msg_id } => MsgReadCountChanged {
                 chat_id: chat_id.to_u32(),
                 msg_id: msg_id.to_u32(),
             },
