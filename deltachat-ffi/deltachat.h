@@ -6341,6 +6341,15 @@ void dc_event_unref(dc_event_t* event);
  */
 #define DC_EVENT_MSG_DELETED              2016
 
+/**
+ * Like @ref DC_EVENT_MSG_READ, but also fires on subsequent MDNs,
+ * if there are multiple receivers, i.e. in groups and channels.
+ *
+ * @param data1 (int) chat_id
+ * @param data2 (int) msg_id
+ */
+#define DC_EVENT_MSG_READ_COUNT_CHANGED   2018
+
 
 /**
  * Chat changed. The name or the image of a chat group was changed or members were added or removed.

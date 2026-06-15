@@ -2507,6 +2507,7 @@ async fn handle_mdn(
         // note(treefit): only matters if it is the last message in chat (but probably too expensive to check, debounce also solves it)
         chatlist_events::emit_chatlist_item_changed(context, chat_id);
     }
+    context.emit_event(EventType::MsgReadCountChanged { chat_id, msg_id });
     Ok(())
 }
 
