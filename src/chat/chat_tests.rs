@@ -3071,6 +3071,7 @@ async fn test_broadcast_resend_to_new_member() -> Result<()> {
         let fiona_msg = fiona.recv_msg(&resent_msg).await;
         assert_eq!(fiona_msg.chat_id, fiona_bc_id);
         assert_eq!(fiona_msg.text, (i + 1).to_string());
+        assert_eq!(fiona_msg.param.get_bool(Param::WantsMdn).unwrap(), true);
         assert!(resent_msg.recipients.contains("fiona@example.net"));
         assert!(!resent_msg.recipients.contains("bob@"));
         // The message is undecryptable for Bob, he mustn't be able to know yet that somebody joined
