@@ -49,6 +49,21 @@ use crate::{chat, provider};
 /// see <https://github.com/chatmail/core/issues/7608>
 pub(crate) const MAX_TRANSPORT_RELAYS: usize = 5;
 
+/// Hard-coded candidates for default relays.
+/// In the future, we want to use it during onboarding;
+/// note that before onboarding automatically on any of these,
+/// we need to ask the admins whether their relay is able to handle this.
+/// For now, this is just the first 6 relays from chatmail.at/relays.
+#[allow(unused)]
+const DEFAULT_RELAY_CANDIDATES: &[&str] = &[
+    "mehl.cloud",
+    "mailchat.pl",
+    "chatmail.woodpeckersnest.space",
+    "chatmail.culturanerd.it",
+    "tarpit.fun",
+    "d.gaufr.es",
+];
+
 macro_rules! progress {
     ($context:tt, $progress:expr, $comment:expr) => {
         assert!(
