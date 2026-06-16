@@ -18,11 +18,13 @@ else()
     set(ARCH_DIR "./")
 endif()
 
+set(CARGO_TARGET_DIR "${CMAKE_BINARY_DIR}/target/${ARCH_DIR}/release")
+
 add_custom_command(
 	OUTPUT
-	"${CMAKE_BINARY_DIR}/target/release/libdeltachat.a"
-	"${CMAKE_BINARY_DIR}/target/release/libdeltachat.${DYNAMIC_EXT}"
-	"${CMAKE_BINARY_DIR}/target/release/pkgconfig/deltachat.pc"
+	"${CARGO_TARGET_DIR}/libdeltachat.a"
+	"${CARGO_TARGET_DIR}/libdeltachat.${DYNAMIC_EXT}"
+	"${CARGO_TARGET_DIR}/pkgconfig/deltachat.pc"
         COMMAND
         PREFIX=${CMAKE_INSTALL_PREFIX}
         LIBDIR=${CMAKE_INSTALL_FULL_LIBDIR}
@@ -35,9 +37,9 @@ add_custom_target(
 	lib_deltachat
 	ALL
 	DEPENDS
-	"${CMAKE_BINARY_DIR}/target/release/libdeltachat.a"
-	"${CMAKE_BINARY_DIR}/target/release/libdeltachat.${DYNAMIC_EXT}"
-	"${CMAKE_BINARY_DIR}/target/release/pkgconfig/deltachat.pc"
+	"${CARGO_TARGET_DIR}/libdeltachat.a"
+	"${CARGO_TARGET_DIR}/libdeltachat.${DYNAMIC_EXT}"
+	"${CARGO_TARGET_DIR}/pkgconfig/deltachat.pc"
 )
 
 add_custom_command(
@@ -67,6 +69,6 @@ install(FILES
 )
 
 install(FILES "deltachat-ffi/deltachat.h" DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
-install(FILES "${CMAKE_BINARY_DIR}/target/${ARCH_DIR}/release/libdeltachat.a" DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(FILES "${CMAKE_BINARY_DIR}/target/${ARCH_DIR}/release/libdeltachat.${DYNAMIC_EXT}" DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(FILES "${CMAKE_BINARY_DIR}/target/${ARCH_DIR}/release/pkgconfig/deltachat.pc" DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
+install(FILES "${CARGO_TARGET_DIR}/libdeltachat.a" DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(FILES "${CARGO_TARGET_DIR}/libdeltachat.${DYNAMIC_EXT}" DESTINATION ${CMAKE_INSTALL_LIBDIR})
+install(FILES "${CARGO_TARGET_DIR}/pkgconfig/deltachat.pc" DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
