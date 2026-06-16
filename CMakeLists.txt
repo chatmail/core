@@ -44,8 +44,8 @@ add_custom_command(
     OUTPUT
     "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc-bindings/qt/generated/types.hpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc-bindings/qt/generated/client.hpp"
-    COMMAND ${CARGO} build -p deltachat-jsonrpc-bindings
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CARGO} build --target-dir=${CMAKE_BINARY_DIR}/target --release
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc-bindings
 )
 
 add_custom_target(
