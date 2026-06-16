@@ -221,7 +221,10 @@ impl MimeFactory {
         let mut member_fingerprints = Vec::new();
         let mut member_timestamps = Vec::new();
         let mut recipient_ids = HashSet::new();
-        let mut req_mdn = false;
+        let req_mdn = !chat.is_self_talk()
+            && !msg.is_system_message()
+            && msg.param.get_int(Param::Reaction).unwrap_or_default() == 0
+            && context.should_request_mdns().await?;
 
         let encryption_pubkeys;
 
@@ -476,13 +479,6 @@ impl MimeFactory {
                     "Scale up origin of {} recipients to {origin:?}.", chat.id
                 );
                 ContactId::scaleup_origin(context, &recipient_ids, origin).await?;
-            }
-
-            if !msg.is_system_message()
-                && msg.param.get_int(Param::Reaction).unwrap_or_default() == 0
-                && context.should_request_mdns().await?
-            {
-                req_mdn = true;
             }
 
             encryption_pubkeys = if !is_encrypted {
