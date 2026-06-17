@@ -21,7 +21,6 @@ use pgp::types::{
 };
 use rand_old::{Rng as _, thread_rng};
 use sha2::Sha256;
-use tokio::runtime::Handle;
 
 use crate::key::{DcKey, Fingerprint};
 
@@ -109,97 +108,95 @@ pub enum SeipdVersion {
 /// Encrypts `plain` text using `public_keys_for_encryption`
 /// and signs it using `private_key_for_signing`.
 #[expect(clippy::arithmetic_side_effects)]
-pub async fn pk_encrypt(
+pub fn pk_encrypt(
     plain: Vec<u8>,
     public_keys_for_encryption: Vec<SignedPublicKey>,
     private_key_for_signing: SignedSecretKey,
     compress: bool,
     seipd_version: SeipdVersion,
 ) -> Result<String> {
-    Handle::current()
-        .spawn_blocking(move || {
-            let mut rng = thread_rng();
+    tokio::task::block_in_place(|| {
+        let mut rng = thread_rng();
 
-            let pkeys = public_keys_for_encryption
-                .iter()
-                .filter_map(select_pk_for_encryption);
-            let subpkts = {
-                let mut hashed = Vec::with_capacity(1 + public_keys_for_encryption.len() + 1);
-                hashed.push(Subpacket::critical(SubpacketData::SignatureCreationTime(
-                    pgp::types::Timestamp::now(),
+        let pkeys = public_keys_for_encryption
+            .iter()
+            .filter_map(select_pk_for_encryption);
+        let subpkts = {
+            let mut hashed = Vec::with_capacity(1 + public_keys_for_encryption.len() + 1);
+            hashed.push(Subpacket::critical(SubpacketData::SignatureCreationTime(
+                pgp::types::Timestamp::now(),
+            ))?);
+            for key in &public_keys_for_encryption {
+                let data = SubpacketData::IntendedRecipientFingerprint(key.fingerprint());
+                let subpkt = match private_key_for_signing.version() < KeyVersion::V6 {
+                    true => Subpacket::regular(data)?,
+                    false => Subpacket::critical(data)?,
+                };
+                hashed.push(subpkt);
+            }
+            hashed.push(Subpacket::regular(SubpacketData::IssuerFingerprint(
+                private_key_for_signing.fingerprint(),
+            ))?);
+            let mut unhashed = vec![];
+            if private_key_for_signing.version() <= KeyVersion::V4 {
+                unhashed.push(Subpacket::regular(SubpacketData::IssuerKeyId(
+                    private_key_for_signing.legacy_key_id(),
                 ))?);
-                for key in &public_keys_for_encryption {
-                    let data = SubpacketData::IntendedRecipientFingerprint(key.fingerprint());
-                    let subpkt = match private_key_for_signing.version() < KeyVersion::V6 {
-                        true => Subpacket::regular(data)?,
-                        false => Subpacket::critical(data)?,
-                    };
-                    hashed.push(subpkt);
+            }
+            SubpacketConfig::UserDefined { hashed, unhashed }
+        };
+
+        let msg = MessageBuilder::from_bytes("", plain);
+        let encoded_msg = match seipd_version {
+            SeipdVersion::V1 => {
+                let mut msg = msg.seipd_v1(&mut rng, SYMMETRIC_KEY_ALGORITHM);
+
+                for pkey in pkeys {
+                    msg.encrypt_to_key_anonymous(&mut rng, &pkey)?;
                 }
-                hashed.push(Subpacket::regular(SubpacketData::IssuerFingerprint(
-                    private_key_for_signing.fingerprint(),
-                ))?);
-                let mut unhashed = vec![];
-                if private_key_for_signing.version() <= KeyVersion::V4 {
-                    unhashed.push(Subpacket::regular(SubpacketData::IssuerKeyId(
-                        private_key_for_signing.legacy_key_id(),
-                    ))?);
+
+                let hash_algorithm = private_key_for_signing.hash_alg();
+                msg.sign_with_subpackets(
+                    &*private_key_for_signing,
+                    Password::empty(),
+                    hash_algorithm,
+                    subpkts,
+                );
+                if compress {
+                    msg.compression(CompressionAlgorithm::ZLIB);
                 }
-                SubpacketConfig::UserDefined { hashed, unhashed }
-            };
 
-            let msg = MessageBuilder::from_bytes("", plain);
-            let encoded_msg = match seipd_version {
-                SeipdVersion::V1 => {
-                    let mut msg = msg.seipd_v1(&mut rng, SYMMETRIC_KEY_ALGORITHM);
+                msg.to_armored_string(&mut rng, Default::default())?
+            }
+            SeipdVersion::V2 => {
+                let mut msg = msg.seipd_v2(
+                    &mut rng,
+                    SYMMETRIC_KEY_ALGORITHM,
+                    AeadAlgorithm::Ocb,
+                    ChunkSize::C8KiB,
+                );
 
-                    for pkey in pkeys {
-                        msg.encrypt_to_key_anonymous(&mut rng, &pkey)?;
-                    }
-
-                    let hash_algorithm = private_key_for_signing.hash_alg();
-                    msg.sign_with_subpackets(
-                        &*private_key_for_signing,
-                        Password::empty(),
-                        hash_algorithm,
-                        subpkts,
-                    );
-                    if compress {
-                        msg.compression(CompressionAlgorithm::ZLIB);
-                    }
-
-                    msg.to_armored_string(&mut rng, Default::default())?
+                for pkey in pkeys {
+                    msg.encrypt_to_key_anonymous(&mut rng, &pkey)?;
                 }
-                SeipdVersion::V2 => {
-                    let mut msg = msg.seipd_v2(
-                        &mut rng,
-                        SYMMETRIC_KEY_ALGORITHM,
-                        AeadAlgorithm::Ocb,
-                        ChunkSize::C8KiB,
-                    );
 
-                    for pkey in pkeys {
-                        msg.encrypt_to_key_anonymous(&mut rng, &pkey)?;
-                    }
-
-                    let hash_algorithm = private_key_for_signing.hash_alg();
-                    msg.sign_with_subpackets(
-                        &*private_key_for_signing,
-                        Password::empty(),
-                        hash_algorithm,
-                        subpkts,
-                    );
-                    if compress {
-                        msg.compression(CompressionAlgorithm::ZLIB);
-                    }
-
-                    msg.to_armored_string(&mut rng, Default::default())?
+                let hash_algorithm = private_key_for_signing.hash_alg();
+                msg.sign_with_subpackets(
+                    &*private_key_for_signing,
+                    Password::empty(),
+                    hash_algorithm,
+                    subpkts,
+                );
+                if compress {
+                    msg.compression(CompressionAlgorithm::ZLIB);
                 }
-            };
 
-            Ok(encoded_msg)
-        })
-        .await?
+                msg.to_armored_string(&mut rng, Default::default())?
+            }
+        };
+
+        Ok(encoded_msg)
+    })
 }
 
 /// Returns fingerprints
@@ -485,7 +482,7 @@ mod tests {
         config::Config,
         decrypt,
         key::{load_self_public_key, self_fingerprint, store_self_keypair},
-        mimefactory::{render_outer_message, wrap_encrypted_part},
+        mimefactory::{part_to_bytes, wrap_encrypted_part},
         test_utils::{TestContext, TestContextManager, alice_keypair, bob_keypair},
         token,
     };
@@ -511,8 +508,8 @@ mod tests {
         store_self_keypair(t, secret_key).await?;
 
         let mime_message = wrap_encrypted_part(bytes.try_into().unwrap());
-        let rendered = render_outer_message(vec![], mime_message);
-        let parsed = mailparse::parse_mail(rendered.as_bytes())?;
+        let rendered = part_to_bytes(mime_message);
+        let parsed = mailparse::parse_mail(&rendered)?;
         let (decrypted, _fp) = decrypt::decrypt(t, &parsed).await?.unwrap();
         Ok(decrypted)
     }
@@ -585,7 +582,6 @@ mod tests {
                     compress,
                     SeipdVersion::V2,
                 )
-                .await
                 .unwrap()
             })
             .await
@@ -776,8 +772,7 @@ mod tests {
             KEYS.alice_secret.clone(),
             compress,
             SeipdVersion::V2,
-        )
-        .await?;
+        )?;
 
         // Trying to decrypt it should fail with an OK error message:
         let bob_private_keyring = crate::key::load_self_secret_keyring(bob).await?;
