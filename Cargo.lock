@@ -1448,6 +1448,7 @@ dependencies = [
 name = "deltachat-jsonrpc-bindings"
 version = "2.51.0"
 dependencies = [
+ "deltachat",
  "deltachat-jsonrpc",
 ]
 
