@@ -163,7 +163,9 @@ pub(crate) async fn download_msg(
         delete_from_available_post_msgs(context, &rfc724_mid).await?;
         return Ok(None);
     };
-    Box::pin(session.fetch_single_msg(context, &server_folder, server_uid, rfc724_mid)).await?;
+    session
+        .fetch_single_msg(context, &server_folder, server_uid, rfc724_mid)
+        .await?;
 
     let bcc_self = context.get_config_bool(Config::BccSelf).await?;
     if ephemeral::should_delete_all_downloaded_messages(bcc_self, session.is_chatmail()) {
@@ -204,7 +206,7 @@ impl Session {
         let (sender, receiver) = async_channel::unbounded();
         {
             let _fetch_msgs_lock_guard = context.fetch_msgs_mutex.lock().await;
-            self.fetch_many_msgs(context, folder, vec![uid], &uid_message_ids, sender)
+            Box::pin(self.fetch_many_msgs(context, folder, vec![uid], &uid_message_ids, sender))
                 .await?;
         }
         if receiver.recv().await.is_err() {
