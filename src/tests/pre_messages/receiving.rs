@@ -262,6 +262,61 @@ async fn test_lost_pre_msg() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_pre_msg_mdn_before_sending_full() -> Result<()> {
+    pre_msg_mdn_before_sending_full("").await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_pre_msg_mdn_before_sending_full_with_text() -> Result<()> {
+    pre_msg_mdn_before_sending_full("text").await
+}
+
+async fn pre_msg_mdn_before_sending_full(text: &str) -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let alice_chat_id = alice.create_group_with_members("", &[bob]).await;
+
+    let file_bytes = include_bytes!("../../../test-data/image/screenshot.gif");
+    let mut msg = Message::new(Viewtype::Image);
+    msg.set_file_from_bytes(alice, "a.jpg", file_bytes, None)?;
+    msg.set_text(text.to_string());
+    chat::send_msg(alice, alice_chat_id, &mut msg).await?;
+    let rev_order = false;
+    let pre_msg = alice.pop_sent_msg_ex(rev_order).await.unwrap();
+    let alice_msg_id = msg.id;
+
+    let msg = bob.recv_msg(&pre_msg).await;
+    assert_eq!(msg.download_state, DownloadState::Available);
+    assert_eq!(msg.id.get_state(bob).await?, MessageState::InFresh);
+    assert_eq!(msg.text, text);
+    assert!(msg.param.get_bool(Param::WantsMdn).unwrap_or_default());
+    msg.chat_id.accept(bob).await?;
+    markseen_msgs(bob, vec![msg.id]).await?;
+    assert_eq!(msg.id.get_state(bob).await?, MessageState::InSeen);
+    assert_eq!(
+        bob.sql
+            .count(
+                "SELECT COUNT(*) FROM smtp_mdns WHERE from_id=?",
+                (msg.from_id,)
+            )
+            .await?,
+        1
+    );
+    assert_eq!(
+        alice_msg_id.get_state(alice).await?,
+        MessageState::OutPending
+    );
+
+    let _full_msg = alice.pop_sent_msg().await;
+    assert_eq!(
+        alice_msg_id.get_state(alice).await?,
+        MessageState::OutDelivered
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_post_msg_bad_sender() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
@@ -743,7 +798,10 @@ async fn test_markseen_pre_msg() -> Result<()> {
     assert_eq!(
         alice
             .sql
-            .count("SELECT COUNT(*) FROM smtp_mdns", ())
+            .count(
+                "SELECT COUNT(*) FROM smtp_mdns WHERE from_id=?",
+                (msg.from_id,)
+            )
             .await?,
         1
     );
