@@ -10,4 +10,4 @@ deltachat-jsonrpc.workspace = true
 
 [features]
 default = ["vendored"]
-vendored = ["deltachat-jsonrpc/vendored"]
+vendored = ["deltachat/vendored", "deltachat-jsonrpc/vendored"]
