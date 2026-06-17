@@ -1030,16 +1030,12 @@ impl MimeFactory {
             is_securejoin_message,
         );
 
-        let use_std_header_protection = context
-            .get_config_bool(Config::StdHeaderProtectionComposing)
-            .await?;
         let outer_message = if let Some(encryption_pubkeys) = self.encryption_pubkeys {
             let mut message = add_headers_to_encrypted_part(
                 message,
                 &unprotected_headers,
                 hidden_headers,
                 protected_headers,
-                use_std_header_protection,
             );
 
             // Add gossip headers in chats with multiple recipients
@@ -1941,7 +1937,6 @@ fn add_headers_to_encrypted_part(
     unprotected_headers: &[(&'static str, HeaderType<'static>)],
     hidden_headers: Vec<(&'static str, HeaderType<'static>)>,
     protected_headers: Vec<(&'static str, HeaderType<'static>)>,
-    use_std_header_protection: bool,
 ) -> MimePart<'static> {
     // Store protected headers in the inner message.
     let message = protected_headers
@@ -1957,21 +1952,19 @@ fn add_headers_to_encrypted_part(
             message.header(header, value)
         });
 
-    if use_std_header_protection {
-        message = unprotected_headers
-            .iter()
-            // Structural headers shouldn't be added as "HP-Outer". They are defined in
-            // <https://www.rfc-editor.org/rfc/rfc9787.html#structural-header-fields>.
-            .filter(|(name, _)| {
-                !(name.eq_ignore_ascii_case("mime-version")
-                    || name.eq_ignore_ascii_case("content-type")
-                    || name.eq_ignore_ascii_case("content-transfer-encoding")
-                    || name.eq_ignore_ascii_case("content-disposition"))
-            })
-            .fold(message, |message, (name, value)| {
-                message.header(format!("HP-Outer: {name}"), value.clone())
-            });
-    }
+    message = unprotected_headers
+        .iter()
+        // Structural headers shouldn't be added as "HP-Outer". They are defined in
+        // <https://www.rfc-editor.org/rfc/rfc9787.html#structural-header-fields>.
+        .filter(|(name, _)| {
+            !(name.eq_ignore_ascii_case("mime-version")
+                || name.eq_ignore_ascii_case("content-type")
+                || name.eq_ignore_ascii_case("content-transfer-encoding")
+                || name.eq_ignore_ascii_case("content-disposition"))
+        })
+        .fold(message, |message, (name, value)| {
+            message.header(format!("HP-Outer: {name}"), value.clone())
+        });
 
     // Set the appropriate Content-Type for the inner message
     for (h, v) in &mut message.headers {
@@ -1980,9 +1973,7 @@ fn add_headers_to_encrypted_part(
         {
             let mut ct_new = ct.clone();
             ct_new = ct_new.attribute("protected-headers", "v1");
-            if use_std_header_protection {
-                ct_new = ct_new.attribute("hp", "cipher");
-            }
+            ct_new = ct_new.attribute("hp", "cipher");
             *ct = ct_new;
             break;
         }
@@ -2324,13 +2315,11 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
     );
 
     let outer_message = {
-        let use_std_header_protection = true;
         let message = add_headers_to_encrypted_part(
             message,
             &unprotected_headers,
             hidden_headers,
             protected_headers,
-            use_std_header_protection,
         );
 
         // Disable compression for SecureJoin to ensure
