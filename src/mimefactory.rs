@@ -142,7 +142,8 @@ pub struct MimeFactory {
     /// using `Chat-Disposition-Notification-To` header.
     req_mdn: bool,
 
-    last_added_location_id: Option<u32>,
+    /// Largest timestamp of the location sent in `location.kml` in this message.
+    last_added_location_timestamp: Option<i64>,
 
     /// If the created mime-structure contains sync-items,
     /// the IDs of these items are listed here.
@@ -165,7 +166,9 @@ pub struct MimeFactory {
 pub struct RenderedEmail {
     pub message: String,
     pub is_encrypted: bool,
-    pub last_added_location_id: Option<u32>,
+
+    /// Largest timestamp of the location sent in `location.kml` in this message.
+    pub last_added_location_timestamp: Option<i64>,
 
     /// A comma-separated string of sync-IDs that are used by the rendered email and must be deleted
     /// from `multi_device_sync` once the message is actually queued for sending.
@@ -555,7 +558,7 @@ impl MimeFactory {
             in_reply_to,
             references,
             req_mdn,
-            last_added_location_id: None,
+            last_added_location_timestamp: None,
             sync_ids_to_delete: None,
             attach_selfavatar,
             webxdc_topic,
@@ -606,7 +609,7 @@ impl MimeFactory {
             in_reply_to: String::default(),
             references: Vec::new(),
             req_mdn: false,
-            last_added_location_id: None,
+            last_added_location_timestamp: None,
             sync_ids_to_delete: None,
             attach_selfavatar: false,
             webxdc_topic: None,
@@ -1222,7 +1225,7 @@ impl MimeFactory {
         };
 
         let MimeFactory {
-            last_added_location_id,
+            last_added_location_timestamp,
             ..
         } = self;
 
@@ -1231,7 +1234,7 @@ impl MimeFactory {
         Ok(RenderedEmail {
             message,
             is_encrypted,
-            last_added_location_id,
+            last_added_location_timestamp,
             sync_ids_to_delete: self.sync_ids_to_delete,
             rfc724_mid,
             subject: subject_str,
@@ -1253,16 +1256,17 @@ impl MimeFactory {
         Some(part)
     }
 
-    /// Returns MIME part with a `location.kml` attachment.
+    /// Returns MIME part with a `location.kml` attachment
+    /// and the timestamp of the latest location timestamp.
     async fn get_location_kml_part(
-        &mut self,
+        &self,
         context: &Context,
-    ) -> Result<Option<MimePart<'static>>> {
+    ) -> Result<Option<(MimePart<'static>, i64)>> {
         let Loaded::Message { msg, .. } = &self.loaded else {
             return Ok(None);
         };
 
-        let Some((kml_content, last_added_location_id)) =
+        let Some((kml_content, last_added_location_timestamp)) =
             location::get_kml(context, msg.chat_id).await?
         else {
             return Ok(None);
@@ -1270,11 +1274,7 @@ impl MimeFactory {
 
         let part = MimePart::new("application/vnd.google-earth.kml+xml", kml_content)
             .attachment("location.kml");
-        if !msg.param.exists(Param::SetLatitude) {
-            // otherwise, the independent location is already filed
-            self.last_added_location_id = Some(last_added_location_id);
-        }
-        Ok(Some(part))
+        Ok(Some((part, last_added_location_timestamp)))
     }
 
     async fn render_message(
@@ -1774,9 +1774,10 @@ impl MimeFactory {
         }
 
         if location::is_sending_to_chat(context, msg.chat_id).await?
-            && let Some(part) = self.get_location_kml_part(context).await?
+            && let Some((part, timestamp)) = self.get_location_kml_part(context).await?
         {
             parts.push(part);
+            self.last_added_location_timestamp = Some(timestamp);
         }
 
         // we do not piggyback sync-files to other self-sent-messages

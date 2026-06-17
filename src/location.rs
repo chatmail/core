@@ -521,10 +521,9 @@ pub(crate) async fn delete_orphaned_poi(context: &Context) -> Result<()> {
     Ok(())
 }
 
-/// Returns `location.kml` contents.
-#[expect(clippy::arithmetic_side_effects)]
-pub async fn get_kml(context: &Context, chat_id: ChatId) -> Result<Option<(String, u32)>> {
-    let mut last_added_location_id = 0;
+/// Returns `location.kml` contents and the largest location timestamp, if any.
+pub async fn get_kml(context: &Context, chat_id: ChatId) -> Result<Option<(String, i64)>> {
+    let mut last_added_location_timestamp: Option<i64> = None;
 
     let self_addr = context.get_primary_self_addr().await?;
 
@@ -540,7 +539,6 @@ pub async fn get_kml(context: &Context, chat_id: ChatId) -> Result<Option<(Strin
         .await?;
 
     let now = time();
-    let mut location_count = 0;
     let mut ret = String::new();
     if locations_send_begin != 0 && now <= locations_send_until {
         ret += &format!(
@@ -551,10 +549,10 @@ pub async fn get_kml(context: &Context, chat_id: ChatId) -> Result<Option<(Strin
         context
             .sql
             .query_map(
-                "SELECT id, latitude, longitude, accuracy, timestamp \
+                "SELECT latitude, longitude, accuracy, timestamp \
              FROM locations  WHERE from_id=? \
              AND timestamp>=? \
-             AND (timestamp>=? OR \
+             AND (timestamp>? OR \
                   timestamp=(SELECT MAX(timestamp) FROM locations WHERE from_id=?)) \
              AND independent=0 \
              GROUP BY timestamp \
@@ -566,25 +564,24 @@ pub async fn get_kml(context: &Context, chat_id: ChatId) -> Result<Option<(Strin
                     ContactId::SELF
                 ),
                 |row| {
-                    let location_id: i32 = row.get(0)?;
-                    let latitude: f64 = row.get(1)?;
-                    let longitude: f64 = row.get(2)?;
-                    let accuracy: f64 = row.get(3)?;
-                    let timestamp = get_kml_timestamp(row.get(4)?);
+                    let latitude: f64 = row.get(0)?;
+                    let longitude: f64 = row.get(1)?;
+                    let accuracy: f64 = row.get(2)?;
+                    let timestamp: i64 = row.get(3)?;
 
-                    Ok((location_id, latitude, longitude, accuracy, timestamp))
+                    Ok((latitude, longitude, accuracy, timestamp))
                 },
                 |rows| {
                     for row in rows {
-                        let (location_id, latitude, longitude, accuracy, timestamp) = row?;
+                        let (latitude, longitude, accuracy, timestamp) = row?;
+                        let kml_timestamp = get_kml_timestamp(timestamp);
                         ret += &format!(
                             "<Placemark>\
-                <Timestamp><when>{timestamp}</when></Timestamp>\
+                <Timestamp><when>{kml_timestamp}</when></Timestamp>\
                 <Point><coordinates accuracy=\"{accuracy}\">{longitude},{latitude}</coordinates></Point>\
                 </Placemark>\n"
                         );
-                        location_count += 1;
-                        last_added_location_id = location_id as u32;
+                        last_added_location_timestamp = std::cmp::max(last_added_location_timestamp, Some(timestamp));
                     }
                     Ok(())
                 },
@@ -593,11 +590,7 @@ pub async fn get_kml(context: &Context, chat_id: ChatId) -> Result<Option<(Strin
         ret += "</Document>\n</kml>";
     }
 
-    if location_count > 0 {
-        Ok(Some((ret, last_added_location_id)))
-    } else {
-        Ok(None)
-    }
+    Ok(last_added_location_timestamp.map(|ts| (ret, ts)))
 }
 
 fn get_kml_timestamp(utc: i64) -> String {
