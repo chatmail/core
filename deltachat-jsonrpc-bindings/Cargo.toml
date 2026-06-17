@@ -6,7 +6,8 @@ edition = "2024"
 [dependencies]
 
 [build-dependencies]
-deltachat-jsonrpc.workspace = true
+deltachat = { workspace = true, default-features = false }
+deltachat-jsonrpc = { workspace = true }
 
 [features]
 default = ["vendored"]
