@@ -35,11 +35,13 @@ use crate::download::{
 use crate::ensure_and_debug_assert_eq;
 use crate::ephemeral::{Timer as EphemeralTimer, start_chat_ephemeral_timers};
 use crate::events::EventType;
+use crate::key;
 use crate::key::{Fingerprint, self_fingerprint};
 use crate::location;
 use crate::log::{LogExt, warn};
 use crate::logged_debug_assert;
 use crate::message::{self, Message, MessageState, MsgId, Viewtype};
+use crate::mimefactory;
 use crate::mimefactory::{MimeFactory, RenderedEmail};
 use crate::mimeparser::SystemMessage;
 use crate::param::{Param, Params};
@@ -2756,6 +2758,11 @@ async fn render_mime_message_and_pre_message(
     msg: &mut Message,
     mimefactory: MimeFactory,
 ) -> Result<(Option<RenderedEmail>, RenderedEmail)> {
+    let from_addr = context.get_primary_self_addr().await?;
+    let public_key = key::load_self_public_key(context).await?;
+    let secret_key = key::load_self_secret_key(context).await?;
+    let timestamp = msg.timestamp_sort;
+
     let needs_pre_message = msg.viewtype.has_file()
         && mimefactory.will_be_encrypted() // unencrypted is likely email, we don't want to spam by sending multiple messages
         && msg
@@ -2772,15 +2779,33 @@ async fn render_mime_message_and_pre_message(
 
         let mut mimefactory_post_msg = mimefactory.clone();
         mimefactory_post_msg.set_as_post_message();
-        let rendered_msg = Box::pin(mimefactory_post_msg.render(context))
+        let (queued_msg, side_effects) = Box::pin(mimefactory_post_msg.into_queued_mail(context))
             .await
             .context("Failed to render post-message")?;
 
+        let rendered_msg = mimefactory::render_queued_mail(
+            queued_msg,
+            &public_key,
+            &secret_key,
+            from_addr.clone(),
+            timestamp,
+            side_effects,
+        )?;
+
         let mut mimefactory_pre_msg = mimefactory;
         mimefactory_pre_msg.set_as_pre_message_for(&rendered_msg);
-        let rendered_pre_msg = Box::pin(mimefactory_pre_msg.render(context))
-            .await
-            .context("pre-message failed to render")?;
+        let (queued_pre_msg, pre_side_effects) =
+            Box::pin(mimefactory_pre_msg.into_queued_mail(context))
+                .await
+                .context("pre-message failed to render")?;
+        let rendered_pre_msg = mimefactory::render_queued_mail(
+            queued_pre_msg,
+            &public_key,
+            &secret_key,
+            from_addr,
+            timestamp,
+            pre_side_effects,
+        )?;
 
         if rendered_pre_msg.message.len() > PRE_MSG_SIZE_WARNING_THRESHOLD {
             warn!(
@@ -2793,7 +2818,17 @@ async fn render_mime_message_and_pre_message(
 
         Ok((Some(rendered_pre_msg), rendered_msg))
     } else {
-        Ok((None, Box::pin(mimefactory.render(context)).await?))
+        let (queued_msg, side_effects) = Box::pin(mimefactory.into_queued_mail(context)).await?;
+        let rendered_msg = mimefactory::render_queued_mail(
+            queued_msg,
+            &public_key,
+            &secret_key,
+            from_addr,
+            timestamp,
+            side_effects,
+        )?;
+
+        Ok((None, rendered_msg))
     }
 }
 
@@ -2838,7 +2873,6 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
             return Err(err);
         }
     };
-    let attach_selfavatar = mimefactory.attach_selfavatar;
     let mut recipients = mimefactory.recipients();
 
     let from = context.get_primary_self_addr().await?;
@@ -2925,14 +2959,22 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
 
     let now = time();
 
-    if let Some(last_added_location_timestamp) = rendered_msg.last_added_location_timestamp {
+    if let Some(last_added_location_timestamp) =
+        rendered_msg.side_effects.last_added_location_timestamp
+    {
         location::set_kml_sent_timestamp(context, msg.chat_id, last_added_location_timestamp)
             .await?;
     }
 
-    if attach_selfavatar && let Err(err) = msg.chat_id.set_selfavatar_timestamp(context, now).await
+    if rendered_msg.side_effects.avatar_is_attached
+        || rendered_pre_msg
+            .as_ref()
+            .is_some_and(|msg| msg.side_effects.avatar_is_attached)
     {
-        error!(context, "Failed to set selfavatar timestamp: {err:#}.");
+        msg.chat_id
+            .set_selfavatar_timestamp(context, now)
+            .await
+            .context("Failed to set selfavatar timestamp")?;
     }
 
     if rendered_msg.is_encrypted {
@@ -2940,7 +2982,7 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
     } else {
         msg.param.remove(Param::GuaranteeE2ee);
     }
-    msg.subject.clone_from(&rendered_msg.subject);
+    msg.subject.clone_from(&rendered_msg.side_effects.subject);
     // Sort the message to the bottom. Employ `msgs_index7` to compute `timestamp`.
     context
         .sql
@@ -2972,7 +3014,7 @@ WHERE id=?
     let trans_fn = |t: &mut rusqlite::Transaction| {
         let mut row_ids = Vec::<i64>::new();
 
-        if let Some(sync_ids) = rendered_msg.sync_ids_to_delete {
+        if let Some(sync_ids) = rendered_msg.side_effects.sync_ids_to_delete {
             t.execute(
                 &format!("DELETE FROM multi_device_sync WHERE id IN ({sync_ids})"),
                 (),
