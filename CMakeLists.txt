@@ -51,7 +51,7 @@ add_custom_command(
     LIBDIR=${CMAKE_INSTALL_FULL_LIBDIR}
     INCLUDEDIR=${CMAKE_INSTALL_FULL_INCLUDEDIR}
     # ${CARGO} build --target-dir=${CMAKE_BINARY_DIR}/target --release
-    sh -c "echo CARGO_BUILD_TARGET=\$CARGO_BUILD_TARGET && ${CARGO} build --target-dir=${CMAKE_BINARY_DIR}/target --release"
+    printenv
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc-bindings
 )
 
