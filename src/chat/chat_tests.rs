@@ -5166,6 +5166,52 @@ async fn test_blocked_bob_cant_create_11_chat_via_securejoin() -> Result<()> {
     Ok(())
 }
 
+/// Regression test:
+///
+/// Pinning a chat that didn't complete securejoin on one device
+/// should not cause a blank chat to be displayed on other device.
+/// Such chat should be marked as blocked until the first message is sent.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_sync_no_blank_chat() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice1 = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    for a in [alice1, alice2] {
+        a.set_config_bool(Config::SyncMsgs, true).await?;
+        a.set_config_bool(Config::BccSelf, true).await?;
+    }
+
+    let qr = get_securejoin_qr(bob, None).await?;
+
+    // Scan QR on alice1 and pin the resulting chat.
+    let chat_id = tcm.exec_securejoin_qr(alice1, bob, &qr).await;
+    chat_id
+        .set_visibility(&alice1.ctx, ChatVisibility::Pinned)
+        .await?;
+
+    // alice2 should receive a sync item about changing visibility of a chat it doesn't know about.
+    sync(alice1, alice2).await;
+
+    // Chat created on alice2 should be blocked (hidden)
+    let chat = Chat::load_from_db(&alice2.ctx, chat_id).await?;
+    assert_eq!(chat.blocked, Blocked::Yes);
+    assert_eq!(chat.get_name(), "");
+    assert_eq!(chat.visibility, ChatVisibility::Pinned);
+
+    // First message should unblock and fill missing data on other device.
+    let msg = alice1.send_text(chat_id, "meow").await;
+
+    alice2.recv_msg(&msg).await;
+    let chat = Chat::load_from_db(&alice2.ctx, chat_id).await?;
+    assert_eq!(chat.blocked, Blocked::Not);
+    assert_eq!(chat.get_name(), "bob@example.net");
+    assert_eq!(chat.visibility, ChatVisibility::Pinned);
+
+    Ok(())
+}
+
 /// Tests sending JPEG image with .png extension.
 ///
 /// This is a regression test, previously sending failed

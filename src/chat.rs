@@ -5230,9 +5230,11 @@ impl Context {
                     }
                     _ => (),
                 }
-                // Use `Request` so that even if the program crashes, the user doesn't have to look
-                // into the blocked contacts.
-                ChatIdBlocked::get_for_contact(self, contact_id, Blocked::Request)
+                // Newly created chat will be soon unblocked, `Blocked::Yes` here is just
+                // to hide it from chatlist, as at this point it is completely blank (no name etc.).
+                // Even if app crashes at this point, the chat will re-appear on e.g. any new
+                // message sent from other device.
+                ChatIdBlocked::get_for_contact(self, contact_id, Blocked::Yes)
                     .await?
                     .id
             }
@@ -5256,7 +5258,13 @@ impl Context {
                     }
                     _ => (),
                 }
-                ChatIdBlocked::get_for_contact(self, contact_id, Blocked::Request)
+                // Don't show a chat on other devices until securejoin completes.
+                // E.g. pinning a not-synced chat on device A shouldn't display it on device B yet.
+                //
+                // A pinned chat will appear on other devices only when the first
+                // message is sent from the device that read the invitation - which is the same
+                // behavior as with un-pinned chats.
+                ChatIdBlocked::get_for_contact(self, contact_id, Blocked::Yes)
                     .await?
                     .id
             }
