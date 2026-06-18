@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 project(deltachat LANGUAGES C)
 include(GNUInstallDirs)
 
-option(BUILD_JSONRPC_BINDINGS "Build jsonrpc bindings" OFF)
+option(WITH_JSONRPC_BINDINGS "Generate jsonrpc bindings" OFF)
 
 find_program(CARGO cargo)
 
@@ -44,7 +44,7 @@ install(FILES "${CARGO_OUT_DIR}/libdeltachat.${DYNAMIC_EXT}" DESTINATION "${CMAK
 install(FILES "${CARGO_OUT_DIR}/pkgconfig/deltachat.pc" DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
 
 
-if(BUILD_JSONRPC_BINDINGS)
+if(WITH_JSONRPC_BINDINGS)
   add_custom_target(
     jsonrpc_bindings
     ALL
