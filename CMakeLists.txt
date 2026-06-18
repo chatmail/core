@@ -30,24 +30,13 @@ set(CARGO_BUILD ${CMAKE_COMMAND}
 
 set(CARGO_OUT_DIR "${CMAKE_BINARY_DIR}/target/${ARCH_DIR}/release")
 
-add_custom_command(
-  OUTPUT
-    "${CARGO_OUT_DIR}/libdeltachat.a"
-    "${CARGO_OUT_DIR}/libdeltachat.${DYNAMIC_EXT}"
-    "${CARGO_OUT_DIR}/pkgconfig/deltachat.pc"
-  COMMAND
-    ${CARGO_BUILD}
-  WORKING_DIRECTORY
-    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-ffi"
-)
-
 add_custom_target(
-  lib_deltachat
+  deltachat_ffi
   ALL
-  DEPENDS
-    "${CARGO_OUT_DIR}/libdeltachat.a"
-    "${CARGO_OUT_DIR}/libdeltachat.${DYNAMIC_EXT}"
-    "${CARGO_OUT_DIR}/pkgconfig/deltachat.pc"
+  COMMAND
+    ${CARGO_BUILD} --package deltachat_ffi
+  WORKING_DIRECTORY
+    "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
 install(FILES "deltachat-ffi/deltachat.h" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
@@ -56,21 +45,12 @@ install(FILES "${CARGO_OUT_DIR}/libdeltachat.${DYNAMIC_EXT}" DESTINATION "${CMAK
 install(FILES "${CARGO_OUT_DIR}/pkgconfig/deltachat.pc" DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
 
 
-add_custom_command(
-  OUTPUT
-    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc-bindings/qt/generated/types.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc-bindings/qt/generated/client.hpp"
-  COMMAND
-    ${CARGO_BUILD}
-  WORKING_DIRECTORY
-    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc-bindings"
-)
-
 add_custom_target(
   deltachat_jsonrpc_bindings
-  DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc-bindings/qt/generated/types.hpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc-bindings/qt/generated/client.hpp"
+  COMMAND
+    ${CARGO_BUILD} --package deltachat-jsonrpc-bindings
+  WORKING_DIRECTORY
+    "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
 install(
