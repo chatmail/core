@@ -7450,7 +7450,7 @@ dependencies = [
 [[package]]
 name = "yerpc"
 version = "0.6.4"
-source = "git+https://github.com/d2weber/yerpc.git?branch=qt_bindings#6fa9bb1d9d71c76d4ce1fa02bc1c1a9b34d8c416"
+source = "git+https://github.com/d2weber/yerpc.git?branch=qt_bindings#9e4cfb963b1c113a0c0701ea29865a9099b45949"
 dependencies = [
  "anyhow",
  "async-channel 1.9.0",
@@ -7469,7 +7469,7 @@ dependencies = [
 [[package]]
 name = "yerpc_derive"
 version = "0.6.4"
-source = "git+https://github.com/d2weber/yerpc.git?branch=qt_bindings#6fa9bb1d9d71c76d4ce1fa02bc1c1a9b34d8c416"
+source = "git+https://github.com/d2weber/yerpc.git?branch=qt_bindings#9e4cfb963b1c113a0c0701ea29865a9099b45949"
 dependencies = [
  "convert_case",
  "darling",
