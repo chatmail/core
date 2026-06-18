@@ -8,6 +8,8 @@
 #include <mutex>
 #include <thread>
 
+namespace deltachat {
+
 class CffiTransport : public Transport {
 public:
     explicit CffiTransport(dc_accounts_t* accounts)
@@ -98,3 +100,5 @@ public:
   explicit CffiDeltaChat(dc_accounts_t* accounts)
     : RawClient(std::make_unique<CffiTransport>(accounts)) {}
 };
+
+}
