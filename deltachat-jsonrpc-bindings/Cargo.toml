@@ -1,14 +1,11 @@
 [package]
 name = "deltachat-jsonrpc-bindings"
 version = "2.51.0"
-edition = "2018"
-
-[dependencies]
+edition = "2024"
 
 [build-dependencies]
-deltachat = { workspace = true, default-features = false }
 deltachat-jsonrpc = { workspace = true }
 
 [features]
 default = ["vendored"]
-vendored = ["deltachat/vendored", "deltachat-jsonrpc/vendored"]
+vendored = ["deltachat-jsonrpc/vendored"]
