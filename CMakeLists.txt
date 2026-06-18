@@ -20,20 +20,20 @@ else()
   set(CARGO_OUT_DIR "${CMAKE_BINARY_DIR}/target/release")
 endif()
 
-set(CARGO_BUILD ${CMAKE_COMMAND}
-  -E env
-    CARGO_TARGET_DIR="${CMAKE_BINARY_DIR}/target"
-    PREFIX="${CMAKE_INSTALL_PREFIX}"
-    LIBDIR="${CMAKE_INSTALL_FULL_LIBDIR}"
-    INCLUDEDIR="${CMAKE_INSTALL_FULL_INCLUDEDIR}"
-  ${CARGO} build --release
-)
+if(WITH_JSONRPC_BINDINGS)
+  set(JSONRPC_ARGS --package deltachat-jsonrpc-bindings)
+endif()
 
 add_custom_target(
   lib_deltachat
   ALL
   COMMAND
-    ${CARGO_BUILD} --package deltachat_ffi
+    ${CMAKE_COMMAND} -E env
+    CARGO_TARGET_DIR="${CMAKE_BINARY_DIR}/target"
+    PREFIX="${CMAKE_INSTALL_PREFIX}"
+    LIBDIR="${CMAKE_INSTALL_FULL_LIBDIR}"
+    INCLUDEDIR="${CMAKE_INSTALL_FULL_INCLUDEDIR}"
+    ${CARGO} build --release --package deltachat_ffi ${JSONRPC_ARGS}
   WORKING_DIRECTORY
     "${CMAKE_CURRENT_SOURCE_DIR}"
 )
@@ -43,17 +43,7 @@ install(FILES "${CARGO_OUT_DIR}/libdeltachat.a" DESTINATION "${CMAKE_INSTALL_LIB
 install(FILES "${CARGO_OUT_DIR}/libdeltachat.${DYNAMIC_EXT}" DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 install(FILES "${CARGO_OUT_DIR}/pkgconfig/deltachat.pc" DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
 
-
 if(WITH_JSONRPC_BINDINGS)
-  add_custom_target(
-    jsonrpc_bindings
-    ALL
-    COMMAND
-      ${CARGO_BUILD} --package deltachat-jsonrpc-bindings
-    WORKING_DIRECTORY
-      "${CMAKE_CURRENT_SOURCE_DIR}"
-  )
-
   install(
     FILES
       "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc-bindings/qt/generated/types.hpp"
@@ -61,7 +51,5 @@ if(WITH_JSONRPC_BINDINGS)
       "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc-bindings/qt/transport.hpp"
     DESTINATION
       "${CMAKE_INSTALL_INCLUDEDIR}/deltachat-jsonrpc"
-    COMPONENT
-      jsonrpc_bindings
   )
 endif()
