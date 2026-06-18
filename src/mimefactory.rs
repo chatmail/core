@@ -164,7 +164,6 @@ pub struct MimeFactory {
 #[derive(Debug, Clone)]
 pub struct RenderedEmail {
     pub message: String,
-    // pub envelope: Envelope,
     pub is_encrypted: bool,
     pub last_added_location_id: Option<u32>,
 
@@ -1237,7 +1236,6 @@ impl MimeFactory {
 
         Ok(RenderedEmail {
             message,
-            // envelope: Envelope::new,
             is_encrypted,
             last_added_location_id,
             sync_ids_to_delete: self.sync_ids_to_delete,
