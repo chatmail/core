@@ -1769,11 +1769,14 @@ impl MimeFactory {
             }
         }
 
-        if let Some(msg_kml_part) = self.get_message_kml_part() {
+        if !matches!(self.pre_message_mode, PreMessageMode::Pre { .. })
+            && let Some(msg_kml_part) = self.get_message_kml_part()
+        {
             parts.push(msg_kml_part);
         }
 
-        if location::is_sending_to_chat(context, msg.chat_id).await?
+        if !matches!(self.pre_message_mode, PreMessageMode::Pre { .. })
+            && location::is_sending_to_chat(context, msg.chat_id).await?
             && let Some((part, timestamp)) = self.get_location_kml_part(context).await?
         {
             parts.push(part);
