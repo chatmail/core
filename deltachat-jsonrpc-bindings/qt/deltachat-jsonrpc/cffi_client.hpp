@@ -1,7 +1,7 @@
 #pragma once
 
-#include "deltachat-jsonrpc/types.hpp"
-#include "deltachat-jsonrpc/client.hpp"
+#include "deltachat-jsonrpc/generated/types.hpp"
+#include "deltachat-jsonrpc/generated/client.hpp"
 #include "deltachat.h"
 
 #include <QMutex>
@@ -93,4 +93,10 @@ private:
     std::atomic<uint32_t> next_id_{1};
     std::atomic<bool> done_{false};
     std::unordered_map<uint32_t, std::promise<Result<QJsonValue>>> pending_;
+};
+
+class CffiDeltaChat : public RawClient {
+public:
+  explicit CffiDeltaChat(dc_accounts_t* accounts)
+    : RawClient(std::make_unique<CffiTransport>(accounts)) {}
 };

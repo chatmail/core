@@ -44,12 +44,9 @@ install(FILES "${CARGO_OUT_DIR}/libdeltachat.${DYNAMIC_EXT}" DESTINATION "${CMAK
 install(FILES "${CARGO_OUT_DIR}/pkgconfig/deltachat.pc" DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
 
 if(WITH_JSONRPC_BINDINGS)
-  install(
-    FILES
-      "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc-bindings/qt/generated/types.hpp"
-      "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc-bindings/qt/generated/client.hpp"
-      "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc-bindings/qt/transport.hpp"
-    DESTINATION
-      "${CMAKE_INSTALL_INCLUDEDIR}/deltachat-jsonrpc"
-  )
+  set(JSONRPC_HPP "${CMAKE_CURRENT_SOURCE_DIR}/deltachat-jsonrpc-bindings/deltachat-jsonrpc qt")
+  install(FILES "${DC_JSONRPC_DIR}/generated/types.hpp" "${JSONRPC_HPP}/generated/client.hpp"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/deltachat-jsonrpc/generated")
+  install(FILES "${{JSONRPC_HPP}/cffi_client.hpp"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/deltachat-jsonrpc")
 endif()
