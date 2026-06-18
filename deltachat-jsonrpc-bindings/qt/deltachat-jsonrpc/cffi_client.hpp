@@ -4,11 +4,9 @@
 #include "deltachat-jsonrpc/generated/client.hpp"
 #include "deltachat.h"
 
-#include <QMutex>
-#include <QMutexLocker>
-
-#include <thread>
 #include <cstdint>
+#include <mutex>
+#include <thread>
 
 class CffiTransport : public Transport {
 public:
@@ -24,7 +22,7 @@ public:
         // Unblock dc_jsonrpc_next_response by sending a dummy request
         if (jsonrpc_) dc_jsonrpc_request(jsonrpc_, "{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"get_system_info\"}");
         if (thread_.joinable()) thread_.join();
-        QMutexLocker lk(&mu_);
+        std::lock_guard lk(mu_);
         for (auto& [id, prom] : pending_) {
             prom.set_value({{}, "Transport destructed", -32060});
         }
@@ -45,7 +43,7 @@ public:
         std::future<Result<QJsonValue>> fut = prom.get_future();
 
         {
-            QMutexLocker lk(&mu_);
+            std::lock_guard lk(mu_);
             pending_[id] = std::move(prom);
         }
 
@@ -74,7 +72,7 @@ private:
 
             std::promise<Result<QJsonValue>> prom;
             {
-                QMutexLocker lk(&mu_);
+                std::lock_guard<std::mutex> lk(mu_);
                 if (auto nh = pending_.extract(id)) {
                   prom = std::move(nh.mapped());
                 } else {
@@ -89,7 +87,7 @@ private:
 private:
     dc_jsonrpc_instance_t* jsonrpc_;
     std::thread thread_;
-    QMutex mu_;
+    std::mutex mu_;
     std::atomic<uint32_t> next_id_{1};
     std::atomic<bool> done_{false};
     std::unordered_map<uint32_t, std::promise<Result<QJsonValue>>> pending_;
