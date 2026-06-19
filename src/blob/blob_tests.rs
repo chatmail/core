@@ -4,7 +4,9 @@ use super::*;
 use crate::message::{Message, Viewtype};
 use crate::param::Param;
 use crate::sql;
-use crate::test_utils::{self, AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, TestContext};
+use crate::test_utils::{
+    self, AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, TestContext, TestContextManager,
+};
 use crate::tools::SystemTime;
 
 fn check_image_size(path: impl AsRef<Path>, width: u32, height: u32) -> image::DynamicImage {
@@ -151,11 +153,41 @@ async fn test_add_white_bg() {
                 .unwrap()
                 .decode()
                 .unwrap();
-            assert!(img.width() == img_wh);
-            assert!(img.height() == img_wh);
+            assert_eq!(img.width(), img_wh);
+            assert_eq!(img.height(), img_wh);
             assert_eq!(img.get_pixel(0, 0), Rgba(color));
         });
     }
+}
+
+/// A non-JPEG image mayn't be huge, but after removing Exif it may become huge if it can't be
+/// encoded to JPEG effectively and must be downscaled.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_downscale_after_removing_exif() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.unconfigured().await;
+    let bytes = include_bytes!("../../test-data/image/avatar900x900-q35.jpg").as_slice();
+
+    let avatar_src = t.dir.path().join("avatar.png");
+    fs::write(&avatar_src, bytes).await?;
+
+    let mut blob = BlobObject::create_and_deduplicate(t, &avatar_src, &avatar_src)?;
+    // TODO: Trying 1280 also makes sense, but currently such a test fails: the image still has 900
+    // px and is huge. It should be downscaled.
+    let img_wh = 640;
+    let viewtype = &mut Viewtype::Image;
+    let strict_limits = false;
+    blob.check_or_recode_to_size(t, None, viewtype, img_wh, 27_000, strict_limits)?;
+    tokio::task::block_in_place(move || {
+        let (_, exif) = image_metadata(&std::fs::File::open(blob.to_abs_path())?)?;
+        assert!(exif.is_none());
+        let img = ImageReader::open(blob.to_abs_path())?
+            .with_guessed_format()?
+            .decode()?;
+        assert_eq!(img.width(), img_wh);
+        assert_eq!(img.height(), img_wh);
+        Ok(())
+    })
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
