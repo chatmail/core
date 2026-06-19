@@ -48,10 +48,9 @@ async fn test_shared_secret_decryption_ex(
     let encrypted_msg = pgp::symm_encrypt_message(
         plain_text.as_bytes().to_vec(),
         signer_key,
-        secret_for_encryption,
+        secret_for_encryption.to_string(),
         true,
-    )
-    .await?;
+    )?;
 
     let boundary = "boundary123";
     let rcvd_mail = format!(

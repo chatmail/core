@@ -254,44 +254,41 @@ pub fn pk_validate(
 /// Symmetrically encrypt the message.
 /// This is used for broadcast channels and for version 2 of the Securejoin protocol.
 /// `shared secret` is the secret that will be used for symmetric encryption.
-pub async fn symm_encrypt_message(
+pub fn symm_encrypt_message(
     plain: Vec<u8>,
     private_key_for_signing: Option<SignedSecretKey>,
-    shared_secret: &str,
+    shared_secret: String,
     compress: bool,
 ) -> Result<String> {
-    let shared_secret = Password::from(shared_secret.to_string());
+    let shared_secret = Password::from(shared_secret);
 
-    tokio::task::spawn_blocking(move || {
-        let msg = MessageBuilder::from_bytes("", plain);
-        let mut rng = thread_rng();
-        let mut salt = [0u8; 8];
-        rng.fill(&mut salt[..]);
-        let s2k = StringToKey::Salted {
-            hash_alg: HashAlgorithm::default(),
-            salt,
-        };
-        let mut msg = msg.seipd_v2(
-            &mut rng,
-            SYMMETRIC_KEY_ALGORITHM,
-            AeadAlgorithm::Ocb,
-            ChunkSize::C8KiB,
-        );
-        msg.encrypt_with_password(&mut rng, s2k, &shared_secret)?;
+    let msg = MessageBuilder::from_bytes("", plain);
+    let mut rng = thread_rng();
+    let mut salt = [0u8; 8];
+    rng.fill(&mut salt[..]);
+    let s2k = StringToKey::Salted {
+        hash_alg: HashAlgorithm::default(),
+        salt,
+    };
+    let mut msg = msg.seipd_v2(
+        &mut rng,
+        SYMMETRIC_KEY_ALGORITHM,
+        AeadAlgorithm::Ocb,
+        ChunkSize::C8KiB,
+    );
+    msg.encrypt_with_password(&mut rng, s2k, &shared_secret)?;
 
-        if let Some(private_key_for_signing) = private_key_for_signing.as_deref() {
-            let hash_algorithm = private_key_for_signing.hash_alg();
-            msg.sign(private_key_for_signing, Password::empty(), hash_algorithm);
-        }
-        if compress {
-            msg.compression(CompressionAlgorithm::ZLIB);
-        }
+    if let Some(private_key_for_signing) = private_key_for_signing.as_deref() {
+        let hash_algorithm = private_key_for_signing.hash_alg();
+        msg.sign(private_key_for_signing, Password::empty(), hash_algorithm);
+    }
+    if compress {
+        msg.compression(CompressionAlgorithm::ZLIB);
+    }
 
-        let encoded_msg = msg.to_armored_string(&mut rng, Default::default())?;
+    let encoded_msg = msg.to_armored_string(&mut rng, Default::default())?;
 
-        Ok(encoded_msg)
-    })
-    .await?
+    Ok(encoded_msg)
 }
 
 /// Merges and minimizes OpenPGP certificates.
