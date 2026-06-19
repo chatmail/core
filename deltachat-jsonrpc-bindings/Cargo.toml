@@ -1,0 +1,16 @@
+[package]
+name = "deltachat-jsonrpc-bindings"
+version = "2.54.0-dev"
+description = "Autogenerate DeltaChat JSON-RPC API bindings at build time"
+edition = "2024"
+license = "MPL-2.0"
+repository = "https://github.com/chatmail/core"
+
+[build-dependencies]
+deltachat-jsonrpc = { workspace = true }
+
+[dependencies]
+
+[features]
+default = ["vendored"]
+vendored = ["deltachat-jsonrpc/vendored"]
