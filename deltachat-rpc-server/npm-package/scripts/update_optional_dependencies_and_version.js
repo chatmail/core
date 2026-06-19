@@ -56,7 +56,7 @@ for (const { folder_name, package_name } of platform_package_names) {
 
 if (is_local) {
   package_json.peerDependencies["@deltachat/jsonrpc-client"] =
-    `file:${join(expected_cwd, "/../../deltachat-jsonrpc/typescript")}`;
+    `file:${join(expected_cwd, "/../../deltachat-jsonrpc-bindings/typescript")}`;
 } else {
   package_json.peerDependencies["@deltachat/jsonrpc-client"] = "*";
 }
