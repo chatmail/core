@@ -83,12 +83,15 @@ impl EncryptHelper {
             None
         };
 
+        let shared_secret = shared_secret.to_string();
         let mut raw_message = Vec::new();
         let cursor = Cursor::new(&mut raw_message);
         mail_to_encrypt.clone().write_part(cursor).ok();
 
-        let ctext =
-            pgp::symm_encrypt_message(raw_message, sign_key, shared_secret, compress).await?;
+        let ctext = tokio::task::spawn_blocking(move || {
+            pgp::symm_encrypt_message(raw_message, sign_key, shared_secret, compress)
+        })
+        .await??;
 
         Ok(ctext)
     }
