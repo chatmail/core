@@ -129,6 +129,7 @@ members = [
   "deltachat-ffi",
   "deltachat_derive",
   "deltachat-jsonrpc",
+  "deltachat-jsonrpc-bindings",
   "deltachat-rpc-server",
   "deltachat-ratelimit",
   "deltachat-repl",
@@ -183,6 +184,7 @@ base64 = "0.22"
 chrono = { version = "0.4.44", default-features = false }
 deltachat-contact-tools = { path = "deltachat-contact-tools" }
 deltachat-jsonrpc = { path = "deltachat-jsonrpc", default-features = false }
+deltachat-jsonrpc-bindings = { path = "deltachat-jsonrpc-bindings", default-features = false }
 deltachat = { path = ".", default-features = false }
 futures = "0.3.32"
 futures-lite = "2.6.1"
@@ -202,7 +204,7 @@ thiserror = "2"
 tokio = "1"
 tokio-util = "0.7.18"
 tracing-subscriber = "0.3"
-yerpc = "0.6.4"
+yerpc = "0.7"
 
 [features]
 default = ["vendored"]

@@ -31,7 +31,7 @@ jobs:
           package-manager-cache: false  # never use caching in release builds
 
       - name: Install dependencies without running scripts
-        working-directory: deltachat-jsonrpc/typescript
+        working-directory: deltachat-jsonrpc-bindings/typescript
         run: npm install --ignore-scripts
 
       - name: Package
@@ -41,5 +41,5 @@ jobs:
           npm pack .
 
       - name: Publish
-        working-directory: deltachat-jsonrpc/typescript
+        working-directory: deltachat-jsonrpc-bindings/typescript
         run: npm publish --provenance deltachat-jsonrpc-client-* --access public

@@ -51,6 +51,7 @@
             ./deltachat-contact-tools
             ./deltachat-ffi
             ./deltachat-jsonrpc
+            ./deltachat-jsonrpc-bindings
             ./deltachat-ratelimit
             ./deltachat-repl
             ./deltachat-rpc-client

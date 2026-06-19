@@ -1455,6 +1455,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "deltachat-jsonrpc-bindings"
+version = "2.60.0-dev"
+dependencies = [
+ "deltachat-jsonrpc",
+]
+
+[[package]]
 name = "deltachat-repl"
 version = "2.60.0-dev"
 dependencies = [
@@ -7528,9 +7535,9 @@ dependencies = [
 
 [[package]]
 name = "yerpc"
-version = "0.6.4"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1dc24983fbe850227bfc1de89bf8cbfb3e2463afc322e0de2f155c4c23d06445"
+checksum = "6924db1f1011f1d22566c45c7090aa66c3107c3c463ca32beaa8b2327127040a"
 dependencies = [
  "anyhow",
  "async-channel 1.9.0",
@@ -7548,9 +7555,9 @@ dependencies = [
 
 [[package]]
 name = "yerpc_derive"
-version = "0.6.3"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d8560d021437420316370db865e44c000bf86380b47cf05e49be9d652042bf5"
+checksum = "42c374248c189b15a7f0660db3984e9dcc790ec15f4b44e932e92be49de829f9"
 dependencies = [
  "convert_case",
  "darling",
