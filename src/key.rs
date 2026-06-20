@@ -320,6 +320,17 @@ pub(crate) async fn load_self_public_key(context: &Context) -> Result<SignedPubl
     }
 }
 
+/// Ensures a private key exists for the configured user.
+///
+/// Normally the private key is generated when the first message is
+/// sent but in a few locations there are no such guarantees,
+/// e.g. when exporting keys, and calling this function ensures a
+/// private key will be present.
+pub async fn ensure_secret_key_exists(context: &Context) -> Result<()> {
+    load_self_public_key(context).await?;
+    Ok(())
+}
+
 /// Returns our own public keyring.
 ///
 /// No keys are generated and at most one key is returned.
@@ -897,5 +908,21 @@ i8pcjGO+IZffvyZJVRWfVooBJmWWbPB1pueo3tx8w3+fcuzpxz+RLFKaPyqXO+dD
             fp.human_readable(),
             "0102 0408 1020 4080 FF01\n0204 0810 2040 80FF 1314"
         );
+    }
+
+    mod ensure_secret_key_exists {
+        use super::*;
+
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        async fn test_prexisting() {
+            let t = TestContext::new_alice().await;
+            assert!(ensure_secret_key_exists(&t).await.is_ok());
+        }
+
+        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+        async fn test_not_configured() {
+            let t = TestContext::new().await;
+            assert!(ensure_secret_key_exists(&t).await.is_err());
+        }
     }
 }

@@ -232,9 +232,7 @@ impl TestContextManager {
 
         test_context.set_primary_self_addr(new_addr).await.unwrap();
         // ensure_secret_key_exists() is called during configure
-        crate::e2ee::ensure_secret_key_exists(test_context)
-            .await
-            .unwrap();
+        key::ensure_secret_key_exists(test_context).await.unwrap();
 
         assert_eq!(
             test_context.get_primary_self_addr().await.unwrap(),

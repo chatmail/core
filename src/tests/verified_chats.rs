@@ -6,7 +6,9 @@ use crate::chat::{self, Chat, add_contact_to_chat, remove_contact_from_chat, sen
 use crate::config::Config;
 use crate::constants::Chattype;
 use crate::contact::{Contact, ContactId};
+use crate::key;
 use crate::key::self_fingerprint;
+use crate::message;
 use crate::message::{Message, Viewtype};
 use crate::mimefactory::MimeFactory;
 use crate::mimeparser::SystemMessage;
@@ -18,7 +20,6 @@ use crate::test_utils::{
     E2EE_INFO_MSGS, TestContext, TestContextManager, get_chat_msg, mark_as_verified,
 };
 use crate::tools::SystemTime;
-use crate::{e2ee, message};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_verified_oneonone_chat_not_broken_by_classical() {
@@ -126,7 +127,7 @@ async fn test_create_verified_oneonone_chat() -> Result<()> {
 
     let fiona_new = tcm.unconfigured().await;
     fiona_new.configure_addr("fiona@example.net").await;
-    e2ee::ensure_secret_key_exists(&fiona_new).await?;
+    key::ensure_secret_key_exists(&fiona_new).await?;
 
     tcm.send_recv(&fiona_new, &alice, "I have a new device")
         .await;
@@ -428,7 +429,7 @@ async fn test_verify_then_verify_again() -> Result<()> {
     drop(bob);
     let bob_new = tcm.unconfigured().await;
     bob_new.configure_addr("bob@example.net").await;
-    e2ee::ensure_secret_key_exists(&bob_new).await?;
+    key::ensure_secret_key_exists(&bob_new).await?;
 
     tcm.execute_securejoin(&bob_new, &alice).await;
     assert_verified(&alice, &bob_new).await;

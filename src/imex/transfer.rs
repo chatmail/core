@@ -38,15 +38,16 @@ use tokio::fs;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
+use crate::EventType;
 use crate::chat::add_device_msg;
 use crate::context::Context;
 use crate::imex::BlobDirContents;
+use crate::key;
 use crate::log::warn;
 use crate::message::Message;
 use crate::qr::Qr;
 use crate::stock_str::backup_transfer_msg_body;
 use crate::tools::{TempPathGuard, create_id, time};
-use crate::{EventType, e2ee};
 
 use super::{DBFILE_BACKUP_NAME, export_backup_stream, export_database, import_backup_stream};
 
@@ -112,7 +113,7 @@ impl BackupProvider {
             .context("Context dir not found")?;
 
         // before we export, make sure the private key exists
-        e2ee::ensure_secret_key_exists(context)
+        key::ensure_secret_key_exists(context)
             .await
             .context("Cannot create private key or private key not available")?;
 

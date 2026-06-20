@@ -97,18 +97,6 @@ impl EncryptHelper {
     }
 }
 
-/// Ensures a private key exists for the configured user.
-///
-/// Normally the private key is generated when the first message is
-/// sent but in a few locations there are no such guarantees,
-/// e.g. when exporting keys, and calling this function ensures a
-/// private key will be present.
-// TODO, remove this once deltachat::key::Key no longer exists.
-pub async fn ensure_secret_key_exists(context: &Context) -> Result<()> {
-    load_self_public_key(context).await?;
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,23 +106,7 @@ mod tests {
     use crate::message::Message;
     use crate::mimeparser::SystemMessage;
     use crate::receive_imf::receive_imf;
-    use crate::test_utils::{TestContext, TestContextManager};
-
-    mod ensure_secret_key_exists {
-        use super::*;
-
-        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-        async fn test_prexisting() {
-            let t = TestContext::new_alice().await;
-            assert!(ensure_secret_key_exists(&t).await.is_ok());
-        }
-
-        #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-        async fn test_not_configured() {
-            let t = TestContext::new().await;
-            assert!(ensure_secret_key_exists(&t).await.is_err());
-        }
-    }
+    use crate::test_utils::TestContextManager;
 
     #[test]
     fn test_mailmime_parse() {

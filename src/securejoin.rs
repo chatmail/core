@@ -14,9 +14,9 @@ use crate::constants::{
 use crate::contact::mark_contact_id_as_verified;
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
-use crate::e2ee::ensure_secret_key_exists;
 use crate::events::EventType;
 use crate::headerdef::HeaderDef;
+use crate::key;
 use crate::key::{DcKey, Fingerprint, load_self_public_key, self_fingerprint};
 use crate::log::LogExt as _;
 use crate::log::warn;
@@ -92,7 +92,7 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
     ====   Step 1 in "Setup verified contact" protocol   ====
     =======================================================*/
 
-    ensure_secret_key_exists(context).await.ok();
+    key::ensure_secret_key_exists(context).await.ok();
 
     let chat = match chat {
         Some(id) => {
