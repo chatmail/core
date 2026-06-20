@@ -17,7 +17,6 @@ use crate::blob::BlobDirContents;
 use crate::chat::delete_and_reset_all_device_msgs;
 use crate::config::Config;
 use crate::context::Context;
-use crate::e2ee;
 use crate::events::EventType;
 use crate::key::{self, DcKey, SignedSecretKey};
 use crate::log::{LogExt, warn};
@@ -170,7 +169,7 @@ async fn imex_inner(
 
     if what == ImexMode::ExportBackup || what == ImexMode::ExportSelfKeys {
         // before we export anything, make sure the private key exists
-        e2ee::ensure_secret_key_exists(context)
+        key::ensure_secret_key_exists(context)
             .await
             .context("Cannot create private key or private key not available")?;
 
