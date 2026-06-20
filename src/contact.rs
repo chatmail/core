@@ -1026,7 +1026,9 @@ impl Contact {
                             || row_authname.is_empty());
 
                     row_id = id;
-                    if origin >= row_origin && addr != row_addr {
+                    let qr_with_fingerprint = !fingerprint.is_empty()
+                        && origin == Origin::UnhandledSecurejoinQrScan;
+                    if (origin >= row_origin || qr_with_fingerprint) && addr != row_addr {
                         update_addr = true;
                     }
                     if update_name || update_authname || update_addr || origin > row_origin {

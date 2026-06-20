@@ -271,9 +271,7 @@ impl MimeFactory {
 
             let public_key = SignedPublicKey::from_slice(&public_key_bytes)?;
 
-            let relays =
-                addresses_from_public_key(&public_key).unwrap_or_else(|| vec![addr.clone()]);
-            recipients.extend(relays);
+            recipients.extend(relay_addrs(&public_key, &addr));
             to.push((authname, addr.clone()));
 
             encryption_pubkeys = Some(vec![(addr, public_key)]);
@@ -353,7 +351,7 @@ impl MimeFactory {
                             };
                             if add_timestamp >= remove_timestamp {
                                 let relays = if let Some(public_key) = public_key_opt {
-                                    let addrs = addresses_from_public_key(&public_key);
+                                    let addrs = relay_addrs(&public_key, &addr);
                                     keys.push((addr.clone(), public_key));
                                     addrs
                                 } else if id != ContactId::SELF && !should_encrypt_symmetrically(&msg, &chat) {
@@ -361,10 +359,10 @@ impl MimeFactory {
                                     if is_encrypted {
                                         warn!(context, "Missing key for {addr}");
                                     }
-                                    None
+                                    vec![addr.clone()]
                                 } else {
-                                    None
-                                }.unwrap_or_else(|| vec![addr.clone()]);
+                                    vec![addr.clone()]
+                                };
 
                                 if !recipients_contain_addr(&to, &addr) {
                                     if id != ContactId::SELF {
@@ -393,7 +391,7 @@ impl MimeFactory {
                                     if let Some(email_to_remove) = email_to_remove
                                         && email_to_remove == addr {
                                             let relays = if let Some(public_key) = public_key_opt {
-                                                let addrs = addresses_from_public_key(&public_key);
+                                                let addrs = relay_addrs(&public_key, &addr);
                                                 keys.push((addr.clone(), public_key));
                                                 addrs
                                             } else if id != ContactId::SELF && !should_encrypt_symmetrically(&msg, &chat)  {
@@ -401,10 +399,10 @@ impl MimeFactory {
                                                 if is_encrypted {
                                                     warn!(context, "Missing key for {addr}");
                                                 }
-                                                None
+                                                vec![addr.clone()]
                                             } else {
-                                                None
-                                            }.unwrap_or_else(|| vec![addr.clone()]);
+                                                vec![addr.clone()]
+                                            };
 
                                             // This is a "member removed" message,
                                             // we need to notify removed member
@@ -2201,6 +2199,14 @@ async fn build_avatar_file(context: &Context, path: &str) -> Result<String> {
             res
         });
     Ok(encoded_body)
+}
+
+fn relay_addrs(public_key: &SignedPublicKey, addr: &str) -> Vec<String> {
+    let mut addrs = addresses_from_public_key(public_key).unwrap_or_default();
+    if !addrs.iter().any(|r| r == addr) {
+        addrs.push(addr.to_string());
+    }
+    addrs
 }
 
 fn recipients_contain_addr(recipients: &[(String, String)], addr: &str) -> bool {
