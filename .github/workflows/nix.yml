@@ -46,6 +46,8 @@ jobs:
           - deltachat-repl-armv6l-linux
           - deltachat-repl-armv7l-linux
           - deltachat-repl-i686-linux
+          - deltachat-repl-powerpc64le-linux
+          - deltachat-repl-riscv64-linux
           - deltachat-repl-win32
           - deltachat-repl-win64
           - deltachat-repl-x86_64-linux
@@ -63,6 +65,8 @@ jobs:
           - deltachat-rpc-server-armv7l-linux-wheel
           - deltachat-rpc-server-i686-linux
           - deltachat-rpc-server-i686-linux-wheel
+          - deltachat-rpc-server-powerpc64le-linux
+          - deltachat-rpc-server-riscv64-linux
           - deltachat-rpc-server-win32
           - deltachat-rpc-server-win32-wheel
           - deltachat-rpc-server-win64
