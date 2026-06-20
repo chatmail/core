@@ -64,7 +64,8 @@ pub enum Param {
     ForcePlaintext = b'u',
 
     /// For Messages: do not include Autocrypt header.
-    SkipAutocrypt = b'o',
+    /// Deprecated on 2026-06-20
+    DeprecatedSkipAutocrypt = b'o',
 
     /// For Messages
     WantsMdn = b'r',

@@ -618,9 +618,7 @@ impl MimeFactory {
 
     fn should_skip_autocrypt(&self) -> bool {
         match &self.loaded {
-            Loaded::Message { msg, .. } => {
-                msg.param.get_bool(Param::SkipAutocrypt).unwrap_or_default()
-            }
+            Loaded::Message { .. } => false,
             Loaded::Mdn { .. } => true,
         }
     }
