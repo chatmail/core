@@ -1117,7 +1117,7 @@ impl Session {
                 Err(err) => {
                     warn!(
                         context,
-                        "store_seen_flags_on_imap: Failed to select {folder}, will retry later: {err:#}."
+                        "store_seen_flags_on_imap: Transport {transport_id}: Failed to select {folder}, will retry later: {err:#}."
                     );
                     continue;
                 }
@@ -1128,13 +1128,13 @@ impl Session {
             } else if let Err(err) = self.add_flag_finalized_with_set(&uid_set, "\\Seen").await {
                 warn!(
                     context,
-                    "Cannot mark messages {uid_set} in {folder} as seen, will retry later: {err:#}."
+                    "Transport {transport_id}: Cannot mark messages {uid_set} in {folder} as seen, will retry later: {err:#}."
                 );
                 continue;
             } else {
                 info!(
                     context,
-                    "Marked messages {} in folder {} as seen.", uid_set, folder
+                    "Transport {transport_id}: Marked messages {uid_set} in folder {folder} as seen."
                 );
             }
             context
