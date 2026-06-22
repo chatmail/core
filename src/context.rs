@@ -566,6 +566,10 @@ impl Context {
         self.scheduler.maybe_network().await;
     }
 
+    /// Deprecated, we are trying to get rid of this global setting.
+    /// It is possible to configure a profile with both chatmail relays
+    /// and classical email servers.
+    ///
     /// Returns true if an account is on a chatmail server.
     pub async fn is_chatmail(&self) -> Result<bool> {
         self.get_config_bool(Config::IsChatmail).await

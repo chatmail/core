@@ -319,6 +319,12 @@ pub enum Config {
     /// True if account is configured.
     Configured,
 
+    /// Deprecated, we are trying to get rid of this global setting.
+    /// It is possible to configure a profile with both chatmail relays
+    /// and classical email servers.
+    ///
+    /// Most usages in UIs can be replaced by `force_encryption`.
+    ///
     /// True if account is a chatmail account.
     IsChatmail,
 
