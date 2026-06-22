@@ -111,7 +111,7 @@ impl Session {
     }
 
     // Returns true if IMAP server has `XCHATMAIL` capability.
-    pub fn is_chatmail(&self) -> bool {
+    pub(crate) fn is_chatmail(&self) -> bool {
         self.capabilities.is_chatmail
     }
 
