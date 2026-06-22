@@ -64,6 +64,7 @@ pub enum Qr {
 
         /// Whether the inviter supports the new Securejoin v3 protocol
         is_v3: bool,
+        addr: ContactAddress,
     },
 
     /// Ask the user whether to join the group.
@@ -88,6 +89,7 @@ pub enum Qr {
 
         /// Whether the inviter supports the new Securejoin v3 protocol
         is_v3: bool,
+        addr: ContactAddress,
     },
 
     /// Ask whether to join the broadcast channel.
@@ -115,6 +117,7 @@ pub enum Qr {
 
         /// Whether the inviter supports the new Securejoin v3 protocol
         is_v3: bool,
+        addr: ContactAddress,
     },
 
     /// Contact fingerprint is verified.
@@ -563,6 +566,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                     grpid,
                     contact_id,
                     fingerprint,
+                    addr,
                     invitenumber,
                     authcode,
                     is_v3,
@@ -599,6 +603,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                     grpid,
                     contact_id,
                     fingerprint,
+                    addr,
                     invitenumber,
                     authcode,
                     is_v3,
@@ -624,6 +629,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
             Ok(Qr::AskVerifyContact {
                 contact_id,
                 fingerprint,
+                addr,
                 invitenumber,
                 authcode,
                 is_v3,

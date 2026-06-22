@@ -1,19 +1,21 @@
 //! Bob's side of SecureJoin handling, the joiner-side.
 
 use anyhow::{Context as _, Result};
+use pgp::composed::SignedPublicKey;
 
 use super::HandshakeMessage;
 use super::qrinvite::QrInvite;
 use crate::chat::{self, ChatId, is_contact_in_chat};
 use crate::constants::{Blocked, Chattype};
-use crate::contact::{Contact, Origin};
+use crate::contact::Origin;
 use crate::context::Context;
 use crate::events::EventType;
-use crate::key::self_fingerprint;
+use crate::key::{DcKey as _, self_fingerprint};
 use crate::log::LogExt;
 use crate::message::{self, Message, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::{Param, Params};
+use crate::pgp::addresses_from_public_key;
 use crate::securejoin::{
     ContactId, encrypted_and_signed, insert_into_smtp, verify_sender_by_fingerprint,
 };
@@ -58,13 +60,20 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
         QrInvite::Broadcast { .. } => {}
     }
 
-    let has_key = context
+    let public_key_bytes: Option<Vec<_>> = context
         .sql
-        .exists(
-            "SELECT COUNT(*) FROM public_keys WHERE fingerprint=?",
+        .query_get_value(
+            "SELECT public_key FROM public_keys WHERE fingerprint=?",
             (invite.fingerprint().hex(),),
         )
         .await?;
+    let has_up_to_date_key = if let Some(public_key_bytes) = public_key_bytes {
+        let public_key = SignedPublicKey::from_slice(&public_key_bytes)?;
+        let addrs = addresses_from_public_key(&public_key);
+        addrs.is_some_and(|addrs| addrs.iter().any(|a| a == invite.addr()))
+    } else {
+        false
+    };
 
     // Now start the protocol and initialise the state.
     {
@@ -97,7 +106,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
                 progress: JoinerProgress::Succeeded.into_u16(),
             });
             return Ok(joining_chat_id);
-        } else if has_key
+        } else if has_up_to_date_key
             && verify_sender_by_fingerprint(context, invite.fingerprint(), invite.contact_id())
                 .await?
         {
@@ -154,7 +163,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
         QrInvite::Contact { .. } => {
             // For setup-contact the BobState already ensured the 1:1 chat exists because it is
             // used to send the handshake messages.
-            if !has_key {
+            if !has_up_to_date_key {
                 chat::add_info_msg_with_cmd(
                     context,
                     private_chat_id,
@@ -310,8 +319,7 @@ pub(crate) async fn send_handshake_message(
     if invite.is_v3() && matches!(step, BobHandshakeMsg::Request) {
         // Send a minimal symmetrically-encrypted vc-request-pubkey message
         let rfc724_mid = create_outgoing_rfc724_mid();
-        let contact = Contact::get_by_id(context, invite.contact_id()).await?;
-        let recipient = contact.get_addr();
+        let recipient = invite.addr();
         let alice_fp = invite.fingerprint().hex();
         let auth = invite.authcode();
         let shared_secret = format!("securejoin/{alice_fp}/{auth}");

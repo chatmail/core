@@ -236,6 +236,7 @@ impl From<Qr> for QrObject {
                 invitenumber,
                 authcode,
                 is_v3,
+                ..
             } => {
                 let contact_id = contact_id.to_u32();
                 let fingerprint = fingerprint.human_readable();
@@ -255,6 +256,7 @@ impl From<Qr> for QrObject {
                 invitenumber,
                 authcode,
                 is_v3,
+                ..
             } => {
                 let contact_id = contact_id.to_u32();
                 let fingerprint = fingerprint.human_readable();
@@ -276,6 +278,7 @@ impl From<Qr> for QrObject {
                 authcode,
                 invitenumber,
                 is_v3,
+                ..
             } => {
                 let contact_id = contact_id.to_u32();
                 let fingerprint = fingerprint.human_readable();

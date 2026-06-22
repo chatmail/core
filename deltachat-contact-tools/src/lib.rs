@@ -39,7 +39,7 @@ mod vcard;
 pub use vcard::{make_vcard, parse_vcard, VcardContact};
 
 /// Valid contact address.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContactAddress(String);
 
 impl Deref for ContactAddress {

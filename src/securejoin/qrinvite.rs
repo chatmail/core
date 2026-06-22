@@ -18,6 +18,7 @@ pub enum QrInvite {
     Contact {
         contact_id: ContactId,
         fingerprint: Fingerprint,
+        addr: String,
         invitenumber: String,
         authcode: String,
         #[serde(default)]
@@ -26,6 +27,7 @@ pub enum QrInvite {
     Group {
         contact_id: ContactId,
         fingerprint: Fingerprint,
+        addr: String,
         name: String,
         grpid: String,
         invitenumber: String,
@@ -36,6 +38,7 @@ pub enum QrInvite {
     Broadcast {
         contact_id: ContactId,
         fingerprint: Fingerprint,
+        addr: String,
         name: String,
         grpid: String,
         invitenumber: String,
@@ -92,6 +95,14 @@ impl QrInvite {
             QrInvite::Broadcast { is_v3, .. } => is_v3,
         }
     }
+
+    pub(crate) fn addr(&self) -> &str {
+        match self {
+            QrInvite::Contact { addr, .. } => addr,
+            QrInvite::Group { addr, .. } => addr,
+            QrInvite::Broadcast { addr, .. } => addr,
+        }
+    }
 }
 
 impl TryFrom<Qr> for QrInvite {
@@ -102,12 +113,14 @@ impl TryFrom<Qr> for QrInvite {
             Qr::AskVerifyContact {
                 contact_id,
                 fingerprint,
+                addr,
                 invitenumber,
                 authcode,
                 is_v3,
             } => Ok(QrInvite::Contact {
                 contact_id,
                 fingerprint,
+                addr: addr.to_string(),
                 invitenumber,
                 authcode,
                 is_v3,
@@ -117,12 +130,14 @@ impl TryFrom<Qr> for QrInvite {
                 grpid,
                 contact_id,
                 fingerprint,
+                addr,
                 invitenumber,
                 authcode,
                 is_v3,
             } => Ok(QrInvite::Group {
                 contact_id,
                 fingerprint,
+                addr: addr.to_string(),
                 name: grpname,
                 grpid,
                 invitenumber,
@@ -134,6 +149,7 @@ impl TryFrom<Qr> for QrInvite {
                 grpid,
                 contact_id,
                 fingerprint,
+                addr,
                 authcode,
                 invitenumber,
                 is_v3,
@@ -142,6 +158,7 @@ impl TryFrom<Qr> for QrInvite {
                 grpid,
                 contact_id,
                 fingerprint,
+                addr: addr.to_string(),
                 authcode,
                 invitenumber,
                 is_v3,
