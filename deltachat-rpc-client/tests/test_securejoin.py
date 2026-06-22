@@ -709,7 +709,7 @@ def test_withdraw_securejoin_qr(acfactory):
 def test_qr_scan_updates_new_relay_address(acfactory):
     alice, bob = acfactory.get_online_accounts(2)
 
-    bob.secure_join(alice.get_qr_code())
+    bob_alice_chat = bob.secure_join(alice.get_qr_code())
     alice.wait_for_securejoin_inviter_success()
     bob.wait_for_securejoin_joiner_success()
 
@@ -722,3 +722,7 @@ def test_qr_scan_updates_new_relay_address(acfactory):
     bob.secure_join(alice.get_qr_code())
     alice.wait_for_securejoin_inviter_success()
     bob.wait_for_securejoin_joiner_success()
+
+    bob_alice_chat.send_text("hi")
+    snapshot = alice.wait_for_incoming_msg().get_snapshot()
+    assert snapshot.text == "hi"
