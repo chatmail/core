@@ -56,6 +56,9 @@ pub enum Qr {
         /// Fingerprint of the contact key as scanned from the QR code.
         fingerprint: Fingerprint,
 
+        /// The inviter's address.
+        addr: ContactAddress,
+
         /// Invite number.
         invitenumber: String,
 
@@ -64,7 +67,6 @@ pub enum Qr {
 
         /// Whether the inviter supports the new Securejoin v3 protocol
         is_v3: bool,
-        addr: ContactAddress,
     },
 
     /// Ask the user whether to join the group.
@@ -81,6 +83,9 @@ pub enum Qr {
         /// Fingerprint of the contact key as scanned from the QR code.
         fingerprint: Fingerprint,
 
+        /// The inviter's address.
+        addr: ContactAddress,
+
         /// Invite number.
         invitenumber: String,
 
@@ -89,7 +94,6 @@ pub enum Qr {
 
         /// Whether the inviter supports the new Securejoin v3 protocol
         is_v3: bool,
-        addr: ContactAddress,
     },
 
     /// Ask whether to join the broadcast channel.
@@ -110,6 +114,9 @@ pub enum Qr {
         /// Fingerprint of the contact's key as scanned from the QR code.
         fingerprint: Fingerprint,
 
+        /// The inviter's address.
+        addr: ContactAddress,
+
         /// Invite number.
         invitenumber: String,
         /// Authentication code.
@@ -117,7 +124,6 @@ pub enum Qr {
 
         /// Whether the inviter supports the new Securejoin v3 protocol
         is_v3: bool,
-        addr: ContactAddress,
     },
 
     /// Contact fingerprint is verified.
