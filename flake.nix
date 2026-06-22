@@ -69,6 +69,8 @@
           "armv6l-linux" = "armv6l-unknown-linux-musleabihf";
           "aarch64-linux" = "aarch64-unknown-linux-musl";
           "i686-linux" = "i686-unknown-linux-musl";
+          "powerpc64le-linux" = "powerpc64le-unknown-linux-musl";
+          "riscv64-linux" = "riscv64-unknown-linux-musl";
           "x86_64-darwin" = "x86_64-darwin";
           "aarch64-darwin" = "aarch64-darwin";
         };
@@ -136,6 +138,8 @@
           mkRustPackages "x86_64-linux" //
           mkRustPackages "armv7l-linux" //
           mkRustPackages "armv6l-linux" //
+          mkRustPackages "powerpc64le-linux" //
+          mkRustPackages "riscv64-linux" //
           mkRustPackages "x86_64-darwin" //
           mkRustPackages "aarch64-darwin" //
           mkAndroidPackages "armeabi-v7a" //
