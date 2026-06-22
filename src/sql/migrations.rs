@@ -2434,6 +2434,28 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 154)?;
+    if dbversion < migration_version {
+        // Recreate imap_markseen with PRIMARY KEY and NOT NULL constraints.
+        // PRIMARY KEY is needed to turn
+        // "DELETE FROM imap_markseen_new WHERE id = ?"
+        // query from SCAN into SEARCH.
+        sql.execute_migration(
+            "
+            CREATE TABLE new_imap_markseen (
+                id INTEGER PRIMARY KEY NOT NULL,
+                FOREIGN KEY(id) REFERENCES imap(id) ON DELETE CASCADE
+            );
+            INSERT OR IGNORE INTO new_imap_markseen (id)
+            SELECT id FROM imap_markseen;
+            DROP TABLE imap_markseen;
+            ALTER TABLE new_imap_markseen RENAME TO imap_markseen;
+            ",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
