@@ -67,12 +67,12 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             (invite.fingerprint().hex(),),
         )
         .await?;
+
+    // The key is up to date iff it contains all the addresses from the QR code:
     let has_up_to_date_key = if let Some(public_key_bytes) = public_key_bytes {
         let public_key = SignedPublicKey::from_slice(&public_key_bytes)?;
-        let addrs_in_key = addresses_from_public_key(&public_key);
-        // The key is up to date if it contains all the addresses from the QR code:
-        addrs_in_key
-            .is_some_and(|addrs_in_key| invite.addrs().iter().all(|a| addrs_in_key.contains(a)))
+        let addrs_in_key = addresses_from_public_key(&public_key).unwrap_or_default();
+        invite.addrs().iter().all(|a| addrs_in_key.contains(a))
     } else {
         false
     };
