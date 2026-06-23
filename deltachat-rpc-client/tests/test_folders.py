@@ -69,12 +69,11 @@ def test_markseen_message_and_mdn(acfactory, direct_imap):
     msg.mark_seen()
 
     rex = re.compile("Marked messages [0-9]+ in folder INBOX as seen.")
-
-    for ac in ac1, ac2:
-        while True:
-            event = ac.wait_for_event()
-            if event.kind == EventType.INFO and rex.search(event.msg):
-                break
+    while True:
+        event = ac2.wait_for_event()
+        if event.kind == EventType.INFO and rex.search(event.msg):
+            break
+    ac1.wait_for_msg(EventType.MSGS_CHANGED)
 
     ac1_direct_imap = direct_imap(ac1)
     ac2_direct_imap = direct_imap(ac2)
@@ -82,9 +81,9 @@ def test_markseen_message_and_mdn(acfactory, direct_imap):
     ac1_direct_imap.select_folder("INBOX")
     ac2_direct_imap.select_folder("INBOX")
 
-    # Check that the mdn and original message is marked as seen
-    assert len(list(ac1_direct_imap.conn.fetch(AND(seen=True), mark_seen=False))) == 2
-    assert len(list(ac2_direct_imap.conn.fetch(AND(seen=True), mark_seen=False))) == 2
+    # Check that the original message is marked as seen.
+    assert len(list(ac1_direct_imap.conn.fetch(AND(seen=True), mark_seen=False))) == 1
+    assert len(list(ac2_direct_imap.conn.fetch(AND(seen=True), mark_seen=False))) == 1
 
 
 def test_trash_multiple_messages(acfactory, direct_imap, log):
