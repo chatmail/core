@@ -15,7 +15,7 @@ jobs:
       url: https://rs.delta.chat/
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.3
         with:
           show-progress: false
           persist-credentials: false
@@ -36,7 +36,7 @@ jobs:
       url: https://py.delta.chat/
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.3
         with:
           show-progress: false
           persist-credentials: false
@@ -58,7 +58,7 @@ jobs:
       url: https://c.delta.chat/
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.3
         with:
           show-progress: false
           persist-credentials: false
@@ -84,7 +84,7 @@ jobs:
         working-directory: ./deltachat-jsonrpc/typescript
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.3
         with:
           show-progress: false
           persist-credentials: false
@@ -113,7 +113,7 @@ jobs:
       url: https://cffi.delta.chat/
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6.0.3
         with:
           show-progress: false
           persist-credentials: false
