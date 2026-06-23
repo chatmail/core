@@ -56,8 +56,8 @@ pub enum Qr {
         /// Fingerprint of the contact key as scanned from the QR code.
         fingerprint: Fingerprint,
 
-        /// The inviter's address.
-        addr: ContactAddress,
+        /// The inviter's addresses.
+        addrs: Vec<String>,
 
         /// Invite number.
         invitenumber: String,
@@ -83,8 +83,8 @@ pub enum Qr {
         /// Fingerprint of the contact key as scanned from the QR code.
         fingerprint: Fingerprint,
 
-        /// The inviter's address.
-        addr: ContactAddress,
+        /// The inviter's addresses.
+        addrs: Vec<String>,
 
         /// Invite number.
         invitenumber: String,
@@ -114,8 +114,8 @@ pub enum Qr {
         /// Fingerprint of the contact's key as scanned from the QR code.
         fingerprint: Fingerprint,
 
-        /// The inviter's address.
-        addr: ContactAddress,
+        /// The inviter's addresses.
+        addrs: Vec<String>,
 
         /// Invite number.
         invitenumber: String,
@@ -572,7 +572,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                     grpid,
                     contact_id,
                     fingerprint,
-                    addr,
+                    addrs: vec![addr.to_string()],
                     invitenumber,
                     authcode,
                     is_v3,
@@ -609,7 +609,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                     grpid,
                     contact_id,
                     fingerprint,
-                    addr,
+                    addrs: vec![addr.to_string()],
                     invitenumber,
                     authcode,
                     is_v3,
@@ -635,7 +635,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
             Ok(Qr::AskVerifyContact {
                 contact_id,
                 fingerprint,
-                addr,
+                addrs: vec![addr.to_string()],
                 invitenumber,
                 authcode,
                 is_v3,

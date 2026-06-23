@@ -69,8 +69,10 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
         .await?;
     let has_up_to_date_key = if let Some(public_key_bytes) = public_key_bytes {
         let public_key = SignedPublicKey::from_slice(&public_key_bytes)?;
-        let addrs = addresses_from_public_key(&public_key);
-        addrs.is_some_and(|addrs| addrs.iter().any(|a| a == invite.addr()))
+        let addrs_in_key = addresses_from_public_key(&public_key);
+        // The key is up to date if it contains all the addresses from the QR code:
+        addrs_in_key
+            .is_some_and(|addrs_in_key| invite.addrs().iter().all(|a| addrs_in_key.contains(a)))
     } else {
         false
     };
@@ -319,7 +321,7 @@ pub(crate) async fn send_handshake_message(
     if invite.is_v3() && matches!(step, BobHandshakeMsg::Request) {
         // Send a minimal symmetrically-encrypted vc-request-pubkey message
         let rfc724_mid = create_outgoing_rfc724_mid();
-        let recipient = invite.addr();
+        let recipients = invite.addrs().join(" ");
         let alice_fp = invite.fingerprint().hex();
         let auth = invite.authcode();
         let shared_secret = format!("securejoin/{alice_fp}/{auth}");
@@ -335,7 +337,7 @@ pub(crate) async fn send_handshake_message(
         .await?;
 
         let msg_id = message::insert_tombstone(context, &rfc724_mid).await?;
-        insert_into_smtp(context, &rfc724_mid, recipient, rendered_message, msg_id).await?;
+        insert_into_smtp(context, &rfc724_mid, &recipients, rendered_message, msg_id).await?;
         context.scheduler.interrupt_smtp().await;
     } else {
         let mut msg = Message {
