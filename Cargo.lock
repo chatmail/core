@@ -1479,6 +1479,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "deltachat-jsonrpc-bindings"
+version = "2.51.0"
+dependencies = [
+ "deltachat-jsonrpc",
+]
+
+[[package]]
 name = "deltachat-repl"
 version = "2.54.0-dev"
 dependencies = [
@@ -7507,8 +7514,7 @@ dependencies = [
 [[package]]
 name = "yerpc"
 version = "0.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1dc24983fbe850227bfc1de89bf8cbfb3e2463afc322e0de2f155c4c23d06445"
+source = "git+https://github.com/d2weber/yerpc.git?branch=qt_bindings#9e4cfb963b1c113a0c0701ea29865a9099b45949"
 dependencies = [
  "anyhow",
  "async-channel 1.9.0",
@@ -7526,9 +7532,8 @@ dependencies = [
 
 [[package]]
 name = "yerpc_derive"
-version = "0.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d8560d021437420316370db865e44c000bf86380b47cf05e49be9d652042bf5"
+version = "0.6.4"
+source = "git+https://github.com/d2weber/yerpc.git?branch=qt_bindings#9e4cfb963b1c113a0c0701ea29865a9099b45949"
 dependencies = [
  "convert_case",
  "darling",
