@@ -83,6 +83,8 @@ skip = [
      { name = "rustix", version = "0.38.44" },
      { name = "rustls-webpki", version = "0.102.8" },
      { name = "serdect", version = "0.2.0" },
+     { name = "snafu-derive", version = "0.8.5" },
+     { name = "snafu", version = "0.8.5" },
      { name = "socket2", version = "0.5.9" },
      { name = "spin", version = "0.9.8" },
      { name = "strum_macros", version = "0.26.2" },
