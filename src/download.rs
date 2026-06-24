@@ -209,7 +209,7 @@ impl Session {
         let (sender, receiver) = async_channel::unbounded();
         {
             let _fetch_msgs_lock_guard = context.fetch_msgs_mutex.lock().await;
-            self.fetch_many_msgs(context, folder, vec![uid], &uid_message_ids, sender)
+            Box::pin(self.fetch_many_msgs(context, folder, vec![uid], &uid_message_ids, sender))
                 .await?;
         }
         if receiver.recv().await.is_err() {

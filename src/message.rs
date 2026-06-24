@@ -3,6 +3,7 @@
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::str;
+use std::sync::atomic::Ordering;
 
 use anyhow::{Context as _, Result, ensure, format_err};
 use deltachat_contact_tools::{VcardContact, parse_vcard};
@@ -32,10 +33,9 @@ use crate::param::{Param, Params};
 use crate::reaction::get_msg_reactions;
 use crate::summary::Summary;
 use crate::sync::SyncData;
-use crate::tools::create_outgoing_rfc724_mid;
 use crate::tools::{
-    get_filebytes, get_filemeta, gm2local_offset, read_file, sanitize_filename, time,
-    timestamp_to_str,
+    create_outgoing_rfc724_mid, get_filebytes, get_filemeta, gm2local_offset, read_file,
+    sanitize_filename, time, timestamp_to_str, truncate_msg_text,
 };
 
 /// Message ID, including reserved IDs.
@@ -441,7 +441,13 @@ pub struct Message {
     pub(crate) timestamp_rcvd: i64,
     pub(crate) ephemeral_timer: EphemeralTimer,
     pub(crate) ephemeral_timestamp: i64,
+
+    /// Message text, possibly truncated if the message is large.
     pub(crate) text: String,
+
+    /// Full text if the message text is truncated.
+    pub(crate) full_text: Option<String>,
+
     /// Text that is added to the end of Message.text
     ///
     /// Currently used for adding the download information on pre-messages
@@ -566,6 +572,7 @@ impl Message {
                         }
                         _ => String::new(),
                     };
+
                     let msg = Message {
                         id: row.get("id")?,
                         rfc724_mid: row.get::<_, String>("rfc724mid")?,
@@ -590,6 +597,7 @@ impl Message {
                         original_msg_id: row.get("original_msg_id")?,
                         mime_modified: row.get("mime_modified")?,
                         text,
+                        full_text: None,
                         additional_text: String::new(),
                         subject: row.get("subject")?,
                         param: row.get::<_, String>("param")?.parse().unwrap_or_default(),
@@ -607,6 +615,15 @@ impl Message {
             .with_context(|| format!("failed to load message {id} from the database"))?;
 
         if let Some(msg) = &mut msg {
+            if !msg.mime_modified {
+                let (truncated_text, was_truncated) =
+                    truncate_msg_text(context, msg.text.clone()).await?;
+                if was_truncated {
+                    msg.full_text = Some(msg.text.clone());
+                    msg.text = truncated_text;
+                }
+            }
+
             msg.additional_text =
                 Self::get_additional_text(context, msg.download_state, &msg.param)?;
         }
@@ -2340,6 +2357,23 @@ impl Viewtype {
             Viewtype::Vcard => true,
         }
     }
+}
+
+/// Opt out of truncating long messages.
+///
+/// After calling this function, long messages
+/// will not be truncated during loading.
+///
+/// UIs should call this function if they
+/// can handle long messages by cutting them
+/// and displaying "Show full message" option.
+///
+/// Has no effect for bots which never
+/// truncate messages when loading.
+pub fn dont_truncate_long_messages(context: &Context) {
+    context
+        .truncate_long_messages
+        .store(false, Ordering::Relaxed);
 }
 
 #[cfg(test)]
