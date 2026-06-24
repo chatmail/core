@@ -6,13 +6,16 @@ use std::io::Cursor;
 
 use anyhow::{Context as _, Result, bail};
 use mailparse::ParsedMail;
+use pgp::composed::DecryptionOptions;
 use pgp::composed::Esk;
 use pgp::composed::Message;
 use pgp::composed::PlainSessionKey;
 use pgp::composed::SignedSecretKey;
+use pgp::composed::TheRing;
 use pgp::composed::decrypt_session_key_with_password;
 use pgp::packet::SymKeyEncryptedSessionKey;
 use pgp::types::Password;
+use pgp::types::Seipdv1ReadMode;
 use pgp::types::StringToKey;
 
 use crate::chat::ChatId;
@@ -48,6 +51,15 @@ pub(crate) async fn decrypt(
     };
     let expected_sender_fingerprint: Option<String>;
 
+    let abort_early = true;
+
+    // Use streaming mode for SEIPDv1 decryption to save memory.
+    // This was the default in rPGP 0.19.0
+    // and requires explicitly changing the mode in rPGP 0.20.0.
+    // SEPIDv2 is decrypted in streaming mode in any case.
+    let decrypt_options =
+        DecryptionOptions::new().set_seipdv1_read_mode(Seipdv1ReadMode::Streaming);
+
     let plain = if let Message::Encrypted { esk, .. } = &*msg
         // We only allow one ESK for symmetrically encrypted messages
         // to avoid dealing with messages that are encrypted to multiple symmetric keys
@@ -61,9 +73,15 @@ pub(crate) async fn decrypt(
         expected_sender_fingerprint = fingerprint;
 
         tokio::task::spawn_blocking(move || -> Result<Message<'_>> {
-            let plain = msg
-                .decrypt_with_session_key(psk)
-                .context("decrypt_with_session_key")?;
+            let ring = TheRing {
+                session_keys: vec![psk],
+                decrypt_options,
+                ..Default::default()
+            };
+
+            let (plain, _ring_result) = msg
+                .decrypt_the_ring(ring, abort_early)
+                .context("decrypt_the_ring")?;
 
             let plain: Message<'static> = plain.decompress()?;
             Ok(plain)
@@ -75,11 +93,15 @@ pub(crate) async fn decrypt(
         expected_sender_fingerprint = None;
 
         tokio::task::spawn_blocking(move || -> Result<Message<'_>> {
-            let empty_pw = Password::empty();
             let secret_keys: Vec<&SignedSecretKey> = secret_keys.iter().collect();
-            let plain = msg
-                .decrypt_with_keys(vec![&empty_pw], secret_keys)
-                .context("decrypt_with_keys")?;
+            let ring = TheRing {
+                secret_keys,
+                decrypt_options,
+                ..Default::default()
+            };
+            let (plain, _ring_result) = msg
+                .decrypt_the_ring(ring, abort_early)
+                .context("decrypt_the_ring")?;
 
             let plain: Message<'static> = plain.decompress()?;
             Ok(plain)

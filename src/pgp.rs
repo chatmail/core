@@ -34,7 +34,7 @@ const SYMMETRIC_KEY_ALGORITHM: SymmetricKeyAlgorithm = SymmetricKeyAlgorithm::AE
 /// as [described in the Autocrypt standard](https://autocrypt.org/level1.html#openpgp-based-key-data).
 pub(crate) fn create_keypair(addr: EmailAddress) -> Result<SignedSecretKey> {
     let signing_key_type = PgpKeyType::Ed25519Legacy;
-    let encryption_key_type = PgpKeyType::ECDH(ECCCurve::Curve25519);
+    let encryption_key_type = PgpKeyType::ECDH(ECCCurve::Curve25519Legacy);
 
     let user_id = format!("<{addr}>");
     let key_params = SecretKeyParamsBuilder::default()
@@ -371,10 +371,7 @@ pub fn merge_openpgp_certificates(
         .into_iter()
         .chain(new_direct_signatures)
         .filter(|x: &Signature| x.verify_key(&old_primary_key).is_ok())
-        .max_by_key(|x: &Signature|
-            // Converting to seconds because `Ord` is not derived for `Timestamp`:
-            // <https://github.com/rpgp/rpgp/issues/737>
-            x.created().map_or(0, |ts| ts.as_secs()));
+        .max_by_key(|x: &Signature| x.created());
     let direct_signatures: Vec<Signature> = best_direct_key_signature.into_iter().collect();
 
     // Select at most one User ID.
@@ -396,12 +393,10 @@ pub fn merge_openpgp_certificates(
                         .verify_certification(&old_primary_key, pgp::types::Tag::UserId, &id)
                         .is_ok()
                 })
-                .max_by_key(|signature: &Signature| {
-                    signature.created().map_or(0, |ts| ts.as_secs())
-                });
+                .max_by_key(|signature: &Signature| signature.created());
             best_user_signature.map(|signature| (id, signature))
         })
-        .max_by_key(|(_id, signature)| signature.created().map_or(0, |ts| ts.as_secs()))
+        .max_by_key(|(_id, signature)| signature.created())
         .map(|(id, signature)| SignedUser {
             id,
             signatures: vec![signature],
@@ -707,7 +702,7 @@ mod tests {
 
         // This error message is actually not great,
         // but grepping for it will lead to the correct code
-        test_dont_decrypt_expensive_message_ex(s2k, true, Some("decrypt_with_keys: missing key"))
+        test_dont_decrypt_expensive_message_ex(s2k, true, Some("decrypt_the_ring: missing key"))
             .await
     }
 
@@ -790,7 +785,7 @@ mod tests {
             .await
             .unwrap_err();
 
-        assert_eq!(format!("{error:#}"), "decrypt_with_keys: missing key");
+        assert_eq!(format!("{error:#}"), "decrypt_the_ring: missing key");
 
         Ok(())
     }
