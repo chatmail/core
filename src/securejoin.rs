@@ -741,7 +741,7 @@ pub(crate) async fn handle_securejoin_handshake(
 async fn insert_into_smtp(
     context: &Context,
     rfc724_mid: &str,
-    recipient: &str,
+    recipients: &str,
     rendered_message: String,
     msg_id: MsgId,
 ) -> Result<(), Error> {
@@ -750,7 +750,7 @@ async fn insert_into_smtp(
         .execute(
             "INSERT INTO smtp (rfc724_mid, recipients, mime, msg_id)
             VALUES            (?1,         ?2,         ?3,   ?4)",
-            (&rfc724_mid, &recipient, &rendered_message, msg_id),
+            (&rfc724_mid, &recipients, &rendered_message, msg_id),
         )
         .await?;
     Ok(())

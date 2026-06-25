@@ -704,3 +704,25 @@ def test_withdraw_securejoin_qr(acfactory):
             and "Ignoring RequestWithAuth message because of invalid auth code." in event.msg
         ):
             break
+
+
+def test_qr_scan_updates_new_relay_address(acfactory):
+    alice, bob = acfactory.get_online_accounts(2)
+
+    bob_alice_chat = bob.secure_join(alice.get_qr_code())
+    alice.wait_for_securejoin_inviter_success()
+    bob.wait_for_securejoin_joiner_success()
+
+    for ac in [alice, bob]:
+        old_addr = ac.get_config("configured_addr")
+        ac.add_transport_from_qr(acfactory.get_account_qr())
+        ac.set_config("configured_addr", ac.list_transports()[1]["addr"])
+        ac.delete_transport(old_addr)
+
+    bob.secure_join(alice.get_qr_code())
+    alice.wait_for_securejoin_inviter_success()
+    bob.wait_for_securejoin_joiner_success()
+
+    bob_alice_chat.send_text("hi")
+    snapshot = alice.wait_for_incoming_msg().get_snapshot()
+    assert snapshot.text == "hi"
