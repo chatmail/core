@@ -70,8 +70,14 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
 
     let key_contains_all_invite_addrs = if let Some(public_key_bytes) = public_key_bytes {
         let public_key = SignedPublicKey::from_slice(&public_key_bytes)?;
-        let addrs_in_key = addresses_from_public_key(&public_key).unwrap_or_default();
-        invite.addrs().iter().all(|a| addrs_in_key.contains(a))
+        if let Some(addrs_in_key) = addresses_from_public_key(&public_key) {
+            invite.addrs().iter().all(|a| addrs_in_key.contains(a))
+        } else {
+            // This can happen if the inviter is using an old version of Delta Chat
+            // that doesn't put the relay list into the key.
+            // In this case, we never take the securejoin protocol shortcut, which is fine.
+            false
+        }
     } else {
         false
     };
