@@ -60,7 +60,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
         QrInvite::Broadcast { .. } => {}
     }
 
-    let public_key_bytes: Option<Vec<_>> = context
+    let public_key_bytes: Option<Vec<u8>> = context
         .sql
         .query_get_value(
             "SELECT public_key FROM public_keys WHERE fingerprint=?",
