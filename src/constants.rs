@@ -192,7 +192,7 @@ pub(crate) const WORSE_AVATAR_SIZE: u32 = 256;
 pub(crate) const WORSE_AVATAR_BYTES: usize = 20_000; // this also fits to Outlook servers don't allowing headers larger than 32k.
 
 // max. width/height of images scaled down because of being too huge
-pub const BALANCED_IMAGE_SIZE: u32 = 1280;
+pub const BALANCED_IMAGE_SIZE: u32 = 1312;
 pub const WORSE_IMAGE_SIZE: u32 = 640;
 
 /// Limit for received images size. Bigger images become `Viewtype::File` to avoid excessive memory

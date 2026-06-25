@@ -517,8 +517,8 @@ async fn test_recode_image_huge_jpg() {
         has_exif: true,
         original_width: 1920,
         original_height: 1080,
-        compressed_width: 1704,
-        compressed_height: 959,
+        compressed_width: 1744,
+        compressed_height: 981,
         ..Default::default()
     }
     .test()
