@@ -2627,6 +2627,8 @@ dc_lot_t*       dc_check_qr                  (dc_context_t* context, const char*
  * so that the QR code is useful also without Delta Chat being installed
  * or can be passed to contacts through other channels.
  *
+ * To reset invitations, pass the link to dc_set_config_from_qr().
+ *
  * @memberof dc_context_t
  * @param context The context object.
  * @param chat_id If set to a group-chat-id,
