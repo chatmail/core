@@ -68,8 +68,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
         )
         .await?;
 
-    // The key is up to date iff it contains all the addresses from the QR code:
-    let has_up_to_date_key = if let Some(public_key_bytes) = public_key_bytes {
+    let key_contains_all_invite_addrs = if let Some(public_key_bytes) = public_key_bytes {
         let public_key = SignedPublicKey::from_slice(&public_key_bytes)?;
         let addrs_in_key = addresses_from_public_key(&public_key).unwrap_or_default();
         invite.addrs().iter().all(|a| addrs_in_key.contains(a))
@@ -108,7 +107,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
                 progress: JoinerProgress::Succeeded.into_u16(),
             });
             return Ok(joining_chat_id);
-        } else if has_up_to_date_key
+        } else if key_contains_all_invite_addrs
             && verify_sender_by_fingerprint(context, invite.fingerprint(), invite.contact_id())
                 .await?
         {
@@ -165,7 +164,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
         QrInvite::Contact { .. } => {
             // For setup-contact the BobState already ensured the 1:1 chat exists because it is
             // used to send the handshake messages.
-            if !has_up_to_date_key {
+            if !key_contains_all_invite_addrs {
                 chat::add_info_msg_with_cmd(
                     context,
                     private_chat_id,
