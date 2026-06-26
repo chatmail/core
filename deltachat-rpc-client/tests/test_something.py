@@ -380,7 +380,7 @@ def test_receive_imf_failure(acfactory) -> None:
         snapshot.text == "❌ Failed to receive a message:"
         " Condition failed: `!context.get_config_bool(Config::SimulateReceiveImfError).await?`."
         f" Core version {version}."
-        " Please report this bug to delta@merlinux.eu or https://support.delta.chat/."
+        " Please report this bug to delta@merlinux.eu or https://support.delta.chat/"
     )
 
     # The failed message doesn't break the IMAP loop.
