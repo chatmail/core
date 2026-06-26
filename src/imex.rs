@@ -10,7 +10,7 @@ use futures_lite::FutureExt;
 use pin_project::pin_project;
 
 use tokio::fs::{self, File};
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt, ReadBuf};
 use tokio_tar::Archive;
 
 use crate::blob::BlobDirContents;
@@ -575,6 +575,14 @@ where
         let mut file = File::open(blob.to_abs_path()).await?;
         let path_in_archive = PathBuf::from(BLOBS_BACKUP_NAME).join(blob.as_name());
         builder.append_file(path_in_archive, &mut file).await?;
+
+        // Appending a file does not flush it immediately,
+        // so it may get buffered and not sent over the network
+        // immediately.
+        // Documentation at
+        // <https://docs.rs/astral-tokio-tar/0.6.3/tokio_tar/struct.Builder.html#method.get_mut>
+        // suggests flushing the stream manually.
+        builder.get_mut().flush().await?;
     }
 
     builder.finish().await?;
