@@ -61,7 +61,7 @@ use crate::{logged_debug_assert, mimeparser};
 ///
 /// One email with multiple attachments can end up as multiple chat messages, but they
 /// all have the same chat_id, state and sort_timestamp.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ReceivedMsg {
     /// Chat the message is assigned to.
     pub chat_id: ChatId,
@@ -2074,8 +2074,15 @@ async fn add_parts(
                 None => {
                     warn!(
                         context,
-                        "Cannot add iroh peer because WebXDC instance does not exist."
+                        "Cannot add iroh peer because WebXDC instance {in_reply_to} does not exist."
                     );
+                    return Ok(ReceivedMsg {
+                        chat_id,
+                        state,
+                        hidden: true,
+                        sort_timestamp,
+                        ..Default::default()
+                    });
                 }
             },
             None => {
