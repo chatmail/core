@@ -589,6 +589,7 @@ mod tests {
         EventType,
         chat::{self, ChatId, add_contact_to_chat, resend_msgs, send_msg},
         message::{Message, Viewtype},
+        receive_imf::receive_imf,
         test_utils::{TestContext, TestContextManager},
     };
 
@@ -757,6 +758,67 @@ mod tests {
         assert!(alice.iroh.read().await.is_some());
         alice.stop_io().await;
         assert!(alice.iroh.read().await.is_none());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_duplicated_out_of_order_advertisement() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &mut tcm.alice().await;
+        let bob = &mut tcm.bob().await;
+
+        let alice_chat = alice.create_chat(bob).await;
+        let mut instance = Message::new(Viewtype::File);
+        instance.set_file_from_bytes(
+            alice,
+            "minimal.xdc",
+            include_bytes!("../test-data/webxdc/minimal.xdc"),
+            None,
+        )?;
+
+        send_msg(alice, alice_chat.id, &mut instance).await?;
+        let alice_webxdc = alice.get_last_msg().await;
+        assert_eq!(alice_webxdc.get_viewtype(), Viewtype::Webxdc);
+
+        let webxdc = alice.pop_sent_msg().await;
+        // Imagine that at this point Alice learns about Bob's new transport...
+        send_webxdc_realtime_advertisement(alice, alice_webxdc.id).await?;
+        let advertisement = alice.pop_sent_msg().await;
+
+        // Bob receives an out-of-order advertisement from his new transport.
+        receive_imf(bob, advertisement.payload().as_bytes(), false).await?;
+
+        let bob_webxdc = bob.recv_msg(&webxdc).await;
+        assert_eq!(bob_webxdc.get_viewtype(), Viewtype::Webxdc);
+
+        bob_webxdc.chat_id.accept(bob).await?;
+
+        bob.recv_msg_trash(&advertisement).await;
+        loop {
+            let event = bob.evtracker.recv().await.unwrap();
+            if let EventType::WebxdcRealtimeAdvertisementReceived { msg_id } = event.typ {
+                assert!(msg_id == bob_webxdc.id);
+                break;
+            }
+        }
+        let members = get_iroh_gossip_peers(bob, bob_webxdc.id)
+            .await?
+            .into_iter()
+            .map(|addr| addr.node_id)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            members,
+            vec![
+                alice
+                    .get_or_try_init_peer_channel()
+                    .await
+                    .unwrap()
+                    .get_node_addr()
+                    .await
+                    .unwrap()
+                    .node_id
+            ]
+        );
+        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
