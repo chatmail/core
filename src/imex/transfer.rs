@@ -30,6 +30,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Poll;
+use std::time::Duration;
 
 use anyhow::{Context as _, Result, bail, format_err};
 use futures_lite::FutureExt;
@@ -305,9 +306,12 @@ pub async fn get_backup2(
 ) -> Result<()> {
     let relay_mode = RelayMode::Disabled;
 
+    let mut transport_config = iroh::endpoint::TransportConfig::default();
+    transport_config.max_idle_timeout(Some(Duration::from_secs(60).try_into()?));
     let endpoint = Endpoint::builder()
         .tls_x509() // For compatibility with iroh <0.34.0
         .relay_mode(relay_mode)
+        .transport_config(transport_config)
         .bind()
         .await?;
 
