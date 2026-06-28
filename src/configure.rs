@@ -721,12 +721,12 @@ async fn get_autoconfig(
     }
     progress!(ctx, 300);
 
+    // `?emailaddress=` query string is excluded on purpose.
+    // It is not part of the URL according to <https://datatracker.ietf.org/doc/draft-ietf-mailmaint-autoconfig/06/>.
+    // Related discussion confirming this is at <https://github.com/benbucksch/autoconfig-spec/issues/17>.
     if let Ok(res) = moz_autoconfigure(
         ctx,
-        // the doc does not mention `emailaddress=`, however, Thunderbird adds it, see <https://releases.mozilla.org/pub/thunderbird/>,  which makes some sense
-        &format!(
-            "https://{param_domain}/.well-known/autoconfig/mail/config-v1.1.xml?emailaddress={param_addr_urlencoded}"
-        ),
+        &format!("https://{param_domain}/.well-known/autoconfig/mail/config-v1.1.xml"),
         &param.addr,
         accept_invalid_certificates,
     )
