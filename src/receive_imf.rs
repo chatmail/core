@@ -533,19 +533,10 @@ pub(crate) async fn receive_imf_inner(
         "Receiving message {rfc724_mid_orig:?}, seen={seen}...",
     );
 
-    // These checks must be done before processing of SecureJoin and other special messages.
-    if mime_parser.pre_message == mimeparser::PreMessageMode::Post {
-        // Post-Message just replaces the attachment and modifies Params, not the whole message.
-        // This is done in the `handle_post_message` method.
-    } else if let Some(msg_id) = message::rfc724_mid_exists(context, rfc724_mid_orig).await? {
-        info!(
-            context,
-            "Message {rfc724_mid} is already in some chat or deleted."
-        );
-        if mime_parser.incoming {
-            return Ok(None);
-        }
-
+    let existing_msg_id = message::rfc724_mid_exists(context, rfc724_mid_orig).await?;
+    if let Some(msg_id) = existing_msg_id
+        && !mime_parser.incoming
+    {
         // It sometimes happens that a slow server (usually a classical email server)
         // receives a message via SMTP,
         // but then the connection to the server dies before it sends the OK response.
@@ -566,6 +557,16 @@ pub(crate) async fn receive_imf_inner(
         if !msg_has_pending_smtp_job(context, msg_id).await? {
             msg_id.set_delivered(context).await?;
         }
+    }
+    // These checks must be done before processing of SecureJoin and other special messages.
+    if mime_parser.pre_message == mimeparser::PreMessageMode::Post {
+        // Post-Message just replaces the attachment and modifies Params, not the whole message.
+        // This is done in the `update_from_post_msg` method.
+    } else if existing_msg_id.is_some() {
+        info!(
+            context,
+            "Message {rfc724_mid} is already in some chat or deleted."
+        );
         return Ok(None);
     }
 
@@ -2088,7 +2089,7 @@ async fn add_parts(
     }
 
     handle_edit_delete(context, mime_parser, from_id, &mime_headers).await?;
-    handle_post_message(context, mime_parser, from_id, state).await?;
+    update_from_post_msg(context, mime_parser, from_id, state).await?;
 
     if mime_parser.is_system_message == SystemMessage::CallAccepted
         || mime_parser.is_system_message == SystemMessage::CallEnded
@@ -2282,8 +2283,7 @@ INSERT INTO msgs
 
     // Maybe set logging xdc and add gossip topics for webxdcs.
     for (part, msg_id) in mime_parser.parts.iter().zip(&created_db_entries) {
-        if mime_parser.pre_message != PreMessageMode::Post
-            && part.typ == Viewtype::Webxdc
+        if part.typ == Viewtype::Webxdc
             && let Some(topic) = mime_parser.get_header(HeaderDef::IrohGossipTopic)
         {
             let topic = iroh_topic_from_str(topic)?;
@@ -2433,7 +2433,7 @@ async fn handle_edit_delete(
     Ok(())
 }
 
-async fn handle_post_message(
+async fn update_from_post_msg(
     context: &Context,
     mime_parser: &MimeMessage,
     from_id: ContactId,
@@ -2451,7 +2451,7 @@ async fn handle_post_message(
     let Some(msg_id) = message::rfc724_mid_exists(context, &rfc724_mid).await? else {
         warn!(
             context,
-            "handle_post_message: {rfc724_mid}: Database entry does not exist."
+            "update_from_post_msg: {rfc724_mid}: Database entry does not exist."
         );
         return Ok(());
     };
@@ -2459,7 +2459,7 @@ async fn handle_post_message(
         // else: message is processed like a normal message
         warn!(
             context,
-            "handle_post_message: {rfc724_mid}: Pre-message was not downloaded yet so treat as normal message."
+            "update_from_post_msg: {rfc724_mid}: Pre-message was not downloaded yet so treat as normal message."
         );
         return Ok(());
     };
@@ -2470,7 +2470,7 @@ async fn handle_post_message(
     // Do nothing if safety checks fail, the worst case is the message modifies the chat if the
     // sender is a member.
     if from_id != original_msg.from_id {
-        warn!(context, "handle_post_message: {rfc724_mid}: Bad sender.");
+        warn!(context, "update_from_post_msg: {rfc724_mid}: Bad sender.");
         return Ok(());
     }
     let post_msg_showpadlock = part
@@ -2478,14 +2478,17 @@ async fn handle_post_message(
         .get_bool(Param::GuaranteeE2ee)
         .unwrap_or_default();
     if !post_msg_showpadlock && original_msg.get_showpadlock() {
-        warn!(context, "handle_post_message: {rfc724_mid}: Not encrypted.");
+        warn!(
+            context,
+            "update_from_post_msg: {rfc724_mid}: Not encrypted."
+        );
         return Ok(());
     }
 
     if !part.typ.has_file() {
         warn!(
             context,
-            "handle_post_message: {rfc724_mid}: First mime part's message-viewtype has no file."
+            "update_from_post_msg: {rfc724_mid}: First mime part's message-viewtype has no file."
         );
         return Ok(());
     }
@@ -2516,7 +2519,10 @@ WHERE id=?
                 part.typ,
                 part.bytes as isize,
                 part.error.as_deref().unwrap_or_default(),
-                state,
+                match mime_parser.incoming {
+                    true => state,
+                    false => MessageState::Undefined,
+                },
                 DownloadState::Done as u32,
                 original_msg.id,
             ),

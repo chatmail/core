@@ -257,21 +257,21 @@ async fn test_lost_pre_msg() -> Result<()> {
     let _pre_msg = alice.pop_sent_msg().await;
     let msg = bob.recv_msg(&full_msg).await;
     assert_eq!(msg.download_state, DownloadState::Done);
-    assert_eq!(msg.text, "");
+    assert_eq!(msg.text, "populate");
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_pre_msg_mdn_before_sending_full() -> Result<()> {
-    pre_msg_mdn_before_sending_full("").await
+async fn test_post_msg_mdn_before_sending_pre_msg() -> Result<()> {
+    post_msg_mdn_before_sending_pre_msg("").await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_pre_msg_mdn_before_sending_full_with_text() -> Result<()> {
-    pre_msg_mdn_before_sending_full("text").await
+async fn test_post_msg_mdn_before_sending_pre_msg_with_text() -> Result<()> {
+    post_msg_mdn_before_sending_pre_msg("text").await
 }
 
-async fn pre_msg_mdn_before_sending_full(text: &str) -> Result<()> {
+async fn post_msg_mdn_before_sending_pre_msg(text: &str) -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
@@ -283,11 +283,11 @@ async fn pre_msg_mdn_before_sending_full(text: &str) -> Result<()> {
     msg.set_text(text.to_string());
     chat::send_msg(alice, alice_chat_id, &mut msg).await?;
     let rev_order = false;
-    let pre_msg = alice.pop_sent_msg_ex(rev_order).await.unwrap();
+    let post_msg = alice.pop_sent_msg_ex(rev_order).await.unwrap();
     let alice_msg_id = msg.id;
 
-    let msg = bob.recv_msg(&pre_msg).await;
-    assert_eq!(msg.download_state, DownloadState::Available);
+    let msg = bob.recv_msg(&post_msg).await;
+    assert_eq!(msg.download_state, DownloadState::Done);
     assert_eq!(msg.id.get_state(bob).await?, MessageState::InFresh);
     assert_eq!(msg.text, text);
     assert!(msg.param.get_bool(Param::WantsMdn).unwrap_or_default());
@@ -308,10 +308,29 @@ async fn pre_msg_mdn_before_sending_full(text: &str) -> Result<()> {
         MessageState::OutPending
     );
 
-    let _full_msg = alice.pop_sent_msg().await;
+    // Bob's other device receives the pre-message first.
+    let bob = &tcm.bob().await;
+    let pre_msg = alice.pop_sent_msg().await;
     assert_eq!(
         alice_msg_id.get_state(alice).await?,
         MessageState::OutDelivered
+    );
+    let msg = bob.recv_msg(&pre_msg).await;
+    assert_eq!(msg.download_state, DownloadState::Available);
+    assert_eq!(msg.id.get_state(bob).await?, MessageState::InFresh);
+    assert_eq!(msg.text, text);
+    assert!(msg.param.get_bool(Param::WantsMdn).unwrap_or_default());
+    msg.chat_id.accept(bob).await?;
+    markseen_msgs(bob, vec![msg.id]).await?;
+    assert_eq!(msg.id.get_state(bob).await?, MessageState::InSeen);
+    assert_eq!(
+        bob.sql
+            .count(
+                "SELECT COUNT(*) FROM smtp_mdns WHERE from_id=?",
+                (msg.from_id,)
+            )
+            .await?,
+        1
     );
     Ok(())
 }
@@ -613,8 +632,8 @@ async fn test_webxdc_updates_in_post_message_after_pre_message() -> Result<()> {
         .await?;
 
     send_msg(alice, alice_chat_id, &mut alice_instance).await?;
-    let post_message = alice.pop_sent_msg().await;
     let pre_message = alice.pop_sent_msg().await;
+    let post_message = alice.pop_sent_msg().await;
 
     let bob_instance = bob.recv_msg(&pre_message).await;
     assert_eq!(bob_instance.download_state, DownloadState::Available);
@@ -659,8 +678,8 @@ async fn test_large_webxdc_without_text() -> Result<()> {
         .await?;
 
     send_msg(bob, bob_chat_id, &mut bob_instance).await?;
-    let post_message = bob.pop_sent_msg().await;
     let pre_message = bob.pop_sent_msg().await;
+    let post_message = bob.pop_sent_msg().await;
 
     tcm.section("Alice receives a pre-message");
     let alice_instance = alice.recv_msg(&pre_message).await;
@@ -704,8 +723,8 @@ async fn test_webxdc_updates_in_post_message_after_deleted_pre_message() -> Resu
         .await?;
 
     send_msg(alice, alice_chat_id, &mut alice_instance).await?;
-    let post_message = alice.pop_sent_msg().await;
     let pre_message = alice.pop_sent_msg().await;
+    let post_message = alice.pop_sent_msg().await;
 
     let bob_instance = bob.recv_msg(&pre_message).await;
     assert_eq!(bob_instance.download_state, DownloadState::Available);
@@ -746,8 +765,8 @@ async fn test_webxdc_updates_in_post_message_without_pre_message() -> Result<()>
         .await?;
 
     send_msg(alice, alice_chat_id, &mut alice_instance).await?;
-    let post_message = alice.pop_sent_msg().await;
     let pre_message = alice.pop_sent_msg().await;
+    let post_message = alice.pop_sent_msg().await;
 
     // Bob receives post-message first.
     let bob_instance = bob.recv_msg(&post_message).await;
