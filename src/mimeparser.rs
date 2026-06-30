@@ -525,8 +525,6 @@ impl MimeMessage {
             // let known protected headers from the decrypted
             // part override the unencrypted top-level
 
-            // Signature was checked for original From, so we
-            // do not allow overriding it.
             let mut inner_from = None;
 
             MimeMessage::merge_headers(
@@ -558,19 +556,22 @@ impl MimeMessage {
                     // This _might_ be because the sender's mail server
                     // replaced the sending address, e.g. in a mailing list.
                     // Or it's because someone is doing some replay attack.
-                    // Resending encrypted messages via mailing lists
-                    // without reencrypting is not useful anyway,
-                    // so we return an error below.
                     warn!(
                         context,
                         "From header in encrypted part doesn't match the outer one",
                     );
 
-                    // Return an error from the parser.
-                    // This will result in creating a tombstone
-                    // and no further message processing
-                    // as if the MIME structure is broken.
-                    bail!("From header is forged");
+                    // If there are no valid signatures,
+                    // possibly because we don't have the public key,
+                    // the message will be associated with the address-contact.
+                    // If the address is possibly forged, we trash the message.
+                    if signatures.is_empty() {
+                        // Return an error from the parser.
+                        // This will result in creating a tombstone
+                        // and no further message processing
+                        // as if the MIME structure is broken.
+                        bail!("From header is forged");
+                    }
                 }
                 from = inner_from;
             }
