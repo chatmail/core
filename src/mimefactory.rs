@@ -1347,13 +1347,15 @@ impl MimeFactory {
             subject: subject_str,
         };
 
+        let is_securejoin_message = match &self.loaded {
+            Loaded::Message { msg, .. } => msg.param.get_cmd() == SystemMessage::SecurejoinMessage,
+            Loaded::Mdn { .. } => false,
+        };
+
         // Disable compression for SecureJoin to ensure
         // there are no compression side channels
         // leaking information about the tokens.
-        let should_compress = match &self.loaded {
-            Loaded::Message { msg, .. } => msg.param.get_cmd() != SystemMessage::SecurejoinMessage,
-            Loaded::Mdn { .. } => true,
-        };
+        let should_compress = !is_securejoin_message;
 
         let shared_secret: Option<String> = match &self.loaded {
             Loaded::Message { chat, msg } if should_encrypt_with_broadcast_secret(msg, chat) => {
@@ -1464,11 +1466,6 @@ impl MimeFactory {
         }
 
         let is_encrypted = self.will_be_encrypted();
-        let is_securejoin_message = if let Loaded::Message { msg, .. } = &self.loaded {
-            msg.param.get_cmd() == SystemMessage::SecurejoinMessage
-        } else {
-            false
-        };
 
         let display_name = if is_securejoin_message && !is_encrypted {
             // Unencrypted securejoin messages should _not_ include the display name.
