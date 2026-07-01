@@ -3456,6 +3456,8 @@ async fn test_prefer_encrypt_mutual_if_encrypted() -> Result<()> {
     Ok(())
 }
 
+/// Tests reception of encrypted and signed message with forged From header
+/// when the signature cannot be checked because the public key is not available.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_forged_from_and_no_valid_signatures() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -4718,6 +4720,10 @@ async fn test_no_op_member_added_is_trash() -> Result<()> {
     Ok(())
 }
 
+/// Tests reception of a message with a valid signature and forged From header.
+///
+/// The message is accepted because the sender contact is associated with the key
+/// rather than the address.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_forged_from() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -4732,8 +4738,16 @@ async fn test_forged_from() -> Result<()> {
         .payload
         .replace("bob@example.net", "notbob@example.net");
 
-    let msg = alice.recv_msg_opt(&sent_msg).await;
-    assert!(msg.is_none());
+    let msg = alice.recv_msg(&sent_msg).await;
+    assert_eq!(msg.text, "hi!");
+    assert!(msg.get_showpadlock());
+    let contact = Contact::get_by_id(&alice, msg.from_id).await?;
+    assert!(contact.is_key_contact());
+
+    // We take the address from the encrypted part
+    // and send replies there.
+    assert_eq!(contact.get_addr(), "bob@example.net");
+
     Ok(())
 }
 
