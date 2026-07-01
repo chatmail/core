@@ -25,9 +25,10 @@ impl EncryptHelper {
     }
 
     pub fn get_aheader(&self) -> Aheader {
+        let public_key = pgp::minimize_autocrypt_certificate(&self.public_key);
         Aheader {
             addr: self.addr.clone(),
-            public_key: self.public_key.clone(),
+            public_key,
             prefer_encrypt: EncryptPreference::Mutual,
             verified: false,
         }
