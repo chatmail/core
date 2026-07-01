@@ -8,6 +8,7 @@ use base64::Engine as _;
 use data_encoding::BASE32_NOPAD;
 use deltachat_contact_tools::sanitize_bidi_characters;
 use iroh_gossip::proto::TopicId;
+use mail_builder::headers::Header as _;
 use mail_builder::headers::HeaderType;
 use mail_builder::headers::address::Address;
 use mail_builder::mime::MimePart;
@@ -21,11 +22,11 @@ use crate::constants::{BROADCAST_INCOMPATIBILITY_MSG, Chattype, DC_FROM_HANDSHAK
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::download::PostMsgMetadata;
-use crate::e2ee::EncryptHelper;
 use crate::ensure_and_debug_assert;
 use crate::ephemeral::Timer as EphemeralTimer;
 use crate::headerdef::HeaderDef;
-use crate::key::{DcKey, SignedPublicKey, self_fingerprint};
+use crate::key;
+use crate::key::{DcKey, SignedPublicKey, SignedSecretKey, self_fingerprint};
 use crate::location;
 use crate::log::warn;
 use crate::message::{Message, MsgId, Viewtype};
@@ -142,17 +143,8 @@ pub struct MimeFactory {
     /// using `Chat-Disposition-Notification-To` header.
     req_mdn: bool,
 
-    /// Largest timestamp of the location sent in `location.kml` in this message.
-    last_added_location_timestamp: Option<i64>,
-
-    /// If the created mime-structure contains sync-items,
-    /// the IDs of these items are listed here.
-    /// The IDs are returned via `RenderedEmail`
-    /// and must be deleted if the message is actually queued for sending.
-    sync_ids_to_delete: Option<String>,
-
     /// True if the avatar should be attached.
-    pub attach_selfavatar: bool,
+    attach_selfavatar: bool,
 
     /// This field is used to sustain the topic id of webxdcs needed for peer channels.
     webxdc_topic: Option<TopicId>,
@@ -161,24 +153,330 @@ pub struct MimeFactory {
     pre_message_mode: PreMessageMode,
 }
 
-/// Result of rendering a message, ready to be submitted to a send job.
-#[derive(Debug, Clone)]
-pub struct RenderedEmail {
-    pub message: String,
-    pub is_encrypted: bool,
+/// Result of rendering non-MDN message.
+pub struct RenderedMessage {
+    main_part: MimePart<'static>,
+
+    parts: Vec<MimePart<'static>>,
 
     /// Largest timestamp of the location sent in `location.kml` in this message.
+    last_added_location_timestamp: Option<i64>,
+
+    /// True if the avatar is attached to the message.
+    avatar_is_attached: bool,
+
+    /// If the created mime-structure contains sync-items,
+    /// the IDs of these items are listed here.
+    /// The IDs are returned via `RenderedEmail`
+    /// and must be deleted if the message is actually queued for sending.
+    sync_ids_to_delete: Option<String>,
+}
+
+/// Email message queued, but not sent yet.
+///
+/// It is stored unencrypted to
+/// make it possible to change protected headers
+/// like the From address, Autocrypt header
+/// and the Date later.
+#[derive(Debug, Clone)]
+pub(crate) struct QueuedMail {
+    /// Unencrypted queued message.
+    ///
+    /// This message has both the headers and the body,
+    /// but without the From, Autocrypt and Date headers.
+    ///
+    /// For encrypted messages this is the OpenPGP payload.
+    raw_message: Vec<u8>,
+
+    /// Display name to put in the `From:` field.
+    ///
+    /// Email address is not determined yet here.
+    display_name: String,
+
+    /// Message-ID.
+    rfc724_mid: String,
+
+    /// Public keys to which the message should be encrypted.
+    encryption_pubkeys: Option<Vec<(String, SignedPublicKey)>>,
+
+    /// Shared secret if the message should be encrypted symmetrically.
+    shared_secret: Option<String>,
+
+    /// If true, Autocrypt header should be added before sending.
+    should_attach_pubkey: bool,
+
+    /// If true, OpenPGP compression may be used.
+    should_compress: bool,
+
+    /// If true, encrypted message should be signed as well.
+    should_sign: bool,
+}
+
+/// Side effects that should be applied at the same time
+/// as the message is persisted in the queue.
+#[derive(Debug, Clone, Default)]
+pub struct RenderSideEffects {
+    /// Largest timestamp of the location sent in `location.kml` in this message.
     pub last_added_location_timestamp: Option<i64>,
+
+    /// True if the message has the avatar attached.
+    ///
+    /// Timestamp of the last time avatar was gossiped should be updated.
+    pub avatar_is_attached: bool,
 
     /// A comma-separated string of sync-IDs that are used by the rendered email and must be deleted
     /// from `multi_device_sync` once the message is actually queued for sending.
     pub sync_ids_to_delete: Option<String>,
 
+    /// Subject that was rendered into the message.
+    ///
+    /// Used to update the subject on the sent message object.
+    pub subject: String,
+}
+
+/// Renders [`QueuedMail`].
+///
+/// Adds headers:
+/// - `From`
+/// - `Date`
+/// - `Autocrypt`
+/// - `Message-ID`
+///
+/// Encrypts and signs the message if necessary.
+pub(crate) fn render_queued_mail(
+    queued_mail: QueuedMail,
+    public_key: &SignedPublicKey,
+    secret_key: &SignedSecretKey,
+    from_addr: String,
+    timestamp: i64,
+    side_effects: RenderSideEffects,
+) -> Result<RenderedEmail> {
+    let QueuedMail {
+        rfc724_mid,
+        display_name,
+        mut raw_message,
+        encryption_pubkeys,
+        shared_secret,
+        should_attach_pubkey,
+        should_compress,
+        should_sign,
+    } = queued_mail;
+
+    let mut inner_headers: Vec<u8> = Vec::new();
+    let mut outer_headers: Vec<u8> = Vec::new();
+
+    let is_encrypted = encryption_pubkeys.is_some();
+
+    let from_header = new_address_with_name(&display_name, from_addr.clone());
+    inner_headers.extend_from_slice(b"From: ");
+    from_header.write_header(&mut inner_headers, 6)?;
+
+    if is_encrypted {
+        let unencrypted_from = Address::new_address(None::<&'static str>, from_addr.to_string());
+        outer_headers.extend_from_slice(b"From: ");
+        unencrypted_from.write_header(&mut outer_headers, 6)?;
+
+        inner_headers.extend_from_slice(b"HP-Outer: From: ");
+        unencrypted_from.write_header(&mut inner_headers, 16)?;
+    } else {
+        outer_headers.extend_from_slice(b"From: ");
+        from_header.write_header(&mut outer_headers, 6)?;
+    }
+
+    let date = chrono::DateTime::<chrono::Utc>::from_timestamp(timestamp, 0)
+        .unwrap()
+        .to_rfc2822();
+    inner_headers.extend_from_slice(b"Date: ");
+    inner_headers.extend_from_slice(date.as_bytes());
+    inner_headers.extend_from_slice(b"\r\n");
+
+    if is_encrypted {
+        inner_headers.extend_from_slice(b"HP-Outer: Date: ");
+        inner_headers.extend_from_slice(date.as_bytes());
+        inner_headers.extend_from_slice(b"\r\n");
+
+        // Randomized date goes to unprotected header.
+        //
+        // We cannot just send "Thu, 01 Jan 1970 00:00:00 +0000"
+        // or omit the header because GMX then fails with
+        //
+        // host mx00.emig.gmx.net[212.227.15.9] said:
+        // 554-Transaction failed
+        // 554-Reject due to policy restrictions.
+        // 554 For explanation visit https://postmaster.gmx.net/en/case?...
+        // (in reply to end of DATA command)
+        //
+        // and the explanation page says
+        // "The time information deviates too much from the actual time".
+        //
+        // We also limit the range to 6 days (518400 seconds)
+        // because with a larger range we got
+        // error "500 Date header far in the past/future"
+        // which apparently originates from Symantec Messaging Gateway
+        // and means the message has a Date that is more
+        // than 7 days in the past:
+        // <https://github.com/chatmail/core/issues/7466>
+        let timestamp_offset = rand::random_range(0..518400);
+        let protected_timestamp = timestamp.saturating_sub(timestamp_offset);
+        let unprotected_date =
+            chrono::DateTime::<chrono::Utc>::from_timestamp(protected_timestamp, 0)
+                .unwrap()
+                .to_rfc2822();
+        outer_headers.extend_from_slice(b"Date: ");
+        outer_headers.extend_from_slice(unprotected_date.as_bytes());
+        outer_headers.extend_from_slice(b"\r\n");
+    } else {
+        outer_headers.extend_from_slice(b"Date: ");
+        outer_headers.extend_from_slice(date.as_bytes());
+        outer_headers.extend_from_slice(b"\r\n");
+    }
+
+    inner_headers.extend_from_slice(b"Message-ID: <");
+    inner_headers.extend_from_slice(rfc724_mid.as_bytes());
+    inner_headers.extend_from_slice(b">\r\n");
+    outer_headers.extend_from_slice(b"Message-ID: <");
+    outer_headers.extend_from_slice(rfc724_mid.as_bytes());
+    outer_headers.extend_from_slice(b">\r\n");
+    if is_encrypted {
+        inner_headers.extend_from_slice(b"HP-Outer: Message-ID: <");
+        inner_headers.extend_from_slice(rfc724_mid.as_bytes());
+        inner_headers.extend_from_slice(b">\r\n");
+    }
+
+    // MIME header <https://datatracker.ietf.org/doc/html/rfc2045>.
+    outer_headers.extend_from_slice(b"MIME-Version: 1.0\r\n");
+
+    if should_attach_pubkey {
+        let aheader = Aheader {
+            addr: from_addr.clone(),
+            public_key: public_key.clone(),
+            prefer_encrypt: EncryptPreference::Mutual,
+            verified: false,
+        };
+        let autocrypt_header = mail_builder::headers::raw::Raw::new(aheader.to_string());
+        if is_encrypted {
+            inner_headers.extend_from_slice(b"Autocrypt: ");
+            autocrypt_header.write_header(&mut inner_headers, 11)?;
+        } else {
+            outer_headers.extend_from_slice(b"Autocrypt: ");
+            autocrypt_header.write_header(&mut outer_headers, 11)?;
+        }
+    }
+
+    if is_encrypted {
+        // Copy not protected headers to outer headers.
+        let (parsed_headers, _index) = mailparse::parse_headers(&raw_message)?;
+        for parsed_header in parsed_headers {
+            let original_header_name = parsed_header.get_key();
+            let header_name = original_header_name.to_lowercase();
+
+            if header_name == "mime-version"
+                || header_name == "content-type"
+                || header_name == "content-transfer-encoding"
+                || header_name == "content-disposition"
+            {
+                // Structural headers shouldn't be added as "HP-Outer". They are defined in
+                // <https://www.rfc-editor.org/rfc/rfc9787.html#structural-header-fields>.
+                continue;
+            }
+            let header_value = if header_name == "mime-version"
+                || header_name == "chat-version"
+                || header_name == "chat-is-post-message"
+            {
+                parsed_header.get_value_raw()
+            } else if header_name == "subject" {
+                &b"[...]"[..]
+            } else if header_name == "to" {
+                &b"To: \"hidden-recipients\""[..]
+            } else {
+                continue;
+            };
+
+            outer_headers.extend_from_slice(original_header_name.as_bytes());
+            outer_headers.extend_from_slice(b": ");
+            outer_headers.extend_from_slice(header_value);
+            outer_headers.extend_from_slice(b"\r\n");
+
+            inner_headers.extend_from_slice(b"HP-Outer: ");
+            inner_headers.extend_from_slice(original_header_name.as_bytes());
+            inner_headers.extend_from_slice(b": ");
+            inner_headers.extend_from_slice(header_value);
+            inner_headers.extend_from_slice(b"\r\n");
+        }
+    }
+
+    let mut message = if let Some(encryption_pubkeys) = encryption_pubkeys {
+        let mut full_raw_message = inner_headers.clone();
+        full_raw_message.append(&mut raw_message);
+
+        let encrypted = if let Some(shared_secret) = shared_secret {
+            let sign_key = if should_sign {
+                Some(secret_key.clone())
+            } else {
+                None
+            };
+
+            crate::pgp::symm_encrypt_message(
+                full_raw_message,
+                sign_key,
+                shared_secret,
+                should_compress,
+            )?
+        } else {
+            // Asymmetric encryption
+
+            // Use SEIPDv2 if all recipients support it.
+            let seipd_version = if encryption_pubkeys
+                .iter()
+                .all(|(_addr, pubkey)| pubkey_supports_seipdv2(pubkey))
+            {
+                SeipdVersion::V2
+            } else {
+                SeipdVersion::V1
+            };
+
+            // Encrypt to self unconditionally,
+            // even for a single-device setup.
+            let mut encryption_keyring = vec![public_key.clone()];
+            encryption_keyring.extend(encryption_pubkeys.iter().map(|(_addr, key)| (*key).clone()));
+
+            crate::pgp::pk_encrypt(
+                full_raw_message,
+                encryption_keyring,
+                secret_key.clone(),
+                should_compress,
+                seipd_version,
+            )?
+        };
+
+        let message = wrap_encrypted_part(encrypted);
+
+        part_to_vec(message)
+    } else {
+        raw_message
+    };
+
+    let mut full_message = outer_headers;
+    full_message.append(&mut message);
+    Ok(RenderedEmail {
+        message: String::from_utf8_lossy(&full_message).to_string(),
+        is_encrypted,
+        rfc724_mid,
+        side_effects,
+    })
+}
+
+/// Result of rendering a message, ready to be submitted to a send job.
+#[derive(Debug, Clone)]
+pub struct RenderedEmail {
+    pub message: String,
+
+    pub is_encrypted: bool,
+
     /// Message ID (Message in the sense of Email)
     pub rfc724_mid: String,
 
-    /// Message subject.
-    pub subject: String,
+    pub side_effects: RenderSideEffects,
 }
 
 fn new_address_with_name(name: &str, address: String) -> Address<'static> {
@@ -558,8 +856,6 @@ impl MimeFactory {
             in_reply_to,
             references,
             req_mdn,
-            last_added_location_timestamp: None,
-            sync_ids_to_delete: None,
             attach_selfavatar,
             webxdc_topic,
             pre_message_mode: PreMessageMode::None,
@@ -609,8 +905,6 @@ impl MimeFactory {
             in_reply_to: String::default(),
             references: Vec::new(),
             req_mdn: false,
-            last_added_location_timestamp: None,
-            sync_ids_to_delete: None,
             attach_selfavatar: false,
             webxdc_topic: None,
             pre_message_mode: PreMessageMode::None,
@@ -737,53 +1031,40 @@ impl MimeFactory {
         self.recipients.clone()
     }
 
-    /// Consumes a `MimeFactory` and renders it into a message which is then stored in
-    /// `smtp`-table to be used by the SMTP loop
-    #[expect(clippy::arithmetic_side_effects)]
-    pub async fn render(mut self, context: &Context) -> Result<RenderedEmail> {
-        let mut headers = Vec::<(&'static str, HeaderType<'static>)>::new();
-
-        let from = new_address_with_name(&self.from_displayname, self.from_addr.clone());
-
-        let mut to: Vec<Address<'static>> = Vec::new();
-        for (name, addr) in &self.to {
-            to.push(Address::new_address(
-                if name.is_empty() {
-                    None
-                } else {
-                    Some(name.to_string())
-                },
-                addr.clone(),
-            ));
-        }
-
-        let mut past_members: Vec<Address<'static>> = Vec::new(); // Contents of `Chat-Group-Past-Members` header.
-        for (name, addr) in &self.past_members {
-            past_members.push(Address::new_address(
-                if name.is_empty() {
-                    None
-                } else {
-                    Some(name.to_string())
-                },
-                addr.clone(),
-            ));
-        }
-
+    async fn render_headers(
+        &mut self,
+        context: &Context,
+        subject_str: &str,
+    ) -> Result<Vec<(&'static str, HeaderType<'static>)>> {
         ensure_and_debug_assert!(
             self.member_timestamps.is_empty()
-                || to.len() + past_members.len() == self.member_timestamps.len(),
-            "to.len() ({}) + past_members.len() ({}) != self.member_timestamps.len() ({})",
-            to.len(),
-            past_members.len(),
+                || self.to.len().checked_add(self.past_members.len())
+                    == Some(self.member_timestamps.len()),
+            "self.to.len() ({}) + self.past_members.len() ({}) != self.member_timestamps.len() ({})",
+            self.to.len(),
+            self.past_members.len(),
             self.member_timestamps.len(),
         );
-        if to.is_empty() {
-            to.push(hidden_recipients());
-        }
 
-        // Start with Internet Message Format headers in the order of the standard example
-        // <https://datatracker.ietf.org/doc/html/rfc5322#appendix-A.1.1>.
-        headers.push(("From", from.into()));
+        let mut headers = Vec::<(&'static str, HeaderType<'static>)>::new();
+
+        let to: Vec<Address<'static>> = if self.to.is_empty() {
+            vec![hidden_recipients()]
+        } else {
+            self.to
+                .iter()
+                .map(|(name, addr)| {
+                    Address::new_address(
+                        if name.is_empty() {
+                            None
+                        } else {
+                            Some(name.to_string())
+                        },
+                        addr.clone(),
+                    )
+                })
+                .collect()
+        };
 
         if let Some(sender_displayname) = &self.sender_displayname {
             let sender = new_address_with_name(sender_displayname, self.from_addr.clone());
@@ -793,10 +1074,25 @@ impl MimeFactory {
             "To",
             mail_builder::headers::address::Address::new_list(to.clone()).into(),
         ));
-        if !past_members.is_empty() {
+
+        if !self.past_members.is_empty() {
+            let past_members: Vec<Address<'static>> = self
+                .past_members
+                .iter()
+                .map(|(name, addr)| {
+                    Address::new_address(
+                        if name.is_empty() {
+                            None
+                        } else {
+                            Some(name.to_string())
+                        },
+                        addr.clone(),
+                    )
+                })
+                .collect();
             headers.push((
                 "Chat-Group-Past-Members",
-                mail_builder::headers::address::Address::new_list(past_members.clone()).into(),
+                mail_builder::headers::address::Address::new_list(past_members).into(),
             ));
         }
 
@@ -832,33 +1128,9 @@ impl MimeFactory {
             }
         }
 
-        let subject_str = self.subject_str(context).await?;
         headers.push((
             "Subject",
             mail_builder::headers::text::Text::new(subject_str.to_string()).into(),
-        ));
-
-        let date = chrono::DateTime::<chrono::Utc>::from_timestamp(self.timestamp, 0)
-            .unwrap()
-            .to_rfc2822();
-        headers.push(("Date", mail_builder::headers::raw::Raw::new(date).into()));
-
-        let rfc724_mid = match &self.loaded {
-            Loaded::Message { msg, .. } => match &self.pre_message_mode {
-                PreMessageMode::Pre { .. } => {
-                    if msg.pre_rfc724_mid.is_empty() {
-                        create_outgoing_rfc724_mid()
-                    } else {
-                        msg.pre_rfc724_mid.clone()
-                    }
-                }
-                _ => msg.rfc724_mid.clone(),
-            },
-            Loaded::Mdn { .. } => create_outgoing_rfc724_mid(),
-        };
-        headers.push((
-            "Message-ID",
-            mail_builder::headers::message_id::MessageId::new(rfc724_mid.clone()).into(),
         ));
 
         // Reply headers as in <https://datatracker.ietf.org/doc/html/rfc5322#appendix-A.2>.
@@ -928,7 +1200,6 @@ impl MimeFactory {
             }
         }
 
-        // Non-standard headers.
         headers.push((
             "Chat-Version",
             mail_builder::headers::raw::Raw::new("1.0").into(),
@@ -941,19 +1212,6 @@ impl MimeFactory {
             headers.push((
                 "Chat-Disposition-Notification-To",
                 mail_builder::headers::raw::Raw::new(self.from_addr.clone()).into(),
-            ));
-        }
-
-        let grpimage = self.grpimage();
-        let skip_autocrypt = self.should_skip_autocrypt();
-        let encrypt_helper = EncryptHelper::new(context).await?;
-
-        if !skip_autocrypt {
-            // unless determined otherwise we add the Autocrypt header
-            let aheader = encrypt_helper.get_aheader().to_string();
-            headers.push((
-                "Autocrypt",
-                mail_builder::headers::raw::Raw::new(aheader).into(),
             ));
         }
 
@@ -973,8 +1231,6 @@ impl MimeFactory {
             ));
         }
 
-        let is_encrypted = self.will_be_encrypted();
-
         // Add ephemeral timer for non-MDN messages.
         // For MDNs it does not matter because they are not visible
         // and ignored by the receiver.
@@ -988,18 +1244,76 @@ impl MimeFactory {
             }
         }
 
-        let is_securejoin_message = if let Loaded::Message { msg, .. } = &self.loaded {
-            msg.param.get_cmd() == SystemMessage::SecurejoinMessage
-        } else {
-            false
+        Ok(headers)
+    }
+
+    /// Helper function render the messages that are not queued.
+    ///
+    /// Used for MDNs because their payload is rendered right before sending.
+    pub async fn render(self, context: &Context) -> Result<RenderedEmail> {
+        let timestamp = self.timestamp;
+        let from_addr = context.get_primary_self_addr().await?;
+        let public_key = key::load_self_public_key(context).await?;
+        let secret_key = key::load_self_secret_key(context).await?;
+        let (queued_mail, side_effects) = Box::pin(self.pre_render(context)).await?;
+        let rendered_mail = render_queued_mail(
+            queued_mail,
+            &public_key,
+            &secret_key,
+            from_addr,
+            timestamp,
+            side_effects,
+        )?;
+        Ok(rendered_mail)
+    }
+
+    /// Consumes a `MimeFactory` and renders it into a message which is then stored in
+    /// `smtp`-table to be used by the SMTP loop
+    #[expect(clippy::arithmetic_side_effects)]
+    pub(crate) async fn pre_render(
+        mut self,
+        context: &Context,
+    ) -> Result<(QueuedMail, RenderSideEffects)> {
+        let rfc724_mid = match &self.loaded {
+            Loaded::Message { msg, .. } => match &self.pre_message_mode {
+                PreMessageMode::Pre { .. } => {
+                    if msg.pre_rfc724_mid.is_empty() {
+                        create_outgoing_rfc724_mid()
+                    } else {
+                        msg.pre_rfc724_mid.clone()
+                    }
+                }
+                _ => msg.rfc724_mid.clone(),
+            },
+            Loaded::Mdn { .. } => create_outgoing_rfc724_mid(),
         };
+
+        let subject_str = self.subject_str(context).await?;
+        let mut headers = self.render_headers(context, &subject_str).await?;
+
+        let grpimage = self.grpimage();
+
+        let is_encrypted = self.will_be_encrypted();
+
+        let last_added_location_timestamp;
+        let avatar_is_attached;
+        let sync_ids_to_delete;
 
         let message: MimePart<'static> = match &self.loaded {
             Loaded::Message { msg, .. } => {
                 let msg = msg.clone();
-                let (main_part, mut parts) = self
+                let RenderedMessage {
+                    main_part,
+                    mut parts,
+                    last_added_location_timestamp: tmp_last_added_location_timestamp,
+                    avatar_is_attached: tmp_avatar_is_attached,
+                    sync_ids_to_delete: tmp_sync_ids_to_delete,
+                } = self
                     .render_message(context, &mut headers, &grpimage, is_encrypted)
                     .await?;
+                last_added_location_timestamp = tmp_last_added_location_timestamp;
+                avatar_is_attached = tmp_avatar_is_attached;
+                sync_ids_to_delete = tmp_sync_ids_to_delete;
                 if parts.is_empty() {
                     // Single part, render as regular message.
                     main_part
@@ -1016,29 +1330,51 @@ impl MimeFactory {
                     }
                 }
             }
-            Loaded::Mdn { .. } => self.render_mdn()?,
+            Loaded::Mdn { .. } => {
+                last_added_location_timestamp = None;
+                avatar_is_attached = false;
+                sync_ids_to_delete = None;
+                self.render_mdn()?
+            }
         };
 
-        let HeadersByConfidentiality {
-            mut unprotected_headers,
-            hidden_headers,
-            protected_headers,
-        } = group_headers_by_confidentiality(
-            headers,
-            &self.from_addr,
-            self.timestamp,
-            is_encrypted,
-            is_securejoin_message,
-        );
+        let should_attach_pubkey = !self.should_skip_autocrypt();
+        let is_post_message = self.pre_message_mode == PreMessageMode::Post;
+        let side_effects = RenderSideEffects {
+            avatar_is_attached,
+            sync_ids_to_delete,
+            last_added_location_timestamp,
+            subject: subject_str,
+        };
 
-        let outer_message = if let Some(encryption_pubkeys) = self.encryption_pubkeys {
-            let mut message = add_headers_to_encrypted_part(
-                message,
-                &unprotected_headers,
-                hidden_headers,
-                protected_headers,
-            );
+        let is_securejoin_message = match &self.loaded {
+            Loaded::Message { msg, .. } => msg.param.get_cmd() == SystemMessage::SecurejoinMessage,
+            Loaded::Mdn { .. } => false,
+        };
 
+        // Disable compression for SecureJoin to ensure
+        // there are no compression side channels
+        // leaking information about the tokens.
+        let should_compress = !is_securejoin_message;
+
+        let shared_secret: Option<String> = match &self.loaded {
+            Loaded::Message { chat, msg } if should_encrypt_with_broadcast_secret(msg, chat) => {
+                let secret = load_broadcast_secret(context, chat.id).await?;
+                if secret.is_none() {
+                    // If there is no shared secret yet
+                    // because this is an old broadcast channel,
+                    // created before we had symmetric encryption,
+                    // we show an error message.
+                    let text = BROADCAST_INCOMPATIBILITY_MSG;
+                    chat::add_info_msg(context, chat.id, text).await?;
+                    bail!(text);
+                }
+                secret
+            }
+            _ => None,
+        };
+
+        if let Some(ref encryption_pubkeys) = self.encryption_pubkeys {
             // Add gossip headers in chats with multiple recipients
             let multiple_recipients =
                 encryption_pubkeys.len() > 1 || context.get_config_bool(Config::BccSelf).await?;
@@ -1049,10 +1385,10 @@ impl MimeFactory {
             match &self.loaded {
                 Loaded::Message { chat, msg } => {
                     if !should_hide_recipients(msg, chat) {
-                        for (addr, key) in &encryption_pubkeys {
+                        for (addr, key) in encryption_pubkeys {
                             let fingerprint = key.dc_fingerprint().hex();
                             let cmd = msg.param.get_cmd();
-                            if self.pre_message_mode == PreMessageMode::Post {
+                            if is_post_message {
                                 continue;
                             }
 
@@ -1105,10 +1441,10 @@ impl MimeFactory {
                             }
                             .to_string();
 
-                            message = message.header(
+                            headers.push((
                                 "Autocrypt-Gossip",
-                                mail_builder::headers::raw::Raw::new(header),
-                            );
+                                mail_builder::headers::raw::Raw::new(header).into(),
+                            ));
 
                             context
                                 .sql
@@ -1127,73 +1463,29 @@ impl MimeFactory {
                     // Never gossip in MDNs.
                 }
             }
+        }
 
-            // Disable compression for SecureJoin to ensure
-            // there are no compression side channels
-            // leaking information about the tokens.
-            let compress = match &self.loaded {
-                Loaded::Message { msg, .. } => {
-                    msg.param.get_cmd() != SystemMessage::SecurejoinMessage
-                }
-                Loaded::Mdn { .. } => true,
-            };
+        let is_encrypted = self.will_be_encrypted();
 
-            let shared_secret: Option<String> = match &self.loaded {
-                Loaded::Message { chat, msg }
-                    if should_encrypt_with_broadcast_secret(msg, chat) =>
-                {
-                    let secret = load_broadcast_secret(context, chat.id).await?;
-                    if secret.is_none() {
-                        // If there is no shared secret yet
-                        // because this is an old broadcast channel,
-                        // created before we had symmetric encryption,
-                        // we show an error message.
-                        let text = BROADCAST_INCOMPATIBILITY_MSG;
-                        chat::add_info_msg(context, chat.id, text).await?;
-                        bail!(text);
-                    }
-                    secret
-                }
-                _ => None,
-            };
+        let display_name = if is_securejoin_message && !is_encrypted {
+            // Unencrypted securejoin messages should _not_ include the display name.
+            "".to_string()
+        } else {
+            self.from_displayname.clone()
+        };
 
-            let encrypted = if let Some(shared_secret) = shared_secret {
-                let sign = true;
-                encrypt_helper
-                    .encrypt_symmetrically(context, &shared_secret, message, compress, sign)
-                    .await?
-            } else {
-                // Asymmetric encryption
+        let is_mdn = matches!(self.loaded, Loaded::Mdn { .. });
+        let should_sign = true;
 
-                // Use SEIPDv2 if all recipients support it.
-                let seipd_version = if encryption_pubkeys
-                    .iter()
-                    .all(|(_addr, pubkey)| pubkey_supports_seipdv2(pubkey))
-                {
-                    SeipdVersion::V2
-                } else {
-                    SeipdVersion::V1
-                };
+        let HeadersByConfidentiality {
+            mut unprotected_headers,
+            hidden_headers,
+            protected_headers,
+        } = group_headers_by_confidentiality(headers);
 
-                // Encrypt to self unconditionally,
-                // even for a single-device setup.
-                let mut encryption_keyring = vec![encrypt_helper.public_key.clone()];
-                encryption_keyring
-                    .extend(encryption_pubkeys.iter().map(|(_addr, key)| (*key).clone()));
-
-                encrypt_helper
-                    .encrypt(
-                        context,
-                        encryption_keyring,
-                        message,
-                        compress,
-                        seipd_version,
-                    )
-                    .await?
-            };
-
-            wrap_encrypted_part(encrypted)
-        } else if matches!(self.loaded, Loaded::Mdn { .. }) {
+        let message = if self.encryption_pubkeys.is_some() {
+            add_headers_to_encrypted_part(message, hidden_headers, protected_headers)
+        } else if is_mdn {
             // Never add outer multipart/mixed wrapper to MDN
             // as multipart/report Content-Type is used to recognize MDNs
             // by Delta Chat receiver and Chatmail servers
@@ -1209,6 +1501,10 @@ impl MimeFactory {
                 .fold(message, |message, (header, value)| {
                     message.header(header, value)
                 });
+            let message = message.header(
+                "Message-ID",
+                mail_builder::headers::message_id::MessageId::new(rfc724_mid.clone()),
+            );
             let message = MimePart::new("multipart/mixed", vec![message]);
             let message = protected_headers
                 .iter()
@@ -1221,24 +1517,26 @@ impl MimeFactory {
                 HashSet::from_iter(protected_headers.iter().map(|(header, _value)| *header));
             unprotected_headers.retain(|(header, _value)| !protected.contains(header));
 
-            message
+            unprotected_headers
+                .iter()
+                .cloned()
+                .fold(message, |message, (header, value)| {
+                    message.header(header, value)
+                })
         };
+        let raw_message = part_to_vec(message);
 
-        let MimeFactory {
-            last_added_location_timestamp,
-            ..
-        } = self;
-
-        let message = render_outer_message(unprotected_headers, outer_message);
-
-        Ok(RenderedEmail {
-            message,
-            is_encrypted,
-            last_added_location_timestamp,
-            sync_ids_to_delete: self.sync_ids_to_delete,
+        let queued_email = QueuedMail {
+            raw_message,
             rfc724_mid,
-            subject: subject_str,
-        })
+            display_name,
+            encryption_pubkeys: self.encryption_pubkeys.clone(),
+            shared_secret,
+            should_attach_pubkey,
+            should_sign,
+            should_compress,
+        };
+        Ok((queued_email, side_effects))
     }
 
     /// Returns MIME part with a `message.kml` attachment.
@@ -1278,12 +1576,12 @@ impl MimeFactory {
     }
 
     async fn render_message(
-        &mut self,
+        &self,
         context: &Context,
         headers: &mut Vec<(&'static str, HeaderType<'static>)>,
         grpimage: &Option<String>,
         is_encrypted: bool,
-    ) -> Result<(MimePart<'static>, Vec<MimePart<'static>>)> {
+    ) -> Result<RenderedMessage> {
         let Loaded::Message { chat, msg } = &self.loaded else {
             bail!("Attempt to render MDN as a message");
         };
@@ -1775,21 +2073,25 @@ impl MimeFactory {
             parts.push(msg_kml_part);
         }
 
-        if !matches!(self.pre_message_mode, PreMessageMode::Pre { .. })
-            && location::is_sending_to_chat(context, msg.chat_id).await?
-            && let Some((part, timestamp)) = self.get_location_kml_part(context).await?
-        {
-            parts.push(part);
-            self.last_added_location_timestamp = Some(timestamp);
-        }
+        let last_added_location_timestamp =
+            if !matches!(self.pre_message_mode, PreMessageMode::Pre { .. })
+                && location::is_sending_to_chat(context, msg.chat_id).await?
+                && let Some((part, timestamp)) = self.get_location_kml_part(context).await?
+            {
+                parts.push(part);
+                Some(timestamp)
+            } else {
+                None
+            };
 
+        let mut sync_ids_to_delete = None;
         // we do not piggyback sync-files to other self-sent-messages
         // to not risk files becoming too larger and being skipped by download-on-demand.
         if command == SystemMessage::MultiDeviceSync {
             let json = msg.param.get(Param::Arg).unwrap_or_default();
             let ids = msg.param.get(Param::Arg2).unwrap_or_default();
             parts.push(context.build_sync_part(json.to_string()));
-            self.sync_ids_to_delete = Some(ids.to_string());
+            sync_ids_to_delete = Some(ids.to_string());
         } else if command == SystemMessage::WebxdcStatusUpdate {
             let json = msg.param.get(Param::Arg).unwrap_or_default();
             parts.push(context.build_status_update_part(json));
@@ -1816,9 +2118,9 @@ impl MimeFactory {
             }
         }
 
-        self.attach_selfavatar =
+        let avatar_is_attached =
             self.attach_selfavatar && self.pre_message_mode != PreMessageMode::Post;
-        if self.attach_selfavatar {
+        if avatar_is_attached {
             match context.get_config(Config::Selfavatar).await? {
                 Some(path) => match build_avatar_file(context, &path).await {
                     Ok(avatar) => headers.push((
@@ -1834,7 +2136,13 @@ impl MimeFactory {
             }
         }
 
-        Ok((main_part, parts))
+        Ok(RenderedMessage {
+            main_part,
+            parts,
+            last_added_location_timestamp,
+            avatar_is_attached,
+            sync_ids_to_delete,
+        })
     }
 
     /// Render an MDN
@@ -1903,23 +2211,6 @@ impl MimeFactory {
     }
 }
 
-/// Stores the unprotected headers on the outer message, and renders it.
-pub(crate) fn render_outer_message(
-    unprotected_headers: Vec<(&'static str, HeaderType<'static>)>,
-    outer_message: MimePart<'static>,
-) -> String {
-    let outer_message = unprotected_headers
-        .into_iter()
-        .fold(outer_message, |message, (header, value)| {
-            message.header(header, value)
-        });
-
-    let mut buffer = Vec::new();
-    let cursor = Cursor::new(&mut buffer);
-    outer_message.clone().write_part(cursor).ok();
-    String::from_utf8_lossy(&buffer).to_string()
-}
-
 /// Takes the encrypted part, wraps it in a MimePart,
 /// and sets the appropriate Content-Type for the outer message
 pub(crate) fn wrap_encrypted_part(encrypted: String) -> MimePart<'static> {
@@ -1936,36 +2227,16 @@ pub(crate) fn wrap_encrypted_part(encrypted: String) -> MimePart<'static> {
 
 fn add_headers_to_encrypted_part(
     message: MimePart<'static>,
-    unprotected_headers: &[(&'static str, HeaderType<'static>)],
     hidden_headers: Vec<(&'static str, HeaderType<'static>)>,
     protected_headers: Vec<(&'static str, HeaderType<'static>)>,
 ) -> MimePart<'static> {
     // Store protected headers in the inner message.
-    let message = protected_headers
-        .into_iter()
-        .fold(message, |message, (header, value)| {
-            message.header(header, value)
-        });
-
     // Add hidden headers to encrypted payload.
-    let mut message: MimePart<'static> = hidden_headers
+    let mut message: MimePart<'static> = protected_headers
         .into_iter()
+        .chain(hidden_headers)
         .fold(message, |message, (header, value)| {
             message.header(header, value)
-        });
-
-    message = unprotected_headers
-        .iter()
-        // Structural headers shouldn't be added as "HP-Outer". They are defined in
-        // <https://www.rfc-editor.org/rfc/rfc9787.html#structural-header-fields>.
-        .filter(|(name, _)| {
-            !(name.eq_ignore_ascii_case("mime-version")
-                || name.eq_ignore_ascii_case("content-type")
-                || name.eq_ignore_ascii_case("content-transfer-encoding")
-                || name.eq_ignore_ascii_case("content-disposition"))
-        })
-        .fold(message, |message, (name, value)| {
-            message.header(format!("HP-Outer: {name}"), value.clone())
         });
 
     // Set the appropriate Content-Type for the inner message
@@ -2022,84 +2293,26 @@ struct HeadersByConfidentiality {
 /// See [`HeadersByConfidentiality`] for more info.
 fn group_headers_by_confidentiality(
     headers: Vec<(&'static str, HeaderType<'static>)>,
-    from_addr: &str,
-    timestamp: i64,
-    is_encrypted: bool,
-    is_securejoin_message: bool,
 ) -> HeadersByConfidentiality {
     let mut unprotected_headers: Vec<(&'static str, HeaderType<'static>)> = Vec::new();
     let mut hidden_headers: Vec<(&'static str, HeaderType<'static>)> = Vec::new();
     let mut protected_headers: Vec<(&'static str, HeaderType<'static>)> = Vec::new();
 
-    // MIME header <https://datatracker.ietf.org/doc/html/rfc2045>.
-    unprotected_headers.push((
-        "MIME-Version",
-        mail_builder::headers::raw::Raw::new("1.0").into(),
-    ));
-
     for header @ (original_header_name, _header_value) in &headers {
         let header_name = original_header_name.to_lowercase();
-        if header_name == "message-id" {
-            unprotected_headers.push(header.clone());
-            hidden_headers.push(header.clone());
-        } else if is_hidden(&header_name) {
-            hidden_headers.push(header.clone());
-        } else if header_name == "from" {
-            // Unencrypted securejoin messages should _not_ include the display name:
-            if is_encrypted || !is_securejoin_message {
-                protected_headers.push(header.clone());
-            }
+        debug_assert_ne!(header_name, "from");
+        debug_assert_ne!(header_name, "message-id");
+        debug_assert_ne!(header_name, "autocrypt");
+        debug_assert_ne!(header_name, "date");
 
-            unprotected_headers.push((
-                original_header_name,
-                Address::new_address(None::<&'static str>, from_addr.to_string()).into(),
-            ));
+        if is_hidden(&header_name) {
+            hidden_headers.push(header.clone());
         } else if header_name == "to" {
             protected_headers.push(header.clone());
-            if is_encrypted {
-                unprotected_headers.push(("To", hidden_recipients().into()));
-            } else {
-                unprotected_headers.push(header.clone());
-            }
+            unprotected_headers.push(("To", hidden_recipients().into()));
         } else if header_name == "chat-broadcast-secret" {
-            if is_encrypted {
-                protected_headers.push(header.clone());
-            }
-        } else if is_encrypted && header_name == "date" {
             protected_headers.push(header.clone());
-
-            // Randomized date goes to unprotected header.
-            //
-            // We cannot just send "Thu, 01 Jan 1970 00:00:00 +0000"
-            // or omit the header because GMX then fails with
-            //
-            // host mx00.emig.gmx.net[212.227.15.9] said:
-            // 554-Transaction failed
-            // 554-Reject due to policy restrictions.
-            // 554 For explanation visit https://postmaster.gmx.net/en/case?...
-            // (in reply to end of DATA command)
-            //
-            // and the explanation page says
-            // "The time information deviates too much from the actual time".
-            //
-            // We also limit the range to 6 days (518400 seconds)
-            // because with a larger range we got
-            // error "500 Date header far in the past/future"
-            // which apparently originates from Symantec Messaging Gateway
-            // and means the message has a Date that is more
-            // than 7 days in the past:
-            // <https://github.com/chatmail/core/issues/7466>
-            let timestamp_offset = rand::random_range(0..518400);
-            let protected_timestamp = timestamp.saturating_sub(timestamp_offset);
-            let unprotected_date =
-                chrono::DateTime::<chrono::Utc>::from_timestamp(protected_timestamp, 0)
-                    .unwrap()
-                    .to_rfc2822();
-            unprotected_headers.push((
-                "Date",
-                mail_builder::headers::raw::Raw::new(unprotected_date).into(),
-            ));
-        } else if is_encrypted {
+        } else {
             protected_headers.push(header.clone());
 
             match header_name.as_str() {
@@ -2116,8 +2329,6 @@ fn group_headers_by_confidentiality(
                     // Other headers are removed from unprotected part.
                 }
             }
-        } else {
-            unprotected_headers.push(header.clone())
         }
     }
     HeadersByConfidentiality {
@@ -2238,17 +2449,17 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
     context: &Context,
     step: &str,
     rfc724_mid: &str,
-    attach_self_pubkey: bool,
+    should_attach_pubkey: bool,
     auth: &str,
     shared_secret: &str,
 ) -> Result<String> {
     info!(context, "Sending secure-join message {step:?}.");
 
-    let mut headers = Vec::<(&'static str, HeaderType<'static>)>::new();
+    let timestamp = time();
 
-    let from_addr = context.get_primary_self_addr().await?;
-    let from = new_address_with_name("", from_addr.to_string());
-    headers.push(("From", from.into()));
+    let message: MimePart<'static> = MimePart::new("text/plain", "Secure-Join");
+
+    let mut headers = Vec::<(&'static str, HeaderType<'static>)>::new();
 
     let to: Vec<Address<'static>> = vec![hidden_recipients()];
     headers.push((
@@ -2261,32 +2472,11 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
         mail_builder::headers::text::Text::new("Secure-Join".to_string()).into(),
     ));
 
-    let timestamp = time();
-    let date = chrono::DateTime::<chrono::Utc>::from_timestamp(timestamp, 0)
-        .unwrap()
-        .to_rfc2822();
-    headers.push(("Date", mail_builder::headers::raw::Raw::new(date).into()));
-
-    headers.push((
-        "Message-ID",
-        mail_builder::headers::message_id::MessageId::new(rfc724_mid.to_string()).into(),
-    ));
-
     // Automatic Response headers <https://www.rfc-editor.org/rfc/rfc3834>
     if context.get_config_bool(Config::Bot).await? {
         headers.push((
             "Auto-Submitted",
             mail_builder::headers::raw::Raw::new("auto-generated".to_string()).into(),
-        ));
-    }
-
-    let encrypt_helper = EncryptHelper::new(context).await?;
-
-    if attach_self_pubkey {
-        let aheader = encrypt_helper.get_aheader().to_string();
-        headers.push((
-            "Autocrypt",
-            mail_builder::headers::raw::Raw::new(aheader).into(),
         ));
     }
 
@@ -2300,46 +2490,63 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
         mail_builder::headers::text::Text::new(auth.to_string()).into(),
     ));
 
-    let message: MimePart<'static> = MimePart::new("text/plain", "Secure-Join");
-
-    let is_encrypted = true;
-    let is_securejoin_message = true;
     let HeadersByConfidentiality {
-        unprotected_headers,
         hidden_headers,
         protected_headers,
-    } = group_headers_by_confidentiality(
-        headers,
-        &from_addr,
-        timestamp,
-        is_encrypted,
-        is_securejoin_message,
-    );
+        ..
+    } = group_headers_by_confidentiality(headers);
 
-    let outer_message = {
-        let message = add_headers_to_encrypted_part(
-            message,
-            &unprotected_headers,
-            hidden_headers,
-            protected_headers,
-        );
+    let message = add_headers_to_encrypted_part(message, hidden_headers, protected_headers);
 
-        // Disable compression for SecureJoin to ensure
-        // there are no compression side channels
-        // leaking information about the tokens.
-        let compress = false;
-        // Only sign the message if we attach the pubkey.
-        let sign = attach_self_pubkey;
-        let encrypted = encrypt_helper
-            .encrypt_symmetrically(context, shared_secret, message, compress, sign)
-            .await?;
+    // Disable compression for SecureJoin to ensure
+    // there are no compression side channels
+    // leaking information about the tokens.
+    let should_compress = false;
 
-        wrap_encrypted_part(encrypted)
+    // Only sign the message if we attach the pubkey.
+    let should_sign = should_attach_pubkey;
+
+    let raw_message = part_to_vec(message);
+
+    let queued_mail = QueuedMail {
+        raw_message,
+        display_name: String::new(),
+        rfc724_mid: rfc724_mid.to_string(),
+        encryption_pubkeys: Some(vec![]),
+        shared_secret: Some(shared_secret.to_string()),
+        should_attach_pubkey,
+        should_sign,
+        should_compress,
     };
 
-    let message = render_outer_message(unprotected_headers, outer_message);
+    let public_key = key::load_self_public_key(context).await?;
+    let secret_key = key::load_self_secret_key(context).await?;
 
-    Ok(message)
+    let side_effects = RenderSideEffects {
+        subject: "Secure-Join".to_string(),
+
+        ..Default::default()
+    };
+
+    let from_addr = context.get_primary_self_addr().await?;
+    let rendered_mail = render_queued_mail(
+        queued_mail,
+        &public_key,
+        &secret_key,
+        from_addr,
+        timestamp,
+        side_effects,
+    )?;
+
+    Ok(rendered_mail.message)
+}
+
+/// Renders MIME part into a vector.
+pub(crate) fn part_to_vec(message: MimePart<'static>) -> Vec<u8> {
+    let mut raw_message = Vec::new();
+    let cursor = Cursor::new(&mut raw_message);
+    message.write_part(cursor).ok();
+    raw_message
 }
 
 #[cfg(test)]

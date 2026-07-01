@@ -22,6 +22,7 @@ use tokio::runtime::Handle;
 use tokio::{fs, task};
 use uuid::Uuid;
 
+use crate::aheader::{Aheader, EncryptPreference};
 use crate::chat::{
     self, Chat, ChatId, ChatIdBlocked, MessageListOptions, add_to_chat_contacts_table, create_group,
 };
@@ -33,7 +34,6 @@ use crate::contact::{
     Contact, ContactId, Modifier, Origin, import_vcard, make_vcard, mark_contact_id_as_verified,
 };
 use crate::context::Context;
-use crate::e2ee::EncryptHelper;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::key::{self, DcKey, self_fingerprint};
 use crate::log::warn;
@@ -1240,8 +1240,15 @@ pub async fn encrypt_raw_message(
     receivers: &[&TestContext],
     payload: &[u8],
 ) -> Result<String> {
-    let encryption_helper = EncryptHelper::new(context).await?;
-    let mut encryption_keyring = vec![encryption_helper.public_key.clone()];
+    let public_key = key::load_self_public_key(context).await?;
+    let aheader = Aheader {
+        addr: context.get_primary_self_addr().await?,
+        public_key: public_key.clone(),
+        prefer_encrypt: EncryptPreference::Mutual,
+        verified: false,
+    };
+
+    let mut encryption_keyring = vec![public_key.clone()];
 
     for receiver in receivers {
         encryption_keyring.push(key::load_self_public_key(receiver).await?);
@@ -1250,18 +1257,17 @@ pub async fn encrypt_raw_message(
     let from = context.get_primary_self_addr().await?;
     let compress = false;
 
-    let mut cleartext = format!("Autocrypt: {}", encryption_helper.get_aheader()).into_bytes();
+    let mut cleartext = format!("Autocrypt: {aheader}").into_bytes();
     cleartext.extend_from_slice(b"\r\n");
     cleartext.extend_from_slice(payload);
-    let encrypted_payload = encryption_helper
-        .encrypt_raw(
-            context,
-            encryption_keyring,
-            cleartext,
-            compress,
-            SeipdVersion::V2,
-        )
-        .await?;
+    let sign_key = key::load_self_secret_key(context).await?;
+    let encrypted_payload = crate::pgp::pk_encrypt(
+        cleartext,
+        encryption_keyring,
+        sign_key,
+        compress,
+        SeipdVersion::V2,
+    )?;
     let boundary = Uuid::new_v4();
 
     let res = format!(

@@ -967,8 +967,7 @@ Content-Transfer-Encoding: base64\r
             alice_secret_key,
             compress,
             SeipdVersion::V2,
-        )
-        .await?;
+        )?;
 
         let boundary = "boundary123";
         let rcvd_mail = format!(
