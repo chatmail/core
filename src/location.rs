@@ -14,6 +14,7 @@ use std::time::Duration;
 
 use anyhow::{Context as _, Result, ensure};
 use async_channel::Receiver;
+use quick_xml::XmlVersion;
 use quick_xml::events::{BytesEnd, BytesStart, BytesText};
 use tokio::time::timeout;
 
@@ -140,8 +141,9 @@ impl Kml {
         if self.tag == KmlTag::PlacemarkTimestampWhen
             || self.tag == KmlTag::PlacemarkPointCoordinates
         {
-            let val = event.xml_content().unwrap_or_default();
-
+            let val = event
+                .xml_content(XmlVersion::Implicit1_0)
+                .unwrap_or_default();
             let val = val.replace(['\n', '\r', '\t', ' '], "");
 
             if self.tag == KmlTag::PlacemarkTimestampWhen && val.len() >= 19 {
@@ -227,7 +229,7 @@ impl Kml {
                     == "addr"
             }) {
                 self.addr = addr
-                    .decode_and_unescape_value(reader.decoder())
+                    .decoded_and_normalized_value(XmlVersion::Implicit1_0, reader.decoder())
                     .ok()
                     .map(|a| a.into_owned());
             }
@@ -253,7 +255,7 @@ impl Kml {
                 })
             }) {
                 let v = acc
-                    .decode_and_unescape_value(reader.decoder())
+                    .decoded_and_normalized_value(XmlVersion::Implicit1_0, reader.decoder())
                     .unwrap_or_default();
 
                 self.curr.accuracy = v.trim().parse().unwrap_or_default();

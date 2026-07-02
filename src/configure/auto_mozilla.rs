@@ -5,6 +5,7 @@
 use std::io::BufRead;
 use std::str::FromStr;
 
+use quick_xml::XmlVersion;
 use quick_xml::events::{BytesStart, Event};
 
 use super::{Error, ServerParams};
@@ -71,7 +72,7 @@ fn parse_server<B: BufRead>(
             })
         })
         .map(|typ| {
-            typ.decode_and_unescape_value(reader.decoder())
+            typ.decoded_and_normalized_value(XmlVersion::Implicit1_0, reader.decoder())
                 .unwrap_or_default()
                 .to_lowercase()
         })
@@ -101,7 +102,11 @@ fn parse_server<B: BufRead>(
                 }
             }
             Event::Text(ref event) => {
-                let val = event.xml_content().unwrap_or_default().trim().to_owned();
+                let val = event
+                    .xml_content(XmlVersion::Implicit1_0)
+                    .unwrap_or_default()
+                    .trim()
+                    .to_owned();
 
                 match tag_config {
                     MozConfigTag::Hostname => hostname = Some(val),
