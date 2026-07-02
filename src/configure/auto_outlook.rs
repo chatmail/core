@@ -5,6 +5,7 @@
 
 use std::io::BufRead;
 
+use quick_xml::XmlVersion;
 use quick_xml::events::Event;
 
 use super::{Error, ServerParams};
@@ -79,7 +80,7 @@ fn parse_protocol<B: BufRead>(
                 }
             }
             Event::Text(ref e) => {
-                let val = e.xml_content().unwrap_or_default();
+                let val = e.xml_content(XmlVersion::Implicit1_0).unwrap_or_default();
 
                 if let Some(ref tag) = current_tag {
                     match tag.as_str() {
@@ -123,7 +124,7 @@ fn parse_redirecturl<B: BufRead>(
     let mut buf = Vec::new();
     match reader.read_event_into(&mut buf)? {
         Event::Text(ref e) => {
-            let val = e.xml_content().unwrap_or_default();
+            let val = e.xml_content(XmlVersion::Implicit1_0).unwrap_or_default();
             Ok(val.trim().to_string())
         }
         _ => Ok("".to_string()),

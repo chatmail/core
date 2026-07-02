@@ -6,7 +6,7 @@ use std::io::BufRead;
 use std::sync::LazyLock;
 
 use quick_xml::{
-    Reader,
+    Reader, XmlVersion,
     errors::Error as QuickXmlError,
     events::{BytesEnd, BytesStart, BytesText},
 };
@@ -327,7 +327,7 @@ fn dehtml_starttag_cb<B: std::io::BufRead>(
                 })
             {
                 let href = href
-                    .decode_and_unescape_value(reader.decoder())
+                    .decoded_and_normalized_value(XmlVersion::Implicit1_0, reader.decoder())
                     .unwrap_or_default()
                     .to_string();
 
@@ -374,7 +374,7 @@ fn maybe_push_tag(
 fn tag_contains_attr(event: &BytesStart, reader: &Reader<impl BufRead>, name: &str) -> bool {
     event.attributes().any(|r| {
         r.map(|a| {
-            a.decode_and_unescape_value(reader.decoder())
+            a.decoded_and_normalized_value(XmlVersion::Implicit1_0, reader.decoder())
                 .map(|v| v == name)
                 .unwrap_or(false)
         })
