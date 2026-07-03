@@ -125,6 +125,8 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
         "vc-request-pubkey"
     );
     assert!(msg.get_header(HeaderDef::SecureJoinAuth).is_some());
+    let encrypted_payload = String::from_utf8(msg.decoded_data.clone()).unwrap();
+    assert!(!encrypted_payload.contains("Bob Examplenet"));
     assert!(!msg.header_exists(HeaderDef::AutoSubmitted));
 
     tcm.section("Step 3: Alice receives vc-request-pubkey, sends vc-pubkey");
@@ -143,6 +145,8 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     let msg = bob.parse_msg(&sent).await;
     assert!(msg.was_encrypted());
     assert_eq!(msg.get_header(HeaderDef::SecureJoin).unwrap(), "vc-pubkey");
+    let encrypted_payload = String::from_utf8(msg.decoded_data.clone()).unwrap();
+    assert!(!encrypted_payload.contains("Alice Exampleorg"));
     assert_eq!(
         msg.get_header(HeaderDef::AutoSubmitted),
         alice_auto_submitted_hdr.then_some("auto-generated")
