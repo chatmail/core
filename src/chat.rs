@@ -4810,10 +4810,20 @@ pub(crate) async fn get_chat_id_by_grpid(
         .await
 }
 
+/// Intended to be used only for messages passed to
+/// [`add_device_msg_with_importance`].
+pub fn set_device_msg_state(msg: &mut Message, state: MessageState) {
+    msg.state = state;
+}
+
 /// Adds a message to device chat.
 ///
 /// Optional `label` can be provided to ensure that message is added only once.
 /// If `important` is true, a notification will be sent.
+///
+/// If message state is [`MessageState::Undefined`],
+/// the message will be added to the DB as [`MessageState::InFresh`].
+/// To set message state, you may utilize [`set_device_msg_state`].
 #[expect(clippy::arithmetic_side_effects)]
 pub async fn add_device_msg_with_importance(
     context: &Context,
@@ -4850,7 +4860,11 @@ pub async fn add_device_msg_with_importance(
             msg.timestamp_sort = last_msg_time + 1;
         }
         prepare_msg_blob(context, msg).await?;
-        let state = MessageState::InFresh;
+        let state = if msg.state == MessageState::Undefined {
+            MessageState::InFresh
+        } else {
+            msg.state
+        };
         let row_id = context
             .sql
             .insert(

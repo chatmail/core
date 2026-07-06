@@ -661,6 +661,42 @@ impl MessageData {
     }
 }
 
+#[derive(Deserialize, Serialize, TypeDef, schemars::JsonSchema)]
+#[repr(u32)]
+pub enum DeviceMessageState {
+    // Variants that are not really wanted for device messages are omitted,
+    // to avoid misuse.
+
+    // Undefined,
+    InFresh,
+    InNoticed,
+    // InSeen,
+    // OutDraft,
+    // OutPending,
+    // OutFailed,
+    // OutDelivered,
+    // OutMdnRcvd,
+}
+
+impl From<DeviceMessageState> for deltachat::message::MessageState {
+    fn from(message_state: DeviceMessageState) -> Self {
+        use deltachat::message::MessageState;
+        match message_state {
+            DeviceMessageState::InFresh => MessageState::InFresh,
+            DeviceMessageState::InNoticed => MessageState::InNoticed,
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, TypeDef, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceMessageData {
+    #[serde(flatten)]
+    pub message_data: MessageData,
+    #[serde(default)]
+    pub message_state: Option<DeviceMessageState>,
+}
+
 #[derive(Serialize, TypeDef, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MessageReadReceipt {
