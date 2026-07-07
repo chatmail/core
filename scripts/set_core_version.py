@@ -67,13 +67,14 @@ def main():
     parser.add_argument("newversion")
 
     json_list = [
-        "deltachat-jsonrpc/typescript/package.json",
+        "deltachat-jsonrpc-bindings/typescript/package.json",
         "deltachat-rpc-server/npm-package/package.json",
     ]
     toml_list = [
         "Cargo.toml",
         "deltachat-ffi/Cargo.toml",
         "deltachat-jsonrpc/Cargo.toml",
+        "deltachat-jsonrpc-bindings/Cargo.toml",
         "deltachat-rpc-server/Cargo.toml",
         "deltachat-repl/Cargo.toml",
         "python/pyproject.toml",

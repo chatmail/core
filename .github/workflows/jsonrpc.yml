@@ -30,16 +30,16 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-bin: false
       - name: npm install
-        working-directory: deltachat-jsonrpc/typescript
+        working-directory: deltachat-jsonrpc-bindings/typescript
         run: npm install
       - name: Build TypeScript, run Rust tests, generate bindings
-        working-directory: deltachat-jsonrpc/typescript
+        working-directory: deltachat-jsonrpc-bindings/typescript
         run: npm run build
       - name: Run integration tests
-        working-directory: deltachat-jsonrpc/typescript
+        working-directory: deltachat-jsonrpc-bindings/typescript
         run: npm run test
         env:
           CHATMAIL_DOMAIN: ${{ vars.CHATMAIL_DOMAIN }}
       - name: Run linter
-        working-directory: deltachat-jsonrpc/typescript
+        working-directory: deltachat-jsonrpc-bindings/typescript
         run: npm run prettier:check
