@@ -132,9 +132,7 @@ ORDER BY timestamp DESC, id DESC LIMIT 1)"
                 )
             };
         }
-        // - `GROUP BY` is needed several messages may have the same
-        //   timestamp
-        // - the list starts with the newest chats
+        // The list starts with the newest chats.
         //
         // The query shows messages from blocked contacts in
         // groups. Otherwise it would be hard to follow conversations.
@@ -149,7 +147,6 @@ ORDER BY timestamp DESC, id DESC LIMIT 1)"
                  WHERE c.id>9
                    AND c.blocked!=1
                    AND c.id IN(SELECT chat_id FROM chats_contacts WHERE contact_id=? AND add_timestamp >= remove_timestamp)
-                 GROUP BY c.id
                  ORDER BY c.archived=? DESC, IFNULL(NULLIF(m.timestamp,0),c.created_timestamp) DESC, m.id DESC"),
                 (query_contact_id, ChatVisibility::Pinned),
                 process_row,
@@ -174,7 +171,6 @@ ORDER BY timestamp DESC, id DESC LIMIT 1)"
                  WHERE c.id>9
                    AND c.blocked!=1
                    AND c.archived=1
-                 GROUP BY c.id
                  ORDER BY IFNULL(NULLIF(m.timestamp,0),c.created_timestamp) DESC, m.id DESC"
                     ),
                     (),
@@ -206,7 +202,6 @@ ORDER BY timestamp DESC, id DESC LIMIT 1)"
                    AND c.blocked!=1
                    AND IFNULL(c.name_normalized,c.name) LIKE ?
                    AND (NOT ? OR EXISTS (SELECT 1 FROM msgs m WHERE m.chat_id = c.id AND m.state == ? AND hidden=0))
-                 GROUP BY c.id
                  ORDER BY IFNULL(NULLIF(m.timestamp,0),c.created_timestamp) DESC, m.id DESC"),
                     (skip_id, str_like_cmd, only_unread, MessageState::InFresh),
                     process_row,
@@ -250,7 +245,6 @@ ORDER BY timestamp DESC, id DESC LIMIT 1)"
                        AND c.blocked=0
                        AND NOT c.archived=?
                        AND (c.type!=? OR c.id IN(SELECT chat_id FROM chats_contacts WHERE contact_id=? AND add_timestamp >= remove_timestamp))
-                     GROUP BY c.id
                      ORDER BY c.id=? DESC, c.archived=? DESC, IFNULL(NULLIF(m.timestamp,0),c.created_timestamp) DESC, m.id DESC"),
                     (
                         skip_id, ChatVisibility::Archived,
@@ -271,7 +265,6 @@ ORDER BY timestamp DESC, id DESC LIMIT 1)"
                      WHERE c.id>9 AND c.id!=?
                        AND (c.blocked=0 OR c.blocked=2)
                        AND NOT c.archived=?
-                     GROUP BY c.id
                      ORDER BY c.id=0 DESC, c.archived=? DESC, IFNULL(NULLIF(m.timestamp,0),c.created_timestamp) DESC, m.id DESC"),
                     (skip_id, ChatVisibility::Archived, ChatVisibility::Pinned),
                     process_row,
