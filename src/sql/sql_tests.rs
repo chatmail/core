@@ -1,5 +1,6 @@
 use super::*;
 use crate::message::Message;
+use crate::tools::SystemTime;
 use crate::{EventType, test_utils::TestContext};
 
 #[test]
@@ -364,6 +365,117 @@ async fn test_incremental_vacuum() -> Result<()> {
     let t = TestContext::new().await;
 
     incremental_vacuum(&t).await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_remove_unused_hidden_transports() -> Result<()> {
+    let t = TestContext::new().await;
+    let now = time();
+
+    let transport_id = t
+        .sql
+        .transaction(|t| {
+            // published transport
+            t.execute(
+                "INSERT INTO transports
+                (addr,
+                entered_param,
+                configured_param,
+                add_timestamp)
+                VALUES (?, ?, ?, ?)",
+                ("1", "", "", now),
+            )?;
+
+            // not published transport
+            let transport_id = t.query_row::<u32, _, _>(
+                "INSERT INTO transports
+                (addr,
+                entered_param,
+                configured_param,
+                is_published,
+                add_timestamp)
+                VALUES (?, ?, ?, ?, ?)
+                RETURNING id",
+                ("2", "", "", 0, now),
+                |row| row.get(0),
+            )?;
+
+            // this transport has add_timestamp in the future,
+            // and should not be removed at all, since we only shift time
+            // by 90 days and one second.
+            t.execute(
+                "INSERT INTO transports
+                (addr,
+                entered_param,
+                configured_param,
+                is_published,
+                add_timestamp)
+                VALUES (?, ?, ?, ?, ?)",
+                ("3", "", "", 0, now + 60),
+            )?;
+            Ok(transport_id)
+        })
+        .await?;
+
+    async fn assert_transport_removed(
+        context: &Context,
+        hidden_transport_id: u32,
+        should_be_removed: bool,
+    ) -> Result<()> {
+        let transports_count: u32 = context
+            .sql
+            .query_get_value("SELECT count(*) FROM transports", ())
+            .await?
+            .unwrap();
+        assert_eq!(transports_count, if should_be_removed { 2 } else { 3 });
+        let hidden_transport_present: bool = context
+            .sql
+            .query_get_value(
+                "SELECT count(*) FROM transports WHERE id=?",
+                (hidden_transport_id,),
+            )
+            .await?
+            .unwrap();
+        assert_eq!(hidden_transport_present, !should_be_removed);
+        Ok(())
+    }
+
+    assert_eq!(
+        t.sql
+            .query_get_value::<i64>(
+                "SELECT last_rcvd_timestamp FROM transports WHERE id=?",
+                (transport_id,)
+            )
+            .await?
+            .unwrap(),
+        0
+    );
+    update_transport_last_rcvd_timestamp(&t, transport_id).await?;
+    // last_rcvd_timestamp should update
+    assert!(
+        t.sql
+            .query_get_value::<i64>(
+                "SELECT last_rcvd_timestamp FROM transports WHERE id=?",
+                (transport_id,)
+            )
+            .await?
+            .unwrap()
+            >= now
+    );
+
+    assert_transport_removed(&t, transport_id, false).await?;
+    remove_unused_hidden_transports(&t).await?;
+    // it was recently used, so nothing is deleted
+    assert_transport_removed(&t, transport_id, false).await?;
+
+    SystemTime::shift(Duration::from_secs(
+        (UNPUBLISHED_TRANSPORT_KEEP_TIME + 1).try_into()?,
+    ));
+
+    remove_unused_hidden_transports(&t).await?;
+    assert_transport_removed(&t, transport_id, true).await?;
 
     Ok(())
 }

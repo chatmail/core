@@ -1182,6 +1182,7 @@ impl Session {
 
         for (request_uids, set) in build_sequence_sets(&request_uids)? {
             info!(context, "Starting UID FETCH of message set \"{}\".", set);
+            let transport_id = self.transport_id();
             let mut fetch_responses = self
                 .uid_fetch(&set, BODY_FULL)
                 .await
@@ -1277,6 +1278,12 @@ impl Session {
                     "Passing message UID {} to receive_imf().", request_uid
                 );
                 let res = receive_imf_inner(context, rfc724_mid, body, is_seen).await;
+                crate::sql::update_transport_last_rcvd_timestamp(context, transport_id)
+                    .await
+                    .context(format!(
+                        "Failed to update last_rcvd_timestamp of transport {}",
+                        transport_id
+                    ))?;
 
                 // If there was an error receiving the message, show a device message:
                 let received_msg = match res {
