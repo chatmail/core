@@ -526,7 +526,7 @@ impl CommandApi {
     /// - [Self::add_transport_from_qr()] to add a transport
     ///   from a server encoded in a QR code.
     /// - [Self::list_transports()] to get a list of all configured transports.
-    /// - [Self::delete_transport()] to remove a transport.
+    /// - [Self::set_transport_unpublished()] to remove a transport.
     /// - [Self::set_transport_unpublished()] to set whether contacts see this transport.
     async fn add_or_update_transport(
         &self,
@@ -552,7 +552,7 @@ impl CommandApi {
 
     /// Returns the list of all email accounts that are used as a transport in the current profile.
     /// Use [Self::add_or_update_transport()] to add or change a transport
-    /// and [Self::delete_transport()] to delete a transport.
+    /// and [Self::set_transport_unpublished()] to remove a transport.
     /// Use [Self::list_transports_ex()] to additionally query
     /// whether the transports are marked as 'unpublished'.
     async fn list_transports(&self, account_id: u32) -> Result<Vec<EnteredLoginParam>> {
@@ -568,7 +568,7 @@ impl CommandApi {
 
     /// Returns the list of all email accounts that are used as a transport in the current profile.
     /// Use [Self::add_or_update_transport()] to add or change a transport
-    /// and [Self::delete_transport()] to delete a transport.
+    /// and [Self::set_transport_unpublished()] to remove a transport.
     async fn list_transports_ex(&self, account_id: u32) -> Result<Vec<TransportListEntry>> {
         let ctx = self.get_context(account_id).await?;
         let res = ctx
@@ -580,23 +580,23 @@ impl CommandApi {
         Ok(res)
     }
 
-    /// Removes the transport with the specified email address
-    /// (i.e. [EnteredLoginParam::addr]).
+    /// Immediately deletes a transport, potentially causing messages not to arrive.
+    /// This must ONLY be used by the automated tests.
+    /// UI implementations must use `set_transport_unpublished()` instead.
     async fn delete_transport(&self, account_id: u32, addr: String) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
         ctx.delete_transport(&addr).await
     }
 
     /// Change whether the transport is unpublished.
+    /// UIs should call this function when the user clicks on "Remove".
+    /// Core will keep listening on this transport for some time,
+    /// and automatically remove it once it is no longer needed.
     ///
     /// Unpublished transports are not advertised to contacts,
     /// and self-sent messages are not sent there,
     /// so that we don't cause extra messages to the corresponding inbox,
     /// but can still receive messages from contacts who don't know our new transport addresses yet.
-    ///
-    /// The default is false, but when the user updates from a version that didn't have this flag,
-    /// existing secondary transports are set to unpublished,
-    /// so that an existing transport address doesn't suddenly get spammed with a lot of messages.
     async fn set_transport_unpublished(
         &self,
         account_id: u32,
