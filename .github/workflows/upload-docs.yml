@@ -27,7 +27,7 @@ jobs:
           mkdir -p "$HOME/.ssh"
           echo "${{ secrets.RS_DOCS_SSH_KEY }}" > "$HOME/.ssh/key"
           chmod 600 "$HOME/.ssh/key"
-          rsync -avzh -e "ssh -i $HOME/.ssh/key -o StrictHostKeyChecking=no" $GITHUB_WORKSPACE/target/doc/* "${{ secrets.RS_DOCS_SSH_USER }}@rs.delta.chat:"
+          rsync -avzh -e "ssh -i $HOME/.ssh/key -o StrictHostKeyChecking=no" $GITHUB_WORKSPACE/target/doc/ "${{ secrets.RS_DOCS_SSH_USER }}@rs.delta.chat:"
 
   build-python:
     runs-on: ubuntu-latest
@@ -49,7 +49,7 @@ jobs:
           mkdir -p "$HOME/.ssh"
           echo "${{ secrets.PY_DOCS_SSH_KEY }}" > "$HOME/.ssh/key"
           chmod 600 "$HOME/.ssh/key"
-          rsync -avzh --delete -e "ssh -i $HOME/.ssh/key -o StrictHostKeyChecking=no" $GITHUB_WORKSPACE/result/html/* "${{ secrets.PY_DOCS_SSH_USER }}@py.delta.chat:"
+          rsync -avzh --delete -e "ssh -i $HOME/.ssh/key -o StrictHostKeyChecking=no" $GITHUB_WORKSPACE/result/html/ "${{ secrets.PY_DOCS_SSH_USER }}@py.delta.chat:"
 
   build-c:
     runs-on: ubuntu-latest
@@ -71,7 +71,7 @@ jobs:
           mkdir -p "$HOME/.ssh"
           echo "${{ secrets.C_DOCS_SSH_KEY }}" > "$HOME/.ssh/key"
           chmod 600 "$HOME/.ssh/key"
-          rsync -avzh --delete -e "ssh -i $HOME/.ssh/key -o StrictHostKeyChecking=no" $GITHUB_WORKSPACE/result/html/* "${{ secrets.C_DOCS_SSH_USER }}@c.delta.chat:"
+          rsync -avzh --delete -e "ssh -i $HOME/.ssh/key -o StrictHostKeyChecking=no" $GITHUB_WORKSPACE/result/html/ "${{ secrets.C_DOCS_SSH_USER }}@c.delta.chat:"
 
   build-ts:
     runs-on: ubuntu-latest
@@ -104,7 +104,7 @@ jobs:
           mkdir -p "$HOME/.ssh"
           echo "${{ secrets.JS_JSONRPC_DOCS_SSH_KEY }}" > "$HOME/.ssh/key"
           chmod 600 "$HOME/.ssh/key"
-          rsync -avzh --delete -e "ssh -i $HOME/.ssh/key -o StrictHostKeyChecking=no" $GITHUB_WORKSPACE/deltachat-jsonrpc/typescript/docs/* "${{ secrets.JS_JSONRPC_DOCS_SSH_USER }}@js.jsonrpc.delta.chat:"
+          rsync -avzh --delete -e "ssh -i $HOME/.ssh/key -o StrictHostKeyChecking=no" $GITHUB_WORKSPACE/deltachat-jsonrpc/typescript/docs/ "${{ secrets.JS_JSONRPC_DOCS_SSH_USER }}@js.jsonrpc.delta.chat:"
 
   build-cffi:
     runs-on: ubuntu-latest
@@ -125,4 +125,4 @@ jobs:
           mkdir -p "$HOME/.ssh"
           echo "${{ secrets.CFFI_DOCS_SSH_KEY }}" > "$HOME/.ssh/key"
           chmod 600 "$HOME/.ssh/key"
-          rsync -avzh --delete -e "ssh -i $HOME/.ssh/key -o StrictHostKeyChecking=no" $GITHUB_WORKSPACE/target/doc/* "${{ secrets.CFFI_DOCS_SSH_USER }}@delta.chat:"
+          rsync -avzh --delete -e "ssh -i $HOME/.ssh/key -o StrictHostKeyChecking=no" $GITHUB_WORKSPACE/target/doc/ "${{ secrets.CFFI_DOCS_SSH_USER }}@delta.chat:"
