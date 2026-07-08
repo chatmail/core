@@ -230,8 +230,9 @@ impl Context {
         self.sql.count("SELECT COUNT(*) FROM transports", ()).await
     }
 
-    /// Removes the transport with the specified email address
-    /// (i.e. [EnteredLoginParam::addr]).
+    /// Immediately deletes a transport, potentially causing messages not to arrive.
+    /// This must ONLY be used by the automated tests.
+    /// UI implementations must use `set_transport_unpublished()` instead.
     pub async fn delete_transport(&self, addr: &str) -> Result<()> {
         let now = time();
         let removed_transport_id = self
@@ -282,15 +283,14 @@ impl Context {
     }
 
     /// Change whether the transport is unpublished.
+    /// UIs should call this function when the user clicks on "Remove".
+    /// Core will keep listening on this transport for some time,
+    /// and automatically remove it once it is no longer needed.
     ///
     /// Unpublished transports are not advertised to contacts,
     /// and self-sent messages are not sent there,
     /// so that we don't cause extra messages to the corresponding inbox,
     /// but can still receive messages from contacts who don't know our new transport addresses yet.
-    ///
-    /// The default is false, but when the user updates from a version that didn't have this flag,
-    /// existing secondary transports are set to unpublished,
-    /// so that an existing transport address doesn't suddenly get spammed with a lot of messages.
     pub async fn set_transport_unpublished(&self, addr: &str, unpublished: bool) -> Result<()> {
         self.sql
             .transaction(|trans| {
