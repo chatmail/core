@@ -553,22 +553,30 @@ impl CommandApi {
     /// Returns the list of all email accounts that are used as a transport in the current profile.
     /// Use [Self::add_or_update_transport()] to add or change a transport
     /// and [Self::set_transport_unpublished()] to remove a transport.
-    /// Use [Self::list_transports_ex()] to additionally query
-    /// whether the transports are marked as 'unpublished'.
     async fn list_transports(&self, account_id: u32) -> Result<Vec<EnteredLoginParam>> {
         let ctx = self.get_context(account_id).await?;
         let res = ctx
             .list_transports()
             .await?
             .into_iter()
+            .filter(|t| !t.is_unpublished)
             .map(|t| t.param.into())
             .collect();
         Ok(res)
     }
 
+    /// Deprecated 2026-06: This is not needed by UI implementations anymore,
+    /// because unpublished relays now count as removed from the user point of view,
+    /// and must not be shown in the list of relays.
+    /// This means that UIs should use `list_transports()` instead of this function.
+    ///
     /// Returns the list of all email accounts that are used as a transport in the current profile.
+    ///
+    /// As opposed to `list_transports()`, this function also returns unpublished transports,
+    /// and for each returned transport it returns the information whether or not is `unpublished`.
+    ///
     /// Use [Self::add_or_update_transport()] to add or change a transport
-    /// and [Self::set_transport_unpublished()] to remove a transport.
+    /// and [Self::set_transport_unpublished()] to change whether a transport is 'published'.
     async fn list_transports_ex(&self, account_id: u32) -> Result<Vec<TransportListEntry>> {
         let ctx = self.get_context(account_id).await?;
         let res = ctx
