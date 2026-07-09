@@ -181,3 +181,10 @@ Calling `into()`, `try_into()` or `parse()`
 creates an indirection,
 which is hard to follow for people who are not familiar with Rust,
 or who are not using rust-analyzer.
+
+## Use macros only when really needed
+
+Macros can be hard to read for people unfamiliar with Rust,
+and can have surprising effects like evaluating arguments multiple times.
+Therefore, macros should only be used when really needed;
+using functions is usually better.
