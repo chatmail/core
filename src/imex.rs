@@ -673,7 +673,7 @@ async fn export_self_keys(context: &Context, dir: &Path) -> Result<()> {
         .await?;
     let self_addr = context.get_primary_self_addr().await?;
     for (id, private_key, is_default) in keys {
-        let id = Some(id).filter(|_| is_default == 0);
+        let id = (is_default == 0).then_some(id);
 
         let Ok(private_key) = private_key else {
             export_errors += 1;
