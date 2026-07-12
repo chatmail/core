@@ -3,7 +3,7 @@
 use anyhow::Context as _;
 
 use super::session::Session as ImapSession;
-use super::{get_uid_next, get_uidvalidity, set_modseq, set_uid_next, set_uidvalidity};
+use super::{get_uid_next, get_uidvalidity, set_uid_next, set_uidvalidity};
 use crate::context::Context;
 use crate::ensure_and_debug_assert;
 use crate::log::warn;
@@ -199,9 +199,6 @@ impl ImapSession {
 
             return Ok(true);
         }
-
-        // UIDVALIDITY is modified, reset highest seen MODSEQ.
-        set_modseq(context, transport_id, folder, 0).await?;
 
         // ==============  uid_validity has changed or is being set the first time.  ==============
 
