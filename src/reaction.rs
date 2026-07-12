@@ -84,7 +84,7 @@ pub struct ReactionFrequency {
     pub reaction: Reaction,
 
     /// Number of contacts that reacted with this emoji.
-    pub count: usize,
+    pub count: u32,
 
     /// True if `ContactId::SELF` is among the contacts that reacted with this emoji.
     pub is_from_self: bool,
@@ -420,7 +420,7 @@ pub(crate) async fn apply_pending_reactions(
 /// sorted in descending order of frequency.
 fn calc_frequencies(by_contact: &BTreeMap<ContactId, Reaction>) -> Vec<ReactionFrequency> {
     let mut self_reaction = Reaction::new("");
-    let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
+    let mut counts: BTreeMap<&str, u32> = BTreeMap::new();
     for (contact_id, reaction) in by_contact {
         let count = counts.entry(reaction.as_str()).or_insert(0);
         *count = count.saturating_add(1);

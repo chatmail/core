@@ -56,16 +56,18 @@ pub async fn get_storage_usage(ctx: &Context) -> Result<StorageUsage> {
     let blobdir_size =
         tokio::task::spawn_blocking(move || get_blobdir_storage_usage(&context_clone));
 
-    let page_size: u64 = ctx
+    let page_size: i64 = ctx
         .sql
         .query_get_value("PRAGMA page_size", ())
         .await?
         .unwrap_or_default();
-    let page_count: u64 = ctx
+    let page_size = u64::try_from(page_size)?;
+    let page_count: i64 = ctx
         .sql
         .query_get_value("PRAGMA page_count", ())
         .await?
         .unwrap_or_default();
+    let page_count = u64::try_from(page_count)?;
 
     let mut largest_tables = ctx
         .sql
@@ -78,7 +80,8 @@ pub async fn get_storage_usage(ctx: &Context) -> Result<StorageUsage> {
             (),
             |row| {
                 let name: String = row.get(0)?;
-                let size: u64 = row.get(1)?;
+                let size: i64 = row.get(1)?;
+                let size: u64 = u64::try_from(size)?;
                 Ok((name, size, None))
             },
         )
@@ -86,12 +89,13 @@ pub async fn get_storage_usage(ctx: &Context) -> Result<StorageUsage> {
 
     for row in &mut largest_tables {
         let name = &row.0;
-        let row_count: Result<Option<u64>> = ctx
+        let row_count: Option<i64> = ctx
             .sql
             // SECURITY: the table name comes from the db, not from the user
             .query_get_value(&format!("SELECT COUNT(*) FROM {name}"), ())
-            .await;
-        row.2 = row_count.unwrap_or_default();
+            .await
+            .unwrap_or_default();
+        row.2 = row_count.map(|count| u64::try_from(count).unwrap_or_default());
     }
 
     let largest_webxdc_data = ctx
@@ -103,8 +107,12 @@ pub async fn get_storage_usage(ctx: &Context) -> Result<StorageUsage> {
             (),
             |row| {
                 let msg_id: MsgId = row.get(0)?;
-                let size: u64 = row.get(1)?;
-                let count: u64 = row.get(2)?;
+                let size: i64 = row.get(1)?;
+                let count: i64 = row.get(2)?;
+
+                // This should never fail as the count cannot be negative.
+                let size: u64 = u64::try_from(size)?;
+                let count: u64 = u64::try_from(count)?;
 
                 Ok((msg_id, size, count))
             },
