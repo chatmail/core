@@ -658,7 +658,7 @@ pub(crate) async fn msgs_to_key_contacts(context: &Context) -> Result<()> {
         return Ok(());
     }
     let trans_fn = |t: &mut rusqlite::Transaction| {
-        let mut first_key_contacts_msg_id: u64 = t
+        let mut first_key_contacts_msg_id: u32 = t
             .query_one(
                 "SELECT CAST(value AS INTEGER) FROM config WHERE keyname='first_key_contacts_msg_id'",
                 (),
@@ -682,10 +682,10 @@ pub(crate) async fn msgs_to_key_contacts(context: &Context) -> Result<()> {
             )
             .context("Prepare stmt")?;
         let msgs_to_migrate = 1000;
-        let mut msgs_migrated: u64 = 0;
+        let mut msgs_migrated: u32 = 0;
         while first_key_contacts_msg_id > 0 && msgs_migrated < msgs_to_migrate {
             let start_msg_id = first_key_contacts_msg_id.saturating_sub(msgs_to_migrate);
-            let cnt: u64 = stmt
+            let cnt: u32 = stmt
                 .execute((start_msg_id, first_key_contacts_msg_id))
                 .context("UPDATE msgs")?
                 .try_into()?;

@@ -77,7 +77,7 @@ struct ContactStat {
     #[serde(skip_serializing_if = "is_false")]
     direct_chat: bool,
 
-    last_seen: u64,
+    last_seen: i64,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     transitive_chain: Option<u32>,
@@ -328,7 +328,7 @@ async fn ensure_last_old_contact_id(context: &Context) -> Result<()> {
         return Ok(());
     }
 
-    let last_contact_id: u64 = context
+    let last_contact_id: u32 = context
         .sql
         .query_get_value("SELECT MAX(id) FROM contacts", ())
         .await?
@@ -451,7 +451,7 @@ async fn get_contact_stats(context: &Context, last_old_contact: u32) -> Result<V
                 let id = row.get(0)?;
                 let is_encrypted: bool = row.get(1)?;
                 let verifier: ContactId = row.get(2)?;
-                let last_seen: u64 = row.get(3)?;
+                let last_seen: i64 = row.get(3)?;
                 let bot: bool = row.get(4)?;
 
                 let verified = match (is_encrypted, verifier) {
