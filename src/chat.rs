@@ -1794,8 +1794,7 @@ impl Chat {
         }
 
         let is_bot = context.get_config_bool(Config::Bot).await?;
-        msg.param
-            .set_optional(Param::Bot, Some("1").filter(|_| is_bot));
+        msg.param.set_optional(Param::Bot, is_bot.then_some("1"));
 
         // Set "In-Reply-To:" to identify the message to which the composed message is a reply.
         // Set "References:" to identify the "thread" of the conversation.
