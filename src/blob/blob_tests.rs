@@ -406,8 +406,8 @@ async fn test_recode_image_balanced_png() {
         extension: "png",
         original_width: 1920,
         original_height: 1080,
-        compressed_width: 848,
-        compressed_height: 477,
+        compressed_width: 904,
+        compressed_height: 509,
         ..Default::default()
     }
     .test()
@@ -497,8 +497,8 @@ async fn test_recode_image_rgba_png_to_jpeg() {
         extension: "png",
         original_width: 1920,
         original_height: 1080,
-        compressed_width: 848,
-        compressed_height: 477,
+        compressed_width: 904,
+        compressed_height: 509,
         ..Default::default()
     }
     .test()

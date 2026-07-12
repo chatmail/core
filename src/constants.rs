@@ -193,7 +193,7 @@ pub(crate) const WORSE_AVATAR_BYTES: usize = 20_000; // this also fits to Outloo
 
 // max. width/height of images scaled down because of being too huge
 pub const BALANCED_IMAGE_SIZE: u32 = 1360;
-pub const WORSE_IMAGE_SIZE: u32 = 640;
+pub const WORSE_IMAGE_SIZE: u32 = 680;
 
 /// Limit for received images size. Bigger images become `Viewtype::File` to avoid excessive memory
 /// usage by UIs.
