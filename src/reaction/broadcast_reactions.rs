@@ -42,7 +42,7 @@ struct WireMessage {
 #[derive(Debug, Serialize, Deserialize)]
 struct WireEntry {
     emoji: String,
-    count: usize,
+    count: u32,
 }
 
 /// Renders one or more message's states as a JSON string, ready to be sent in `Chat-Broadcast-States:` header.
@@ -235,10 +235,10 @@ pub(crate) async fn load_broadcast_reactions(
             (msg_id,),
             |row| {
                 let reaction: String = row.get(0)?;
-                let count: i64 = row.get(1)?;
+                let count: u32 = row.get(1)?;
                 Ok(ReactionFrequency {
                     reaction: Reaction::new(&reaction),
-                    count: count as usize,
+                    count,
                     is_from_self: false,
                 })
             },
@@ -405,7 +405,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_modify_frequencies() {
         // Helper to create a ReactionFrequency entry
-        let freq = |emoji: &str, count: usize, is_from_self: bool| -> ReactionFrequency {
+        let freq = |emoji: &str, count: u32, is_from_self: bool| -> ReactionFrequency {
             ReactionFrequency {
                 reaction: Reaction::new(emoji),
                 count,

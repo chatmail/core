@@ -12,7 +12,7 @@ pub struct JsonrpcReaction {
     emoji: String,
 
     /// Emoji frequency.
-    count: usize,
+    count: u32,
 
     /// True if we reacted with this emoji.
     is_from_self: bool,
