@@ -1999,23 +1999,6 @@ async fn get_uidvalidity(context: &Context, transport_id: u32, folder: &str) -> 
         .unwrap_or(0))
 }
 
-pub(crate) async fn set_modseq(
-    context: &Context,
-    transport_id: u32,
-    folder: &str,
-    modseq: u64,
-) -> Result<()> {
-    context
-        .sql
-        .execute(
-            "INSERT INTO imap_sync (transport_id, folder, modseq) VALUES (?,?,?)
-                ON CONFLICT(transport_id, folder) DO UPDATE SET modseq=excluded.modseq",
-            (transport_id, folder, modseq),
-        )
-        .await?;
-    Ok(())
-}
-
 /// Builds a list of sequence/uid sets. The returned sets have each no more than around 1000
 /// characters because according to <https://tools.ietf.org/html/rfc2683#section-3.2.1.5>
 /// command lines should not be much more than 1000 chars (servers should allow at least 8000 chars)
