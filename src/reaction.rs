@@ -18,7 +18,7 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::fmt;
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 
 use crate::chat::{Chat, ChatId, send_msg};
@@ -199,6 +199,39 @@ async fn set_msg_id_reaction(
     Ok(())
 }
 
+/// Adds or updates a pending reaction to `pending_reactions` table.
+async fn set_pending_reaction(
+    context: &Context,
+    rfc724_mid: &str,
+    contact_id: ContactId,
+    timestamp: i64,
+    reaction: &Reaction,
+) -> Result<()> {
+    if reaction.is_empty() {
+        context
+            .sql
+            .execute(
+                "DELETE FROM pending_reactions
+                 WHERE rfc724_mid = ?1
+                 AND contact_id = ?2",
+                (rfc724_mid, contact_id),
+            )
+            .await?;
+    } else {
+        context
+            .sql
+            .execute(
+                "INSERT INTO pending_reactions (rfc724_mid, contact_id, reaction, timestamp)
+                 VALUES (?1, ?2, ?3, ?4)
+                 ON CONFLICT(rfc724_mid, contact_id)
+                 DO UPDATE SET reaction=excluded.reaction, timestamp=excluded.timestamp",
+                (rfc724_mid, contact_id, reaction.as_str(), timestamp),
+            )
+            .await?;
+    }
+    Ok(())
+}
+
 /// Sends a reaction to message `msg_id`, overriding previously sent reactions.
 ///
 /// `reaction` is a string consisting of a single emoji. Use
@@ -235,6 +268,9 @@ pub async fn send_reaction(context: &Context, msg_id: MsgId, reaction: &str) -> 
 ///
 /// `reaction` is string representing the emoji. It can be empty
 /// if contact wants to remove the reaction.
+///
+/// Delegates to [`set_msg_reaction_if_present`],
+/// and if message is not present, fallbacks to [`set_pending_reaction`].
 pub(crate) async fn set_msg_reaction(
     context: &Context,
     in_reply_to: &str,
@@ -244,8 +280,43 @@ pub(crate) async fn set_msg_reaction(
     reaction: Reaction,
     is_incoming_fresh: bool,
 ) -> Result<()> {
+    if !set_msg_reaction_if_present(
+        context,
+        in_reply_to,
+        chat_id,
+        contact_id,
+        timestamp,
+        &reaction,
+        is_incoming_fresh,
+    )
+    .await?
+    {
+        info!(
+            context,
+            "Can't assign reaction to unknown message with Message-ID {}; inserting into pending table.",
+            in_reply_to
+        );
+        let rfc724_mid = in_reply_to.trim_start_matches('<').trim_end_matches('>');
+        set_pending_reaction(context, rfc724_mid, contact_id, timestamp, &reaction).await?
+    }
+    Ok(())
+}
+
+/// Similar to [`set_msg_reaction`],
+/// but does not create a row in `pending_messages` if message is not present.
+///
+/// Returns `Ok(true)` if message was present and `Ok(false)` if not.
+pub(crate) async fn set_msg_reaction_if_present(
+    context: &Context,
+    in_reply_to: &str,
+    chat_id: ChatId,
+    contact_id: ContactId,
+    timestamp: i64,
+    reaction: &Reaction,
+    is_incoming_fresh: bool,
+) -> Result<bool> {
     if let Some(msg_id) = rfc724_mid_exists(context, in_reply_to).await? {
-        set_msg_id_reaction(context, msg_id, chat_id, contact_id, timestamp, &reaction).await?;
+        set_msg_id_reaction(context, msg_id, chat_id, contact_id, timestamp, reaction).await?;
 
         if is_incoming_fresh
             && !reaction.is_empty()
@@ -255,15 +326,82 @@ pub(crate) async fn set_msg_reaction(
                 chat_id,
                 contact_id,
                 msg_id,
-                reaction,
+                reaction: reaction.clone(),
             });
         }
-    } else {
-        info!(
-            context,
-            "Can't assign reaction to unknown message with Message-ID {}", in_reply_to
-        );
+        return Ok(true);
     }
+    Ok(false)
+}
+
+/// Applies pending reactions to message `rfc724_mid`, assuming `chat_id`.
+///
+/// Does not check if the `chat_id` is correct for this message.
+pub(crate) async fn apply_pending_reactions(
+    context: &Context,
+    rfc724_mid: &str,
+    chat_id: ChatId,
+) -> Result<()> {
+    let pending_reactions: BTreeMap<ContactId, (Reaction, i64)> = context
+        .sql
+        .query_map_collect(
+            "SELECT contact_id, reaction, timestamp
+            FROM pending_reactions
+            WHERE rfc724_mid=?",
+            (rfc724_mid,),
+            |row| {
+                let contact_id: ContactId = row.get(0)?;
+                let reaction: Reaction = Reaction::new(row.get::<_, String>(1)?.as_str());
+                let timestamp: i64 = row.get(2)?;
+                Ok((contact_id, (reaction, timestamp)))
+            },
+        )
+        .await?;
+
+    if pending_reactions.is_empty() {
+        return Ok(());
+    }
+
+    info!(
+        context,
+        "Applying {} pending reactions to {}.",
+        pending_reactions.len(),
+        rfc724_mid
+    );
+
+    for (contact_id, (reaction, timestamp)) in pending_reactions {
+        // We know whether the reaction message is incoming,
+        // but it is unclear whether it's still fresh (i.e. unnoticed by the user).
+        // To be safe, always count it as fresh, to notify the user rather once too often than once too few.
+        // This is only relevant in edge cases, anyway.
+        let is_incoming_fresh = contact_id != ContactId::SELF;
+        if !set_msg_reaction_if_present(
+            context,
+            rfc724_mid,
+            chat_id,
+            contact_id,
+            timestamp,
+            &reaction,
+            is_incoming_fresh,
+        )
+        .await?
+        {
+            bail!("Message {rfc724_mid} is not present, can't apply pending reactions");
+        }
+    }
+
+    // Note: race condition can't happen here,
+    // as at this point the message is already added to the DB,
+    // so no new pending reactions with this rfc724_mid will be added in meantime.
+    // (Assuming this function is used after receiving the message.)
+    context
+        .sql
+        .execute(
+            "DELETE FROM pending_reactions WHERE rfc724_mid=?",
+            (rfc724_mid,),
+        )
+        .await?;
+
     Ok(())
 }
 
@@ -710,6 +848,71 @@ Content-Disposition: reaction\n\
             vec![("👍".to_string(), 2)]
         );
 
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_send_out_of_order_reaction() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = tcm.alice().await;
+        let bob = tcm.bob().await;
+        let charlie = tcm.charlie().await;
+
+        tcm.send_recv_accept(&alice, &bob, "hi").await;
+        tcm.send_recv_accept(&alice, &charlie, "hi").await;
+
+        let chat_alice = alice.create_chat(&bob).await;
+        let groupchat_alice = alice
+            .create_group_with_members("test", &[&bob, &charlie])
+            .await;
+
+        // one to one
+
+        {
+            let alice_msg = alice.send_text(chat_alice.id, "test").await;
+
+            send_reaction(&alice, alice_msg.sender_msg_id, "👍").await?;
+            let reaction_msg = alice.pop_sent_msg().await;
+
+            bob.recv_msg_hidden(&reaction_msg).await;
+            let msg = bob.recv_msg(&alice_msg).await;
+            assert_eq!(get_msg_reactions(&bob, msg.id).await?.reactions.len(), 1);
+        }
+
+        // group
+
+        {
+            let alice_msg = alice.send_text(groupchat_alice, "test").await;
+
+            send_reaction(&alice, alice_msg.sender_msg_id, "👍").await?;
+            let reaction_msg_alice = alice.pop_sent_msg().await;
+
+            let charlie_msg = charlie.recv_msg(&alice_msg).await;
+            send_reaction(&charlie, charlie_msg.id, "👍").await?;
+            let reaction_msg_charlie = charlie.pop_sent_msg().await;
+
+            bob.recv_msg_hidden(&reaction_msg_alice).await;
+            bob.recv_msg_hidden(&reaction_msg_charlie).await;
+            let msg = bob.recv_msg(&alice_msg).await;
+            assert_eq!(get_msg_reactions(&bob, msg.id).await?.reactions.len(), 2);
+        }
+
+        // react and remove reaction
+
+        {
+            let alice_msg = alice.send_text(chat_alice.id, "test").await;
+
+            send_reaction(&alice, alice_msg.sender_msg_id, "👍").await?;
+            let reaction_msg = alice.pop_sent_msg().await;
+
+            send_reaction(&alice, alice_msg.sender_msg_id, "").await?;
+            let remove_reaction_msg = alice.pop_sent_msg().await;
+
+            bob.recv_msg_hidden(&reaction_msg).await;
+            bob.recv_msg_hidden(&remove_reaction_msg).await;
+            let msg = bob.recv_msg(&alice_msg).await;
+            assert_eq!(get_msg_reactions(&bob, msg.id).await?.reactions.len(), 0);
+        }
         Ok(())
     }
 

@@ -2505,6 +2505,23 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 158)?;
+    if dbversion < migration_version {
+        // Stores reactions to not-yet-received messages.
+        sql.execute_migration(
+            "CREATE TABLE pending_reactions (
+                rfc724_mid TEXT NOT NULL,
+                contact_id INTEGER NOT NULL,
+                reaction TEXT NOT NULL,
+                timestamp INTEGER NOT NULL,
+                PRIMARY KEY(rfc724_mid, contact_id),
+                FOREIGN KEY(contact_id) REFERENCES contacts(id) ON DELETE CASCADE
+            ) STRICT",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
