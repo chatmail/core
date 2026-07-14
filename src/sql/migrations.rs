@@ -2456,6 +2456,15 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 155)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "CREATE INDEX msgs_index10 ON msgs (mime_in_reply_to)",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
