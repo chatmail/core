@@ -938,11 +938,6 @@ UPDATE config SET value=? WHERE keyname='configured_addr' AND value!=?1
                 .await?;
             context.scheduler.interrupt_inbox().await;
         }
-        if target.is_none() && !mime_parser.mdn_reports.is_empty() && mime_parser.has_chat_version()
-        {
-            // This is a Delta Chat MDN. Mark as read.
-            markseen_on_imap_table(context, rfc724_mid_orig).await?;
-        }
         if !mime_parser.incoming && !context.get_config_bool(Config::TeamProfile).await? {
             let mut updated_chats = BTreeMap::new();
             let mut archived_chats_maybe_noticed = false;
@@ -1170,8 +1165,9 @@ async fn decide_chat_assignment(
         info!(context, "Message is an MDN (TRASH).");
         true
     } else if mime_parser.delivery_report.is_some() {
+        // Auto-marking DSNs as IMAP-seen should be avoided because the user may want to see them in
+        // another MUA.
         info!(context, "Message is a DSN (TRASH).");
-        markseen_on_imap_table(context, rfc724_mid).await.ok();
         true
     } else if mime_parser.get_header(HeaderDef::ChatEdit).is_some()
         || mime_parser.get_header(HeaderDef::ChatDelete).is_some()
