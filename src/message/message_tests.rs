@@ -450,6 +450,12 @@ async fn test_get_state() -> Result<()> {
     markseen_msgs(&bob, vec![bob_msg.id]).await?;
     assert_state(&bob, bob_msg.id, MessageState::InSeen).await;
 
+    let sent = bob.get_sent_mdn().await;
+    alice.recv_msg_trash(&sent).await;
+    let alice_msg = Message::load_from_db(&alice, alice_msg.id).await?;
+    assert_eq!(alice_msg.get_state(), MessageState::OutMdnRcvd);
+    assert_eq!(alice_msg.error().unwrap(), "badly failed");
+
     Ok(())
 }
 
