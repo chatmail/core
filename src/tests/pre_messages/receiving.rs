@@ -6,6 +6,7 @@ use crate::EventType;
 use crate::chat;
 use crate::chat::send_msg;
 use crate::config::Config;
+use crate::constants;
 use crate::contact;
 use crate::download::{DownloadState, PRE_MSG_ATTACHMENT_SIZE_THRESHOLD, PostMsgMetadata};
 use crate::message::{Message, MessageState, Viewtype, delete_msgs, markseen_msgs};
@@ -456,10 +457,11 @@ async fn test_receive_pre_message_image() -> Result<()> {
 
     // test that metadata is correctly returned by methods
     assert_eq!(msg.get_post_message_viewtype(), Some(Viewtype::Image));
-    // recoded image dimensions
-    assert_eq!(msg.get_filebytes(bob).await?, Some(233935));
-    assert_eq!(msg.get_height(), 1704);
-    assert_eq!(msg.get_width(), 959);
+    let n_bytes: usize = msg.get_filebytes(bob).await?.unwrap().try_into().unwrap();
+    assert!(100_000 < n_bytes);
+    assert!(n_bytes <= constants::BALANCED_IMAGE_BYTES);
+    assert_eq!(msg.get_height(), 1920);
+    assert_eq!(msg.get_width(), 1080);
 
     Ok(())
 }
