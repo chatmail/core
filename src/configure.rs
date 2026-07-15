@@ -45,9 +45,11 @@ use crate::transport::{
 use crate::{EventType, stock_str};
 use crate::{chat, provider};
 
-/// Maximum number of relays
-/// see <https://github.com/chatmail/core/issues/7608>
-pub(crate) const MAX_TRANSPORT_RELAYS: usize = 5;
+/// Maximum number of published relays.
+///
+/// See <https://github.com/chatmail/core/issues/7608>
+/// and <https://github.com/chatmail/core/issues/8421>.
+pub(crate) const MAX_PUBLISHED_RELAYS: usize = 5;
 
 /// Hard-coded candidates for default relays.
 /// In the future, we want to use it during onboarding;
@@ -336,14 +338,11 @@ impl Context {
                 .await?
             && self
                 .sql
-                .count("SELECT COUNT(*) FROM transports", ())
+                .count("SELECT COUNT(*) FROM transports WHERE is_published", ())
                 .await?
-                >= MAX_TRANSPORT_RELAYS
+                >= MAX_PUBLISHED_RELAYS
         {
-            bail!(
-                "You have reached the maximum number of relays ({}).",
-                MAX_TRANSPORT_RELAYS
-            )
+            bail!("You have reached the maximum number of relays ({MAX_PUBLISHED_RELAYS}).")
         }
 
         let provider = match configure(self, param).await {
