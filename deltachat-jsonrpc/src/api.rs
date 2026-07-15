@@ -590,7 +590,7 @@ impl CommandApi {
 
     /// Immediately deletes a transport, potentially causing messages not to arrive.
     /// This must ONLY be used by the automated tests.
-    /// UI implementations must use `set_transport_unpublished()` instead.
+    /// UI implementations must use [`Self::set_transport_unpublished`] instead.
     async fn delete_transport(&self, account_id: u32, addr: String) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
         ctx.delete_transport(&addr).await
@@ -605,6 +605,11 @@ impl CommandApi {
     /// and self-sent messages are not sent there,
     /// so that we don't cause extra messages to the corresponding inbox,
     /// but can still receive messages from contacts who don't know our new transport addresses yet.
+    ///
+    /// Unpublished transports that are not used to receive any new messages for a time defined by
+    /// [`UNPUBLISHED_TRANSPORT_KEEP_TIME`] are automatically removed.
+    ///
+    /// [`UNPUBLISHED_TRANSPORT_KEEP_TIME`]: deltachat::sql::UNPUBLISHED_TRANSPORT_KEEP_TIME
     async fn set_transport_unpublished(
         &self,
         account_id: u32,
