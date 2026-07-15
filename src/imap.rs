@@ -607,7 +607,6 @@ impl Imap {
         let _fetch_msgs_lock_guard = context.fetch_msgs_mutex.lock().await;
 
         let mut uids_fetch: Vec<u32> = Vec::new();
-        let mut available_post_msgs: Vec<String> = Vec::new();
         let mut download_later: Vec<String> = Vec::new();
         let mut uid_message_ids = BTreeMap::new();
         let mut largest_uid_skipped = None;
@@ -695,8 +694,6 @@ impl Imap {
                     .is_some()
                 {
                     info!(context, "{message_id:?} is a post-message.");
-                    available_post_msgs.push(message_id.clone());
-
                     let is_bot = context.get_config_bool(Config::Bot).await?;
                     if is_bot && download_limit.is_none_or(|download_limit| size <= download_limit)
                     {
@@ -792,18 +789,8 @@ impl Imap {
         chat::mark_old_messages_as_noticed(context, received_msgs).await?;
 
         if fetch_res.is_ok() {
-            info!(
-                context,
-                "available_post_msgs: {}, download_later: {}.",
-                available_post_msgs.len(),
-                download_later.len(),
-            );
+            info!(context, "download_later: {}.", download_later.len(),);
             let trans_fn = |t: &mut rusqlite::Transaction| {
-                let mut stmt = t.prepare("INSERT OR IGNORE INTO available_post_msgs VALUES (?)")?;
-                for rfc724_mid in available_post_msgs {
-                    stmt.execute((rfc724_mid,))
-                        .context("INSERT OR IGNORE INTO available_post_msgs")?;
-                }
                 let mut stmt =
                     t.prepare("INSERT OR IGNORE INTO download (rfc724_mid, msg_id) VALUES (?,0)")?;
                 for rfc724_mid in download_later {

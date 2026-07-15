@@ -1723,10 +1723,6 @@ pub async fn delete_msgs_ex(
                 "DELETE FROM download WHERE rfc724_mid=?",
                 (&msg.rfc724_mid,),
             )?;
-            trans.execute(
-                "DELETE FROM available_post_msgs WHERE rfc724_mid=?",
-                (&msg.rfc724_mid,),
-            )?;
             Ok(())
         };
         if let Err(e) = context.sql.transaction(update_db).await {

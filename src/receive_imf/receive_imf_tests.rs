@@ -5696,27 +5696,27 @@ async fn test_mark_message_as_delivered_only_after_sent_out_fully() -> Result<()
         .await
         .unwrap();
 
-    let (pre_msg_id, pre_msg_payload) = first_row_in_smtp_queue(alice).await;
-    assert_eq!(msg_id, pre_msg_id);
-    assert!(pre_msg_payload.len() < file_bytes.len());
-
-    assert_eq!(msg_id.get_state(alice).await?, MessageState::OutPending);
-    // Alice receives her own pre-message because of bcc_self
-    // This should not yet mark the message as delivered,
-    // because not everything was sent,
-    // but it does remove the pre-message from the SMTP queue
-    receive_imf(alice, pre_msg_payload.as_bytes(), false).await?;
-    assert_eq!(msg_id.get_state(alice).await?, MessageState::OutPending);
-
     let (post_msg_id, post_msg_payload) = first_row_in_smtp_queue(alice).await;
     assert_eq!(msg_id, post_msg_id);
     assert!(post_msg_payload.len() > file_bytes.len());
 
     assert_eq!(msg_id.get_state(alice).await?, MessageState::OutPending);
     // Alice receives her own post-message because of bcc_self
+    // This should not yet mark the message as delivered,
+    // because not everything was sent,
+    // but it does remove the post-message from the SMTP queue.
+    receive_imf(alice, post_msg_payload.as_bytes(), false).await?;
+    assert_eq!(msg_id.get_state(alice).await?, MessageState::OutPending);
+
+    let (pre_msg_id, pre_msg_payload) = first_row_in_smtp_queue(alice).await;
+    assert_eq!(msg_id, pre_msg_id);
+    assert!(pre_msg_payload.len() < file_bytes.len());
+
+    assert_eq!(msg_id.get_state(alice).await?, MessageState::OutPending);
+    // Alice receives her own pre-message because of bcc_self
     // This should now mark the message as delivered,
     // because everything was sent by now.
-    receive_imf(alice, post_msg_payload.as_bytes(), false).await?;
+    receive_imf(alice, pre_msg_payload.as_bytes(), false).await?;
     assert_eq!(msg_id.get_state(alice).await?, MessageState::OutDelivered);
 
     Ok(())

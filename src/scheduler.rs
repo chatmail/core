@@ -14,7 +14,7 @@ pub(crate) use self::connectivity::ConnectivityStore;
 use crate::config::Config;
 use crate::contact::{ContactId, RecentlySeenLoop};
 use crate::context::Context;
-use crate::download::{download_known_post_messages_without_pre_message, download_msgs};
+use crate::download::download_msgs;
 use crate::ephemeral;
 use crate::events::EventType;
 use crate::imap::{Imap, session::Session};
@@ -486,7 +486,6 @@ async fn fetch_idle(ctx: &Context, connection: &mut Imap, mut session: Session) 
         .await
         .context("fetch_move_delete")?;
 
-    download_known_post_messages_without_pre_message(ctx, &mut session).await?;
     download_msgs(ctx, &mut session)
         .await
         .context("download_msgs")?;

@@ -379,7 +379,7 @@ pub(crate) async fn send_msg_to_smtp(
     if retries > 6 {
         context
             .sql
-            .execute("DELETE FROM smtp WHERE id=?", (rowid,))
+            .execute("DELETE FROM smtp WHERE msg_id=?", (msg_id,))
             .await
             .context("Failed to remove message with exceeded retry limit from smtp table")?;
         if let Some(mut msg) = Message::load_from_db_optional(context, msg_id).await? {
@@ -457,7 +457,7 @@ pub(crate) async fn send_msg_to_smtp(
             }
             context
                 .sql
-                .execute("DELETE FROM smtp WHERE id=?", (rowid,))
+                .execute("DELETE FROM smtp WHERE msg_id=?", (msg_id,))
                 .await?;
         }
     };
