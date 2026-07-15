@@ -237,10 +237,21 @@ def test_transport_limit(acfactory) -> None:
         account.add_transport_from_qr(qr)
 
     second_addr = account.list_transports()[1]["addr"]
-    account.delete_transport(second_addr)
+    third_addr = account.list_transports()[2]["addr"]
 
-    # test that adding a transport after deleting one works again
+    # test that adding a transport after unpublishing one works again
+    account.set_transport_unpublished(second_addr)
     account.add_transport_from_qr(qr)
+    with pytest.raises(JsonRpcError):
+        account.add_transport_from_qr(qr)
+
+    # UIs are not expected to delete transports directly,
+    # but we still test that adding a transport
+    # after deleting one instead of unpublishing works.
+    account.delete_transport(third_addr)
+    account.add_transport_from_qr(qr)
+    with pytest.raises(JsonRpcError):
+        account.add_transport_from_qr(qr)
 
 
 def test_message_info_imap_urls(acfactory) -> None:
