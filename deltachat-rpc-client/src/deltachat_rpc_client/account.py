@@ -133,6 +133,10 @@ class Account:
         """Delete a transport."""
         self._rpc.delete_transport(self.id, addr)
 
+    def set_transport_unpublished(self, addr: str, unpublished: bool = True):
+        """Unpublish the transport."""
+        self._rpc.set_transport_unpublished(self.id, addr, unpublished)
+
     @futuremethod
     def list_transports(self):
         """Return the list of all email accounts that are used as a transport in the current profile."""
