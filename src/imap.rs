@@ -350,7 +350,7 @@ impl Imap {
 
         let login_params = prioritize_server_login_params(&context.sql, &self.lp, "imap").await?;
         let mut first_error = None;
-        for lp in login_params {
+        'candidate: for lp in login_params {
             info!(context, "IMAP trying to connect to {}.", lp.connection);
             let connection_candidate = lp.connection.clone();
             let client = match Client::connect(
@@ -366,7 +366,7 @@ impl Imap {
                 Err(err) => {
                     warn!(context, "{err:#}.");
                     first_error.get_or_insert(err);
-                    continue;
+                    continue 'candidate;
                 }
             };
 
@@ -399,7 +399,7 @@ impl Imap {
                         Ok(capabilities) => capabilities,
                         Err(err) => {
                             warn!(context, "Failed to determine capabilities: {err:#}.");
-                            continue;
+                            continue 'candidate;
                         }
                     };
                     let resync_request_sender = self.resync_request_sender.clone();
@@ -416,7 +416,7 @@ impl Imap {
                             Ok(compressed_session) => compressed_session,
                             Err(err) => {
                                 warn!(context, "Failed to enable IMAP compression: {err:#}.");
-                                continue;
+                                continue 'candidate;
                             }
                         };
                         Session::new(
