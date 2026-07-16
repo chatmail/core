@@ -387,19 +387,28 @@ impl Imap {
                     user: imap_user.into(),
                     access_token: token,
                 };
-                client.authenticate("XOAUTH2", auth).await
+                client
+                    .authenticate("XOAUTH2", auth)
+                    .await
+                    .map(|session| (session, None))
             } else {
                 info!(context, "Logging into IMAP server with LOGIN.");
                 client.login(imap_user, imap_pw).await
             };
 
             match login_res {
-                Ok(mut session) => {
-                    let capabilities = match determine_capabilities(&mut session).await {
-                        Ok(capabilities) => capabilities,
-                        Err(err) => {
-                            warn!(context, "Failed to determine capabilities: {err:#}.");
-                            continue 'candidate;
+                Ok((mut session, login_capabilities_opt)) => {
+                    let capabilities = if let Some(login_capabilities) = login_capabilities_opt {
+                        login_capabilities
+                    } else {
+                        // OK response did not contain the CAPABILITY response code.
+                        // Request capabilities explicitly.
+                        match determine_capabilities(&mut session).await {
+                            Ok(capabilities) => capabilities,
+                            Err(err) => {
+                                warn!(context, "Failed to determine capabilities: {err:#}.");
+                                continue 'candidate;
+                            }
                         }
                     };
                     let resync_request_sender = self.resync_request_sender.clone();
