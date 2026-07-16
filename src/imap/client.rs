@@ -53,10 +53,24 @@ fn alpn(port: u16) -> &'static str {
 pub(crate) async fn determine_capabilities(
     session: &mut ImapSession<Box<dyn SessionStream>>,
 ) -> Result<Capabilities> {
-    let caps = session
+    let imap_capabilities = session
         .capabilities()
         .await
         .context("CAPABILITY command error")?;
+    identify_server(session, imap_capabilities).await
+}
+
+/// Identifies the server by sending ID command if it is supported.
+///
+/// Some IMAP servers require sending this command,
+/// see <https://github.com/chatmail/core/issues/3458>,
+/// <https://github.com/OfflineIMAP/offlineimap3/issues/71>
+/// and <https://github.com/pimalaya/himalaya/issues/652>
+/// for details.
+pub(crate) async fn identify_server(
+    session: &mut ImapSession<Box<dyn SessionStream>>,
+    caps: async_imap::types::Capabilities,
+) -> Result<Capabilities> {
     let server_id = if caps.has_str("ID") {
         session.id([("name", Some("Delta Chat"))]).await?
     } else {
@@ -82,18 +96,30 @@ impl Client {
         }
     }
 
+    /// Logs in with the LOGIN command.
+    ///
+    /// If the server supports [ID extension], sends ID command
+    /// and records the server response in the [`Capabilities`] structure.
+    ///
+    /// [ID extension]: https://datatracker.ietf.org/doc/rfc2971/
     pub(crate) async fn login(
         self,
         username: &str,
         password: &str,
-    ) -> Result<ImapSession<Box<dyn SessionStream>>> {
+    ) -> Result<(ImapSession<Box<dyn SessionStream>>, Option<Capabilities>)> {
         let Client { inner, .. } = self;
 
-        let session = inner
-            .login(username, password)
+        let (mut session, login_capabilities_opt) = inner
+            .login_with_capabilities(username, password)
             .await
             .map_err(|(err, _client)| err)?;
-        Ok(session)
+
+        let capabilities = if let Some(login_capabilities) = login_capabilities_opt {
+            Some(identify_server(&mut session, login_capabilities).await?)
+        } else {
+            None
+        };
+        Ok((session, capabilities))
     }
 
     pub(crate) async fn authenticate(
