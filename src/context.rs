@@ -225,7 +225,23 @@ impl WeakContext {
 pub struct InnerContext {
     /// Blob directory path
     pub(crate) blobdir: PathBuf,
+
     pub(crate) sql: Sql,
+
+    /// True if long text messages should be truncated
+    /// and full message HTML added.
+    ///
+    /// This should be set for the UIs that cannot handle
+    /// long messages but can display HTML messages.
+    /// It is enabled by default.
+    ///
+    /// UIs that can handle long messages should call
+    /// [crate::message::dont_truncate_long_messages]
+    /// to unset it.
+    ///
+    /// Ignored for bots, bots never get truncated messages.
+    pub(crate) truncate_long_messages: AtomicBool,
+
     /// The global "ongoing" process state.
     ///
     /// This is a global mutex-like state for operations which should be modal in the
@@ -484,6 +500,7 @@ impl Context {
             blobdir,
             running_state: RwLock::new(Default::default()),
             sql: Sql::new(dbfile),
+            truncate_long_messages: AtomicBool::new(true),
             oauth2_mutex: Mutex::new(()),
             wrong_pw_warning_mutex: Mutex::new(()),
             housekeeping_mutex: Mutex::new(()),
