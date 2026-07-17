@@ -2,10 +2,11 @@
 
 use std::collections::BTreeMap;
 
-use anyhow::{Result, anyhow, bail, ensure};
+use anyhow::{Context as _, Result, anyhow, bail, ensure};
 use deltachat_derive::{FromSql, ToSql};
 use serde::{Deserialize, Serialize};
 
+use crate::chat;
 use crate::config::Config;
 use crate::context::Context;
 use crate::imap::session::Session;
@@ -131,9 +132,9 @@ impl Message {
     }
 }
 
-/// Actually downloads a message partially downloaded before if the message is available on the
-/// session transport, in which case returns `Some`. If the message is available on another
-/// transport, returns `None`.
+/// Actually downloads a message, normally partially downloaded before (if it's an encrypted chat
+/// message and the pre-message isn't lost), if the message is available on the session transport,
+/// in which case returns `Some`. If the message is available on another transport, returns `None`.
 ///
 /// Most messages are downloaded automatically on fetch instead.
 pub(crate) async fn download_msg(
@@ -209,12 +210,18 @@ impl Session {
         let (sender, receiver) = async_channel::unbounded();
         {
             let _fetch_msgs_lock_guard = context.fetch_msgs_mutex.lock().await;
-            self.fetch_many_msgs(context, folder, vec![uid], &uid_message_ids, sender)
+            Box::pin(self.fetch_many_msgs(context, folder, vec![uid], &uid_message_ids, sender))
                 .await?;
         }
-        if receiver.recv().await.is_err() {
-            bail!("Failed to fetch UID {uid}");
+        let mut received_msgs = Vec::with_capacity(1);
+        if let (_, Some(msg)) = receiver
+            .recv()
+            .await
+            .with_context(|| format!("Failed to fetch UID {uid}"))?
+        {
+            received_msgs.push(msg);
         }
+        chat::mark_old_messages_as_noticed(context, received_msgs).await?;
         Ok(())
     }
 }
