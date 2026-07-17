@@ -21,6 +21,7 @@ use crate::message::{Message, MsgId};
 use crate::mimeparser::parse_message_id;
 use crate::param::{Param::SendHtml, Params};
 use crate::plaintext::PlainText;
+use crate::simplify::unescape_message_footer_marks;
 use crate::sql;
 use crate::tools::{buf_compress, buf_decompress};
 
@@ -174,14 +175,14 @@ impl HtmlMsgParser {
                     if self.html.is_empty()
                         && let Ok(decoded_data) = mail.get_body()
                     {
-                        self.html = decoded_data;
+                        self.html = unescape_message_footer_marks(&decoded_data);
                     }
                 } else if mimetype == mime::TEXT_PLAIN
                     && self.plain.is_none()
                     && let Ok(decoded_data) = mail.get_body()
                 {
                     self.plain = Some(PlainText {
-                        text: decoded_data,
+                        text: unescape_message_footer_marks(&decoded_data),
                         flowed: if let Some(format) = mail.ctype.params.get("format") {
                             format.as_str().eq_ignore_ascii_case("flowed")
                         } else {
@@ -412,6 +413,25 @@ and will be wrapped as usual.<br/>
 mime-modified should not be set set as there is no html and no special stuff;<br/>
 although not being a delta-message.<br/>
 test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x27; :)<br/>
+</body></html>
+"#
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_htmlparse_plain_escaped_footer() {
+        let t = TestContext::new().await;
+        let raw = include_bytes!("../test-data/message/text_plain_escaped_footer.eml");
+        let (parser, _) = HtmlMsgParser::from_bytes(&t.ctx, raw).unwrap();
+        assert_eq!(
+            parser.html,
+            r#"<!DOCTYPE html>
+<html><head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="color-scheme" content="light dark" />
+</head><body dir="auto" style="unicode-bidi: plaintext">
+-- escaped footer 1<br/>
+-- escaped footer 2<br/>
 </body></html>
 "#
         );
