@@ -296,7 +296,7 @@ impl Context {
     ///
     /// When more transports are added by [`Self::add_or_update_transport()`] or [`Self::add_transport_from_qr`],
     /// the least recently needed unpublished transport is automatically removed
-    /// if this is necessary in order to stay below the limit of [`MAX_RELAYS`].
+    /// if this is necessary in order to stay below the maximum number of allowed relays.
     pub async fn set_transport_unpublished(&self, addr: &str, unpublished: bool) -> Result<()> {
         self.sql
             .transaction(|trans| {
