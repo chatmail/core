@@ -457,19 +457,17 @@ impl<'a> BlobObject<'a> {
                         self::add_white_bg(&mut img);
                     }
 
-                    // resize() results in often slightly better quality,
-                    // however, comes at high price of being 4+ times slower than thumbnail().
-                    // for a typical camera image that is sent, this may be a change from "instant" (500ms) to "long time waiting" (3s).
-                    // as we do not have recoding in background while chat has already a preview,
-                    // we vote for speed.
-                    // exception is the avatar image: this is far more often sent than recoded,
-                    // usually has less pixels by cropping, UI that needs to wait anyways,
-                    // and also benefits from slightly better (5%) encoding of Triangle-filtered images.
-                    let new_img = if is_avatar {
-                        img.resize(target_wh, target_wh, image::imageops::FilterType::Triangle)
-                    } else {
-                        img.thumbnail(target_wh, target_wh)
-                    };
+                    // resize() results in better quality than thumbnail(); however, when using resize(),
+                    // sending images can require about 60% more time.
+                    // As we do not have recoding in the background, while the chat already has a preview,
+                    // and the processing-time is proportional to the original resolution,
+                    // we choose the faster resampling, if the original image has a high resolution.
+                    let new_img =
+                        if is_avatar || img.width().saturating_mul(img.height()) <= 2000 * 2000 {
+                            img.resize(target_wh, target_wh, image::imageops::FilterType::Triangle)
+                        } else {
+                            img.thumbnail(target_wh, target_wh)
+                        };
 
                     if encoded_img_exceeds_bytes(
                         context,
