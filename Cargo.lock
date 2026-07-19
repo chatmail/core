@@ -1412,7 +1412,6 @@ dependencies = [
  "sdp",
  "serde",
  "serde_json",
- "serde_urlencoded",
  "sha-1",
  "sha2",
  "shadowsocks",

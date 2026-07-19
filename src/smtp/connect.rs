@@ -15,7 +15,6 @@ use crate::net::tls::{SpkiHashStore, TlsSessionStore, wrap_tls};
 use crate::net::{
     connect_tcp_inner, connect_tls_inner, run_connection_attempts, update_connection_history,
 };
-use crate::oauth2::get_oauth2_access_token;
 use crate::sql::Sql;
 use crate::tools::time;
 use crate::transport::ConnectionCandidate;
@@ -48,14 +47,11 @@ async fn new_smtp_transport<S: AsyncBufRead + AsyncWrite + Unpin>(
     Ok(transport)
 }
 
-#[expect(clippy::too_many_arguments)]
 pub(crate) async fn connect_and_auth(
     context: &Context,
     proxy_config: &Option<ProxyConfig>,
     strict_tls: bool,
     candidate: ConnectionCandidate,
-    oauth2: bool,
-    addr: &str,
     user: &str,
     password: &str,
 ) -> Result<SmtpTransport<Box<dyn SessionBufStream>>> {
@@ -65,31 +61,13 @@ pub(crate) async fn connect_and_auth(
     let mut transport = new_smtp_transport(session_stream).await?;
 
     // Authenticate.
-    let (creds, mechanism) = if oauth2 {
-        // oauth2
-        let access_token = get_oauth2_access_token(context, addr, password, false)
-            .await
-            .context("SMTP failed to get OAUTH2 access token")?;
-        if access_token.is_none() {
-            bail!("SMTP OAuth 2 error {addr}");
-        }
-        (
-            async_smtp::authentication::Credentials::new(
-                user.to_string(),
-                access_token.unwrap_or_default(),
-            ),
-            vec![async_smtp::authentication::Mechanism::Xoauth2],
-        )
-    } else {
-        // plain
-        (
-            async_smtp::authentication::Credentials::new(user.to_string(), password.to_string()),
-            vec![
-                async_smtp::authentication::Mechanism::Plain,
-                async_smtp::authentication::Mechanism::Login,
-            ],
-        )
-    };
+    let (creds, mechanism) = (
+        async_smtp::authentication::Credentials::new(user.to_string(), password.to_string()),
+        vec![
+            async_smtp::authentication::Mechanism::Plain,
+            async_smtp::authentication::Mechanism::Login,
+        ],
+    );
     transport
         .try_login(&creds, &mechanism)
         .await

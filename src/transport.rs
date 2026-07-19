@@ -17,7 +17,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
 use crate::configure::server_params::{ServerParams, expand_param_vector};
-use crate::constants::{DC_LP_AUTH_FLAGS, DC_LP_AUTH_OAUTH2};
 use crate::context::Context;
 use crate::ensure_and_debug_assert;
 use crate::events::EventType;
@@ -199,9 +198,6 @@ pub(crate) struct ConfiguredLoginParam {
     /// TLS options: whether to allow invalid certificates and/or
     /// invalid hostnames
     pub certificate_checks: ConfiguredCertificateChecks,
-
-    /// If true, login via OAUTH2 (not recommended anymore)
-    pub oauth2: bool,
 }
 
 /// JSON representation of ConfiguredLoginParam
@@ -224,7 +220,6 @@ pub(crate) struct ConfiguredLoginParamJson {
     pub smtp_password: String,
     pub provider_id: Option<String>,
     pub certificate_checks: ConfiguredCertificateChecks,
-    pub oauth2: bool,
 }
 
 impl fmt::Display for ConfiguredLoginParam {
@@ -349,12 +344,6 @@ impl ConfiguredLoginParam {
             .get_config(Config::ConfiguredMailPw)
             .await?
             .context("IMAP password is not configured")?;
-
-        let server_flags = context
-            .get_config_parsed::<i32>(Config::ConfiguredServerFlags)
-            .await?
-            .unwrap_or_default();
-        let oauth2 = matches!(server_flags & DC_LP_AUTH_FLAGS, DC_LP_AUTH_OAUTH2);
 
         let provider = context
             .get_config(Config::ConfiguredProvider)
@@ -583,7 +572,6 @@ impl ConfiguredLoginParam {
             smtp_password: send_pw,
             certificate_checks,
             provider,
-            oauth2,
         }))
     }
 
@@ -627,7 +615,6 @@ impl ConfiguredLoginParam {
             smtp_password: json.smtp_password,
             provider,
             certificate_checks: json.certificate_checks,
-            oauth2: json.oauth2,
         })
     }
 
@@ -663,7 +650,6 @@ impl From<ConfiguredLoginParam> for ConfiguredLoginParamJson {
             smtp_password: configured_login_param.smtp_password,
             provider_id: configured_login_param.provider.map(|p| p.id.to_string()),
             certificate_checks: configured_login_param.certificate_checks,
-            oauth2: configured_login_param.oauth2,
         }
     }
 }
@@ -857,7 +843,7 @@ pub(crate) async fn add_pseudo_transport(context: &Context, addr: &str) -> Resul
             (
                 addr,
                 serde_json::to_string(&EnteredLoginParam{addr: addr.to_string(), ..Default::default()})?,
-                format!(r#"{{"addr":"{addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#)
+                format!(r#"{{"addr":"{addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic"}}"#)
             ),
         )
         .await?;

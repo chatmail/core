@@ -100,13 +100,11 @@ impl Smtp {
             &proxy_config,
             &lp.addr,
             lp.strict_tls(proxy_config.is_some()),
-            lp.oauth2,
         )
         .await
     }
 
     /// Connect using the provided login params.
-    #[expect(clippy::too_many_arguments)]
     pub async fn connect(
         &mut self,
         context: &Context,
@@ -115,7 +113,6 @@ impl Smtp {
         proxy_config: &Option<ProxyConfig>,
         addr: &str,
         strict_tls: bool,
-        oauth2: bool,
     ) -> Result<()> {
         if self.is_connected() {
             warn!(context, "SMTP already connected.");
@@ -136,8 +133,6 @@ impl Smtp {
                 proxy_config,
                 strict_tls,
                 lp.connection.clone(),
-                oauth2,
-                addr,
                 &lp.user,
                 password,
             )

@@ -118,15 +118,6 @@ pub enum Config {
     /// SMTP server security (e.g. TLS, STARTTLS).
     SendSecurity,
 
-    /// Deprecated(2026-04).
-    /// Use EnteredLoginParam and add_transport{from_qr}()/list_transports() instead.
-    ///
-    /// Whether to use OAuth 2.
-    ///
-    /// Historically contained other bitflags, which are now deprecated.
-    /// Should not be extended in the future, create new config keys instead.
-    ServerFlags,
-
     /// True if proxy is enabled.
     ///
     /// Can be used to disable proxy without erasing known URLs.
@@ -297,12 +288,6 @@ pub enum Config {
     ///
     /// Configured SMTP server password.
     ConfiguredSendPw,
-
-    /// Deprecated(2026-04).
-    /// Use ConfiguredLoginParam and add_transport{from_qr}()/list_transports() instead.
-    ///
-    /// Whether OAuth 2 is used with configured provider.
-    ConfiguredServerFlags,
 
     /// Configured folder for incoming messages.
     ConfiguredInboxFolder,

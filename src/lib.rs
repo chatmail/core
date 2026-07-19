@@ -76,7 +76,6 @@ pub mod login_param;
 pub mod message;
 mod mimefactory;
 pub mod mimeparser;
-pub mod oauth2;
 mod param;
 #[cfg(not(feature = "internals"))]
 mod pgp;

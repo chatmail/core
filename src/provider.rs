@@ -76,13 +76,6 @@ pub enum UsernamePattern {
     Emaillocalpart = 2,
 }
 
-/// Type of OAuth 2 authorization.
-#[derive(Debug, PartialEq, Eq)]
-pub enum Oauth2Authorizer {
-    /// Yandex.
-    Yandex,
-}
-
 /// Email server endpoint.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Server {
@@ -135,9 +128,6 @@ pub struct Provider {
 
     /// Default configuration values to set when provider is configured.
     pub config_defaults: Option<&'static [ConfigDefault]>,
-
-    /// Type of OAuth 2 authorization if provider supports it.
-    pub oauth2_authorizer: Option<Oauth2Authorizer>,
 
     /// Options with good defaults.
     pub opt: ProviderOptions,

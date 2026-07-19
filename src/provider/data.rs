@@ -3,9 +3,7 @@
 use crate::provider::Protocol::*;
 use crate::provider::Socket::*;
 use crate::provider::UsernamePattern::*;
-use crate::provider::{
-    Config, ConfigDefault, Oauth2Authorizer, Provider, ProviderOptions, Server, Status,
-};
+use crate::provider::{Config, ConfigDefault, Provider, ProviderOptions, Server, Status};
 use std::collections::HashMap;
 
 use std::sync::LazyLock;
@@ -35,7 +33,6 @@ static P_163: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // aktivix.org.md: aktivix.org
@@ -63,7 +60,6 @@ static P_AKTIVIX_ORG: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // aliyun.md: aliyun.com
@@ -91,7 +87,6 @@ static P_ALIYUN: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // aol.md: aol.com
@@ -119,7 +114,6 @@ static P_AOL: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // arcor.de.md: arcor.de
@@ -147,7 +141,6 @@ static P_ARCOR_DE: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // autistici.org.md: autistici.org
@@ -175,7 +168,6 @@ static P_AUTISTICI_ORG: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // blindzeln.org.md: delta.blinzeln.de, delta.blindzeln.org
@@ -203,7 +195,6 @@ static P_BLINDZELN_ORG: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // bluewin.ch.md: bluewin.ch
@@ -231,7 +222,6 @@ static P_BLUEWIN_CH: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // chello.at.md: chello.at
@@ -259,7 +249,6 @@ static P_CHELLO_AT: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // comcast.md: xfinity.com, comcast.net
@@ -272,7 +261,6 @@ static P_COMCAST: Provider = Provider {
     server: &[],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // dismail.de.md: dismail.de
@@ -285,7 +273,6 @@ static P_DISMAIL_DE: Provider = Provider {
     server: &[],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // disroot.md: disroot.org
@@ -313,7 +300,6 @@ static P_DISROOT: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // e.email.md: e.email
@@ -341,7 +327,6 @@ static P_E_EMAIL: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // espiv.net.md: espiv.net
@@ -354,7 +339,6 @@ static P_ESPIV_NET: Provider = Provider {
     server: &[],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // example.com.md: example.com, example.org, example.net
@@ -382,7 +366,6 @@ static P_EXAMPLE_COM: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // fastmail.md: 123mail.org, 150mail.com, 150ml.com, 16mail.com, 2-mail.com, 4email.net, 50mail.com, airpost.net, allmail.net, bestmail.us, cluemail.com, elitemail.org, emailcorner.net, emailengine.net, emailengine.org, emailgroups.net, emailplus.org, emailuser.net, eml.cc, f-m.fm, fast-email.com, fast-mail.org, fastem.com, fastemail.us, fastemailer.com, fastest.cc, fastimap.com, fastmail.cn, fastmail.co.uk, fastmail.com, fastmail.com.au, fastmail.de, fastmail.es, fastmail.fm, fastmail.fr, fastmail.im, fastmail.in, fastmail.jp, fastmail.mx, fastmail.net, fastmail.nl, fastmail.org, fastmail.se, fastmail.to, fastmail.tw, fastmail.uk, fastmail.us, fastmailbox.net, fastmessaging.com, fea.st, fmail.co.uk, fmailbox.com, fmgirl.com, fmguy.com, ftml.net, h-mail.us, hailmail.net, imap-mail.com, imap.cc, imapmail.org, inoutbox.com, internet-e-mail.com, internet-mail.org, internetemails.net, internetmailing.net, jetemail.net, justemail.net, letterboxes.org, mail-central.com, mail-page.com, mailandftp.com, mailas.com, mailbolt.com, mailc.net, mailcan.com, mailforce.net, mailftp.com, mailhaven.com, mailingaddress.org, mailite.com, mailmight.com, mailnew.com, mailsent.net, mailservice.ms, mailup.net, mailworks.org, ml1.net, mm.st, myfastmail.com, mymacmail.com, nospammail.net, ownmail.net, petml.com, postinbox.com, postpro.net, proinbox.com, promessage.com, realemail.net, reallyfast.biz, reallyfast.info, rushpost.com, sent.as, sent.at, sent.com, speedpost.net, speedymail.org, ssl-mail.com, swift-mail.com, the-fastest.net, the-quickest.com, theinternetemail.com, veryfast.biz, veryspeedy.net, warpmail.net, xsmail.com, yepmail.net, your-mail.com
@@ -410,7 +393,6 @@ static P_FASTMAIL: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // firemail.de.md: firemail.at, firemail.de
@@ -423,7 +405,6 @@ static P_FIREMAIL_DE: Provider = Provider {
     server: &[],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // freenet.de.md: freenet.de
@@ -465,7 +446,6 @@ static P_FREENET_DE: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // gmail.md: gmail.com, googlemail.com, google.com
@@ -493,7 +473,6 @@ static P_GMAIL: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // gmx.net.md: gmx.net, gmx.de, gmx.at, gmx.ch, gmx.org, gmx.eu, gmx.info, gmx.biz, gmx.com
@@ -528,7 +507,6 @@ static P_GMX_NET: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // hermes.radio.md: *.hermes.radio, *.aco-connexion.org
@@ -547,7 +525,6 @@ static P_HERMES_RADIO: Provider = Provider {
         key: Config::MdnsEnabled,
         value: "0",
     }]),
-    oauth2_authorizer: None,
 };
 
 // hey.com.md: hey.com
@@ -560,7 +537,6 @@ static P_HEY_COM: Provider = Provider {
     server: &[],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // i.ua.md: i.ua
@@ -573,7 +549,6 @@ static P_I_UA: Provider = Provider {
     server: &[],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // i3.net.md: i3.net
@@ -586,7 +561,6 @@ static P_I3_NET: Provider = Provider {
     server: &[],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // icloud.md: icloud.com, me.com, mac.com
@@ -614,7 +588,6 @@ static P_ICLOUD: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // infomaniak.com.md: ik.me
@@ -645,7 +618,6 @@ static P_INFOMANIAK_COM: Provider = Provider {
         ..ProviderOptions::new()
     },
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // kolst.com.md: kolst.com
@@ -658,7 +630,6 @@ static P_KOLST_COM: Provider = Provider {
     server: &[],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // kontent.com.md: kontent.com
@@ -671,7 +642,6 @@ static P_KONTENT_COM: Provider = Provider {
     server: &[],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // mail.com.md: email.com, groupmail.com, post.com, homemail.com, housemail.com, writeme.com, mail.com, mail-me.com, workmail.com, accountant.com, activist.com, adexec.com, allergist.com, alumni.com, alumnidirector.com, archaeologist.com, auctioneer.net, bartender.net, brew-master.com, chef.net, chemist.com, collector.org, columnist.com, comic.com, consultant.com, contractor.net, counsellor.com, deliveryman.com, diplomats.com, dr.com, engineer.com, financier.com, fireman.net, gardener.com, geologist.com, graphic-designer.com, graduate.org, hairdresser.net, instructor.net, insurer.com, journalist.com, legislator.com, lobbyist.com, minister.com, musician.org, optician.com, orthodontist.net, pediatrician.com, photographer.net, physicist.net, politician.com, presidency.com, priest.com, programmer.net, publicist.com, radiologist.net, realtyagent.com, registerednurses.com, repairman.com, representative.com, salesperson.net, secretary.net, socialworker.net, sociologist.com, songwriter.net, teachers.org, techie.com, technologist.com, therapist.net, umpire.com, worker.com, artlover.com, bikerider.com, birdlover.com, blader.com, kittymail.com, lovecat.com, marchmail.com, boardermail.com, catlover.com, clubmember.org, nonpartisan.com, petlover.com, doglover.com, greenmail.net, hackermail.com, theplate.com, bsdmail.com, computer4u.com, coolsite.net, cyberdude.com, cybergal.com, cyberservices.com, cyber-wizard.com, linuxmail.org, null.net, solution4u.com, tech-center.com, webname.com, acdcfan.com, angelic.com, discofan.com, elvisfan.com, hiphopfan.com, kissfans.com, madonnafan.com, metalfan.com, ninfan.com, ravemail.com, reggaefan.com, snakebite.com, bellair.net, californiamail.com, dallasmail.com, nycmail.com, pacific-ocean.com, pacificwest.com, sanfranmail.com, usa.com, africamail.com, asia-mail.com, australiamail.com, berlin.com, brazilmail.com, chinamail.com, dublin.com, dutchmail.com, englandmail.com, europe.com, arcticmail.com, europemail.com, germanymail.com, irelandmail.com, israelmail.com, italymail.com, koreamail.com, mexicomail.com, moscowmail.com, munich.com, asia.com, polandmail.com, safrica.com, samerica.com, scotlandmail.com, spainmail.com, swedenmail.com, swissmail.com, torontomail.com, aircraftmail.com, cash4u.com, disposable.com, execs.com, fastservice.com, instruction.com, job4u.com, net-shopping.com, planetmail.com, planetmail.net, qualityservice.com, rescueteam.com, surgical.net, atheist.com, disciples.com, muslim.com, protestant.com, reborn.com, reincarnate.com, religious.com, saintly.com, brew-meister.com, cutey.com, dbzmail.com, doramail.com, galaxyhit.com, hilarious.com, humanoid.net, hot-shot.com, inorbit.com, iname.com, innocent.com, keromail.com, myself.com, rocketship.com, toothfairy.com, toke.com, tvstar.com, uymail.com, 2trom.com
@@ -684,7 +654,6 @@ static P_MAIL_COM: Provider = Provider {
     server: &[],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // mail.de.md: mail.de
@@ -712,7 +681,6 @@ static P_MAIL_DE: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // mail.ru.md: mail.ru, inbox.ru, internet.ru, bk.ru, list.ru
@@ -740,7 +708,6 @@ static P_MAIL_RU: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // mail2tor.md: mail2tor.com
@@ -768,7 +735,6 @@ static P_MAIL2TOR: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // mailbox.org.md: mailbox.org, secure.mailbox.org
@@ -796,7 +762,6 @@ static P_MAILBOX_ORG: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // mailo.com.md: mailo.com
@@ -824,7 +789,6 @@ static P_MAILO_COM: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // migadu.md: migadu.com
@@ -859,7 +823,6 @@ static P_MIGADU: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // nauta.cu.md: nauta.cu
@@ -894,7 +857,6 @@ static P_NAUTA_CU: Provider = Provider {
         key: Config::MediaQuality,
         value: "1",
     }]),
-    oauth2_authorizer: None,
 };
 
 // naver.md: naver.com
@@ -922,7 +884,6 @@ static P_NAVER: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // nine.testrun.org.md: nine.testrun.org
@@ -978,7 +939,6 @@ static P_NINE_TESTRUN_ORG: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // nubo.coop.md: nubo.coop
@@ -1006,7 +966,6 @@ static P_NUBO_COOP: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // outlook.com.md: hotmail.com, outlook.com, office365.com, outlook.com.tr, live.com, outlook.de
@@ -1034,7 +993,6 @@ static P_OUTLOOK_COM: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // ouvaton.coop.md: ouvaton.org
@@ -1062,7 +1020,6 @@ static P_OUVATON_COOP: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // posteo.md: posteo.de, posteo.af, posteo.at, posteo.be, posteo.ca, posteo.ch, posteo.cl, posteo.co, posteo.co.uk, posteo.com, posteo.com.br, posteo.cr, posteo.cz, posteo.dk, posteo.ee, posteo.es, posteo.eu, posteo.fi, posteo.gl, posteo.gr, posteo.hn, posteo.hr, posteo.hu, posteo.ie, posteo.in, posteo.is, posteo.it, posteo.jp, posteo.la, posteo.li, posteo.lt, posteo.lu, posteo.me, posteo.mx, posteo.my, posteo.net, posteo.nl, posteo.no, posteo.nz, posteo.org, posteo.pe, posteo.pl, posteo.pm, posteo.pt, posteo.ro, posteo.ru, posteo.se, posteo.sg, posteo.si, posteo.tn, posteo.uk, posteo.us
@@ -1104,7 +1061,6 @@ static P_POSTEO: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // protonmail.md: protonmail.com, protonmail.ch, pm.me
@@ -1117,7 +1073,6 @@ static P_PROTONMAIL: Provider = Provider {
     server: &[],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // purelymail.com.md: purelymail.com, cheapermail.com, placeq.com, rethinkmail.com, worldofmail.com
@@ -1145,7 +1100,6 @@ static P_PURELYMAIL_COM: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // qq.md: qq.com, foxmail.com
@@ -1173,7 +1127,6 @@ static P_QQ: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // rambler.ru.md: rambler.ru, autorambler.ru, myrambler.ru, rambler.ua, lenta.ru, ro.ru, r0.ru
@@ -1208,7 +1161,6 @@ static P_RAMBLER_RU: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // riseup.net.md: riseup.net
@@ -1236,7 +1188,6 @@ static P_RISEUP_NET: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // rogers.com.md: rogers.com
@@ -1249,7 +1200,6 @@ static P_ROGERS_COM: Provider = Provider {
     server: &[],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // sonic.md: sonic.net
@@ -1262,7 +1212,6 @@ static P_SONIC: Provider = Provider {
     server: &[],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // stinpriza.net.md: stinpriza.net, stinpriza.eu, el-hoyo.net
@@ -1293,7 +1242,6 @@ static P_STINPRIZA_NET: Provider = Provider {
         ..ProviderOptions::new()
     },
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // systemausfall.org.md: systemausfall.org, solidaris.me
@@ -1321,7 +1269,6 @@ static P_SYSTEMAUSFALL_ORG: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // systemli.org.md: systemli.org
@@ -1349,7 +1296,6 @@ static P_SYSTEMLI_ORG: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // t-online.md: t-online.de, magenta.de
@@ -1377,7 +1323,6 @@ static P_T_ONLINE: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // tiscali.it.md: tiscali.it
@@ -1405,7 +1350,6 @@ static P_TISCALI_IT: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // tutanota.md: tutanota.com, tutanota.de, tutamail.com, tuta.io, keemail.me
@@ -1418,7 +1362,6 @@ static P_TUTANOTA: Provider = Provider {
     server: &[],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // ukr.net.md: ukr.net
@@ -1446,7 +1389,6 @@ static P_UKR_NET: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // undernet.uy.md: undernet.uy
@@ -1474,7 +1416,6 @@ static P_UNDERNET_UY: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // vfemail.md: vfemail.net
@@ -1487,7 +1428,6 @@ static P_VFEMAIL: Provider = Provider {
     server: &[],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // vivaldi.md: vivaldi.net
@@ -1515,7 +1455,6 @@ static P_VIVALDI: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // vk.com.md: vk.com
@@ -1543,7 +1482,6 @@ static P_VK_COM: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // vodafone.de.md: vodafone.de, vodafonemail.de
@@ -1571,7 +1509,6 @@ static P_VODAFONE_DE: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // web.de.md: web.de, email.de, flirt.ms, hallo.ms, kuss.ms, love.ms, magic.ms, singles.ms, cool.ms, kanzler.ms, okay.ms, party.ms, pop.ms, stars.ms, techno.ms, clever.ms, deutschland.ms, genial.ms, ich.ms, online.ms, smart.ms, wichtig.ms, action.ms, fussball.ms, joker.ms, planet.ms, power.ms
@@ -1606,7 +1543,6 @@ static P_WEB_DE: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // wkpb.de.md: wkpb.de
@@ -1634,7 +1570,6 @@ static P_WKPB_DE: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // yahoo.md: yahoo.com, yahoo.de, yahoo.it, yahoo.fr, yahoo.es, yahoo.se, yahoo.co.uk, yahoo.co.nz, yahoo.com.au, yahoo.com.ar, yahoo.com.br, yahoo.com.mx, myyahoo.com, ymail.com, rocketmail.com, yahoodns.net
@@ -1662,7 +1597,6 @@ static P_YAHOO: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // yandex.ru.md: yandex.com, yandex.by, yandex.kz, yandex.ru, yandex.ua, ya.ru, narod.ru
@@ -1690,7 +1624,6 @@ static P_YANDEX_RU: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: Some(Oauth2Authorizer::Yandex),
 };
 
 // yggmail.md: yggmail
@@ -1718,7 +1651,6 @@ static P_YGGMAIL: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // ziggo.nl.md: ziggo.nl
@@ -1746,7 +1678,6 @@ static P_ZIGGO_NL: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 // zoho.md: zohomail.eu, zohomail.com, zoho.com
@@ -1774,7 +1705,6 @@ static P_ZOHO: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
 };
 
 pub(crate) static PROVIDER_DATA: [(&str, &Provider); 521] = [

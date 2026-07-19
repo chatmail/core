@@ -645,11 +645,6 @@ impl Sql {
         self.set_raw_config(key, value).await
     }
 
-    /// Sets configuration for the given key to 64-bit signed integer value.
-    pub async fn set_raw_config_int64(&self, key: &str, value: i64) -> Result<()> {
-        self.set_raw_config(key, Some(&format!("{value}"))).await
-    }
-
     /// Returns 64-bit signed integer configuration value for the given key.
     pub async fn get_raw_config_int64(&self, key: &str) -> Result<Option<i64>> {
         self.get_raw_config(key)

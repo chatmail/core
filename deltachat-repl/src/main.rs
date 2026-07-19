@@ -11,9 +11,7 @@ use std::borrow::Cow::{self, Borrowed, Owned};
 
 use anyhow::{bail, Error};
 use deltachat::chat::ChatId;
-use deltachat::config;
 use deltachat::context::*;
-use deltachat::oauth2::*;
 use deltachat::qr_code_generator::get_securejoin_qr_svg;
 use deltachat::securejoin::*;
 use deltachat::EventType;
@@ -162,11 +160,10 @@ const IMEX_COMMANDS: [&str; 10] = [
     "stop",
 ];
 
-const DB_COMMANDS: [&str; 11] = [
+const DB_COMMANDS: [&str; 10] = [
     "info",
     "set",
     "get",
-    "oauth2",
     "configure",
     "connect",
     "disconnect",
@@ -424,19 +421,6 @@ async fn handle_cmd(
         }
         "configure" => {
             ctx.configure().await?;
-        }
-        "oauth2" => {
-            if let Some(addr) = ctx.get_config(config::Config::Addr).await? {
-                if let Some(oauth2_url) =
-                    get_oauth2_url(&ctx, &addr, "chat.delta:/com.b44t.messenger").await?
-                {
-                    println!("Open the following url, set mail_pw to the generated token and server_flags to 2:\n{oauth2_url}");
-                } else {
-                    println!("OAuth2 not available for {addr}.");
-                }
-            } else {
-                println!("oauth2: set addr first.");
-            }
         }
         "clear" => {
             println!("\n\n\n");

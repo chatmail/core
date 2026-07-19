@@ -162,25 +162,6 @@ pub const DC_DESIRED_TEXT_LINE_LEN: usize = 100;
 /// `char`s), not Unicode Grapheme Clusters.
 pub const DC_DESIRED_TEXT_LEN: usize = DC_DESIRED_TEXT_LINE_LEN * DC_DESIRED_TEXT_LINES;
 
-// Flags for configuring IMAP and SMTP servers.
-// These flags are optional
-// and may be set together with the username, password etc.
-// via dc_set_config() using the key "server_flags".
-
-/// Force OAuth2 authorization.
-///
-/// This flag does not skip automatic configuration.
-/// Before calling configure() with DC_LP_AUTH_OAUTH2 set,
-/// the user has to confirm access at the URL returned by dc_get_oauth2_url().
-pub const DC_LP_AUTH_OAUTH2: i32 = 0x2;
-
-/// Force NORMAL authorization, this is the default.
-/// If this flag is set, automatic configuration is skipped.
-pub const DC_LP_AUTH_NORMAL: i32 = 0x4;
-
-/// if none of these flags are set, the default is chosen
-pub const DC_LP_AUTH_FLAGS: i32 = DC_LP_AUTH_OAUTH2 | DC_LP_AUTH_NORMAL;
-
 // max. weight of images to send w/o recoding
 pub const BALANCED_IMAGE_BYTES: usize = 500_000;
 pub const WORSE_IMAGE_BYTES: usize = 130_000;

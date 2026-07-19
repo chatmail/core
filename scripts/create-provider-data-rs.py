@@ -145,9 +145,6 @@ def process_data(data, file):
     opt = process_opt(data)
     config_defaults = process_config_defaults(data)
 
-    oauth2 = data.get("oauth2", "")
-    oauth2 = "Some(Oauth2Authorizer::" + camel(oauth2) + ")" if oauth2 != "" else "None"
-
     provider = ""
     before_login_hint = cleanstr(data.get("before_login_hint", "") or "")
     after_login_hint = cleanstr(data.get("after_login_hint", ""))
@@ -165,7 +162,6 @@ def process_data(data, file):
         provider += "    server: &[\n" + server + "    ],\n"
         provider += "    opt: " + opt + ",\n"
         provider += "    config_defaults: " + config_defaults + ",\n"
-        provider += "    oauth2_authorizer: " + oauth2 + ",\n"
         provider += "};\n\n"
     else:
         raise TypeError("SMTP and IMAP must be specified together or left out both")
@@ -180,7 +176,7 @@ def process_data(data, file):
     out_all += "// " + file.name + ": " + comment.strip(", ") + "\n"
 
     # also add provider with no special things to do -
-    # eg. _not_ supporting oauth2 is also an information and we can skip the mx-lookup in this case
+    # eg. we can skip the mx-lookup in this case
     out_all += provider
     out_domains += domains
     out_ids += ids
@@ -212,7 +208,7 @@ if __name__ == "__main__":
         "use crate::provider::Socket::*;\n"
         "use crate::provider::UsernamePattern::*;\n"
         "use crate::provider::{\n"
-        "    Config, ConfigDefault, Oauth2Authorizer, Provider, ProviderOptions, Server, Status,\n"
+        "    Config, ConfigDefault, Provider, ProviderOptions, Server, Status,\n"
         "};\n"
         "use std::collections::HashMap;\n\n"
         "use std::sync::LazyLock;\n\n"

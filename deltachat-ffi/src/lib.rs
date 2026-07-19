@@ -401,32 +401,6 @@ pub unsafe extern "C" fn dc_get_push_state(context: *const dc_context_t) -> libc
     block_on(ctx.push_state()) as libc::c_int
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn dc_get_oauth2_url(
-    context: *mut dc_context_t,
-    addr: *const libc::c_char,
-    redirect: *const libc::c_char,
-) -> *mut libc::c_char {
-    if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_oauth2_url()");
-        return ptr::null_mut(); // NULL explicitly defined as "unknown"
-    }
-    let ctx = &*context;
-    let addr = to_string_lossy(addr);
-    let redirect = to_string_lossy(redirect);
-
-    block_on(async move {
-        match oauth2::get_oauth2_url(ctx, &addr, &redirect)
-            .await
-            .context("dc_get_oauth2_url failed")
-            .log_err(ctx)
-        {
-            Ok(Some(res)) => res.strdup(),
-            Ok(None) | Err(_) => ptr::null_mut(),
-        }
-    })
-}
-
 fn spawn_configure(ctx: Context) {
     spawn(async move {
         ctx.configure()

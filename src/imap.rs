@@ -34,7 +34,6 @@ use crate::message::{self, Message};
 use crate::mimeparser;
 use crate::net::proxy::ProxyConfig;
 use crate::net::session::SessionStream;
-use crate::oauth2::get_oauth2_access_token;
 use crate::push::encrypt_device_token;
 use crate::receive_imf::{
     ReceivedMsg, from_field_to_contact_id, get_prefetch_parent_message, receive_imf_inner,
@@ -76,9 +75,6 @@ pub(crate) struct Imap {
 
     pub(crate) idle_interrupt_receiver: Receiver<()>,
 
-    /// Email address.
-    pub(crate) addr: String,
-
     /// Login parameters.
     lp: Vec<ConfiguredServerLoginParam>,
 
@@ -89,8 +85,6 @@ pub(crate) struct Imap {
     proxy_config: Option<ProxyConfig>,
 
     strict_tls: bool,
-
-    oauth2: bool,
 
     /// Watched folder.
     pub(crate) folder: String,
@@ -118,12 +112,6 @@ pub(crate) struct Imap {
     pub(crate) resync_request_receiver: async_channel::Receiver<()>,
 }
 
-#[derive(Debug)]
-struct OAuth2 {
-    user: String,
-    access_token: String,
-}
-
 #[derive(Debug, Default)]
 pub(crate) struct ServerMetadata {
     /// IMAP METADATA `/shared/comment` as defined in
@@ -146,17 +134,6 @@ pub(crate) struct ServerMetadata {
     /// should be fetched from the server
     /// to be ready for WebRTC calls.
     pub ice_servers_expiration_timestamp: i64,
-}
-
-impl async_imap::Authenticator for OAuth2 {
-    type Response = String;
-
-    fn process(&mut self, _data: &[u8]) -> Self::Response {
-        format!(
-            "user={}\x01auth=Bearer {}\x01\x01",
-            self.user, self.access_token
-        )
-    }
 }
 
 #[derive(Debug, Display, PartialEq, Eq, Clone, Copy)]
@@ -250,9 +227,7 @@ impl Imap {
         let lp = param.imap.clone();
         let password = param.imap_password.clone();
         let proxy_config = ProxyConfig::load(context).await?;
-        let addr = &param.addr;
         let strict_tls = param.strict_tls(proxy_config.is_some());
-        let oauth2 = param.oauth2;
         let folder = param
             .imap_folder
             .clone()
@@ -262,12 +237,10 @@ impl Imap {
         Ok(Imap {
             transport_id,
             idle_interrupt_receiver,
-            addr: addr.to_string(),
             lp,
             password,
             proxy_config,
             strict_tls,
-            oauth2,
             folder,
             authentication_failed_once: false,
             connectivity: Default::default(),
@@ -376,25 +349,8 @@ impl Imap {
             let imap_user: &str = lp.user.as_ref();
             let imap_pw: &str = &self.password;
 
-            let login_res = if self.oauth2 {
-                info!(context, "Logging into IMAP server with OAuth 2.");
-                let addr: &str = self.addr.as_ref();
-
-                let token = get_oauth2_access_token(context, addr, imap_pw, true)
-                    .await?
-                    .context("IMAP could not get OAUTH token")?;
-                let auth = OAuth2 {
-                    user: imap_user.into(),
-                    access_token: token,
-                };
-                client
-                    .authenticate("XOAUTH2", auth)
-                    .await
-                    .map(|session| (session, None))
-            } else {
-                info!(context, "Logging into IMAP server with LOGIN.");
-                client.login(imap_user, imap_pw).await
-            };
+            info!(context, "Logging into IMAP server with LOGIN.");
+            let login_res = client.login(imap_user, imap_pw).await;
 
             match login_res {
                 Ok((mut session, login_capabilities_opt)) => {

@@ -231,14 +231,6 @@ class KeyGenType(IntEnum):
     RSA4096 = 3
 
 
-# "Lp" means "login parameters"
-class LpAuthFlag(IntEnum):
-    """Authorization flags."""
-
-    OAUTH2 = 0x2
-    NORMAL = 0x4
-
-
 class MediaQuality(IntEnum):
     """Media quality setting."""
 

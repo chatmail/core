@@ -49,14 +49,13 @@ async fn test_save_load_login_param() -> Result<()> {
         smtp_password: "bar".to_string(),
         provider: None,
         certificate_checks: ConfiguredCertificateChecks::Strict,
-        oauth2: false,
     };
 
     param
         .clone()
         .save_to_transports_table(&t, &EnteredLoginParam::default(), time())
         .await?;
-    let expected_param = r#"{"addr":"alice@example.org","imap":[{"connection":{"host":"imap.example.com","port":123,"security":"Starttls"},"user":"alice"}],"imap_folder":"Folder","imap_user":"","imap_password":"foo","smtp":[{"connection":{"host":"smtp.example.com","port":456,"security":"Tls"},"user":"alice@example.org"}],"smtp_user":"","smtp_password":"bar","provider_id":null,"certificate_checks":"Strict","oauth2":false}"#;
+    let expected_param = r#"{"addr":"alice@example.org","imap":[{"connection":{"host":"imap.example.com","port":123,"security":"Starttls"},"user":"alice"}],"imap_folder":"Folder","imap_user":"","imap_password":"foo","smtp":[{"connection":{"host":"smtp.example.com","port":456,"security":"Tls"},"user":"alice@example.org"}],"smtp_user":"","smtp_password":"bar","provider_id":null,"certificate_checks":"Strict"}"#;
     assert_eq!(
         t.sql
             .query_get_value::<String>("SELECT configured_param FROM transports", ())
@@ -126,8 +125,6 @@ async fn test_posteo_alias() -> Result<()> {
     t.set_config(Config::ConfiguredSendUser, Some(user)).await?;
     t.set_config(Config::ConfiguredSendPw, Some("foobarbaz"))
         .await?;
-    t.set_config(Config::ConfiguredServerFlags, Some("0"))
-        .await?;
 
     let param = ConfiguredLoginParam {
         addr: "alice@posteo.at".to_string(),
@@ -174,7 +171,6 @@ async fn test_posteo_alias() -> Result<()> {
         smtp_password: "foobarbaz".to_string(),
         provider: get_provider_by_id("posteo"),
         certificate_checks: ConfiguredCertificateChecks::Strict,
-        oauth2: false,
     };
 
     let loaded = ConfiguredLoginParam::load_legacy(&t).await?.unwrap();
@@ -212,8 +208,6 @@ async fn test_empty_server_list_legacy() -> Result<()> {
     t.set_config(Config::ConfiguredImapCertificateChecks, Some("1"))
         .await?; // Strict
     t.set_config(Config::ConfiguredSendPw, Some("foobarbaz"))
-        .await?;
-    t.set_config(Config::ConfiguredServerFlags, Some("0"))
         .await?;
 
     let loaded = ConfiguredLoginParam::load_legacy(&t).await?.unwrap();
@@ -293,7 +287,6 @@ fn dummy_configured_login_param(
         smtp_password: "foobarbaz".to_string(),
         provider,
         certificate_checks: ConfiguredCertificateChecks::Automatic,
-        oauth2: false,
     }
 }
 
