@@ -233,7 +233,7 @@ impl Context {
     }
 
     /// Immediately deletes a transport, potentially causing messages not to arrive.
-    /// This must ONLY be used by the automated tests.
+    /// This must ONLY be used internally and by the automated tests.
     /// UI implementations must use [`Self::set_transport_unpublished`] instead.
     pub async fn delete_transport(&self, addr: &str) -> Result<()> {
         let now = time();
@@ -338,7 +338,7 @@ impl Context {
                 )
                 .await?
         {
-            self.try_make_place_for_new_relay().await?;
+            self.try_make_space_for_new_relay().await?;
         }
 
         let provider = match configure(self, param).await {
@@ -363,7 +363,16 @@ impl Context {
         Ok(())
     }
 
-    async fn try_make_place_for_new_relay(&self) -> Result<()> {
+    /// This function is called before adding a new relay.
+    /// If the maximum number of relays ([`MAX_RELAYS`]) is already reached,
+    /// then it tries to make space by removing an unpublished relay.
+    /// If there are multiple unpublished relays,
+    /// the one that hasn't received a message for longest is removed.
+    /// If there are no unpublished relays, an error is returned.
+    ///
+    /// Note that eviction happens before we know that a new relay works,
+    /// which is a trade-off we made in favor of implementation complexity.
+    async fn try_make_space_for_new_relay(&self) -> Result<()> {
         if self.count_transports().await? >= MAX_RELAYS {
             // Try to automatically remove the unpublished transport that wasn't used for the longest time:
             if let Some(addr) = self
@@ -383,7 +392,7 @@ impl Context {
             }
 
             if self.count_transports().await? >= MAX_RELAYS {
-                // Aparently, all the transports are published
+                // Apparently, all the transports are published
                 bail!("You have reached the maximum number of relays ({MAX_RELAYS}).");
             }
         };
@@ -884,14 +893,14 @@ mod tests {
 
         // Test that try_make_place_for_new_relay() doesn't do anything when we're below the limit
         assert_eq!(t.count_transports().await?, 1);
-        t.try_make_place_for_new_relay().await?;
+        t.try_make_space_for_new_relay().await?;
         assert_eq!(t.count_transports().await?, 1);
 
         for i in 0..(MAX_RELAYS - 2) {
             add_pseudo_transport(&t, &format!("transport{i}@example.org")).await?;
         }
         assert_eq!(t.count_transports().await?, MAX_RELAYS - 1);
-        t.try_make_place_for_new_relay().await?;
+        t.try_make_space_for_new_relay().await?;
         assert_eq!(t.count_transports().await?, MAX_RELAYS - 1);
 
         // Test that try_make_place_for_new_relay() removes the unpublished transport
@@ -900,7 +909,7 @@ mod tests {
         t.set_transport_unpublished("unpublished@example.org", true)
             .await?;
         assert_eq!(t.count_transports().await?, MAX_RELAYS);
-        t.try_make_place_for_new_relay().await?;
+        t.try_make_space_for_new_relay().await?;
         assert_eq!(t.count_transports().await?, MAX_RELAYS - 1);
         assert_eq!(
             t.sql
@@ -944,13 +953,13 @@ mod tests {
 
         // Test that try_make_place_for_new_relay()
         // removes the relay with the oldest last_rcvd_timestamp
-        t.try_make_place_for_new_relay().await?;
+        t.try_make_space_for_new_relay().await?;
         assert_eq!(t.count_transports().await?, MAX_RELAYS - 1);
         assert_eq!(
             t.sql
                 .exists(
                     "SELECT COUNT(*) FROM transports WHERE addr=?",
-                    ("published0@example.org",),
+                    ("transport0@example.org",),
                 )
                 .await?,
             false
@@ -967,12 +976,11 @@ mod tests {
 
         // Test that try_make_place_for_new_relay() fails
         // if there are MAX_RELAYS published transports
-        info!(t, "here");
         add_pseudo_transport(&t, "published_extra@example.org").await?;
         t.set_transport_unpublished("other_unpublished@example.org", false)
             .await?;
         assert_eq!(t.count_transports().await?, MAX_RELAYS);
-        assert!(t.try_make_place_for_new_relay().await.is_err());
+        assert!(t.try_make_space_for_new_relay().await.is_err());
         assert_eq!(t.count_transports().await?, MAX_RELAYS);
 
         Ok(())
