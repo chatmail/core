@@ -319,7 +319,6 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                  info\n\
                  set <configuration-key> [<value>]\n\
                  get <configuration-key>\n\
-                 oauth2\n\
                  configure\n\
                  connect\n\
                  disconnect\n\

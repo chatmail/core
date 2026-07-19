@@ -122,19 +122,6 @@ impl Client {
         Ok((session, capabilities))
     }
 
-    pub(crate) async fn authenticate(
-        self,
-        auth_type: &str,
-        authenticator: impl async_imap::Authenticator,
-    ) -> Result<ImapSession<Box<dyn SessionStream>>> {
-        let Client { inner, .. } = self;
-        let session = inner
-            .authenticate(auth_type, authenticator)
-            .await
-            .map_err(|(err, _client)| err)?;
-        Ok(session)
-    }
-
     async fn connection_attempt(
         context: Context,
         host: String,

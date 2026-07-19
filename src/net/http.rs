@@ -5,7 +5,6 @@ use bytes::Bytes;
 use http_body_util::BodyExt;
 use hyper_util::rt::TokioIo;
 use mime::Mime;
-use serde::Serialize;
 use tokio::fs;
 
 use crate::blob::BlobObject;
@@ -451,37 +450,6 @@ pub(crate) async fn post_string(context: &Context, url: &str, body: String) -> R
     let response = sender.send_request(request).await?;
 
     Ok(response.status().is_success())
-}
-
-/// Sends a POST request with x-www-form-urlencoded data.
-///
-/// Does not follow redirects.
-pub(crate) async fn post_form<T: Serialize + ?Sized>(
-    context: &Context,
-    url: &str,
-    form: &T,
-) -> Result<Bytes> {
-    let parsed_url = url
-        .parse::<hyper::Uri>()
-        .with_context(|| format!("Failed to parse URL {url:?}"))?;
-    let scheme = parsed_url.scheme_str().context("URL has no scheme")?;
-    if scheme != "https" {
-        bail!("POST requests to non-HTTPS URLs are not allowed");
-    }
-
-    let encoded_body = serde_urlencoded::to_string(form).context("Failed to encode data")?;
-    let mut sender = get_http_sender(context, parsed_url.clone(), true).await?;
-    let authority = parsed_url
-        .authority()
-        .context("URL has no authority")?
-        .clone();
-    let request = hyper::Request::post(parsed_url)
-        .header(hyper::header::HOST, authority.as_str())
-        .header("content-type", "application/x-www-form-urlencoded")
-        .body(encoded_body)?;
-    let response = sender.send_request(request).await?;
-    let bytes = response.collect().await?.to_bytes();
-    Ok(bytes)
 }
 
 #[cfg(test)]

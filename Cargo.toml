@@ -89,7 +89,6 @@ rusqlite = { workspace = true, features = ["sqlcipher"] }
 sanitize-filename = { workspace = true }
 sdp = "0.17.1"
 serde_json = { workspace = true }
-serde_urlencoded = "0.7.1"
 serde = { workspace = true, features = ["derive"] }
 sha-1 = "0.10"
 sha2 = "0.10"

@@ -13,7 +13,6 @@ use num_traits::ToPrimitive as _;
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
-use crate::constants::{DC_LP_AUTH_FLAGS, DC_LP_AUTH_OAUTH2};
 use crate::context::Context;
 pub use crate::net::proxy::ProxyConfig;
 pub use crate::provider::Socket;
@@ -142,9 +141,6 @@ pub struct EnteredLoginParam {
     /// TLS options: whether to allow invalid certificates and/or
     /// invalid hostnames
     pub certificate_checks: EnteredCertificateChecks,
-
-    /// If true, login via OAUTH2 (not recommended anymore)
-    pub oauth2: bool,
 }
 
 impl EnteredLoginParam {
@@ -222,12 +218,6 @@ impl EnteredLoginParam {
             .await?
             .unwrap_or_default();
 
-        let server_flags = context
-            .get_config_parsed::<i32>(Config::ServerFlags)
-            .await?
-            .unwrap_or_default();
-        let oauth2 = matches!(server_flags & DC_LP_AUTH_FLAGS, DC_LP_AUTH_OAUTH2);
-
         Ok(EnteredLoginParam {
             addr,
             imap: EnteredImapLoginParam {
@@ -246,7 +236,6 @@ impl EnteredLoginParam {
                 password: send_pw,
             },
             certificate_checks,
-            oauth2,
         })
     }
 
@@ -303,15 +292,6 @@ impl EnteredLoginParam {
             )
             .await?;
 
-        let server_flags = if self.oauth2 {
-            Some(DC_LP_AUTH_OAUTH2.to_string())
-        } else {
-            None
-        };
-        context
-            .set_config(Config::ServerFlags, server_flags.as_deref())
-            .await?;
-
         Ok(())
     }
 }
@@ -323,7 +303,7 @@ impl fmt::Display for EnteredLoginParam {
 
         write!(
             f,
-            "{} imap:{}:{}:{}:{}:{}:{} smtp:{}:{}:{}:{}:{}:{} cert_{}",
+            "{} imap:{}:{}:{}:{}:{} smtp:{}:{}:{}:{}:{} cert_{}",
             unset_empty(&self.addr),
             unset_empty(&self.imap.user),
             if !self.imap.password.is_empty() {
@@ -334,7 +314,6 @@ impl fmt::Display for EnteredLoginParam {
             unset_empty(&self.imap.server),
             self.imap.port,
             self.imap.security,
-            if self.oauth2 { "OAUTH2" } else { "AUTH_NORMAL" },
             unset_empty(&self.smtp.user),
             if !self.smtp.password.is_empty() {
                 pw
@@ -344,7 +323,6 @@ impl fmt::Display for EnteredLoginParam {
             unset_empty(&self.smtp.server),
             self.smtp.port,
             self.smtp.security,
-            if self.oauth2 { "OAUTH2" } else { "AUTH_NORMAL" },
             self.certificate_checks
         )
     }
@@ -419,7 +397,6 @@ mod tests {
                 password: "".to_string(),
             },
             certificate_checks: Default::default(),
-            oauth2: false,
         };
         param.save_legacy(&t).await?;
         assert_eq!(

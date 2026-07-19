@@ -226,7 +226,7 @@ impl TestContextManager {
                (
                    new_addr,
                    serde_json::to_string(&EnteredLoginParam{addr: new_addr.to_string(), ..Default::default()}).unwrap(),
-                   format!(r#"{{"addr":"{new_addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#)
+                   format!(r#"{{"addr":"{new_addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic"}}"#)
               ),
           ).await.unwrap();
 

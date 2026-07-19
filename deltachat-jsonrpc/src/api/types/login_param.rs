@@ -66,10 +66,6 @@ pub struct EnteredLoginParam {
     /// invalid hostnames.
     /// Default: Automatic
     pub certificate_checks: Option<EnteredCertificateChecks>,
-
-    /// If true, login via OAUTH2 (not recommended anymore).
-    /// Default: false
-    pub oauth2: Option<bool>,
 }
 
 impl From<dc::TransportListEntry> for TransportListEntry {
@@ -100,7 +96,6 @@ impl From<dc::EnteredLoginParam> for EnteredLoginParam {
             smtp_user: param.smtp.user.into_option(),
             smtp_password: param.smtp.password.into_option(),
             certificate_checks: certificate_checks.into_option(),
-            oauth2: param.oauth2.into_option(),
         }
     }
 }
@@ -127,7 +122,6 @@ impl TryFrom<EnteredLoginParam> for dc::EnteredLoginParam {
                 password: param.smtp_password.unwrap_or_default(),
             },
             certificate_checks: param.certificate_checks.unwrap_or_default().into(),
-            oauth2: param.oauth2.unwrap_or_default(),
         })
     }
 }

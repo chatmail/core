@@ -32,7 +32,6 @@ pub use crate::login_param::EnteredLoginParam;
 use crate::login_param::{EnteredCertificateChecks, TransportListEntry};
 use crate::message::Message;
 use crate::net::proxy::ProxyConfig;
-use crate::oauth2::get_oauth2_addr;
 use crate::provider::{Protocol, Provider, Socket, UsernamePattern};
 use crate::qr::{login_param_from_account_qr, login_param_from_login_qr};
 use crate::smtp::Smtp;
@@ -451,24 +450,7 @@ async fn get_configured_param(
         param.smtp.password.clone()
     };
 
-    let mut addr = param.addr.clone();
-    if param.oauth2 {
-        // the used oauth2 addr may differ, check this.
-        // if get_oauth2_addr() is not available in the oauth2 implementation, just use the given one.
-        progress!(ctx, 10);
-        if let Some(oauth2_addr) = get_oauth2_addr(ctx, &param.addr, &param.imap.password)
-            .await?
-            .and_then(|e| e.parse().ok())
-        {
-            info!(ctx, "Authorized address is {}", oauth2_addr);
-            addr = oauth2_addr;
-            ctx.sql
-                .set_raw_config("addr", Some(param.addr.as_str()))
-                .await?;
-        }
-        progress!(ctx, 20);
-    }
-    // no oauth? - just continue it's no error
+    let addr = param.addr.clone();
 
     let parsed = EmailAddress::new(&param.addr).context("Bad email-address")?;
     let param_domain = parsed.domain;
@@ -618,7 +600,6 @@ async fn get_configured_param(
                 ConfiguredCertificateChecks::AcceptInvalidCertificates
             }
         },
-        oauth2: param.oauth2,
     };
     Ok(configured_login_param)
 }
@@ -649,7 +630,6 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'
             &proxy_config2,
             &smtp_addr,
             strict_tls,
-            configured_param.oauth2,
         )
         .await?;
 

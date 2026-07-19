@@ -503,7 +503,6 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  * - `send_pw`      = SMTP-password, guessed if left out
  * - `send_port`    = SMTP-port, guessed if left out
  * - `send_security`= SMTP-socket, one of @ref DC_SOCKET, defaults to #DC_SOCKET_AUTO
- * - `server_flags` = IMAP-/SMTP-flags as a combination of @ref DC_LP flags, guessed if left out
  * - `proxy_enabled` = Proxy enabled. Disabled by default.
  * - `proxy_url` = Proxy URL. May contain multiple URLs separated by newline, but only the first one is used.
  * - `imap_certificate_checks` = how to check IMAP and SMTP certificates, one of the @ref DC_CERTCK flags, defaults to #DC_CERTCK_AUTO (0)
@@ -590,36 +589,7 @@ int             dc_set_config_from_qr   (dc_context_t* context, const char* qr);
 char*           dc_get_info                  (const dc_context_t* context);
 
 
-/**
- * Get URL that can be used to initiate an OAuth2 authorization.
- *
- * If an OAuth2 authorization is possible for a given e-mail address,
- * this function returns the URL that should be opened in a browser.
- *
- * If the user authorizes access,
- * the given redirect_uri is called by the provider.
- * It's up to the UI to handle this call.
- *
- * The provider will attach some parameters to the URL,
- * most important the parameter `code` that should be set as the `mail_pw`.
- * With `server_flags` set to #DC_LP_AUTH_OAUTH2,
- * dc_configure() can be called as usual afterwards.
- *
- * @memberof dc_context_t
- * @param context The context object.
- * @param addr E-mail address the user has entered.
- *     In case the user selects a different e-mail address during
- *     authorization, this is corrected in dc_configure()
- * @param redirect_uri URL that will get `code` that is used as `mail_pw` then.
- *     Not all URLs are allowed here, however, the following should work:
- *     `chat.delta:/PATH`, `http://localhost:PORT/PATH`,
- *     `https://localhost:PORT/PATH`, `urn:ietf:wg:oauth:2.0:oob`
- *     (the latter just displays the code the user can copy+paste then)
- * @return URL that can be opened in the browser to start OAuth2.
- *     Returned strings must be released using dc_str_unref().
- *     If OAuth2 is not possible for the given e-mail address, NULL is returned.
- */
-char*           dc_get_oauth2_url            (dc_context_t* context, const char* addr, const char* redirect_uri);
+
 
 
 #define DC_CONNECTIVITY_NOT_CONNECTED        1000
@@ -713,7 +683,7 @@ int              dc_get_push_state           (dc_context_t* context);
  *       to get the full configuration from well-known URLs.
  *
  *     - If _more_ options as `mail_server`, `mail_port`, `send_server`,
- *       `send_port`, `send_user` or `server_flags` are specified,
+ *       `send_port` or `send_user` are specified,
  *       **autoconfigure/autodiscover is skipped**.
  *
  * While dc_configure() returns immediately,
@@ -5735,41 +5705,6 @@ int64_t         dc_lot_get_timestamp     (const dc_lot_t* lot);
 /**
  * @}
  */
-
-
-/**
- * @defgroup DC_LP DC_LP
- *
- * Flags for configuring IMAP and SMTP servers.
- * These flags are optional
- * and may be set together with the username, password etc.
- * via dc_set_config() using the key "server_flags".
- *
- * @addtogroup DC_LP
- * @{
- */
-
-
-/**
- * Force OAuth2 authorization. This flag does not skip automatic configuration.
- * Before calling dc_configure() with DC_LP_AUTH_OAUTH2 set,
- * the user has to confirm access at the URL returned by dc_get_oauth2_url().
- */
-#define DC_LP_AUTH_OAUTH2                0x2
-
-
-/**
- * Force NORMAL authorization, this is the default.
- * If this flag is set, automatic configuration is skipped.
- */
-#define DC_LP_AUTH_NORMAL                0x4
-
-
-/**
- * @}
- */
-
-#define DC_LP_AUTH_FLAGS        (DC_LP_AUTH_OAUTH2|DC_LP_AUTH_NORMAL) // if none of these flags are set, the default is chosen
 
 /**
  * @defgroup DC_CERTCK DC_CERTCK
