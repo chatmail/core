@@ -47,6 +47,9 @@ mod pool;
 
 use pool::{Pool, WalCheckpointStats};
 
+/// How long a hidden and unused transport should be kept in the database before being deleted.
+pub const UNPUBLISHED_TRANSPORT_KEEP_TIME: i64 = 90 * 24 * 60 * 60;
+
 /// A wrapper around the underlying Sqlite3 object.
 #[derive(Debug)]
 pub struct Sql {
@@ -908,15 +911,38 @@ pub async fn housekeeping(context: &Context) -> Result<()> {
         .log_err(context)
         .ok();
 
+    remove_unused_hidden_transports(context)
+        .await
+        .context("Failed to remove unused hidden transports")
+        .log_err(context)
+        .ok();
+
     info!(context, "Housekeeping done.");
     Ok(())
+}
+
+/// Removes transports that are hidden (`is_published=0`),
+/// and haven't been used to receive new messages for [`UNPUBLISHED_TRANSPORT_KEEP_TIME`] seconds.
+pub(crate) async fn remove_unused_hidden_transports(context: &Context) -> Result<usize> {
+    let now = time();
+    let cutoff = now.saturating_sub(UNPUBLISHED_TRANSPORT_KEEP_TIME);
+    context
+        .sql
+        .execute(
+            "DELETE FROM transports
+            WHERE is_published=0
+            AND last_rcvd_timestamp<?1
+            AND add_timestamp<?1", // important, prevents immediate deletion in case of `last_rcvd_timestamp=0`
+            (cutoff,),
+        )
+        .await
 }
 
 /// Updates transport's `last_rcvd_timestamp`
 /// with the current time.
 ///
-/// This is done so that we can determine
-/// which unpublished relay is safest to remove.
+/// This is used to postpone deletion of hidden transport by [`remove_unused_hidden_transports`],
+/// if it is still used to receive messages.
 pub(crate) async fn update_transport_last_rcvd_timestamp(
     context: &Context,
     transport_id: u32,
