@@ -606,7 +606,10 @@ impl CommandApi {
     /// so that we don't cause extra messages to the corresponding inbox,
     /// but can still receive messages from contacts who don't know our new transport addresses yet.
     ///
-    /// Unpublished transports that are not used to receive any new messages for a time defined by
+    /// When more transports are added by [`Self::add_or_update_transport()`] or [`Self::add_transport_from_qr`],
+    /// the least recently needed unpublished transport is automatically removed
+    /// if this is necessary in order to stay below the maximum number of allowed relays.
+    /// Also, unpublished transports that are not used to receive any new messages for a time defined by
     /// [`UNPUBLISHED_TRANSPORT_KEEP_TIME`] are automatically removed.
     ///
     /// [`UNPUBLISHED_TRANSPORT_KEEP_TIME`]: deltachat::sql::UNPUBLISHED_TRANSPORT_KEEP_TIME

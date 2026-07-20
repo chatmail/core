@@ -45,11 +45,10 @@ use crate::transport::{
 use crate::{EventType, stock_str};
 use crate::{chat, provider};
 
-/// Maximum number of published relays.
+/// Maximum number of relays.
 ///
-/// See <https://github.com/chatmail/core/issues/7608>
-/// and <https://github.com/chatmail/core/issues/8421>.
-pub(crate) const MAX_PUBLISHED_RELAYS: usize = 5;
+/// See <https://github.com/chatmail/core/issues/7608>.
+pub(crate) const MAX_RELAYS: usize = 5;
 
 /// Hard-coded candidates for default relays.
 /// In the future, we want to use it during onboarding;
@@ -233,7 +232,7 @@ impl Context {
     }
 
     /// Immediately deletes a transport, potentially causing messages not to arrive.
-    /// This must ONLY be used by the automated tests.
+    /// This must ONLY be used internally and by the automated tests.
     /// UI implementations must use [`Self::set_transport_unpublished`] instead.
     pub async fn delete_transport(&self, addr: &str) -> Result<()> {
         let now = time();
@@ -294,7 +293,10 @@ impl Context {
     /// so that we don't cause extra messages to the corresponding inbox,
     /// but can still receive messages from contacts who don't know our new transport addresses yet.
     ///
-    /// Unpublished transports that are not used to receive any new messages for a time defined by
+    /// When more transports are added by [`Self::add_or_update_transport()`] or [`Self::add_transport_from_qr`],
+    /// the least recently needed unpublished transport is automatically removed
+    /// if this is necessary in order to stay below the maximum number of allowed relays.
+    /// Also, unpublished transports that are not used to receive any new messages for a time defined by
     /// `UNPUBLISHED_TRANSPORT_KEEP_TIME` are automatically removed.
     pub async fn set_transport_unpublished(&self, addr: &str, unpublished: bool) -> Result<()> {
         self.sql
@@ -327,22 +329,15 @@ impl Context {
     async fn inner_configure(&self, param: &EnteredLoginParam) -> Result<()> {
         info!(self, "Configure ...");
 
-        let old_addr = self.get_config(Config::ConfiguredAddr).await?;
-        if old_addr.is_some()
-            && !self
-                .sql
-                .exists(
-                    "SELECT COUNT(*) FROM transports WHERE addr=?",
-                    (&param.addr,),
-                )
-                .await?
-            && self
-                .sql
-                .count("SELECT COUNT(*) FROM transports WHERE is_published", ())
-                .await?
-                >= MAX_PUBLISHED_RELAYS
+        if !self
+            .sql
+            .exists(
+                "SELECT COUNT(*) FROM transports WHERE addr=?",
+                (&param.addr,),
+            )
+            .await?
         {
-            bail!("You have reached the maximum number of relays ({MAX_PUBLISHED_RELAYS}).")
+            self.try_make_space_for_new_relay().await?;
         }
 
         let provider = match configure(self, param).await {
@@ -364,6 +359,42 @@ impl Context {
         self.set_config_internal(Config::NotifyAboutWrongPw, Some("1"))
             .await?;
         on_configure_completed(self, provider).await?;
+        Ok(())
+    }
+
+    /// This function is called before adding a new relay.
+    /// If the maximum number of relays ([`MAX_RELAYS`]) is already reached,
+    /// then it tries to make space by removing an unpublished relay.
+    /// If there are multiple unpublished relays,
+    /// the one that hasn't received a message for longest is removed.
+    /// If there are no unpublished relays, an error is returned.
+    ///
+    /// Note that eviction happens before we know that a new relay works,
+    /// which is a trade-off we made in favor of implementation complexity.
+    async fn try_make_space_for_new_relay(&self) -> Result<()> {
+        if self.count_transports().await? >= MAX_RELAYS {
+            // Try to automatically remove the unpublished transport that wasn't used for the longest time:
+            if let Some(addr) = self
+                .sql
+                .query_get_value::<String>(
+                    "SELECT addr FROM transports WHERE is_published=0
+                    ORDER BY last_rcvd_timestamp, add_timestamp LIMIT 1",
+                    (),
+                )
+                .await?
+            {
+                info!(
+                    self,
+                    "Auto-deleting relay {addr} to make space for new relay."
+                );
+                self.delete_transport(&addr).await?;
+            }
+
+            if self.count_transports().await? >= MAX_RELAYS {
+                // Apparently, all the transports are published
+                bail!("You have reached the maximum number of relays ({MAX_RELAYS})");
+            }
+        };
         Ok(())
     }
 }
@@ -812,10 +843,14 @@ pub enum Error {
 
 #[cfg(test)]
 mod tests {
+    use crate::tools::SystemTime;
+
     use super::*;
     use crate::config::Config;
     use crate::login_param::EnteredImapLoginParam;
+    use crate::sql::update_transport_last_rcvd_timestamp;
     use crate::test_utils::TestContext;
+    use crate::transport::add_pseudo_transport;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_no_panic_on_bad_credentials() {
@@ -844,6 +879,109 @@ mod tests {
         let configured_param = get_configured_param(t, &entered_param).await?;
         assert_eq!(configured_param.imap_user, "alice@example.net");
         assert_eq!(configured_param.smtp_user, "");
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_try_make_place_for_new_relay() -> Result<()> {
+        let t = TestContext::new().await;
+
+        // Setting ConfiguredAddr on an unconfigured account creates a pseudo primary transport
+        t.set_config(Config::ConfiguredAddr, Some("primary@example.org"))
+            .await?;
+
+        // Test that try_make_place_for_new_relay() doesn't do anything when we're below the limit
+        assert_eq!(t.count_transports().await?, 1);
+        t.try_make_space_for_new_relay().await?;
+        assert_eq!(t.count_transports().await?, 1);
+
+        for i in 0..(MAX_RELAYS - 2) {
+            add_pseudo_transport(&t, &format!("transport{i}@example.org")).await?;
+        }
+        assert_eq!(t.count_transports().await?, MAX_RELAYS - 1);
+        t.try_make_space_for_new_relay().await?;
+        assert_eq!(t.count_transports().await?, MAX_RELAYS - 1);
+
+        // Test that try_make_place_for_new_relay() removes the unpublished transport
+        // when we're at the limit
+        add_pseudo_transport(&t, "unpublished@example.org").await?;
+        t.set_transport_unpublished("unpublished@example.org", true)
+            .await?;
+        assert_eq!(t.count_transports().await?, MAX_RELAYS);
+        t.try_make_space_for_new_relay().await?;
+        assert_eq!(t.count_transports().await?, MAX_RELAYS - 1);
+        assert_eq!(
+            t.sql
+                .exists(
+                    "SELECT COUNT(*) FROM transports WHERE addr=?",
+                    ("unpublished@example.org",),
+                )
+                .await?,
+            false
+        );
+
+        // Test that if there are multiple unpublished relays,
+        // the one that was used least recently is removed
+        t.set_transport_unpublished("transport0@example.org", true)
+            .await?;
+        add_pseudo_transport(&t, "other_unpublished@example.org").await?;
+        t.set_transport_unpublished("other_unpublished@example.org", true)
+            .await?;
+        assert_eq!(t.count_transports().await?, MAX_RELAYS);
+
+        let transport0_id: u32 = t
+            .sql
+            .query_get_value(
+                "SELECT id FROM transports WHERE addr=?",
+                ("transport0@example.org",),
+            )
+            .await?
+            .unwrap();
+        let other_unpublished_id: u32 = t
+            .sql
+            .query_get_value(
+                "SELECT id FROM transports WHERE addr=?",
+                ("other_unpublished@example.org",),
+            )
+            .await?
+            .unwrap();
+
+        update_transport_last_rcvd_timestamp(&t, transport0_id).await?;
+        SystemTime::shift(std::time::Duration::from_secs(10));
+        update_transport_last_rcvd_timestamp(&t, other_unpublished_id).await?;
+
+        // Test that try_make_place_for_new_relay()
+        // removes the relay with the oldest last_rcvd_timestamp
+        t.try_make_space_for_new_relay().await?;
+        assert_eq!(t.count_transports().await?, MAX_RELAYS - 1);
+        assert_eq!(
+            t.sql
+                .exists(
+                    "SELECT COUNT(*) FROM transports WHERE addr=?",
+                    ("transport0@example.org",),
+                )
+                .await?,
+            false
+        );
+        assert_eq!(
+            t.sql
+                .exists(
+                    "SELECT COUNT(*) FROM transports WHERE addr=?",
+                    ("other_unpublished@example.org",),
+                )
+                .await?,
+            true
+        );
+
+        // Test that try_make_place_for_new_relay() fails
+        // if there are MAX_RELAYS published transports
+        add_pseudo_transport(&t, "published_extra@example.org").await?;
+        t.set_transport_unpublished("other_unpublished@example.org", false)
+            .await?;
+        assert_eq!(t.count_transports().await?, MAX_RELAYS);
+        assert!(t.try_make_space_for_new_relay().await.is_err());
+        assert_eq!(t.count_transports().await?, MAX_RELAYS);
+
         Ok(())
     }
 }

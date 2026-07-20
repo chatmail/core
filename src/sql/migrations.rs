@@ -2459,8 +2459,8 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
     inc_and_check(&mut migration_version, 155)?;
     if dbversion < migration_version {
         // last_rcvd_timestamp tracks timestamp of the last received message
-        // on the transport. This is used to remove hidden transports that
-        // were not used to receive messages for some predefined time.
+        // on the transport. This is used to automatically remove hidden transports
+        // that were not used to receive messages for some time.
         //
         // NOTE: ideally we would use `DEFAULT (unixepoch())`,
         // but sqlite forbids non-constant default in ALTER TABLE.
