@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.55.0] - 2026-07-20
+
+Minor release to fix CI because releasing 2.54.0 failed.
+
+### CI
+
+- Update Node version to 24.
+
 ## [2.54.0] - 2026-07-20
 
 ### API-Changes
@@ -8473,3 +8481,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.52.0]: https://github.com/chatmail/core/compare/v2.51.0..v2.52.0
 [2.53.0]: https://github.com/chatmail/core/compare/v2.52.0..v2.53.0
 [2.54.0]: https://github.com/chatmail/core/compare/v2.53.0..v2.54.0
+[2.55.0]: https://github.com/chatmail/core/compare/v2.54.0..v2.55.0
