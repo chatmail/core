@@ -917,8 +917,26 @@ pub async fn housekeeping(context: &Context) -> Result<()> {
         .log_err(context)
         .ok();
 
+    remove_old_pending_reactions(context)
+        .await
+        .context("Failed to remove old pending reactions")
+        .log_err(context)
+        .ok();
+
     info!(context, "Housekeeping done.");
     Ok(())
+}
+
+/// Removes pending reactions that weren't applied for 90 days.
+async fn remove_old_pending_reactions(context: &Context) -> Result<usize> {
+    let three_months_ago = time().saturating_sub(60 * 60 * 24 * 90);
+    context
+        .sql
+        .execute(
+            "DELETE FROM pending_reactions WHERE timestamp < ?",
+            (three_months_ago,),
+        )
+        .await
 }
 
 /// Removes transports that are hidden (`is_published=0`),
