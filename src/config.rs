@@ -477,6 +477,15 @@ pub enum Config {
     /// and incoming unencrypted messages are not fetched and not processed.
     #[strum(props(default = "1"))]
     ForceEncryption,
+
+    /// If the From address in the encrypted part differs from the outer one,
+    /// keep the outer address as the contact address and trash the message
+    /// unless the outer address is a relay address of the sender's key.
+    ///
+    /// Only the outer From is enforced by the sender's relay,
+    /// so only it can be used as an identity.
+    #[strum(props(default = "0"))]
+    EnforceOuterFromKeyAlignment,
 }
 
 impl Config {

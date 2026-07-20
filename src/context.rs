@@ -1037,6 +1037,12 @@ impl Context {
                 .await?
                 .to_string(),
         );
+        res.insert(
+            "enforce_outer_from_key_alignment",
+            self.get_config_bool(Config::EnforceOuterFromKeyAlignment)
+                .await?
+                .to_string(),
+        );
 
         let elapsed = time_elapsed(&self.creation_time);
         res.insert("uptime", duration_to_str(elapsed));

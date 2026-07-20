@@ -213,13 +213,14 @@ impl TestContextManager {
         to.recv_msg(&sent).await
     }
 
-    pub async fn change_addr(&self, test_context: &TestContext, new_addr: &str) {
+    /// Adds a transport for `new_addr` without changing the primary self address.
+    pub async fn add_transport(&self, test_context: &TestContext, new_addr: &str) {
         self.section(&format!(
-            "{} changes her self address and reconfigures",
-            test_context.name()
+            "{} adds a transport for {}",
+            test_context.name(),
+            new_addr
         ));
 
-        // Insert a transport for the new address.
         test_context.sql
           .execute(
             "INSERT OR IGNORE INTO transports (addr, entered_param, configured_param) VALUES (?, ?, ?)",
@@ -229,6 +230,18 @@ impl TestContextManager {
                    format!(r#"{{"addr":"{new_addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#)
               ),
           ).await.unwrap();
+
+        // Drop self key from cache so regen will list `new_addr` as a relay address.
+        test_context.self_public_key.lock().await.take();
+    }
+
+    pub async fn change_addr(&self, test_context: &TestContext, new_addr: &str) {
+        self.section(&format!(
+            "{} changes her self address and reconfigures",
+            test_context.name()
+        ));
+
+        self.add_transport(test_context, new_addr).await;
 
         test_context.set_primary_self_addr(new_addr).await.unwrap();
         // ensure_secret_key_exists() is called during configure

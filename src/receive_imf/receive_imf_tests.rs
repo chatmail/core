@@ -4724,6 +4724,9 @@ async fn test_no_op_member_added_is_trash() -> Result<()> {
 ///
 /// The message is accepted because the sender contact is associated with the key
 /// rather than the address.
+///
+/// If `enforce_outer_from_key_alignment` is set, the message is trashed instead
+/// because the outer From is not a relay address of the sender's key.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_forged_from() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -4747,6 +4750,98 @@ async fn test_forged_from() -> Result<()> {
     // We take the address from the encrypted part
     // and send replies there.
     assert_eq!(contact.get_addr(), "bob@example.net");
+
+    alice
+        .set_config_bool(Config::EnforceOuterFromKeyAlignment, true)
+        .await?;
+    chat::send_text_msg(&bob, bob_chat_id, "hi again!".to_string()).await?;
+    let mut sent_msg = bob.pop_sent_msg().await;
+    sent_msg.payload = sent_msg
+        .payload
+        .replace("bob@example.net", "notbob@example.net");
+    assert!(alice.recv_msg_opt(&sent_msg).await.is_none());
+
+    Ok(())
+}
+
+/// Tests that a forged From header in the encrypted part
+/// does not change the address of the sender contact
+/// if `enforce_outer_from_key_alignment` is set.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_forged_inner_from() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = tcm.alice().await;
+    let bob = tcm.bob().await;
+
+    alice
+        .set_config_bool(Config::EnforceOuterFromKeyAlignment, true)
+        .await?;
+    let bob_chat_id = tcm.send_recv_accept(&alice, &bob, "hi").await.chat_id;
+
+    // Bob claims the victim address in the encrypted part,
+    // while his relay keeps the outer From at his own address.
+    tcm.change_addr(&bob, "victim@example.org").await;
+    chat::send_text_msg(&bob, bob_chat_id, "hi!".to_string()).await?;
+    let mut sent_msg = bob.pop_sent_msg().await;
+    sent_msg.payload = sent_msg
+        .payload
+        .replace("victim@example.org", "bob@example.net");
+
+    let msg = alice.recv_msg(&sent_msg).await;
+    let contact = Contact::get_by_id(&alice, msg.from_id).await?;
+    assert_eq!(contact.get_addr(), "bob@example.net");
+
+    Ok(())
+}
+
+/// Tests that a sender key without relay addresses is accepted
+/// as long as the outer From matches the one in the encrypted part.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_outer_from_key_without_relays() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = tcm.alice().await;
+    let bob = tcm.bob().await;
+
+    alice
+        .set_config_bool(Config::EnforceOuterFromKeyAlignment, true)
+        .await?;
+    bob.sql
+        .execute("UPDATE transports SET is_published=0", ())
+        .await?;
+    bob.self_public_key.lock().await.take();
+
+    let msg = tcm.send_recv(&bob, &alice, "hi!").await;
+    let contact = Contact::get_by_id(&alice, msg.from_id).await?;
+    assert_eq!(contact.get_addr(), "bob@example.net");
+
+    Ok(())
+}
+
+/// Tests that a relay address added to the key after the recipient learned it
+/// is accepted as outer From, because the updated key is imported
+/// from the Autocrypt header of the encrypted part first.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_outer_from_updated_key() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = tcm.alice().await;
+    let bob = tcm.bob().await;
+
+    alice
+        .set_config_bool(Config::EnforceOuterFromKeyAlignment, true)
+        .await?;
+    tcm.send_recv_accept(&bob, &alice, "hello").await;
+    let bob_chat_id = bob.create_chat(&alice).await.id;
+
+    tcm.add_transport(&bob, "bob@relay-new.example").await;
+    chat::send_text_msg(&bob, bob_chat_id, "hi!".to_string()).await?;
+    let mut sent_msg = bob.pop_sent_msg().await;
+    sent_msg.payload = sent_msg
+        .payload
+        .replace("bob@example.net", "bob@relay-new.example");
+
+    let msg = alice.recv_msg(&sent_msg).await;
+    let contact = Contact::get_by_id(&alice, msg.from_id).await?;
+    assert_eq!(contact.get_addr(), "bob@relay-new.example");
 
     Ok(())
 }
