@@ -29,6 +29,7 @@ use crate::key::{self, DcKey, Fingerprint, SignedPublicKey};
 use crate::log::warn;
 use crate::message::{self, Message, MsgId, Viewtype, get_vcard_summary, set_msg_failed};
 use crate::param::{Param, Params};
+use crate::pgp::addresses_from_public_key;
 use crate::simplify::{SimplifiedText, simplify};
 use crate::sync::SyncItems;
 use crate::tools::{get_filemeta, parse_receive_headers, time, truncate_msg_text, validate_id};
@@ -339,6 +340,7 @@ impl MimeMessage {
         let from_is_not_self_addr = !context.is_self_addr(&from.addr).await?;
 
         let mut aheader_values = mail.headers.get_all_values(HeaderDef::Autocrypt.into());
+        let mut aheader_protected = false;
 
         let mut pre_message = if mail
             .headers
@@ -380,6 +382,7 @@ impl MimeMessage {
                     .get_all_values(HeaderDef::Autocrypt.into());
                 if !protected_aheader_values.is_empty() {
                     aheader_values = protected_aheader_values;
+                    aheader_protected = true;
                 }
 
                 expected_sender_fingerprint = expected_sender_fp;
@@ -405,7 +408,9 @@ impl MimeMessage {
             // See `get_all_addresses_from_header()` for why we take the last valid header.
             for val in aheader_values.iter().rev() {
                 autocrypt_header = match Aheader::from_str(val) {
-                    Ok(header) if addr_cmp(&header.addr, &from.addr) => Some(header),
+                    Ok(header) if aheader_protected || addr_cmp(&header.addr, &from.addr) => {
+                        Some(header)
+                    }
                     Ok(header) => {
                         warn!(
                             context,
@@ -550,7 +555,9 @@ impl MimeMessage {
             }
 
             if let Some(inner_from) = inner_from {
-                if !addr_cmp(&inner_from.addr, &from.addr) {
+                if addr_cmp(&inner_from.addr, &from.addr) {
+                    from = inner_from;
+                } else {
                     // There is a From: header in the encrypted
                     // part, but it doesn't match the outer one.
                     // This _might_ be because the sender's mail server
@@ -572,8 +579,25 @@ impl MimeMessage {
                         // as if the MIME structure is broken.
                         bail!("From header is forged");
                     }
+
+                    if context
+                        .get_config_bool(Config::EnforceOuterFromKeyAlignment)
+                        .await?
+                    {
+                        ensure!(
+                            public_keyring.iter().any(|public_key| {
+                                signatures.contains_key(&public_key.dc_fingerprint())
+                                    && addresses_from_public_key(public_key).is_some_and(|relays| {
+                                        relays.iter().any(|relay| addr_cmp(relay, &from.addr))
+                                    })
+                            }),
+                            "Outer From address {:?} is not aligned with the sender's key",
+                            from.addr
+                        );
+                    } else {
+                        from = inner_from;
+                    }
                 }
-                from = inner_from;
             }
         }
         if signatures.is_empty() {
