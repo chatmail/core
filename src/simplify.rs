@@ -1,7 +1,7 @@
 //! # Simplify incoming plaintext.
 use crate::tools::IsNoneOrEmpty;
 
-/// Protects lines starting with `--` against being treated as a footer.
+/// Protects lines starting with `-- ` against being treated as a footer.
 /// for that, we insert a ZERO WIDTH SPACE (ZWSP, 0x200B);
 /// this should be invisible on most systems and there is no need to unescape it again
 /// (which won't be done by non-deltas anyway).
@@ -10,10 +10,27 @@ use crate::tools::IsNoneOrEmpty;
 /// but for non-delta-compatibility, that seems to be better.
 /// (to be only compatible with delta, only "[\r\n|\n]-- {0,2}[\r\n|\n]" needs to be replaced)
 pub fn escape_message_footer_marks(text: &str) -> String {
-    if let Some(text) = text.strip_prefix("--") {
-        "-\u{200B}-".to_string() + &text.replace("\n--", "\n-\u{200B}-")
+    if let Some(text) = text.strip_prefix("-- ") {
+        "-\u{200B}- ".to_string() + &text.replace("\n-- ", "\n-\u{200B}- ")
     } else {
-        text.replace("\n--", "\n-\u{200B}-")
+        text.replace("\n-- ", "\n-\u{200B}- ")
+    }
+}
+
+/// Unapplies changes made by [`escape_message_footer_marks`].
+///
+/// This assumes original message doesn't contain `LF DASH ZWSP DASH` (`\n-\u{200B}-`)
+/// character sequence and doesn't start with `DASH ZWSP DASH` (`-\u{200B}-`)
+/// character sequence.
+/// Such sequences are unlikely to appear in normal text communication.
+///
+/// For backward compatibility, un-escaping as opposed to escaping
+/// doesn't require the final space to be present.
+pub fn unescape_message_footer_marks(text: &str) -> String {
+    if let Some(text) = text.strip_prefix("-\u{200B}-") {
+        "--".to_string() + &text.replace("\n-\u{200B}-", "\n--")
+    } else {
+        text.replace("\n-\u{200B}-", "\n--")
     }
 }
 
@@ -289,8 +306,7 @@ fn render_message(lines: &[&str], is_cut_at_end: bool) -> String {
     if is_cut_at_end && !ret.is_empty() {
         ret += " [...]";
     }
-    // redo escaping done by escape_message_footer_marks()
-    ret.replace('\u{200B}', "")
+    unescape_message_footer_marks(&ret)
 }
 
 /// Returns true if the line contains only whitespace.
@@ -467,12 +483,21 @@ mod tests {
     }
 
     #[test]
-    fn test_escape_message_footer_marks() {
-        let esc = escape_message_footer_marks("--\n--text --in line");
-        assert_eq!(esc, "-\u{200B}-\n-\u{200B}-text --in line");
+    fn test_escape_unescape_message_footer_marks() {
+        let original = "-- \n-- text -- in line";
+        let esc = escape_message_footer_marks(original);
+        assert_eq!(esc, "-\u{200B}- \n-\u{200B}- text -- in line");
+        let unesc = unescape_message_footer_marks(&esc);
+        assert_eq!(unesc, original);
+    }
 
-        let esc = escape_message_footer_marks("--\r\n--text");
-        assert_eq!(esc, "-\u{200B}-\r\n-\u{200B}-text");
+    #[test]
+    fn test_escape_unescape_message_footer_marks_crlf() {
+        let original = "-- \r\n-- text";
+        let esc = escape_message_footer_marks(original);
+        assert_eq!(esc, "-\u{200B}- \r\n-\u{200B}- text");
+        let unesc = unescape_message_footer_marks(&esc);
+        assert_eq!(unesc, original);
     }
 
     #[test]
@@ -515,7 +540,7 @@ mod tests {
         assert!(!is_cut);
         assert_eq!(footer.unwrap(), "footer");
 
-        let input = "text\n\n--\ntreated as footer when unescaped".to_string();
+        let input = "text\n\n-- \ntreated as footer when unescaped".to_string();
         let SimplifiedText {
             text,
             is_cut,
@@ -532,7 +557,7 @@ mod tests {
             footer,
             ..
         } = simplify(escaped, true);
-        assert_eq!(text, "text\n\n--\ntreated as footer when unescaped");
+        assert_eq!(text, "text\n\n-- \ntreated as footer when unescaped");
         assert!(!is_cut);
         assert_eq!(footer, None);
 
@@ -557,7 +582,7 @@ mod tests {
         assert!(!is_cut);
         assert_eq!(footer, None);
 
-        let input = "--\ntreated as footer when unescaped".to_string();
+        let input = "-- \ntreated as footer when unescaped".to_string();
         let SimplifiedText {
             text,
             is_cut,
@@ -575,7 +600,7 @@ mod tests {
             footer,
             ..
         } = simplify(escaped, true);
-        assert_eq!(text, "--\ntreated as footer when unescaped");
+        assert_eq!(text, "-- \ntreated as footer when unescaped");
         assert!(!is_cut);
         assert_eq!(footer, None);
     }
