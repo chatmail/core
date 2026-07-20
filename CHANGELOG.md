@@ -1,5 +1,103 @@
 # Changelog
 
+## [2.54.0] - 2026-07-20
+
+### API-Changes
+
+- [**breaking**] Deprecate `is_chatmail`.
+  - UIs should not behave differently for chatmail relays than for classical email servers; most usages of `is_chatmail` can be replaced by `force_encryption`.
+- [**breaking**] `delete_transport()` must not be used by UIs anymore. Instead, `set_transport_unpublished()` must be called when a user clicks on "Remove".
+- [**breaking**] `list_transports()` doesn't return unpublished relays anymore.
+  - UIs should use `list_transports()` rather than `list_transports_ex()`, because unpublished transports count as removed from the user point of view, and should not be shown in the relay list anymore.
+- deltachat-rpc-client: add `Account.set_transport_unpublished()`.
+- Add `MsgReadCountChanged` event.
+
+### Features / Changes
+
+- Implement support for populating and maintaining a list of default relays ([#8341](https://github.com/chatmail/core/pull/8341)).
+- Remove hidden relays automatically ([#8402](https://github.com/chatmail/core/pull/8402)).
+- Automatically remove oldest unpublished relay in order to make space when the user wants to add more; don't allow more than 5 relays overall ([#8428](https://github.com/chatmail/core/pull/8428)).
+- Add silent group changes messages as InNoticed, not InSeen.
+- Remove `?emailaddress` argument from autoconfig URL that is not using a dedicated domain.
+- Remove `imap::Session::sync_seen_flags()` ([#7742](https://github.com/chatmail/core/pull/7742)).
+- Use CAPABILITY response code if IMAP LOGIN command returns it.
+- Increase max idle timeout for iroh backup receiver to 60 seconds.
+
+### Fixes
+
+- Request MDNs for resent channel messages.
+- Make pre-messages w/o text want MDNs ([#8004](https://github.com/chatmail/core/pull/8004)).
+- Make truncated edited messages have HTML for receivers ([#8249](https://github.com/chatmail/core/pull/8249)).
+- Un-escape message footer marks in full messages (`get_html`) ([#8427](https://github.com/chatmail/core/pull/8427)).
+- Hide synced chat if we only know its visibility ([#8343](https://github.com/chatmail/core/pull/8343)).
+- Tombstone MDN before sending it ([#8252](https://github.com/chatmail/core/pull/8252)).
+- Recreate `imap_markseen` with `PRIMARY KEY` constraint.
+- Rerun the full securejoin protocol if the address was outdated ([#8358](https://github.com/chatmail/core/pull/8358)).
+- Return early from `receive_imf` to not tombstone Iroh-Node-Addr message if webxdc instance isn't found ([#8372](https://github.com/chatmail/core/pull/8372)).
+- Replace `last_added_location_id` with `last_added_location_timestamp`.
+- Do not put locations into pre-messages.
+- RUSTSEC-2026-0204 ([#8403](https://github.com/chatmail/core/pull/8403)).
+- Ensure public key signatures are not in the past compared to the public key.
+- Do not bubble up errors in IMAP candidate loop.
+- Do not log errors if full message is not available on any transport.
+- Apply reactions that arrived before the message at later time ([#8415](https://github.com/chatmail/core/pull/8415)).
+
+### Performance
+
+- Add timestamp to `msgs_index7` and speed up `Chatlist::try_load()` ([#7848](https://github.com/chatmail/core/pull/7848)).
+
+### CI
+
+- Update Rust to 1.97.1.
+- rrsync prepends the restricted upload path, we need to leave it out ([#8405](https://github.com/chatmail/core/pull/8405)).
+
+### Documentation
+
+- Update STYLE.md: macros should be used only when necessary ([#8410](https://github.com/chatmail/core/pull/8410)).
+- `create_group_chat_unencrypted()` may lead to chat split on the first device.
+
+### Refactor
+
+- Deprecate unused `SkipAutocrypt` param.
+- Remove commented out `RenderedEmail.envelope`.
+- Remove the ability to send messages with non-standard header protection.
+- Make `crate::pgp::symm_encrypt_message` non-async.
+- Move `ensure_secret_key_exists` into key.rs.
+- Improve comment ([#8366](https://github.com/chatmail/core/pull/8366)).
+- Remove `set_modseq()` function.
+- Remove unnecessary reference in format string.
+- Label the loop iterating over the candidates.
+- Remove `GROUP BY c.id` from chatlist queries.
+
+### Tests
+
+- securejoin: Check that "vc-{,request-}pubkey" messages don't contain displayname.
+
+### Miscellaneous Tasks
+
+- bump version to 2.54.0-dev.
+- deps: bump taiki-e/install-action from 2.81.1 to 2.81.8.
+- deps: bump taiki-e/install-action from 2.81.8 to 2.81.11.
+- update rPGP from 0.19.0 to 0.20.0.
+- update astral-tokio-tar from 0.6.2 to 0.6.3.
+- deps: bump anyhow to 1.0.103.
+- deps: bump actions/checkout from 6 to 7.
+- cargo: bump syn from 2.0.117 to 2.0.118.
+- cargo: bump quote from 1.0.45 to 1.0.46.
+- cargo: bump bytes from 1.11.1 to 1.12.0.
+- cargo: bump regex from 1.12.3 to 1.12.4.
+- cargo: bump log from 0.4.31 to 0.4.33.
+- cargo: bump hyper from 1.9.0 to 1.10.1.
+- deps: bump zizmorcore/zizmor-action from 0.5.6 to 0.5.7.
+- cargo: bump chrono from 0.4.44 to 0.4.45.
+- update quick-xml to 0.41.0.
+- cargo: bump brotli from 8.0.2 to 8.0.4.
+- cargo: bump smallvec from 1.15.1 to 1.15.2.
+- deps: bump taiki-e/install-action from 2.81.11 to 2.82.6.
+- update yanked spin@0.9.8 and spin@0.10.0.
+- deps: bump taiki-e/install-action from 2.82.6 to 2.82.10.
+- update async-imap to 0.11.3.
+
 ## [2.53.0] - 2026-06-15
 
 ### Features / Changes
@@ -8374,3 +8472,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.51.0]: https://github.com/chatmail/core/compare/v2.50.0..v2.51.0
 [2.52.0]: https://github.com/chatmail/core/compare/v2.51.0..v2.52.0
 [2.53.0]: https://github.com/chatmail/core/compare/v2.52.0..v2.53.0
+[2.54.0]: https://github.com/chatmail/core/compare/v2.53.0..v2.54.0
