@@ -29,7 +29,6 @@ use deltachat::message::{
 use deltachat::peer_channels::{
     leave_webxdc_realtime, send_webxdc_realtime_advertisement, send_webxdc_realtime_data,
 };
-use deltachat::provider::get_provider_info;
 use deltachat::qr::{self, Qr};
 use deltachat::qr_code_generator::{create_qr_svg, generate_backup_qr, get_securejoin_qr_svg};
 use deltachat::reaction::{get_msg_reactions, send_reaction};
@@ -55,7 +54,6 @@ use types::events::Event;
 use types::http::HttpResponse;
 use types::message::{MessageData, MessageObject, MessageReadReceipt};
 use types::notify_state::JsonrpcNotifyState;
-use types::provider_info::ProviderInfo;
 use types::reactions::JsonrpcReactions;
 use types::webxdc::WebxdcMessageInfo;
 
@@ -343,21 +341,6 @@ impl CommandApi {
         let total_size = get_blobdir_storage_usage(&ctx);
 
         Ok(dbfile + total_size)
-    }
-
-    /// Returns provider for the given domain.
-    ///
-    /// This function looks up domain in offline database.
-    ///
-    /// For compatibility, email address can be passed to this function
-    /// instead of the domain.
-    async fn get_provider_info(
-        &self,
-        _account_id: u32,
-        email: String,
-    ) -> Result<Option<ProviderInfo>> {
-        let provider_info = get_provider_info(email.split('@').next_back().unwrap_or(""));
-        Ok(ProviderInfo::from_dc_type(provider_info))
     }
 
     /// Checks if the context is already configured.

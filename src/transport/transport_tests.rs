@@ -4,8 +4,6 @@ use std::time::Duration;
 use crate::tools::SystemTime;
 
 use super::*;
-use crate::log::LogExt as _;
-use crate::provider::get_provider_by_id;
 use crate::test_utils::TestContext;
 use crate::test_utils::TestContextManager;
 use crate::tools::time;
@@ -47,7 +45,6 @@ async fn test_save_load_login_param() -> Result<()> {
         }],
         smtp_user: "".to_string(),
         smtp_password: "bar".to_string(),
-        provider: None,
         certificate_checks: ConfiguredCertificateChecks::Strict,
     };
 
@@ -55,7 +52,7 @@ async fn test_save_load_login_param() -> Result<()> {
         .clone()
         .save_to_transports_table(&t, &EnteredLoginParam::default(), time())
         .await?;
-    let expected_param = r#"{"addr":"alice@example.org","imap":[{"connection":{"host":"imap.example.com","port":123,"security":"Starttls"},"user":"alice"}],"imap_folder":"Folder","imap_user":"","imap_password":"foo","smtp":[{"connection":{"host":"smtp.example.com","port":456,"security":"Tls"},"user":"alice@example.org"}],"smtp_user":"","smtp_password":"bar","provider_id":null,"certificate_checks":"Strict"}"#;
+    let expected_param = r#"{"addr":"alice@example.org","imap":[{"connection":{"host":"imap.example.com","port":123,"security":"Starttls"},"user":"alice"}],"imap_folder":"Folder","imap_user":"","imap_password":"foo","smtp":[{"connection":{"host":"smtp.example.com","port":456,"security":"Tls"},"user":"alice@example.org"}],"smtp_user":"","smtp_password":"bar","certificate_checks":"Strict"}"#;
     assert_eq!(
         t.sql
             .query_get_value::<String>("SELECT configured_param FROM transports", ())
@@ -72,7 +69,6 @@ async fn test_save_load_login_param() -> Result<()> {
     assert!(formatted.contains(" imap:[imap.example.com:123:starttls]"));
     assert!(formatted.contains(" folder:\"Folder\""));
     assert!(formatted.contains(" smtp:[smtp.example.com:456:tls]"));
-    assert!(formatted.contains(" provider:none"));
     assert!(formatted.contains(" cert_strict"));
 
     // Legacy ConfiguredImapCertificateChecks config is ignored
@@ -91,176 +87,7 @@ async fn test_save_load_login_param() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_posteo_alias() -> Result<()> {
-    let t = TestContext::new().await;
-
-    let user = "alice@posteo.de";
-
-    // Alice has old config with "alice@posteo.at" address
-    // and "alice@posteo.de" username.
-    t.set_config(Config::Configured, Some("1")).await?;
-    t.set_config(Config::ConfiguredProvider, Some("posteo"))
-        .await?;
-    t.sql
-        .set_raw_config(Config::ConfiguredAddr.as_ref(), Some("alice@posteo.at"))
-        .await?;
-    t.set_config(Config::ConfiguredMailServer, Some("posteo.de"))
-        .await?;
-    t.set_config(Config::ConfiguredMailPort, Some("993"))
-        .await?;
-    t.set_config(Config::ConfiguredMailSecurity, Some("1"))
-        .await?; // TLS
-    t.set_config(Config::ConfiguredMailUser, Some(user)).await?;
-    t.set_config(Config::ConfiguredMailPw, Some("foobarbaz"))
-        .await?;
-    t.set_config(Config::ConfiguredImapCertificateChecks, Some("1"))
-        .await?; // Strict
-    t.set_config(Config::ConfiguredSendServer, Some("posteo.de"))
-        .await?;
-    t.set_config(Config::ConfiguredSendPort, Some("465"))
-        .await?;
-    t.set_config(Config::ConfiguredSendSecurity, Some("1"))
-        .await?; // TLS
-    t.set_config(Config::ConfiguredSendUser, Some(user)).await?;
-    t.set_config(Config::ConfiguredSendPw, Some("foobarbaz"))
-        .await?;
-
-    let param = ConfiguredLoginParam {
-        addr: "alice@posteo.at".to_string(),
-        imap: vec![
-            ConfiguredServerLoginParam {
-                connection: ConnectionCandidate {
-                    host: "posteo.de".to_string(),
-                    port: 993,
-                    security: ConnectionSecurity::Tls,
-                },
-                user: user.to_string(),
-            },
-            ConfiguredServerLoginParam {
-                connection: ConnectionCandidate {
-                    host: "posteo.de".to_string(),
-                    port: 143,
-                    security: ConnectionSecurity::Starttls,
-                },
-                user: user.to_string(),
-            },
-        ],
-        imap_folder: None,
-        imap_user: "alice@posteo.de".to_string(),
-        imap_password: "foobarbaz".to_string(),
-        smtp: vec![
-            ConfiguredServerLoginParam {
-                connection: ConnectionCandidate {
-                    host: "posteo.de".to_string(),
-                    port: 465,
-                    security: ConnectionSecurity::Tls,
-                },
-                user: user.to_string(),
-            },
-            ConfiguredServerLoginParam {
-                connection: ConnectionCandidate {
-                    host: "posteo.de".to_string(),
-                    port: 587,
-                    security: ConnectionSecurity::Starttls,
-                },
-                user: user.to_string(),
-            },
-        ],
-        smtp_user: "alice@posteo.de".to_string(),
-        smtp_password: "foobarbaz".to_string(),
-        provider: get_provider_by_id("posteo"),
-        certificate_checks: ConfiguredCertificateChecks::Strict,
-    };
-
-    let loaded = ConfiguredLoginParam::load_legacy(&t).await?.unwrap();
-    assert_eq!(loaded, param);
-
-    migrate_configured_login_param(&t).await;
-    let (_transport_id, loaded) = ConfiguredLoginParam::load(&t).await?.unwrap();
-    assert_eq!(loaded, param);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_empty_server_list_legacy() -> Result<()> {
-    // Find a provider that does not have server list set.
-    //
-    // There is at least one such provider in the provider database.
-    let (domain, provider) = crate::provider::data::PROVIDER_DATA
-        .iter()
-        .find(|(_domain, provider)| provider.server.is_empty())
-        .unwrap();
-
-    let t = TestContext::new().await;
-
-    let addr = format!("alice@{domain}");
-
-    t.set_config(Config::Configured, Some("1")).await?;
-    t.set_config(Config::ConfiguredProvider, Some(provider.id))
-        .await?;
-    t.sql
-        .set_raw_config(Config::ConfiguredAddr.as_ref(), Some(&addr))
-        .await?;
-    t.set_config(Config::ConfiguredMailPw, Some("foobarbaz"))
-        .await?;
-    t.set_config(Config::ConfiguredImapCertificateChecks, Some("1"))
-        .await?; // Strict
-    t.set_config(Config::ConfiguredSendPw, Some("foobarbaz"))
-        .await?;
-
-    let loaded = ConfiguredLoginParam::load_legacy(&t).await?.unwrap();
-    assert_eq!(loaded.provider, Some(*provider));
-    assert_eq!(loaded.imap.is_empty(), false);
-    assert_eq!(loaded.smtp.is_empty(), false);
-
-    migrate_configured_login_param(&t).await;
-
-    let (_transport_id, loaded) = ConfiguredLoginParam::load(&t).await?.unwrap();
-    assert_eq!(loaded.provider, Some(*provider));
-    assert_eq!(loaded.imap.is_empty(), false);
-    assert_eq!(loaded.smtp.is_empty(), false);
-
-    Ok(())
-}
-
-async fn migrate_configured_login_param(t: &TestContext) {
-    t.sql.execute("DROP TABLE transports;", ()).await.unwrap();
-    t.sql.set_raw_config_int("dbversion", 130).await.unwrap();
-    t.sql.run_migrations(t).await.log_err(t).ok();
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_empty_server_list() -> Result<()> {
-    // Find a provider that does not have server list set.
-    //
-    // There is at least one such provider in the provider database.
-    let (domain, provider) = crate::provider::data::PROVIDER_DATA
-        .iter()
-        .find(|(_domain, provider)| provider.server.is_empty())
-        .unwrap();
-
-    let t = TestContext::new().await;
-
-    let addr = format!("alice@{domain}");
-
-    dummy_configured_login_param(&addr, Some(provider))
-        .save_to_transports_table(&t, &EnteredLoginParam::default(), time())
-        .await?;
-
-    let (_transport_id, loaded) = ConfiguredLoginParam::load(&t).await?.unwrap();
-    assert_eq!(loaded.provider, Some(*provider));
-    assert_eq!(loaded.imap.is_empty(), false);
-    assert_eq!(loaded.smtp.is_empty(), false);
-
-    Ok(())
-}
-
-fn dummy_configured_login_param(
-    addr: &str,
-    provider: Option<&'static Provider>,
-) -> ConfiguredLoginParam {
+fn dummy_configured_login_param(addr: &str) -> ConfiguredLoginParam {
     ConfiguredLoginParam {
         addr: addr.to_string(),
         imap: vec![ConfiguredServerLoginParam {
@@ -284,7 +111,6 @@ fn dummy_configured_login_param(
         }],
         smtp_user: addr.to_string(),
         smtp_password: "foobarbaz".to_string(),
-        provider,
         certificate_checks: ConfiguredCertificateChecks::Automatic,
     }
 }
@@ -312,7 +138,7 @@ async fn test_is_published_flag() -> Result<()> {
     )
     .await;
 
-    dummy_configured_login_param("alice@otherprovider.com", None)
+    dummy_configured_login_param("alice@otherprovider.com")
         .save_to_transports_table(
             alice,
             &EnteredLoginParam {

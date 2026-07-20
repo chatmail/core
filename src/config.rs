@@ -294,9 +294,6 @@ pub enum Config {
     /// Unix timestamp of the last successful configuration.
     ConfiguredTimestamp,
 
-    /// ID of the configured provider from the provider database.
-    ConfiguredProvider,
-
     /// Deprecated(2026-04).
     /// Use [`Context::is_configured()`] instead.
     ///

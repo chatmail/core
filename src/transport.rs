@@ -16,13 +16,12 @@ use deltachat_contact_tools::{EmailAddress, addr_normalize};
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
-use crate::configure::server_params::{ServerParams, expand_param_vector};
 use crate::context::Context;
 use crate::ensure_and_debug_assert;
 use crate::events::EventType;
 use crate::login_param::EnteredLoginParam;
 use crate::net::load_connection_timestamp;
-use crate::provider::{Protocol, Provider, Socket, UsernamePattern, get_provider_by_id};
+use crate::provider::Socket;
 use crate::sql::Sql;
 use crate::sync::{RemovedTransportData, SyncData, TransportData};
 
@@ -69,9 +68,7 @@ impl TryFrom<Socket> for ConnectionSecurity {
 #[repr(u32)]
 #[strum(serialize_all = "snake_case")]
 pub(crate) enum ConfiguredCertificateChecks {
-    /// Use configuration from the provider database.
-    /// If there is no provider database setting for certificate checks,
-    /// accept invalid certificates.
+    /// Accept invalid certificates.
     ///
     /// Must not be saved by new versions.
     ///
@@ -95,9 +92,7 @@ pub(crate) enum ConfiguredCertificateChecks {
     /// Alias to `AcceptInvalidCertificates` for compatibility.
     AcceptInvalidCertificates2 = 3,
 
-    /// Use configuration from the provider database.
-    /// If there is no provider database setting for certificate checks,
-    /// apply strict checks to TLS certificates.
+    /// Apply strict checks to TLS certificates.
     Automatic = 4,
 }
 
@@ -170,8 +165,7 @@ pub(crate) struct ConfiguredLoginParam {
 
     /// Custom IMAP user.
     ///
-    /// This overwrites autoconfig from the provider database
-    /// if non-empty.
+    /// This overwrites autoconfig if non-empty.
     pub imap_user: String,
 
     pub imap_password: String,
@@ -187,13 +181,10 @@ pub(crate) struct ConfiguredLoginParam {
 
     /// Custom SMTP user.
     ///
-    /// This overwrites autoconfig from the provider database
-    /// if non-empty.
+    /// This overwrites autoconfig if non-empty.
     pub smtp_user: String,
 
     pub smtp_password: String,
-
-    pub provider: Option<&'static Provider>,
 
     /// TLS options: whether to allow invalid certificates and/or
     /// invalid hostnames
@@ -218,16 +209,12 @@ pub(crate) struct ConfiguredLoginParamJson {
     pub smtp: Vec<ConfiguredServerLoginParam>,
     pub smtp_user: String,
     pub smtp_password: String,
-    pub provider_id: Option<String>,
+
     pub certificate_checks: ConfiguredCertificateChecks,
 }
 
 impl fmt::Display for ConfiguredLoginParam {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let provider_id = match self.provider {
-            Some(provider) => provider.id,
-            None => "none",
-        };
         let certificate_checks = self.certificate_checks;
         if let Ok(parsed_addr) = EmailAddress::new(&self.addr) {
             // Only include the domain.
@@ -260,7 +247,7 @@ impl fmt::Display for ConfiguredLoginParam {
             write!(f, "{smtp}")?;
             first = false;
         }
-        write!(f, "] provider:{provider_id} cert_{certificate_checks}")?;
+        write!(f, "] cert_{certificate_checks}")?;
         Ok(())
     }
 }
@@ -344,12 +331,6 @@ impl ConfiguredLoginParam {
             .get_config(Config::ConfiguredMailPw)
             .await?
             .context("IMAP password is not configured")?;
-
-        let provider = context
-            .get_config(Config::ConfiguredProvider)
-            .await?
-            .and_then(|cfg| get_provider_by_id(&cfg));
-
         let imap;
         let smtp;
 
@@ -362,149 +343,7 @@ impl ConfiguredLoginParam {
             .await?
             .unwrap_or_default();
 
-        if let Some(provider) = provider {
-            let parsed_addr = EmailAddress::new(&addr).context("Bad email-address")?;
-            let addr_localpart = parsed_addr.local;
-
-            if provider.server.is_empty() {
-                let servers = vec![
-                    ServerParams {
-                        protocol: Protocol::Imap,
-                        hostname: context
-                            .get_config(Config::ConfiguredMailServer)
-                            .await?
-                            .unwrap_or_default(),
-                        port: context
-                            .get_config_parsed::<u16>(Config::ConfiguredMailPort)
-                            .await?
-                            .unwrap_or_default(),
-                        socket: context
-                            .get_config_parsed::<i32>(Config::ConfiguredMailSecurity)
-                            .await?
-                            .and_then(num_traits::FromPrimitive::from_i32)
-                            .unwrap_or_default(),
-                        username: mail_user.clone(),
-                    },
-                    ServerParams {
-                        protocol: Protocol::Smtp,
-                        hostname: context
-                            .get_config(Config::ConfiguredSendServer)
-                            .await?
-                            .unwrap_or_default(),
-                        port: context
-                            .get_config_parsed::<u16>(Config::ConfiguredSendPort)
-                            .await?
-                            .unwrap_or_default(),
-                        socket: context
-                            .get_config_parsed::<i32>(Config::ConfiguredSendSecurity)
-                            .await?
-                            .and_then(num_traits::FromPrimitive::from_i32)
-                            .unwrap_or_default(),
-                        username: send_user.clone(),
-                    },
-                ];
-                let servers = expand_param_vector(servers, &addr, &parsed_addr.domain);
-                imap = servers
-                    .iter()
-                    .filter_map(|params| {
-                        let Ok(security) = params.socket.try_into() else {
-                            return None;
-                        };
-                        if params.protocol == Protocol::Imap {
-                            Some(ConfiguredServerLoginParam {
-                                connection: ConnectionCandidate {
-                                    host: params.hostname.clone(),
-                                    port: params.port,
-                                    security,
-                                },
-                                user: params.username.clone(),
-                            })
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                smtp = servers
-                    .iter()
-                    .filter_map(|params| {
-                        let Ok(security) = params.socket.try_into() else {
-                            return None;
-                        };
-                        if params.protocol == Protocol::Smtp {
-                            Some(ConfiguredServerLoginParam {
-                                connection: ConnectionCandidate {
-                                    host: params.hostname.clone(),
-                                    port: params.port,
-                                    security,
-                                },
-                                user: params.username.clone(),
-                            })
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-            } else {
-                imap = provider
-                    .server
-                    .iter()
-                    .filter_map(|server| {
-                        if server.protocol != Protocol::Imap {
-                            return None;
-                        }
-
-                        let Ok(security) = server.socket.try_into() else {
-                            return None;
-                        };
-
-                        Some(ConfiguredServerLoginParam {
-                            connection: ConnectionCandidate {
-                                host: server.hostname.to_string(),
-                                port: server.port,
-                                security,
-                            },
-                            user: if !mail_user.is_empty() {
-                                mail_user.clone()
-                            } else {
-                                match server.username_pattern {
-                                    UsernamePattern::Email => addr.to_string(),
-                                    UsernamePattern::Emaillocalpart => addr_localpart.clone(),
-                                }
-                            },
-                        })
-                    })
-                    .collect();
-                smtp = provider
-                    .server
-                    .iter()
-                    .filter_map(|server| {
-                        if server.protocol != Protocol::Smtp {
-                            return None;
-                        }
-
-                        let Ok(security) = server.socket.try_into() else {
-                            return None;
-                        };
-
-                        Some(ConfiguredServerLoginParam {
-                            connection: ConnectionCandidate {
-                                host: server.hostname.to_string(),
-                                port: server.port,
-                                security,
-                            },
-                            user: if !send_user.is_empty() {
-                                send_user.clone()
-                            } else {
-                                match server.username_pattern {
-                                    UsernamePattern::Email => addr.to_string(),
-                                    UsernamePattern::Emaillocalpart => addr_localpart.clone(),
-                                }
-                            },
-                        })
-                    })
-                    .collect();
-            }
-        } else if let (Some(configured_mail_servers), Some(configured_send_servers)) = (
+        if let (Some(configured_mail_servers), Some(configured_send_servers)) = (
             context.get_config(Config::ConfiguredImapServers).await?,
             context.get_config(Config::ConfiguredSmtpServers).await?,
         ) {
@@ -571,7 +410,6 @@ impl ConfiguredLoginParam {
             smtp_user: send_user,
             smtp_password: send_pw,
             certificate_checks,
-            provider,
         }))
     }
 
@@ -602,7 +440,6 @@ impl ConfiguredLoginParam {
                 .is_none_or(|folder| !folder.is_empty()),
             "Configured watched folder name cannot be empty"
         );
-        let provider = json.provider_id.and_then(|id| get_provider_by_id(&id));
 
         Ok(ConfiguredLoginParam {
             addr: json.addr,
@@ -613,7 +450,7 @@ impl ConfiguredLoginParam {
             smtp: json.smtp,
             smtp_user: json.smtp_user,
             smtp_password: json.smtp_password,
-            provider,
+
             certificate_checks: json.certificate_checks,
         })
     }
@@ -624,13 +461,9 @@ impl ConfiguredLoginParam {
     }
 
     pub(crate) fn strict_tls(&self, connected_through_proxy: bool) -> bool {
-        let provider_strict_tls = self.provider.map(|provider| provider.opt.strict_tls);
         match self.certificate_checks {
-            ConfiguredCertificateChecks::OldAutomatic => {
-                provider_strict_tls.unwrap_or(connected_through_proxy)
-            }
-            ConfiguredCertificateChecks::Automatic => provider_strict_tls.unwrap_or(true),
-            ConfiguredCertificateChecks::Strict => true,
+            ConfiguredCertificateChecks::OldAutomatic => connected_through_proxy,
+            ConfiguredCertificateChecks::Automatic | ConfiguredCertificateChecks::Strict => true,
             ConfiguredCertificateChecks::AcceptInvalidCertificates
             | ConfiguredCertificateChecks::AcceptInvalidCertificates2 => false,
         }
@@ -648,7 +481,7 @@ impl From<ConfiguredLoginParam> for ConfiguredLoginParamJson {
             smtp: configured_login_param.smtp,
             smtp_user: configured_login_param.smtp_user,
             smtp_password: configured_login_param.smtp_password,
-            provider_id: configured_login_param.provider.map(|p| p.id.to_string()),
+
             certificate_checks: configured_login_param.certificate_checks,
         }
     }

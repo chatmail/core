@@ -19,7 +19,6 @@ typedef struct _dc_chat      dc_chat_t;
 typedef struct _dc_msg       dc_msg_t;
 typedef struct _dc_contact   dc_contact_t;
 typedef struct _dc_lot       dc_lot_t;
-typedef struct _dc_provider  dc_provider_t;
 typedef struct _dc_event     dc_event_t;
 typedef struct _dc_event_emitter dc_event_emitter_t;
 typedef struct _dc_event_channel dc_event_channel_t;
@@ -5199,98 +5198,6 @@ uint32_t       dc_contact_get_verifier_id      (dc_contact_t* contact);
 
 
 /**
- * @class dc_provider_t
- *
- * Opaque object containing information about one single e-mail provider.
- */
-
-
-/**
- * Create a provider struct for the given e-mail address by local lookup.
- *
- * Lookup is done from the local database by extracting the domain from the e-mail address.
- * Therefore the provider for custom domains cannot be identified.
- *
- * @memberof dc_provider_t
- * @param context The context object.
- * @param email The user's e-mail address to extract the provider info form.
- * @return A dc_provider_t struct which can be used with the dc_provider_get_*
- *     accessor functions. If no provider info is found, NULL will be
- *     returned.
- */
-dc_provider_t*  dc_provider_new_from_email            (const dc_context_t* context, const char* email);
-
-
-/**
- * Create a provider struct for the given e-mail address by local lookup.
- *
- * DNS lookup is not used anymore and this function is deprecated.
- *
- * @memberof dc_provider_t
- * @param context The context object.
- * @param email The user's e-mail address to extract the provider info form.
- * @return A dc_provider_t struct which can be used with the dc_provider_get_*
- *     accessor functions. If no provider info is found, NULL will be
- *     returned.
- * @deprecated 2025-10-17 use dc_provider_new_from_email() instead.
- */
-dc_provider_t*  dc_provider_new_from_email_with_dns    (const dc_context_t* context, const char* email);
-
-
-/**
- * URL of the overview page.
- *
- * This URL allows linking to the providers page on providers.delta.chat.
- *
- * @memberof dc_provider_t
- * @param provider The dc_provider_t struct.
- * @return A string with a fully-qualified URL,
- *     if there is no such URL, an empty string is returned, NULL is never returned.
- *     The returned value must be released using dc_str_unref().
- */
-char*           dc_provider_get_overview_page         (const dc_provider_t* provider);
-
-
-/**
- * Get hints to be shown to the user on the login screen.
- * Depending on the @ref DC_PROVIDER_STATUS returned by dc_provider_get_status(),
- * the UI may want to highlight the hint.
- *
- * Moreover, the UI should display a "More information" link
- * that forwards to the URL returned by dc_provider_get_overview_page().
- *
- * @memberof dc_provider_t
- * @param provider The dc_provider_t struct.
- * @return A string with the hint to show to the user, may contain multiple lines,
- *     if there is no such hint, an empty string is returned, NULL is never returned.
- *     The returned value must be released using dc_str_unref().
- */
-char*           dc_provider_get_before_login_hint     (const dc_provider_t* provider);
-
-
-/**
- * Whether DC works with this provider.
- *
- * Can be one of #DC_PROVIDER_STATUS_OK,
- * #DC_PROVIDER_STATUS_PREPARATION or #DC_PROVIDER_STATUS_BROKEN.
- *
- * @memberof dc_provider_t
- * @param provider The dc_provider_t struct.
- * @return The status as a constant number.
- */
-int             dc_provider_get_status                (const dc_provider_t* provider);
-
-
-/**
- * Free the provider info struct.
- *
- * @memberof dc_provider_t
- * @param provider The dc_provider_t struct.
- */
-void            dc_provider_unref                     (dc_provider_t* provider);
-
-
-/**
  * @class dc_lot_t
  *
  * An object containing a set of values.
@@ -6608,61 +6515,6 @@ void dc_event_unref(dc_event_t* event);
  */
 #define DC_MEDIA_QUALITY_BALANCED 0
 #define DC_MEDIA_QUALITY_WORSE    1
-
-
-/**
- * @defgroup DC_PROVIDER_STATUS DC_PROVIDER_STATUS
- *
- * These constants are used as return values for dc_provider_get_status().
- *
- * @addtogroup DC_PROVIDER_STATUS
- * @{
- */
-
-/**
- * Provider works out-of-the-box.
- * This provider status is returned for provider where the login
- * works by just entering the name or the e-mail address.
- *
- * - There is no need for the user to do any special things
- *   (enable IMAP or so) in the provider's web interface or at other places.
- * - There is no need for the user to enter advanced settings;
- *   server, port etc. are known by the core.
- *
- * The status is returned by dc_provider_get_status().
- */
-#define         DC_PROVIDER_STATUS_OK           1
-
-/**
- * Provider works, but there are preparations needed.
- *
- * - The user has to do some special things as "Enable IMAP in the web interface",
- *   what exactly, is described in the string returned by dc_provider_get_before_login_hints()
- *   and, typically more detailed, in the page linked by dc_provider_get_overview_page().
- * - There is no need for the user to enter advanced settings;
- *   server, port etc. should be known by the core.
- *
- * The status is returned by dc_provider_get_status().
- */
-#define         DC_PROVIDER_STATUS_PREPARATION  2
-
-/**
- * Provider is not working.
- * This provider status is returned for providers
- * that are known to not work with Delta Chat.
- * The UI should block logging in with this provider.
- *
- * More information about that is typically provided
- * in the string returned by dc_provider_get_before_login_hints()
- * and in the page linked by dc_provider_get_overview_page().
- *
- * The status is returned by dc_provider_get_status().
- */
-#define         DC_PROVIDER_STATUS_BROKEN       3
-
-/**
- * @}
- */
 
 
 /**

@@ -68,20 +68,6 @@ jobs:
           command: check
           command-arguments: "-Dwarnings"
 
-  provider_database:
-    name: Check provider database
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          show-progress: false
-          persist-credentials: false
-      - name: Install rustfmt
-        run: rustup component add --toolchain stable-x86_64-unknown-linux-gnu rustfmt
-      - name: Check provider database
-        run: scripts/update-provider-database.sh
-
   docs:
     name: Rust doc comments
     runs-on: ubuntu-latest
