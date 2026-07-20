@@ -513,15 +513,12 @@ jobs:
             deltachat-rpc-server/npm-package/*.tgz
 
       # Configure Node.js for publishing.
+      # Check <https://docs.npmjs.com/trusted-publishers> for the version requirements.
       - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
           registry-url: "https://registry.npmjs.org"
-
-      # Ensure npm 11.5.1 or later is installed.
-      # It is needed for <https://docs.npmjs.com/trusted-publishers>
-      - name: Update npm
-        run: npm install -g npm@latest
+          package-manager-cache: false  # never use caching in release builds
 
       - name: Publish npm packets for prebuilds and `@deltachat/stdio-rpc-server`
         if: github.event_name == 'release'
