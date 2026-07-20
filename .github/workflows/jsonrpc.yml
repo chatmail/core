@@ -20,10 +20,10 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - name: Use Node.js 18.x
+      - name: Use Node.js 24
         uses: actions/setup-node@v6
         with:
-          node-version: 18.x
+          node-version: 24
       - name: Add Rust cache
         uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
         with:
