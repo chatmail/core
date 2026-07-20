@@ -37,9 +37,7 @@ use crate::tools::ToOption;
 #[repr(u32)]
 #[strum(serialize_all = "snake_case")]
 pub enum EnteredCertificateChecks {
-    /// `Automatic` means that provider database setting should be taken.
-    /// If there is no provider database setting for certificate checks,
-    /// check certificates strictly.
+    /// `Automatic` means strict certificate checks.
     #[default]
     Automatic = 0,
 

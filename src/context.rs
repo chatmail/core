@@ -574,7 +574,7 @@ impl Context {
 
     /// Returns maximum number of recipients a single email can be sent to.
     pub(crate) async fn get_max_smtp_rcpt_to(&self) -> Result<u32> {
-        let Some((transport_id, param)) = ConfiguredLoginParam::load(self).await? else {
+        let Some((transport_id, _param)) = ConfiguredLoginParam::load(self).await? else {
             bail!("Not configured");
         };
         let metadata_limit = self
@@ -586,11 +586,7 @@ impl Context {
         if let Some(limit) = metadata_limit {
             return Ok(limit);
         }
-        let val = param
-            .provider
-            .and_then(|provider| provider.opt.max_smtp_rcpt_to)
-            .map_or(constants::DEFAULT_MAX_SMTP_RCPT_TO, u32::from);
-        Ok(val)
+        Ok(constants::DEFAULT_MAX_SMTP_RCPT_TO)
     }
 
     /// Does a single round of fetching from IMAP and returns.

@@ -24,7 +24,7 @@ use deltachat::reaction::send_reaction;
 use deltachat::receive_imf::*;
 use deltachat::sql;
 use deltachat::tools::*;
-use deltachat::{config, provider};
+use deltachat::config;
 use tokio::fs;
 
 /// Reset database tables.
@@ -395,7 +395,6 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                  joinqr <qr-content>\n\
                  setqr <qr-content>\n\
                  createqrsvg <qr-content>\n\
-                 providerinfo <addr>\n\
                  fileinfo <file>\n\
                  estimatedeletion <seconds>\n\
                  clear -- clear screen\n\
@@ -1203,24 +1202,6 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             let file = dirs::home_dir().unwrap_or_default().join("qr.svg");
             fs::write(&file, svg).await?;
             println!("{file:#?} written.");
-        }
-        "providerinfo" => {
-            ensure!(!arg1.is_empty(), "Argument <addr> missing.");
-            match provider::get_provider_info(arg1) {
-                Some(info) => {
-                    println!("Information for provider belonging to {arg1}:");
-                    println!("status: {}", info.status as u32);
-                    println!("before_login_hint: {}", info.before_login_hint);
-                    println!("after_login_hint: {}", info.after_login_hint);
-                    println!("overview_page: {}", info.overview_page);
-                    for server in info.server.iter() {
-                        println!("server: {}:{}", server.hostname, server.port,);
-                    }
-                }
-                None => {
-                    println!("No information for provider belonging to {arg1} found.");
-                }
-            }
         }
         "fileinfo" => {
             ensure!(!arg1.is_empty(), "Argument <file> missing.");

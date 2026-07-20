@@ -9,7 +9,7 @@ pub mod location;
 pub mod login_param;
 pub mod message;
 pub mod notify_state;
-pub mod provider_info;
+
 pub mod qr;
 pub mod reactions;
 pub mod webxdc;
