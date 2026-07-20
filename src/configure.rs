@@ -45,10 +45,9 @@ use crate::transport::{
 use crate::{EventType, stock_str};
 use crate::{chat, provider};
 
-/// Maximum number of published relays.
+/// Maximum number of relays.
 ///
-/// See <https://github.com/chatmail/core/issues/7608>
-/// and <https://github.com/chatmail/core/issues/8421>.
+/// See <https://github.com/chatmail/core/issues/7608>.
 pub(crate) const MAX_RELAYS: usize = 5;
 
 /// Hard-coded candidates for default relays.
@@ -330,15 +329,13 @@ impl Context {
     async fn inner_configure(&self, param: &EnteredLoginParam) -> Result<()> {
         info!(self, "Configure ...");
 
-        let old_addr = self.get_config(Config::ConfiguredAddr).await?;
-        if old_addr.is_some()
-            && !self
-                .sql
-                .exists(
-                    "SELECT COUNT(*) FROM transports WHERE addr=?",
-                    (&param.addr,),
-                )
-                .await?
+        if !self
+            .sql
+            .exists(
+                "SELECT COUNT(*) FROM transports WHERE addr=?",
+                (&param.addr,),
+            )
+            .await?
         {
             self.try_make_space_for_new_relay().await?;
         }
@@ -388,14 +385,14 @@ impl Context {
             {
                 info!(
                     self,
-                    "Auto-deleting relay {addr} to make space for new relay"
+                    "Auto-deleting relay {addr} to make space for new relay."
                 );
                 self.delete_transport(&addr).await?;
             }
 
             if self.count_transports().await? >= MAX_RELAYS {
                 // Apparently, all the transports are published
-                bail!("You have reached the maximum number of relays ({MAX_RELAYS}).");
+                bail!("You have reached the maximum number of relays ({MAX_RELAYS})");
             }
         };
         Ok(())
