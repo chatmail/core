@@ -2522,6 +2522,18 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 159)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "CREATE TABLE relay_candidates(
+                domain TEXT PRIMARY KEY NOT NULL,
+                last_tried TEXT NOT NULL DEFAULT 0
+            ) STRICT",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
