@@ -148,7 +148,6 @@ describe("online tests", function () {
     expect(message2.text).equal("super secret message");
     expect(message2.showPadlock).equal(true);
   });
-
 });
 
 async function waitForEvent<T extends DcEvent["kind"]>(
