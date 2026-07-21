@@ -8,7 +8,7 @@ use tokio::time::timeout;
 use super::Imap;
 use super::session::Session;
 use crate::context::Context;
-use crate::log::warn;
+use crate::log::{LogExt as _, warn};
 use crate::net::TIMEOUT;
 use crate::tools::{self, time_elapsed};
 
@@ -50,6 +50,13 @@ impl Session {
             );
             return Ok(self);
         }
+
+        // we try to add additional relays right before going into IDLE mode,
+        // because apparently we are connected, but don't have anything important to do.
+        crate::automatic_transport_management::maybe_add_additional_transports(context)
+            .await
+            .context("maybe_add_additional_relays")
+            .log_err(context);
 
         let mut handle = self.inner.idle();
         handle

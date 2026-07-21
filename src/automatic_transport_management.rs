@@ -1,0 +1,93 @@
+use anyhow::Result;
+use rand::TryRngCore as _;
+use rand::distr::{Alphanumeric, SampleString};
+use rand::seq::IndexedRandom;
+
+use crate::config::Config;
+use crate::login_param::{EnteredCertificateChecks, EnteredImapLoginParam};
+use crate::{configure::EnteredLoginParam, context::Context, tools::time};
+
+/// The target number of transports we try to reach.
+const NUM_TRANSPORTS_TARGET: usize = 3;
+/// How often we want to try adding new transports.
+const AUTOMATIC_ADDITION_DEBOUNCE_SECONDS: i64 = 60 * 60; // one hour
+/// How long we ignore a transport candidate after failing to create an account there:
+const BACKOFF_PERIOD_FOR_NOT_WORKING_TRANSPORT: i64 = 60 * 60 * 24 * 7; // one week
+
+// TODO think about how this interacts with stop_io()/start_io()
+pub(crate) async fn maybe_add_additional_transports(context: &Context) -> Result<()> {
+    let now = time();
+
+    // TODO potentially rename housekeeping_mutex
+    let Ok(_housekeeping_lock) = context.housekeeping_mutex.try_lock() else {
+        // Housekeeping or automatic relay management is already running in another thread, do nothing.
+        return Ok(());
+    };
+    if context
+        .get_config_i64(Config::LastAutomaticTransportManagement)
+        .await?
+        > now.saturating_sub(AUTOMATIC_ADDITION_DEBOUNCE_SECONDS)
+    {
+        return Ok(());
+    }
+    context
+        .set_config_internal(
+            Config::LastAutomaticTransportManagement,
+            Some(&now.to_string()),
+        )
+        .await?;
+
+    while context.count_transports().await? < NUM_TRANSPORTS_TARGET {
+        let cutoff_timestamp = now.saturating_sub(BACKOFF_PERIOD_FOR_NOT_WORKING_TRANSPORT);
+
+        // TODO find out why login_param_from_account_qr() uses OsRng rather than rng()
+        let candidates: Vec<String> = context
+            .sql
+            .query_map_vec(
+                "SELECT domain FROM relay_candidates WHERE last_tried<?",
+                (cutoff_timestamp,),
+                |row| Ok(row.get::<_, String>(0)?),
+            )
+            .await?;
+
+        let Some(domain) = candidates.choose(&mut rand::rng()) else {
+            info!(
+                context,
+                "maybe_add_additional_relays: No suitable candidates"
+            );
+            return Ok(());
+        };
+
+        let mut param = login_param_from_domain(domain);
+        let res = context.add_transport_inner(&mut param).await;
+        if res.is_err() {
+            context
+                .sql
+                .execute("UPDATE relay_candidates SET last_tried=?", (now,))
+                .await?;
+        }
+        res?;
+    }
+
+    Ok(())
+}
+
+pub(crate) fn login_param_from_domain(domain: &str) -> EnteredLoginParam {
+    // TODO Question: BTW, why is this using OsRng rather than rng()?
+    // I just extracted this function, didn't change the code.
+    let rng = &mut rand::rngs::OsRng.unwrap_err();
+    let username = Alphanumeric.sample_string(rng, 9);
+    let addr = username + "@" + domain;
+    let password = Alphanumeric.sample_string(rng, 50);
+
+    let param = EnteredLoginParam {
+        addr,
+        imap: EnteredImapLoginParam {
+            password,
+            ..Default::default()
+        },
+        smtp: Default::default(),
+        certificate_checks: EnteredCertificateChecks::Strict,
+    };
+    param
+}
