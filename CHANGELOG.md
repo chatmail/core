@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.56.0] - 2026-07-21
+
+### API-Changes
+
+- [**breaking**] remove all oauth support and drop DC_LP_AUTH flags.
+  - removed oauth2 module, dc_get_oauth2_url FFI function, DC_LP_AUTH flags and configured/serverflags, and the oauth2 parameter/field from SMTP/IMAP clients, JSON-RPC interfaces, and CLI tools.
+
+also contains regenerated provider data after dropping oauth in the update script.
+
+### Features / Changes
+
+- do not set backup_time in exported databases.
+
+### Fixes
+
+- revert 207c2e6e4c1bec43204c3b8a46fcbbff67d54b3f because some users reported problems with it.
+
+### Miscellaneous Tasks
+
+- bump version to 2.56.0-dev.
+
 ## [2.55.0] - 2026-07-20
 
 Minor release to fix CI because releasing 2.54.0 failed.
@@ -8482,3 +8503,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.53.0]: https://github.com/chatmail/core/compare/v2.52.0..v2.53.0
 [2.54.0]: https://github.com/chatmail/core/compare/v2.53.0..v2.54.0
 [2.55.0]: https://github.com/chatmail/core/compare/v2.54.0..v2.55.0
+[2.56.0]: https://github.com/chatmail/core/compare/v2.55.0..v2.56.0
