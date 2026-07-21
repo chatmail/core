@@ -2522,6 +2522,7 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
         .await?;
     }
 
+    // TODO should we call it relay_candidates or transport_candidates?
     inc_and_check(&mut migration_version, 159)?;
     if dbversion < migration_version {
         sql.execute_migration(

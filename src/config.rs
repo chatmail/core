@@ -353,6 +353,10 @@ pub enum Config {
     /// Timestamp of the last `CantDecryptOutgoingMsgs` notification.
     LastCantDecryptOutgoingMsgs,
 
+    /// Timestamp of the last call to
+    /// [`crate::automatic_transport_management::maybe_add_additional_transports`]
+    LastAutomaticTransportManagement,
+
     /// Whether to avoid using IMAP IDLE even if the server supports it.
     ///
     /// This is a developer option for testing "fake idle".
