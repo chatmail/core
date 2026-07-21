@@ -53,7 +53,7 @@ use types::chat::FullChat;
 use types::contact::{ContactObject, VcardContact};
 use types::events::Event;
 use types::http::HttpResponse;
-use types::message::{MessageData, MessageObject, MessageReadReceipt};
+use types::message::{DeviceMessageData, MessageData, MessageObject, MessageReadReceipt};
 use types::notify_state::JsonrpcNotifyState;
 use types::provider_info::ProviderInfo;
 use types::reactions::JsonrpcReactions;
@@ -1245,18 +1245,27 @@ impl CommandApi {
         &self,
         account_id: u32,
         label: String,
-        msg: Option<MessageData>,
+        msg: Option<DeviceMessageData>,
     ) -> Result<Option<u32>> {
         let ctx = self.get_context(account_id).await?;
         if let Some(msg) = msg {
-            let mut message = msg.create_message(&ctx).await?;
-            let message_id =
-                deltachat::chat::add_device_msg(&ctx, Some(&label), Some(&mut message)).await?;
+            let mut message = msg.message_data.create_message(&ctx).await?;
+            if let Some(state) = msg.message_state {
+                deltachat::chat::set_device_msg_state(&mut message, state.into());
+            }
+            let message_id = deltachat::chat::add_device_msg_with_importance(
+                &ctx,
+                Some(&label),
+                Some(&mut message),
+                false,
+            )
+            .await?;
             if !message_id.is_unset() {
                 return Ok(Some(message_id.to_u32()));
             }
         } else {
-            deltachat::chat::add_device_msg(&ctx, Some(&label), None).await?;
+            deltachat::chat::add_device_msg_with_importance(&ctx, Some(&label), None, false)
+                .await?;
         }
         Ok(None)
     }
