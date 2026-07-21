@@ -357,6 +357,9 @@ pub enum Config {
     /// [`crate::automatic_transport_management::maybe_add_additional_transports`]
     LastAutomaticTransportManagement,
 
+    /// Whether to automatically add/remove transports
+    AutomaticTransportManagement,
+
     /// Whether to avoid using IMAP IDLE even if the server supports it.
     ///
     /// This is a developer option for testing "fake idle".

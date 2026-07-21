@@ -49,21 +49,6 @@ use crate::{chat, provider};
 /// See <https://github.com/chatmail/core/issues/7608>.
 pub(crate) const MAX_RELAYS: usize = 5;
 
-/// Hard-coded candidates for default relays.
-/// In the future, we want to use it during onboarding;
-/// note that before onboarding automatically on any of these,
-/// we need to ask the admins whether their relay is able to handle this.
-/// For now, this is just the first 6 relays from chatmail.at/relays.
-#[allow(unused)]
-const DEFAULT_RELAY_CANDIDATES: &[&str] = &[
-    "mehl.cloud",
-    "mailchat.pl",
-    "chatmail.woodpeckersnest.space",
-    "chatmail.culturanerd.it",
-    "tarpit.fun",
-    "d.gaufr.es",
-];
-
 macro_rules! progress {
     ($context:tt, $progress:expr, $comment:expr) => {
         assert!(
@@ -604,7 +589,11 @@ async fn get_configured_param(
     Ok(configured_login_param)
 }
 
-async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'static Provider>> {
+// TODO maybe this function name should be changed
+pub(crate) async fn configure(
+    ctx: &Context,
+    param: &EnteredLoginParam,
+) -> Result<Option<&'static Provider>> {
     progress!(ctx, 1);
 
     let configured_param = get_configured_param(ctx, param).await?;

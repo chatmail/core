@@ -2525,11 +2525,32 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
     // TODO should we call it relay_candidates or transport_candidates?
     inc_and_check(&mut migration_version, 159)?;
     if dbversion < migration_version {
-        sql.execute_migration(
-            "CREATE TABLE relay_candidates(
-                domain TEXT PRIMARY KEY NOT NULL,
-                last_tried TEXT NOT NULL DEFAULT 0
-            ) STRICT",
+        // TODO put a better list here
+        const DEFAULT_RELAY_CANDIDATES: &[&str] = &[
+            "mehl.cloud",
+            "mailchat.pl",
+            "chatmail.woodpeckersnest.space",
+            "chatmail.culturanerd.it",
+            "tarpit.fun",
+            "d.gaufr.es",
+        ];
+
+        sql.execute_migration_transaction(
+            |transaction| {
+                transaction.execute(
+                    "CREATE TABLE relay_candidates(
+                        domain TEXT PRIMARY KEY NOT NULL,
+                        last_tried TEXT NOT NULL DEFAULT 0
+                    ) STRICT",
+                    (),
+                )?;
+                let mut statement =
+                    transaction.prepare("INSERT INTO relay_candidates(domain) VALUES (?)")?;
+                for domain in DEFAULT_RELAY_CANDIDATES {
+                    statement.execute((domain,));
+                }
+                Ok(())
+            },
             migration_version,
         )
         .await?;

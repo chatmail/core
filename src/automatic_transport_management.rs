@@ -15,6 +15,9 @@ const AUTOMATIC_ADDITION_DEBOUNCE_SECONDS: i64 = 60 * 60; // one hour
 const BACKOFF_PERIOD_FOR_NOT_WORKING_TRANSPORT: i64 = 60 * 60 * 24 * 7; // one week
 
 // TODO think about how this interacts with stop_io()/start_io()
+
+// TODO decide if this should be done asynchronously in a task;
+// generally we should be able to try adding relays while io is running.
 pub(crate) async fn maybe_add_additional_transports(context: &Context) -> Result<()> {
     let now = time();
 
@@ -37,14 +40,24 @@ pub(crate) async fn maybe_add_additional_transports(context: &Context) -> Result
         )
         .await?;
 
-    while context.count_transports().await? < NUM_TRANSPORTS_TARGET {
-        let cutoff_timestamp = now.saturating_sub(BACKOFF_PERIOD_FOR_NOT_WORKING_TRANSPORT);
+    // Using `for` instead of `while` to prevent infinite loop
+    for _ in 0..NUM_TRANSPORTS_TARGET {
+        if context.count_transports().await? >= NUM_TRANSPORTS_TARGET {
+            return Ok(());
+        }
 
-        // TODO find out why login_param_from_account_qr() uses OsRng rather than rng()
+        // First, query all candidates that were not tried since `BACKOFF_PERIOD_FOR_NOT_WORKING_TRANSPORT` seconds.
+        // Domains that are already used are excluded.
+        let cutoff_timestamp = now.saturating_sub(BACKOFF_PERIOD_FOR_NOT_WORKING_TRANSPORT);
         let candidates: Vec<String> = context
             .sql
             .query_map_vec(
-                "SELECT domain FROM relay_candidates WHERE last_tried<?",
+                "SELECT domain FROM relay_candidates WHERE last_tried<?
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM transports
+                    WHERE substr(addr, instr(addr, '@') + 1) = domain
+                )",
                 (cutoff_timestamp,),
                 |row| Ok(row.get::<_, String>(0)?),
             )
@@ -58,14 +71,17 @@ pub(crate) async fn maybe_add_additional_transports(context: &Context) -> Result
             return Ok(());
         };
 
-        let mut param = login_param_from_domain(domain);
-        let res = context.add_transport_inner(&mut param).await;
+        let param = login_param_from_domain(domain);
+        let res = crate::configure::configure(context, &param).await;
         if res.is_err() {
             context
                 .sql
                 .execute("UPDATE relay_candidates SET last_tried=?", (now,))
                 .await?;
         }
+
+        // TODO: Decide whether we want to immediately try again with another relay,
+        // if this one failed. If yes, remove the next line.
         res?;
     }
 
