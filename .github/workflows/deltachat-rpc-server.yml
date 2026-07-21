@@ -514,7 +514,7 @@ jobs:
 
       # Configure Node.js for publishing.
       # Check <https://docs.npmjs.com/trusted-publishers> for the version requirements.
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           registry-url: "https://registry.npmjs.org"
