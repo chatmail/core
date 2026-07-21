@@ -899,6 +899,8 @@ impl CommandApi {
 
     /// Get QR code text that will offer a [SecureJoin](https://securejoin.delta.chat/) invitation.
     ///
+    /// To reset invitations, pass the link to `set_config_from_qr()`.
+    ///
     /// If `chat_id` is a group chat ID, SecureJoin QR code for the group is returned.
     /// If `chat_id` is unset, setup contact QR code is returned.
     async fn get_chat_securejoin_qr_code(
