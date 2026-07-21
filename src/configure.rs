@@ -29,9 +29,10 @@ use crate::log::warn;
 pub use crate::login_param::EnteredLoginParam;
 use crate::login_param::{EnteredCertificateChecks, TransportListEntry};
 use crate::net::proxy::ProxyConfig;
-use crate::provider::{Protocol, Socket};
+use crate::provider::{self, Protocol, Socket};
 use crate::qr::{login_param_from_account_qr, login_param_from_login_qr};
 use crate::smtp::Smtp;
+use crate::sync::Sync::Nosync;
 use crate::tools::time;
 use crate::transport::{
     ConfiguredCertificateChecks, ConfiguredLoginParam, ConfiguredServerLoginParam,
@@ -352,6 +353,7 @@ impl Context {
         };
         self.set_config_internal(Config::NotifyAboutWrongPw, Some("1"))
             .await?;
+        apply_legacy_domain_config_defaults(self, &param.addr).await?;
         Ok(())
     }
 
@@ -392,6 +394,24 @@ impl Context {
     }
 }
 
+/// Applies a few select non-default config values that used to come from provider database.
+async fn apply_legacy_domain_config_defaults(context: &Context, addr: &str) -> Result<()> {
+    let settings = provider::legacy_settings_for_addr(addr);
+
+    if settings.disable_mdns && !context.config_exists(Config::MdnsEnabled).await? {
+        context
+            .set_config_ex(Nosync, Config::MdnsEnabled, Some("0"))
+            .await?;
+    }
+
+    if settings.worse_media_quality && !context.config_exists(Config::MediaQuality).await? {
+        context
+            .set_config_ex(Nosync, Config::MediaQuality, Some("1"))
+            .await?;
+    }
+    Ok(())
+}
+
 /// Retrieves data from autoconfig
 /// to transform user-entered login parameters into complete configuration.
 async fn get_configured_param(
@@ -427,7 +447,13 @@ async fn get_configured_param(
         && param.smtp.user.is_empty()
     {
         // no advanced parameters entered by the user: do Autoconfig
-        param_autoconfig = get_autoconfig(ctx, param, &param_domain).await;
+        // except for a few known legacy-domain overrides.
+        let legacy_servers = provider::legacy_settings_for_addr(&param.addr).autoconfig_servers;
+        param_autoconfig = if legacy_servers.is_some() {
+            legacy_servers
+        } else {
+            get_autoconfig(ctx, param, &param_domain).await
+        };
     } else {
         param_autoconfig = None;
     }

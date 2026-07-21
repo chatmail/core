@@ -8,6 +8,7 @@ use std::time::Duration;
 use anyhow::{bail, ensure, Result};
 use deltachat::chat::{self, Chat, ChatId, ChatItem, ChatVisibility, MuteDuration};
 use deltachat::chatlist::*;
+use deltachat::config;
 use deltachat::constants::*;
 use deltachat::contact::*;
 use deltachat::context::*;
@@ -24,7 +25,6 @@ use deltachat::reaction::send_reaction;
 use deltachat::receive_imf::*;
 use deltachat::sql;
 use deltachat::tools::*;
-use deltachat::config;
 use tokio::fs;
 
 /// Reset database tables.

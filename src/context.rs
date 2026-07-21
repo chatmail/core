@@ -574,9 +574,10 @@ impl Context {
 
     /// Returns maximum number of recipients a single email can be sent to.
     pub(crate) async fn get_max_smtp_rcpt_to(&self) -> Result<u32> {
-        let Some((transport_id, _param)) = ConfiguredLoginParam::load(self).await? else {
+        let Some((transport_id, param)) = ConfiguredLoginParam::load(self).await? else {
             bail!("Not configured");
         };
+        // A relay advertising its own limit via IMAP METADATA is authoritative.
         let metadata_limit = self
             .metadata
             .read()
@@ -585,6 +586,11 @@ impl Context {
             .and_then(|metadata| metadata.max_smtp_rcpt_to);
         if let Some(limit) = metadata_limit {
             return Ok(limit);
+        }
+        // A few legacy domains (e.g. nauta.cu) need a hard-coded limit.
+        if let Some(limit) = crate::provider::legacy_settings_for_addr(&param.addr).max_smtp_rcpt_to
+        {
+            return Ok(limit as u32);
         }
         Ok(constants::DEFAULT_MAX_SMTP_RCPT_TO)
     }
