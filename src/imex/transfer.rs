@@ -48,7 +48,7 @@ use crate::log::warn;
 use crate::message::Message;
 use crate::qr::Qr;
 use crate::stock_str::backup_transfer_msg_body;
-use crate::tools::{TempPathGuard, create_id, time};
+use crate::tools::{TempPathGuard, create_id};
 
 use super::{DBFILE_BACKUP_NAME, export_backup_stream, export_database, import_backup_stream};
 
@@ -130,7 +130,7 @@ impl BackupProvider {
 
         let passphrase = String::new();
 
-        export_database(context, &dbfile, passphrase, time())
+        export_database(context, &dbfile, passphrase)
             .await
             .context("Database export failed")?;
 

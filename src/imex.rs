@@ -453,7 +453,7 @@ async fn export_backup(context: &Context, dir: &Path, passphrase: String) -> Res
     let temp_db_path = TempPathGuard::new(temp_db_path);
     let temp_path = TempPathGuard::new(temp_path);
 
-    export_database(context, &temp_db_path, passphrase, now)
+    export_database(context, &temp_db_path, passphrase)
         .await
         .context("could not export database")?;
 
@@ -737,17 +737,11 @@ where
 /// overwritten.
 ///
 /// This also verifies that IO is not running during the export.
-async fn export_database(
-    context: &Context,
-    dest: &Path,
-    passphrase: String,
-    timestamp: i64,
-) -> Result<()> {
+async fn export_database(context: &Context, dest: &Path, passphrase: String) -> Result<()> {
     ensure!(
         !context.scheduler.is_running().await,
         "cannot export backup, IO is running"
     );
-    let timestamp = timestamp.try_into().context("32-bit UNIX time overflow")?;
 
     // TODO: Maybe introduce camino crate for UTF-8 paths where we need them.
     let dest = dest
@@ -755,10 +749,6 @@ async fn export_database(
         .with_context(|| format!("path {} is not valid unicode", dest.display()))?;
 
     context.set_config(Config::BccSelf, Some("1")).await?;
-    context
-        .sql
-        .set_raw_config_int("backup_time", timestamp)
-        .await?;
     context
         .sql
         .set_raw_config_int("backup_version", DCBACKUP_VERSION)
