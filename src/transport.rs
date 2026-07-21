@@ -461,9 +461,18 @@ impl ConfiguredLoginParam {
     }
 
     pub(crate) fn strict_tls(&self, connected_through_proxy: bool) -> bool {
+        let disable_strict_tls =
+            crate::provider::legacy_settings_for_addr(&self.addr).disable_strict_tls;
         match self.certificate_checks {
-            ConfiguredCertificateChecks::OldAutomatic => connected_through_proxy,
-            ConfiguredCertificateChecks::Automatic | ConfiguredCertificateChecks::Strict => true,
+            ConfiguredCertificateChecks::OldAutomatic => {
+                if disable_strict_tls {
+                    false
+                } else {
+                    connected_through_proxy
+                }
+            }
+            ConfiguredCertificateChecks::Automatic => !disable_strict_tls,
+            ConfiguredCertificateChecks::Strict => true,
             ConfiguredCertificateChecks::AcceptInvalidCertificates
             | ConfiguredCertificateChecks::AcceptInvalidCertificates2 => false,
         }
