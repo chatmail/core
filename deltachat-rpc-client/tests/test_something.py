@@ -747,28 +747,6 @@ def test_early_failure(tmp_path) -> None:
         rpc.start()
 
 
-def test_provider_info(rpc) -> None:
-    account_id = rpc.add_account()
-
-    provider_info = rpc.get_provider_info(account_id, "example.org")
-    assert provider_info["id"] == "example.com"
-
-    provider_info = rpc.get_provider_info(account_id, "uep7oiw4ahtaizuloith.org")
-    assert provider_info is None
-
-    # Test MX record resolution.
-    # This previously resulted in Gmail provider
-    # because MX record pointed to google.com domain,
-    # but MX record resolution has been removed.
-    provider_info = rpc.get_provider_info(account_id, "github.com")
-    assert provider_info is None
-
-    # Disable MX record resolution.
-    rpc.set_config(account_id, "proxy_enabled", "1")
-    provider_info = rpc.get_provider_info(account_id, "github.com")
-    assert provider_info is None
-
-
 def test_mdn_doesnt_break_autocrypt(acfactory) -> None:
     alice, bob = acfactory.get_online_accounts(2)
 

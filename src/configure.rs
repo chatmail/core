@@ -335,21 +335,18 @@ impl Context {
             self.try_make_space_for_new_relay().await?;
         }
 
-        match configure(self, param).await {
-            Err(error) => {
-                // Log entered and actual params
-                let configured_param = get_configured_param(self, param).await;
-                warn!(
-                    self,
-                    "configure failed: Entered params: {}. Used params: {}. Error: {error}.",
-                    param.to_string(),
-                    configured_param
-                        .map(|param| param.to_string())
-                        .unwrap_or("error".to_owned())
-                );
-                return Err(error);
-            }
-            Ok(()) => (),
+        if let Err(error) = configure(self, param).await {
+            // Log entered and actual params
+            let configured_param = get_configured_param(self, param).await;
+            warn!(
+                self,
+                "configure failed: Entered params: {}. Used params: {}. Error: {error}.",
+                param.to_string(),
+                configured_param
+                    .map(|param| param.to_string())
+                    .unwrap_or("error".to_owned())
+            );
+            return Err(error);
         };
         self.set_config_internal(Config::NotifyAboutWrongPw, Some("1"))
             .await?;
@@ -436,8 +433,7 @@ async fn get_configured_param(
 
     progress!(ctx, 200);
 
-    let param_autoconfig;
-    if param.imap.server.is_empty()
+    let param_autoconfig = if param.imap.server.is_empty()
         && param.imap.port == 0
         && param.imap.security == Socket::Automatic
         && param.imap.user.is_empty()
@@ -449,14 +445,14 @@ async fn get_configured_param(
         // no advanced parameters entered by the user: do Autoconfig
         // except for a few known legacy-domain overrides.
         let legacy_servers = provider::legacy_settings_for_addr(&param.addr).autoconfig_servers;
-        param_autoconfig = if legacy_servers.is_some() {
+        if legacy_servers.is_some() {
             legacy_servers
         } else {
             get_autoconfig(ctx, param, &param_domain).await
-        };
+        }
     } else {
-        param_autoconfig = None;
-    }
+        None
+    };
 
     progress!(ctx, 500);
 
