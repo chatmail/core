@@ -126,12 +126,9 @@ pub async fn wrap_rustls<'a>(
     let root_cert_store =
         rustls::RootCertStore::from_iter(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 
-    let mut config = rustls::ClientConfig::builder_with_provider(Arc::new(
-        rustls::crypto::aws_lc_rs::default_provider(),
-    ))
-    .with_safe_default_protocol_versions()?
-    .with_root_certificates(root_cert_store)
-    .with_no_client_auth();
+    let mut config = rustls::ClientConfig::builder()
+        .with_root_certificates(root_cert_store)
+        .with_no_client_auth();
     config.alpn_protocols = if alpn.is_empty() {
         vec![]
     } else {
