@@ -168,7 +168,8 @@ impl From<Socket> for dc::Socket {
 #[derive(Serialize, Deserialize, TypeDef, schemars::JsonSchema, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum EnteredCertificateChecks {
-    /// `Automatic` means strict certificate checks.
+    /// `Automatic` means strict certificate checks,
+    /// unless a legacy-domain override disables them.
     #[default]
     Automatic,
 

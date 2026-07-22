@@ -69,7 +69,7 @@ pub(crate) struct LegacyProviderSettings {
     pub autoconfig_servers: Option<Vec<ServerParams>>,
 
     /// Maximum number of recipients allowed in a single SMTP send, if limited.
-    pub max_smtp_rcpt_to: Option<usize>,
+    pub max_smtp_rcpt_to: Option<u32>,
 
     /// Whether to disable strict TLS certificate checks by default.
     pub disable_strict_tls: bool,

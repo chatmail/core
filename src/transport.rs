@@ -92,7 +92,8 @@ pub(crate) enum ConfiguredCertificateChecks {
     /// Alias to `AcceptInvalidCertificates` for compatibility.
     AcceptInvalidCertificates2 = 3,
 
-    /// Apply strict checks to TLS certificates.
+    /// Apply strict checks to TLS certificates,
+    /// unless a legacy-domain override disables them.
     Automatic = 4,
 }
 
@@ -464,13 +465,8 @@ impl ConfiguredLoginParam {
         let disable_strict_tls =
             crate::provider::legacy_settings_for_addr(&self.addr).disable_strict_tls;
         match self.certificate_checks {
-            ConfiguredCertificateChecks::OldAutomatic => {
-                if disable_strict_tls {
-                    false
-                } else {
-                    connected_through_proxy
-                }
-            }
+            ConfiguredCertificateChecks::OldAutomatic if disable_strict_tls => false,
+            ConfiguredCertificateChecks::OldAutomatic => connected_through_proxy,
             ConfiguredCertificateChecks::Automatic => !disable_strict_tls,
             ConfiguredCertificateChecks::Strict => true,
             ConfiguredCertificateChecks::AcceptInvalidCertificates
