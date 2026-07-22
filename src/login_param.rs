@@ -37,7 +37,8 @@ use crate::tools::ToOption;
 #[repr(u32)]
 #[strum(serialize_all = "snake_case")]
 pub enum EnteredCertificateChecks {
-    /// `Automatic` means strict certificate checks.
+    /// `Automatic` means strict certificate checks,
+    /// unless a legacy-domain override disables them.
     #[default]
     Automatic = 0,
 

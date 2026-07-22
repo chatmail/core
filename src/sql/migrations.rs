@@ -1117,9 +1117,7 @@ UPDATE chats SET protected=1, type=120 WHERE type=130;"#,
         .await?;
     }
 
-    if dbversion < 71 {
-        sql.set_db_version(71).await?;
-    }
+    // Migration 71 was removed together with the provider database it read from.
     if dbversion < 72 && !sql.col_exists("msgs", "mime_modified").await? {
         sql.execute_migration(
             r#"
