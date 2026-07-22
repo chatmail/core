@@ -2547,7 +2547,7 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
                 let mut statement =
                     transaction.prepare("INSERT INTO relay_candidates(domain) VALUES (?)")?;
                 for domain in DEFAULT_RELAY_CANDIDATES {
-                    statement.execute((domain,));
+                    statement.execute((domain,))?;
                 }
                 Ok(())
             },

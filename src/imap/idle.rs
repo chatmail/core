@@ -53,10 +53,9 @@ impl Session {
 
         // we try to add additional relays right before going into IDLE mode,
         // because apparently we are connected, but don't have anything important to do.
-        crate::automatic_transport_management::maybe_add_additional_transports(context)
-            .await
-            .context("maybe_add_additional_relays")
-            .log_err(context);
+        tokio::task::spawn(
+            crate::automatic_transport_management::maybe_add_additional_transports(context.clone()),
+        );
 
         let mut handle = self.inner.idle();
         handle
