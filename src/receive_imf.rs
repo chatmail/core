@@ -2745,6 +2745,12 @@ async fn lookup_or_create_adhoc_group(
         for &id in &contact_ids {
             stmt.execute((id,)).context("INSERT INTO temp.contacts")?;
         }
+
+        // Contact IDs are 32-bit internally,
+        // so this conversion of contact ID set size
+        // to u32 should never fail.
+        let contact_ids_len = u32::try_from(contact_ids.len())?;
+
         let val = t
             .query_row(
                 "SELECT c.id, c.blocked
@@ -2758,7 +2764,7 @@ async fn lookup_or_create_adhoc_group(
                      AND contact_id NOT IN (SELECT id FROM temp.contacts)
                      AND add_timestamp >= remove_timestamp)=0
                 ORDER BY m.timestamp DESC",
-                (&grpname, contact_ids.len()),
+                (&grpname, contact_ids_len),
                 |row| {
                     let id: ChatId = row.get(0)?;
                     let blocked: Blocked = row.get(1)?;
