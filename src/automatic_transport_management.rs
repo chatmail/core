@@ -126,7 +126,8 @@ pub(crate) fn login_param_from_domain(domain: &str) -> EnteredLoginParam {
     let username = Alphanumeric.sample_string(rng, 9);
     let addr = username + "@" + domain;
     let addr = addr_normalize(&addr);
-    let password = Alphanumeric.sample_string(rng, 50);
+    // 22 * log2(26 * 2 + 10) = 130 bits of entropy
+    let password = Alphanumeric.sample_string(rng, 22);
 
     let param = EnteredLoginParam {
         addr,
