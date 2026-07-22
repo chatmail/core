@@ -1,14 +1,13 @@
 use std::pin::Pin;
 
 use anyhow::Result;
-use rand::TryRngCore as _;
+use deltachat_contact_tools::addr_normalize;
 use rand::distr::{Alphanumeric, SampleString};
 use rand::seq::IndexedRandom;
 
 use crate::config::Config;
 use crate::log::LogExt as _;
 use crate::login_param::{EnteredCertificateChecks, EnteredImapLoginParam};
-use crate::transport::restart_io_if_running_boxed;
 use crate::{configure::EnteredLoginParam, context::Context, tools::time};
 
 /// The target number of transports we try to reach.
@@ -18,11 +17,7 @@ const AUTOMATIC_ADDITION_DEBOUNCE_SECONDS: i64 = 60 * 60; // one hour
 /// How long we ignore a transport candidate after failing to create an account there:
 const BACKOFF_PERIOD_FOR_NOT_WORKING_TRANSPORT: i64 = 60 * 60 * 24 * 7; // one week
 
-// TODO think about how this interacts with stop_io()/start_io()
-
-// TODO decide if this should be done asynchronously in a task;
-// generally we should be able to try adding relays while io is running.
-pub(crate) async fn maybe_add_additional_transports(
+pub(crate) fn maybe_add_additional_transports(
     context: Context,
 ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     Box::pin(async move {
@@ -38,7 +33,6 @@ async fn maybe_add_additional_transports_inner(context: &Context) -> Result<()> 
     let mut transport_added = false;
     info!(context, "dbg maybe_add_additional_transports");
 
-    // TODO potentially rename housekeeping_mutex
     let Ok(_housekeeping_lock) = context.housekeeping_mutex.try_lock() else {
         // Housekeeping or automatic relay management is already running in another thread, do nothing.
         info!(context, "dbg skipping because of taken mutex");
@@ -52,6 +46,16 @@ async fn maybe_add_additional_transports_inner(context: &Context) -> Result<()> 
         info!(context, "dbg already ran recently");
         return Ok(());
     }
+    // TODO uncomment this after I'm done with testing:
+    // if context
+    //     .get_config_bool(Config::AutomaticTransportManagement)
+    //     .await?
+    // {
+    //     info!(context, "dbg automatic transport management disabled");
+    //     return Ok(());
+    // }
+    // Set the config at the beginning to avoid endless loops.
+    // Race conditions are not a concern because we locked the mutex.
     context
         .set_config_internal(
             Config::LastAutomaticTransportManagement,
@@ -111,7 +115,7 @@ async fn maybe_add_additional_transports_inner(context: &Context) -> Result<()> 
     }
     if transport_added {
         info!(context, "dbg restarting");
-        restart_io_if_running_boxed(context.clone()).await;
+        context.restart_io_if_running().await;
     }
 
     Ok(())
@@ -121,6 +125,7 @@ pub(crate) fn login_param_from_domain(domain: &str) -> EnteredLoginParam {
     let rng = &mut rand::rng();
     let username = Alphanumeric.sample_string(rng, 9);
     let addr = username + "@" + domain;
+    let addr = addr_normalize(&addr);
     let password = Alphanumeric.sample_string(rng, 50);
 
     let param = EnteredLoginParam {
