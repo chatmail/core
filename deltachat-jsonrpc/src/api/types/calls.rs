@@ -1,6 +1,6 @@
 use anyhow::{Context as _, Result};
 
-use deltachat::calls::{call_state, CallState};
+use deltachat::calls::{CallState, call_state};
 use deltachat::context::Context;
 use deltachat::message::MsgId;
 use serde::Serialize;

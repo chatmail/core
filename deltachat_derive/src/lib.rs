@@ -14,7 +14,7 @@ pub fn to_sql_derive(input: TokenStream) -> TokenStream {
     let ast: syn::DeriveInput = syn::parse(input).unwrap();
     let name = &ast.ident;
 
-    let gen = quote! {
+    let r#gen = quote! {
         impl rusqlite::types::ToSql for #name {
             fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput> {
                 let num = *self as i64;
@@ -24,7 +24,7 @@ pub fn to_sql_derive(input: TokenStream) -> TokenStream {
             }
         }
     };
-    gen.into()
+    r#gen.into()
 }
 
 #[proc_macro_derive(FromSql)]
@@ -32,7 +32,7 @@ pub fn from_sql_derive(input: TokenStream) -> TokenStream {
     let ast: syn::DeriveInput = syn::parse(input).unwrap();
     let name = &ast.ident;
 
-    let gen = quote! {
+    let r#gen = quote! {
         impl rusqlite::types::FromSql for #name {
             fn column_result(col: rusqlite::types::ValueRef) -> rusqlite::types::FromSqlResult<Self> {
                 let inner = rusqlite::types::FromSql::column_result(col)?;
@@ -44,5 +44,5 @@ pub fn from_sql_derive(input: TokenStream) -> TokenStream {
             }
         }
     };
-    gen.into()
+    r#gen.into()
 }

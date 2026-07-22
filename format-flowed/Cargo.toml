@@ -2,7 +2,7 @@
 name = "format-flowed"
 version = "1.0.0"
 description = "format=flowed support"
-edition = "2021"
+edition = "2024"
 license = "MPL-2.0"
 
 keywords = ["email"]

@@ -5,7 +5,7 @@ use std::path::Path;
 use std::str::FromStr;
 use std::time::Duration;
 
-use anyhow::{bail, ensure, Result};
+use anyhow::{Result, bail, ensure};
 use deltachat::chat::{self, Chat, ChatId, ChatItem, ChatVisibility, MuteDuration};
 use deltachat::chatlist::*;
 use deltachat::constants::*;
@@ -1225,12 +1225,11 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
         "fileinfo" => {
             ensure!(!arg1.is_empty(), "Argument <file> missing.");
 
-            if let Ok(buf) = read_file(&context, Path::new(arg1)).await {
-                let (width, height) = get_filemeta(&buf)?;
-                println!("width={width}, height={height}");
-            } else {
+            let Ok(buf) = read_file(&context, Path::new(arg1)).await else {
                 bail!("Command failed.");
-            }
+            };
+            let (width, height) = get_filemeta(&buf)?;
+            println!("width={width}, height={height}");
         }
         "estimatedeletion" => {
             ensure!(!arg1.is_empty(), "Argument <seconds> missing");

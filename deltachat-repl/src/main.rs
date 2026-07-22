@@ -9,12 +9,12 @@ extern crate deltachat;
 
 use std::borrow::Cow::{self, Borrowed, Owned};
 
-use anyhow::{bail, Error};
+use anyhow::{Error, bail};
+use deltachat::EventType;
 use deltachat::chat::ChatId;
 use deltachat::context::*;
 use deltachat::qr_code_generator::get_securejoin_qr_svg;
 use deltachat::securejoin::*;
-use deltachat::EventType;
 use log::{error, info, warn};
 use nu_ansi_term::Color;
 use rustyline::completion::{Completer, FilenameCompleter, Pair};

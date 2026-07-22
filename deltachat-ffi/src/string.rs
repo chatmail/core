@@ -17,13 +17,15 @@ use std::ptr;
 /// }
 /// ```
 unsafe fn dc_strdup(s: *const libc::c_char) -> *mut libc::c_char {
-    let ret: *mut libc::c_char = if !s.is_null() {
-        libc::strdup(s)
-    } else {
-        libc::calloc(1, 1) as *mut libc::c_char
-    };
-    assert!(!ret.is_null());
-    ret
+    unsafe {
+        let ret: *mut libc::c_char = if !s.is_null() {
+            libc::strdup(s)
+        } else {
+            libc::calloc(1, 1) as *mut libc::c_char
+        };
+        assert!(!ret.is_null());
+        ret
+    }
 }
 
 /// Error type for the [OsStrExt] trait
@@ -164,34 +166,40 @@ pub(crate) trait Strdup {
     /// This function will panic when the original string contains an
     /// interior null byte as this can not be represented in raw C
     /// strings.
-    unsafe fn strdup(&self) -> *mut libc::c_char;
+    fn strdup(&self) -> *mut libc::c_char;
 }
 
 impl Strdup for str {
-    unsafe fn strdup(&self) -> *mut libc::c_char {
-        let tmp = CString::new_lossy(self);
-        dc_strdup(tmp.as_ptr())
+    fn strdup(&self) -> *mut libc::c_char {
+        unsafe {
+            let tmp = CString::new_lossy(self);
+            dc_strdup(tmp.as_ptr())
+        }
     }
 }
 
 impl Strdup for String {
-    unsafe fn strdup(&self) -> *mut libc::c_char {
+    fn strdup(&self) -> *mut libc::c_char {
         let s: &str = self;
         s.strdup()
     }
 }
 
 impl Strdup for std::path::Path {
-    unsafe fn strdup(&self) -> *mut libc::c_char {
-        let tmp = self.to_c_string().unwrap_or_else(|_| CString::default());
-        dc_strdup(tmp.as_ptr())
+    fn strdup(&self) -> *mut libc::c_char {
+        unsafe {
+            let tmp = self.to_c_string().unwrap_or_else(|_| CString::default());
+            dc_strdup(tmp.as_ptr())
+        }
     }
 }
 
 impl Strdup for [u8] {
-    unsafe fn strdup(&self) -> *mut libc::c_char {
-        let tmp = CString::new_lossy(self);
-        dc_strdup(tmp.as_ptr())
+    fn strdup(&self) -> *mut libc::c_char {
+        unsafe {
+            let tmp = CString::new_lossy(self);
+            dc_strdup(tmp.as_ptr())
+        }
     }
 }
 
@@ -209,15 +217,15 @@ pub(crate) trait OptStrdup {
     /// Allocate a new raw C `*char` version of this string, or NULL.
     ///
     /// See [Strdup::strdup] for details.
-    unsafe fn strdup(&self) -> *mut libc::c_char;
+    fn strdup(&self) -> *mut libc::c_char;
 }
 
 impl<T: AsRef<str>> OptStrdup for Option<T> {
-    unsafe fn strdup(&self) -> *mut libc::c_char {
+    fn strdup(&self) -> *mut libc::c_char {
         match self {
             Some(s) => {
                 let tmp = CString::new_lossy(s.as_ref());
-                dc_strdup(tmp.as_ptr())
+                unsafe { dc_strdup(tmp.as_ptr()) }
             }
             None => ptr::null_mut(),
         }
@@ -258,11 +266,9 @@ pub(crate) fn to_opt_string_lossy(s: *const libc::c_char) -> Option<String> {
 pub(crate) fn as_path<'a>(s: *const libc::c_char) -> &'a std::path::Path {
     assert!(!s.is_null(), "cannot be used on null pointers");
     use std::os::unix::ffi::OsStrExt;
-    unsafe {
-        let c_str = std::ffi::CStr::from_ptr(s).to_bytes();
-        let os_str = std::ffi::OsStr::from_bytes(c_str);
-        std::path::Path::new(os_str)
-    }
+    let c_str = unsafe { std::ffi::CStr::from_ptr(s) }.to_bytes();
+    let os_str = std::ffi::OsStr::from_bytes(c_str);
+    std::path::Path::new(os_str)
 }
 
 // as_path() implementation for windows, documented above.

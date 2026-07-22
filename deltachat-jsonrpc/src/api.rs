@@ -5,26 +5,27 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{collections::HashMap, str::FromStr};
 
-use anyhow::{anyhow, bail, ensure, Context, Result};
+use anyhow::{Context, Result, anyhow, bail, ensure};
+use deltachat::EventEmitter;
 pub use deltachat::accounts::Accounts;
 use deltachat::blob::BlobObject;
 use deltachat::calls::ice_servers;
 use deltachat::chat::{
-    self, add_contact_to_chat, forward_msgs, forward_msgs_2ctx, get_chat_media, get_chat_msgs,
-    get_chat_msgs_ex, markfresh_chat, marknoticed_all_chats, marknoticed_chat,
-    remove_contact_from_chat, Chat, ChatId, ChatItem, MessageListOptions,
+    self, Chat, ChatId, ChatItem, MessageListOptions, add_contact_to_chat, forward_msgs,
+    forward_msgs_2ctx, get_chat_media, get_chat_msgs, get_chat_msgs_ex, markfresh_chat,
+    marknoticed_all_chats, marknoticed_chat, remove_contact_from_chat,
 };
 use deltachat::chatlist::Chatlist;
-use deltachat::config::{get_all_ui_config_keys, Config};
+use deltachat::config::{Config, get_all_ui_config_keys};
 use deltachat::constants::DC_MSG_ID_DAYMARKER;
-use deltachat::contact::{may_be_valid_addr, Contact, ContactId, Origin};
+use deltachat::contact::{Contact, ContactId, Origin, may_be_valid_addr};
 use deltachat::context::get_info;
 use deltachat::ephemeral::Timer;
 use deltachat::imex;
 use deltachat::location;
 use deltachat::message::{
-    self, delete_msgs_ex, get_existing_msg_ids, get_msg_read_receipt_count, get_msg_read_receipts,
-    markseen_msgs, Message, MessageState, MsgId, Viewtype,
+    self, Message, MessageState, MsgId, Viewtype, delete_msgs_ex, get_existing_msg_ids,
+    get_msg_read_receipt_count, get_msg_read_receipts, markseen_msgs,
 };
 use deltachat::peer_channels::{
     leave_webxdc_realtime, send_webxdc_realtime_advertisement, send_webxdc_realtime_data,
@@ -37,10 +38,9 @@ use deltachat::securejoin;
 use deltachat::stock_str::StockMessage;
 use deltachat::storage_usage::{get_blobdir_storage_usage, get_storage_usage};
 use deltachat::webxdc::StatusUpdateSerial;
-use deltachat::EventEmitter;
 use sanitize_filename::is_sanitized;
 use tokio::fs;
-use tokio::sync::{watch, Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, watch};
 use types::login_param::EnteredLoginParam;
 use yerpc::rpc;
 
@@ -67,7 +67,7 @@ use self::types::{
         JsonrpcMessageListItem, MessageNotificationInfo, MessageSearchResult, MessageViewtype,
     },
 };
-use crate::api::types::chat_list::{get_chat_list_item_by_id, ChatListItemFetchResult};
+use crate::api::types::chat_list::{ChatListItemFetchResult, get_chat_list_item_by_id};
 use crate::api::types::login_param::TransportListEntry;
 use crate::api::types::qr::{QrObject, SecurejoinSource, SecurejoinUiPath};
 
@@ -2295,7 +2295,7 @@ impl CommandApi {
         let message = Message::load_from_db(&ctx, MsgId::new(instance_msg_id)).await?;
         let blob = message.get_webxdc_blob(&ctx, &path).await?;
 
-        use base64::{engine::general_purpose, Engine as _};
+        use base64::{Engine as _, engine::general_purpose};
         Ok(general_purpose::STANDARD_NO_PAD.encode(blob))
     }
 
