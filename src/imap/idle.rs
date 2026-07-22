@@ -56,6 +56,7 @@ impl Session {
         tokio::task::spawn(
             crate::automatic_transport_management::maybe_add_additional_transports(context.clone()),
         );
+        info!(context, "dbg spawned transports task");
 
         let mut handle = self.inner.idle();
         handle
