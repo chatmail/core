@@ -1,6 +1,4 @@
-use anyhow::Context as _;
 use strum::IntoEnumIterator;
-use tempfile::tempdir;
 
 use super::*;
 use crate::chat::{Chat, MuteDuration, get_chat_contacts, get_chat_msgs, send_msg, set_muted};
@@ -482,63 +480,6 @@ async fn test_limit_search_msgs() -> Result<()> {
     // In-chat should not be not limited
     let res = alice.search_msgs(Some(chat.id), "foo").await?;
     assert_eq!(res.len(), 1001);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_check_passphrase() -> Result<()> {
-    let dir = tempdir()?;
-    let dbfile = dir.path().join("db.sqlite");
-
-    let context = ContextBuilder::new(dbfile.clone())
-        .with_id(1)
-        .build()
-        .await
-        .context("failed to create context")?;
-    assert_eq!(context.open("foo".to_string()).await?, true);
-    assert_eq!(context.is_open().await, true);
-    drop(context);
-
-    let context = ContextBuilder::new(dbfile)
-        .with_id(2)
-        .build()
-        .await
-        .context("failed to create context")?;
-    assert_eq!(context.is_open().await, false);
-    assert_eq!(context.check_passphrase("bar".to_string()).await?, false);
-    assert_eq!(context.open("false".to_string()).await?, false);
-    assert_eq!(context.open("foo".to_string()).await?, true);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_context_change_passphrase() -> Result<()> {
-    let dir = tempdir()?;
-    let dbfile = dir.path().join("db.sqlite");
-
-    let context = ContextBuilder::new(dbfile)
-        .with_id(1)
-        .build()
-        .await
-        .context("failed to create context")?;
-    assert_eq!(context.open("foo".to_string()).await?, true);
-    assert_eq!(context.is_open().await, true);
-
-    context
-        .set_config(Config::Addr, Some("alice@example.org"))
-        .await?;
-
-    context
-        .change_passphrase("bar".to_string())
-        .await
-        .context("Failed to change passphrase")?;
-
-    assert_eq!(
-        context.get_config(Config::Addr).await?.unwrap(),
-        "alice@example.org"
-    );
 
     Ok(())
 }

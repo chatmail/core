@@ -200,6 +200,9 @@ async fn import_backup(
     backup_to_import: &Path,
     passphrase: String,
 ) -> Result<()> {
+    if !passphrase.is_empty() {
+        bail!("Encrypted passphrase is not supported");
+    }
     let backup_file = File::open(backup_to_import).await?;
     let file_size = backup_file.metadata().await?.len();
     info!(
@@ -210,7 +213,7 @@ async fn import_backup(
         context.get_dbfile().display()
     );
 
-    import_backup_stream(context, backup_file, file_size, passphrase).await?;
+    import_backup_stream(context, backup_file, file_size).await?;
     Ok(())
 }
 
@@ -231,7 +234,6 @@ pub(crate) async fn import_backup_stream<R: tokio::io::AsyncRead + Unpin>(
     context: &Context,
     backup_file: R,
     file_size: u64,
-    passphrase: String,
 ) -> Result<()> {
     ensure!(
         !context.is_configured().await?,
@@ -242,7 +244,7 @@ pub(crate) async fn import_backup_stream<R: tokio::io::AsyncRead + Unpin>(
         "Cannot import backup, IO is running"
     );
 
-    import_backup_stream_inner(context, backup_file, file_size, passphrase)
+    import_backup_stream_inner(context, backup_file, file_size)
         .await
         .0
 }
@@ -315,7 +317,6 @@ async fn import_backup_stream_inner<R: tokio::io::AsyncRead + Unpin>(
     context: &Context,
     backup_file: R,
     file_size: u64,
-    passphrase: String,
 ) -> (Result<()>,) {
     let backup_file = ProgressReader::new(backup_file, context.clone(), file_size);
     let mut archive = Archive::new(backup_file);
@@ -362,7 +363,7 @@ async fn import_backup_stream_inner<R: tokio::io::AsyncRead + Unpin>(
     if res.is_ok() {
         res = context
             .sql
-            .import(&unpacked_database, passphrase.clone())
+            .import(&unpacked_database)
             .await
             .context("cannot import unpacked database");
     }
@@ -390,7 +391,7 @@ async fn import_backup_stream_inner<R: tokio::io::AsyncRead + Unpin>(
         }
         context
             .sql
-            .open(context, "".to_string())
+            .open(context)
             .await
             .log_err(context)
             .ok();
@@ -735,7 +736,7 @@ where
 /// overwritten.
 ///
 /// This also verifies that IO is not running during the export.
-async fn export_database(context: &Context, dest: &Path, passphrase: String) -> Result<()> {
+async fn export_database(context: &Context, dest: &Path, _passphrase: String) -> Result<()> {
     ensure!(
         !context.scheduler.is_running().await,
         "cannot export backup, IO is running"
@@ -745,6 +746,7 @@ async fn export_database(context: &Context, dest: &Path, passphrase: String) -> 
     let dest = dest
         .to_str()
         .with_context(|| format!("path {} is not valid unicode", dest.display()))?;
+    let mut dest_conn = rusqlite::Connection::open(dest)?;
 
     context.set_config(Config::BccSelf, Some("1")).await?;
     context
@@ -755,22 +757,12 @@ async fn export_database(context: &Context, dest: &Path, passphrase: String) -> 
     context
         .sql
         .call_write(|conn| {
-            conn.execute("VACUUM;", ())
-                .map_err(|err| warn!(context, "Vacuum failed, exporting anyway {err}"))
-                .ok();
-            conn.execute("ATTACH DATABASE ? AS backup KEY ?", (dest, passphrase))
-                .context("failed to attach backup database")?;
-            let res = conn
-                .query_row("SELECT sqlcipher_export('backup')", [], |_row| Ok(()))
-                .context("failed to export to attached backup database");
-            conn.execute(
-                "UPDATE backup.config SET value='0' WHERE keyname='verified_one_on_one_chats';",
-                [],
-            )
-            .ok(); // Deprecated 2025-07. If verified_one_on_one_chats was not set, this errors, which we ignore
-            conn.execute("DETACH DATABASE backup", [])
-                .context("failed to detach backup database")?;
-            res?;
+            if let Err(err) = conn.execute("VACUUM", ()) {
+                warn!(context, "Vacuum failed, exporting anyway: {err:#}.");
+            }
+
+            let backup = rusqlite::backup::Backup::new(conn, &mut dest_conn)?;
+            backup.run_to_completion(5, std::time::Duration::ZERO, None)?;
             Ok(())
         })
         .await
@@ -1040,7 +1032,7 @@ mod tests {
             ar.unpack(&unpack_dir).await?;
 
             let sql = sql::Sql::new(unpack_dir.path().join(DBFILE_BACKUP_NAME));
-            sql.open(&context2, "".to_string()).await?;
+            sql.open(&context2).await?;
             assert_eq!(
                 sql.get_raw_config_int("backup_version").await?.unwrap(),
                 DCBACKUP_VERSION

@@ -324,7 +324,6 @@ pub async fn get_backup2(
     info!(context, "Sending backup authentication token.");
     send_stream.write_all(auth_token.as_bytes()).await?;
 
-    let passphrase = String::new();
     info!(context, "Starting to read backup from the stream.");
 
     let mut file_size_buf = [0u8; 8];
@@ -334,7 +333,7 @@ pub async fn get_backup2(
     // Emit a nonzero progress so that UIs can display smth like "Transferring...".
     context.emit_event(EventType::ImexProgress(1));
 
-    import_backup_stream(context, recv_stream, file_size, passphrase)
+    import_backup_stream(context, recv_stream, file_size)
         .await
         .context("Failed to import backup from QUIC stream")?;
     info!(context, "Finished importing backup from the stream.");

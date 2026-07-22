@@ -305,21 +305,6 @@ int             dc_context_open              (dc_context_t *context, const char*
 
 
 /**
- * Changes the passphrase on the open database.
- * Deprecated 2025-11, see `dc_context_open()` for reasoning.
- *
- * Existing database must already be encrypted and the passphrase cannot be NULL or empty.
- * It is impossible to encrypt unencrypted database with this method and vice versa.
- *
- * @memberof dc_context_t
- * @param context The context object.
- * @param passphrase The new passphrase.
- * @return 1 on success, 0 on error.
- */
-int             dc_context_change_passphrase (dc_context_t* context, const char* passphrase);
-
-
-/**
  * Returns 1 if database is open.
  *
  * @memberof dc_context_t

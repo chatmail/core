@@ -161,24 +161,6 @@ pub unsafe extern "C" fn dc_context_open(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn dc_context_change_passphrase(
-    context: *mut dc_context_t,
-    passphrase: *const libc::c_char,
-) -> libc::c_int {
-    if context.is_null() {
-        eprintln!("ignoring careless call to dc_context_change_passphrase()");
-        return 0;
-    }
-
-    let ctx = unsafe { &*context };
-    let passphrase = to_string_lossy(passphrase);
-    block_on(ctx.change_passphrase(passphrase))
-        .context("dc_context_change_passphrase() failed")
-        .log_err(ctx)
-        .is_ok() as libc::c_int
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn dc_context_is_open(context: *mut dc_context_t) -> libc::c_int {
     if context.is_null() {
         eprintln!("ignoring careless call to dc_context_is_open()");

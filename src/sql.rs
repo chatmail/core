@@ -56,10 +56,6 @@ pub struct Sql {
     /// SQL connection pool.
     pool: RwLock<Option<Pool>>,
 
-    /// None if the database is not open, true if it is open with passphrase and false if it is
-    /// open without a passphrase.
-    is_encrypted: RwLock<Option<bool>>,
-
     /// Cache of `config` table.
     pub(crate) config_cache: RwLock<HashMap<String, Option<String>>>,
 }
@@ -70,50 +66,13 @@ impl Sql {
         Self {
             dbfile,
             pool: Default::default(),
-            is_encrypted: Default::default(),
             config_cache: Default::default(),
         }
-    }
-
-    /// Tests SQLCipher passphrase.
-    ///
-    /// Returns true if passphrase is correct, i.e. the database is new or can be unlocked with
-    /// this passphrase, and false if the database is already encrypted with another passphrase or
-    /// corrupted.
-    ///
-    /// Fails if database is already open.
-    pub async fn check_passphrase(&self, passphrase: String) -> Result<bool> {
-        if self.is_open().await {
-            bail!("Database is already opened.");
-        }
-
-        // Hold the lock to prevent other thread from opening the database.
-        let _lock = self.pool.write().await;
-
-        // Test that the key is correct using a single connection.
-        let connection = Connection::open(&self.dbfile)?;
-        if !passphrase.is_empty() {
-            connection
-                .pragma_update(None, "key", &passphrase)
-                .context("Failed to set PRAGMA key")?;
-        }
-        let key_is_correct = connection
-            .query_row("SELECT count(*) FROM sqlite_master", [], |_row| Ok(()))
-            .is_ok();
-
-        Ok(key_is_correct)
     }
 
     /// Checks if there is currently a connection to the underlying Sqlite database.
     pub async fn is_open(&self) -> bool {
         self.pool.read().await.is_some()
-    }
-
-    /// Returns true if the database is encrypted.
-    ///
-    /// If database is not open, returns `None`.
-    pub(crate) async fn is_encrypted(&self) -> Option<bool> {
-        *self.is_encrypted.read().await
     }
 
     /// Closes all underlying Sqlite connections.
@@ -123,52 +82,22 @@ impl Sql {
     }
 
     /// Imports the database from a separate file with the given passphrase.
-    pub(crate) async fn import(&self, path: &Path, passphrase: String) -> Result<()> {
-        let path_str = path
-            .to_str()
-            .with_context(|| format!("path {path:?} is not valid unicode"))?
-            .to_string();
-
+    pub(crate) async fn import(&self, path: &Path) -> Result<()> {
         // Keep `config_cache` locked all the time the db is imported so that nobody can use invalid
         // values from there. And clear it immediately so as not to forget in case of errors.
         let mut config_cache = self.config_cache.write().await;
         config_cache.clear();
 
+        let src_conn =
+            rusqlite::Connection::open(path).context("Failed to open source database")?;
         let query_only = false;
         self.call(query_only, move |conn| {
-            // Check that backup passphrase is correct before resetting our database.
-            conn.execute("ATTACH DATABASE ? AS backup KEY ?", (path_str, passphrase))
-                .context("failed to attach backup database")?;
-            let res = conn
-                .query_row("SELECT count(*) FROM sqlite_master", [], |_row| Ok(()))
-                .context("backup passphrase is not correct");
+            let backup = rusqlite::backup::Backup::new(&src_conn, &mut *conn)?;
+            backup.run_to_completion(5, std::time::Duration::ZERO, None)?;
+            drop(backup);
 
-            // Reset the database without reopening it. We don't want to reopen the database because we
-            // don't have main database passphrase at this point.
-            // See <https://sqlite.org/c3ref/c_dbconfig_enable_fkey.html> for documentation.
-            // Without resetting import may fail due to existing tables.
-            res.and_then(|_| {
-                conn.set_db_config(DbConfig::SQLITE_DBCONFIG_RESET_DATABASE, true)
-                    .context("failed to set SQLITE_DBCONFIG_RESET_DATABASE")
-            })
-            .and_then(|_| {
-                conn.execute("VACUUM", [])
-                    .context("failed to vacuum the database")
-            })
-            .and(
-                conn.set_db_config(DbConfig::SQLITE_DBCONFIG_RESET_DATABASE, false)
-                    .context("failed to unset SQLITE_DBCONFIG_RESET_DATABASE"),
-            )
-            .and_then(|_| {
-                conn.query_row("SELECT sqlcipher_export('main', 'backup')", [], |_row| {
-                    Ok(())
-                })
-                .context("failed to import from attached backup database")
-            })
-            .and(
-                conn.execute("DETACH DATABASE backup", [])
-                    .context("failed to detach backup database"),
-            )?;
+            conn.execute("VACUUM", [])
+                .context("failed to vacuum the database")?;
             Ok(())
         })
         .await
@@ -177,10 +106,10 @@ impl Sql {
     const N_DB_CONNECTIONS: usize = 3;
 
     /// Creates a new connection pool.
-    fn new_pool(dbfile: &Path, passphrase: String) -> Result<Pool> {
+    fn new_pool(dbfile: &Path) -> Result<Pool> {
         let mut connections = Vec::with_capacity(Self::N_DB_CONNECTIONS);
         for _ in 0..Self::N_DB_CONNECTIONS {
-            let connection = new_connection(dbfile, &passphrase)?;
+            let connection = new_connection(dbfile)?;
             connections.push(connection);
         }
 
@@ -188,8 +117,8 @@ impl Sql {
         Ok(pool)
     }
 
-    async fn try_open(&self, context: &Context, dbfile: &Path, passphrase: String) -> Result<()> {
-        *self.pool.write().await = Some(Self::new_pool(dbfile, passphrase.to_string())?);
+    async fn try_open(&self, context: &Context, dbfile: &Path) -> Result<()> {
+        *self.pool.write().await = Some(Self::new_pool(dbfile)?);
 
         if let Err(e) = self.run_migrations(context).await {
             error!(context, "Running migrations failed: {e:#}");
@@ -247,7 +176,7 @@ impl Sql {
 
     /// Opens the provided database and runs any necessary migrations.
     /// If a database is already open, this will return an error.
-    pub async fn open(&self, context: &Context, passphrase: String) -> Result<()> {
+    pub async fn open(&self, context: &Context) -> Result<()> {
         if self.is_open().await {
             error!(
                 context,
@@ -256,10 +185,8 @@ impl Sql {
             bail!("SQL database is already opened.");
         }
 
-        let passphrase_nonempty = !passphrase.is_empty();
-        self.try_open(context, &self.dbfile, passphrase).await?;
+        self.try_open(context, &self.dbfile).await?;
         info!(context, "Opened database {:?}.", self.dbfile);
-        *self.is_encrypted.write().await = Some(passphrase_nonempty);
 
         // setup debug logging if there is an entry containing its id
         if let Some(xdc_id) = self
@@ -268,28 +195,6 @@ impl Sql {
         {
             set_debug_logging_xdc(context, Some(MsgId::new(xdc_id))).await?;
         }
-        Ok(())
-    }
-
-    /// Changes the passphrase of encrypted database.
-    ///
-    /// The database must already be encrypted and the passphrase cannot be empty.
-    /// It is impossible to turn encrypted database into unencrypted
-    /// and vice versa this way, use import/export for this.
-    pub async fn change_passphrase(&self, passphrase: String) -> Result<()> {
-        let mut lock = self.pool.write().await;
-
-        let pool = lock.take().context("SQL connection pool is not open")?;
-        let query_only = false;
-        let conn = pool.get(query_only).await?;
-        if !passphrase.is_empty() {
-            conn.pragma_update(None, "rekey", passphrase.clone())
-                .context("Failed to set PRAGMA rekey")?;
-        }
-        drop(pool);
-
-        *lock = Some(Self::new_pool(&self.dbfile, passphrase.to_string())?);
-
         Ok(())
     }
 
@@ -690,7 +595,7 @@ impl Sql {
 ///
 /// `passphrase` is the SQLCipher database passphrase.
 /// Empty string if database is not encrypted.
-fn new_connection(path: &Path, passphrase: &str) -> Result<Connection> {
+fn new_connection(path: &Path) -> Result<Connection> {
     let flags = OpenFlags::SQLITE_OPEN_NO_MUTEX
         | OpenFlags::SQLITE_OPEN_READ_WRITE
         | OpenFlags::SQLITE_OPEN_CREATE;
@@ -726,9 +631,6 @@ fn new_connection(path: &Path, passphrase: &str) -> Result<Connection> {
         conn.busy_timeout(Duration::ZERO)?;
     }
 
-    if !passphrase.is_empty() {
-        conn.pragma_update(None, "key", passphrase)?;
-    }
     // Try to enable auto_vacuum. This will only be
     // applied if the database is new or after successful
     // VACUUM, which usually happens before backup export.

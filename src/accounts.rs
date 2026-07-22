@@ -169,9 +169,7 @@ impl Accounts {
             .with_push_subscriber(self.push_subscriber.clone())
             .build()
             .await?;
-        // Try to open without a passphrase,
-        // but do not return an error if account is passphare-protected.
-        ctx.open("".to_string()).await?;
+        ctx.open().await?;
 
         self.accounts.insert(account_config.id, ctx);
         self.emit_event(EventType::AccountsChanged);
@@ -821,9 +819,7 @@ impl Config {
                 .build()
                 .await
                 .with_context(|| format!("failed to create context from file {dbfile:?}"))?;
-            // Try to open without a passphrase,
-            // but do not return an error if account is passphare-protected.
-            ctx.open("".to_string()).await?;
+            ctx.open().await?;
 
             accounts.insert(account_config.id, ctx);
         }
@@ -1272,52 +1268,6 @@ mod tests {
 
         Ok(())
     }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_encrypted_account() -> Result<()> {
-        let dir = tempfile::tempdir().context("failed to create tempdir")?;
-        let p: PathBuf = dir.path().join("accounts");
-
-        let writable = true;
-        let mut accounts = Accounts::new(p.clone(), writable)
-            .await
-            .context("failed to create accounts manager")?;
-
-        assert_eq!(accounts.accounts.len(), 0);
-        let account_id = accounts
-            .add_closed_account()
-            .await
-            .context("failed to add closed account")?;
-        let account = accounts
-            .get_selected_account()
-            .context("failed to get account")?;
-        assert_eq!(account.id, account_id);
-        let passphrase_set_success = account
-            .open("foobar".to_string())
-            .await
-            .context("failed to set passphrase")?;
-        assert!(passphrase_set_success);
-        drop(accounts);
-
-        let writable = false;
-        let accounts = Accounts::new(p.clone(), writable)
-            .await
-            .context("failed to create second accounts manager")?;
-        let account = accounts
-            .get_selected_account()
-            .context("failed to get account")?;
-        assert_eq!(account.is_open().await, false);
-
-        // Try wrong passphrase.
-        assert_eq!(account.open("barfoo".to_string()).await?, false);
-        assert_eq!(account.open("".to_string()).await?, false);
-
-        assert_eq!(account.open("foobar".to_string()).await?, true);
-        assert_eq!(account.is_open().await, true);
-
-        Ok(())
-    }
-
     /// Tests that accounts share stock string translations.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_accounts_share_translations() -> Result<()> {

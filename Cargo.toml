@@ -85,7 +85,7 @@ quick-xml = { version = "0.41", features = ["escape-html"] }
 rand-old = { package = "rand", version = "0.8" }
 rand = { workspace = true }
 regex = { workspace = true }
-rusqlite = { workspace = true, features = ["sqlcipher"] }
+rusqlite = { workspace = true, features = ["backup"] }
 sanitize-filename = { workspace = true }
 sdp = "0.17.1"
 serde_json = { workspace = true }
@@ -209,7 +209,7 @@ yerpc = "0.7"
 default = ["vendored"]
 internals = []
 vendored = [
-  "rusqlite/bundled-sqlcipher-vendored-openssl",
+  "rusqlite/bundled",
   "async-native-tls/vendored"
 ]
 

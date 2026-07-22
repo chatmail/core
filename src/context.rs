@@ -67,7 +67,6 @@ pub struct ContextBuilder {
     id: u32,
     events: Events,
     stock_strings: StockStrings,
-    password: Option<String>,
 
     push_subscriber: Option<PushSubscriber>,
 }
@@ -84,7 +83,6 @@ impl ContextBuilder {
             id: rand::random(),
             events: Events::new(),
             stock_strings: StockStrings::new(),
-            password: None,
             push_subscriber: None,
         }
     }
@@ -131,19 +129,6 @@ impl ContextBuilder {
         self
     }
 
-    /// Sets the password to unlock the database.
-    /// Deprecated 2025-11:
-    /// - Db encryption does nothing with blobs, so fs/disk encryption is recommended.
-    /// - Isolation from other apps is needed anyway.
-    ///
-    /// If an encrypted database is used it must be opened with a password.  Setting a
-    /// password on a new database will enable encryption.
-    #[deprecated(since = "TBD")]
-    pub fn with_password(mut self, password: String) -> Self {
-        self.password = Some(password);
-        self
-    }
-
     /// Sets push subscriber.
     pub(crate) fn with_push_subscriber(mut self, push_subscriber: PushSubscriber) -> Self {
         self.push_subscriber = Some(push_subscriber);
@@ -168,11 +153,10 @@ impl ContextBuilder {
     ///
     /// Returns error if context cannot be opened.
     pub async fn open(self) -> Result<Context> {
-        let password = self.password.clone().unwrap_or_default();
         let context = self.build().await?;
-        match context.open(password).await? {
+        match context.open().await? {
             true => Ok(context),
-            false => bail!("database could not be decrypted, incorrect or missing password"),
+            false => bail!("FIXME database could not be decrypted, incorrect or missing password"),
         }
     }
 }
@@ -386,10 +370,7 @@ impl Context {
         let context =
             Self::new_closed(dbfile, id, events, stock_strings, Default::default()).await?;
 
-        // Open the database if is not encrypted.
-        if context.check_passphrase("".to_string()).await? {
-            context.sql.open(&context, "".to_string()).await?;
-        }
+        context.sql.open(&context).await?;
         Ok(context)
     }
 
@@ -433,34 +414,14 @@ impl Context {
     /// Returns true if passphrase is correct, false is passphrase is not correct. Fails on other
     /// errors.
     #[deprecated(since = "TBD")]
-    pub async fn open(&self, passphrase: String) -> Result<bool> {
-        if self.sql.check_passphrase(passphrase.clone()).await? {
-            self.sql.open(self, passphrase).await?;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-
-    /// Changes encrypted database passphrase.
-    /// Deprecated 2025-11, see [`ContextBuilder::with_password()`] for reasoning.
-    pub async fn change_passphrase(&self, passphrase: String) -> Result<()> {
-        self.sql.change_passphrase(passphrase).await?;
-        Ok(())
+    pub async fn open(&self) -> Result<bool> {
+        self.sql.open(self).await?;
+        Ok(true)
     }
 
     /// Returns true if database is open.
     pub async fn is_open(&self) -> bool {
         self.sql.is_open().await
-    }
-
-    /// Tests the database passphrase.
-    ///
-    /// Returns true if passphrase is correct.
-    ///
-    /// Fails if database is already open.
-    pub(crate) async fn check_passphrase(&self, passphrase: String) -> Result<bool> {
-        self.sql.check_passphrase(passphrase).await
     }
 
     pub(crate) fn with_blobdir(
@@ -850,13 +811,6 @@ impl Context {
         res.insert("number_of_contacts", contacts.to_string());
         res.insert("database_dir", self.get_dbfile().display().to_string());
         res.insert("database_version", dbversion.to_string());
-        res.insert(
-            "database_encrypted",
-            self.sql
-                .is_encrypted()
-                .await
-                .map_or_else(|| "closed".to_string(), |b| b.to_string()),
-        );
         res.insert("journal_mode", journal_mode);
         res.insert("blobdir", self.get_blobdir().display().to_string());
         res.insert(

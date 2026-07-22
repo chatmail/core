@@ -83,7 +83,7 @@ async fn test_housekeeping_db_closed() {
 
     t.sql.close().await;
     housekeeping(&t).await.unwrap(); // housekeeping should emit warnings but not fail
-    t.sql.open(&t, "".to_string()).await.unwrap();
+    t.sql.open(&t).await.unwrap();
 
     let a = t.get_config(Config::Selfavatar).await.unwrap().unwrap();
     assert_eq!(avatar_bytes, &tokio::fs::read(&a).await.unwrap()[..]);
@@ -155,11 +155,11 @@ async fn test_db_reopen() -> Result<()> {
     let sql = Sql::new(dbfile);
 
     // Create database with all the tables.
-    sql.open(&t, "".to_string()).await.unwrap();
+    sql.open(&t).await.unwrap();
     sql.close().await;
 
     // Reopen the database
-    sql.open(&t, "".to_string()).await?;
+    sql.open(&t).await?;
     sql.execute(
         "INSERT INTO config (keyname, value) VALUES (?, ?);",
         ("foo", "bar"),
@@ -205,99 +205,6 @@ async fn test_migration_flags() -> Result<()> {
             _ => unreachable!(),
         }
     }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_check_passphrase() -> Result<()> {
-    use tempfile::tempdir;
-
-    // The context is used only for logging.
-    let t = TestContext::new().await;
-
-    // Create a separate empty database for testing.
-    let dir = tempdir()?;
-    let dbfile = dir.path().join("testdb.sqlite");
-    let sql = Sql::new(dbfile.clone());
-
-    sql.check_passphrase("foo".to_string()).await?;
-    sql.open(&t, "foo".to_string())
-        .await
-        .context("failed to open the database first time")?;
-    sql.close().await;
-
-    // Reopen the database
-    let sql = Sql::new(dbfile);
-
-    // Test that we can't open encrypted database without a passphrase.
-    assert!(sql.open(&t, "".to_string()).await.is_err());
-
-    // Now open the database with passpharse, it should succeed.
-    sql.check_passphrase("foo".to_string()).await?;
-    sql.open(&t, "foo".to_string())
-        .await
-        .context("failed to open the database second time")?;
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_sql_change_passphrase() -> Result<()> {
-    use tempfile::tempdir;
-
-    // The context is used only for logging.
-    let t = TestContext::new().await;
-
-    // Create a separate empty database for testing.
-    let dir = tempdir()?;
-    let dbfile = dir.path().join("testdb.sqlite");
-    let sql = Sql::new(dbfile.clone());
-
-    sql.open(&t, "foo".to_string())
-        .await
-        .context("failed to open the database first time")?;
-    sql.close().await;
-
-    // Change the passphrase from "foo" to "bar".
-    let sql = Sql::new(dbfile.clone());
-    sql.open(&t, "foo".to_string())
-        .await
-        .context("failed to open the database second time")?;
-    sql.change_passphrase("bar".to_string())
-        .await
-        .context("failed to change passphrase")?;
-
-    // Test that at least two connections are still working.
-    // This ensures that not only the connection which changed the password is working,
-    // but other connections as well.
-    {
-        let lock = sql.pool.read().await;
-        let pool = lock.as_ref().unwrap();
-        let query_only = true;
-        let conn1 = pool.get(query_only).await?;
-        let conn2 = pool.get(query_only).await?;
-        conn1
-            .query_row("SELECT count(*) FROM sqlite_master", [], |_row| Ok(()))
-            .unwrap();
-        conn2
-            .query_row("SELECT count(*) FROM sqlite_master", [], |_row| Ok(()))
-            .unwrap();
-    }
-
-    sql.close().await;
-
-    let sql = Sql::new(dbfile);
-
-    // Test that old passphrase is not working.
-    assert!(sql.open(&t, "foo".to_string()).await.is_err());
-
-    // Open the database with the new passphrase.
-    sql.check_passphrase("bar".to_string()).await?;
-    sql.open(&t, "bar".to_string())
-        .await
-        .context("failed to open the database third time")?;
-    sql.close().await;
 
     Ok(())
 }
