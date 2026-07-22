@@ -2,7 +2,7 @@
 name = "deltachat-jsonrpc"
 version = "2.57.0-dev"
 description = "DeltaChat JSON-RPC API"
-edition = "2021"
+edition = "2024"
 license = "MPL-2.0"
 repository = "https://github.com/chatmail/core"
 

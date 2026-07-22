@@ -224,8 +224,7 @@ mod tests {
     fn test_unformat_flowed() {
         let text = "this is a very long message that should be wrapped using format=flowed and \n\
             unwrapped on the receiver";
-        let expected =
-            "this is a very long message that should be wrapped using format=flowed and \
+        let expected = "this is a very long message that should be wrapped using format=flowed and \
                         unwrapped on the receiver";
         assert_eq!(unformat_flowed(text, false), expected);
 
@@ -255,8 +254,7 @@ mod tests {
         assert_eq!(format_flowed_quote(quote), expected);
 
         let quote = "this is a very long quote that should be wrapped using format=flowed and unwrapped on the receiver";
-        let expected =
-            "> this is a very long quote that should be wrapped using format=flowed and \r\n\
+        let expected = "> this is a very long quote that should be wrapped using format=flowed and \r\n\
             > unwrapped on the receiver";
         assert_eq!(format_flowed_quote(quote), expected);
     }
