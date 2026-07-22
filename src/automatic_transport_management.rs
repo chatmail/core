@@ -1,10 +1,14 @@
+use std::pin::Pin;
+
 use anyhow::Result;
 use rand::TryRngCore as _;
 use rand::distr::{Alphanumeric, SampleString};
 use rand::seq::IndexedRandom;
 
 use crate::config::Config;
+use crate::log::LogExt as _;
 use crate::login_param::{EnteredCertificateChecks, EnteredImapLoginParam};
+use crate::transport::restart_io_if_running_boxed;
 use crate::{configure::EnteredLoginParam, context::Context, tools::time};
 
 /// The target number of transports we try to reach.
@@ -18,12 +22,26 @@ const BACKOFF_PERIOD_FOR_NOT_WORKING_TRANSPORT: i64 = 60 * 60 * 24 * 7; // one w
 
 // TODO decide if this should be done asynchronously in a task;
 // generally we should be able to try adding relays while io is running.
-pub(crate) async fn maybe_add_additional_transports(context: &Context) -> Result<()> {
+pub(crate) async fn maybe_add_additional_transports(
+    context: Context,
+) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    Box::pin(async move {
+        maybe_add_additional_transports_inner(&context)
+            .await
+            .log_err(&context)
+            .ok();
+    })
+}
+
+async fn maybe_add_additional_transports_inner(context: &Context) -> Result<()> {
     let now = time();
+    let mut transport_added = false;
+    info!(context, "dbg maybe_add_additional_transports");
 
     // TODO potentially rename housekeeping_mutex
     let Ok(_housekeeping_lock) = context.housekeeping_mutex.try_lock() else {
         // Housekeeping or automatic relay management is already running in another thread, do nothing.
+        info!(context, "dbg skipping because of taken mutex");
         return Ok(());
     };
     if context
@@ -31,6 +49,7 @@ pub(crate) async fn maybe_add_additional_transports(context: &Context) -> Result
         .await?
         > now.saturating_sub(AUTOMATIC_ADDITION_DEBOUNCE_SECONDS)
     {
+        info!(context, "dbg already ran recently");
         return Ok(());
     }
     context
@@ -43,6 +62,7 @@ pub(crate) async fn maybe_add_additional_transports(context: &Context) -> Result
     // Using `for` instead of `while` to prevent infinite loop
     for _ in 0..NUM_TRANSPORTS_TARGET {
         if context.count_transports().await? >= NUM_TRANSPORTS_TARGET {
+            info!(context, "dbg target reached");
             return Ok(());
         }
 
@@ -70,10 +90,12 @@ pub(crate) async fn maybe_add_additional_transports(context: &Context) -> Result
             );
             return Ok(());
         };
+        info!(context, "dbg from {candidates:?}, chose {domain}");
 
         let param = login_param_from_domain(domain);
         let res = crate::configure::configure(context, &param).await;
         if res.is_err() {
+            info!(context, "dbg error {res:?}");
             context
                 .sql
                 .execute("UPDATE relay_candidates SET last_tried=?", (now,))
@@ -83,6 +105,13 @@ pub(crate) async fn maybe_add_additional_transports(context: &Context) -> Result
         // TODO: Decide whether we want to immediately try again with another relay,
         // if this one failed. If yes, remove the next line.
         res?;
+
+        transport_added = true;
+        info!(context, "dbg success");
+    }
+    if transport_added {
+        info!(context, "dbg restarting");
+        restart_io_if_running_boxed(context.clone()).await;
     }
 
     Ok(())
