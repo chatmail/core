@@ -89,9 +89,7 @@ pub(crate) async fn maybe_add_additional_transports(context: &Context) -> Result
 }
 
 pub(crate) fn login_param_from_domain(domain: &str) -> EnteredLoginParam {
-    // TODO Question: BTW, why is this using OsRng rather than rng()?
-    // I just extracted this function, didn't change the code.
-    let rng = &mut rand::rngs::OsRng.unwrap_err();
+    let rng = &mut rand::rng();
     let username = Alphanumeric.sample_string(rng, 9);
     let addr = username + "@" + domain;
     let password = Alphanumeric.sample_string(rng, 50);
