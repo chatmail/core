@@ -6,7 +6,7 @@ use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::{anyhow, Context as _, Result};
+use anyhow::{Context as _, Result, anyhow};
 use deltachat::constants::DC_VERSION_STR;
 use deltachat_jsonrpc::api::{Accounts, CommandApi};
 use futures_lite::stream::StreamExt;

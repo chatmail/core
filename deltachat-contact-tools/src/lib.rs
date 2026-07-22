@@ -30,12 +30,12 @@
 use std::fmt;
 use std::ops::Deref;
 
-use anyhow::bail;
 use anyhow::Result;
+use anyhow::bail;
 use regex::regex;
 
 mod vcard;
-pub use vcard::{make_vcard, parse_vcard, VcardContact};
+pub use vcard::{VcardContact, make_vcard, parse_vcard};
 
 /// Valid contact address.
 #[derive(Debug, Clone, PartialEq, Eq)]
