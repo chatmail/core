@@ -47,13 +47,13 @@ async fn maybe_add_additional_transports_inner(context: &Context) -> Result<()> 
         return Ok(());
     }
     // TODO uncomment this after I'm done with testing:
-    // if context
-    //     .get_config_bool(Config::AutomaticTransportManagement)
-    //     .await?
-    // {
-    //     info!(context, "dbg automatic transport management disabled");
-    //     return Ok(());
-    // }
+    if context
+        .get_config_bool(Config::AutomaticTransportManagement)
+        .await?
+    {
+        info!(context, "dbg automatic transport management disabled");
+        return Ok(());
+    }
     // Set the config at the beginning to avoid endless loops.
     // Race conditions are not a concern because we locked the mutex.
     context
