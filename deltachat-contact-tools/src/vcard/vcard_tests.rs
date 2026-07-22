@@ -220,7 +220,10 @@ END:VCARD
         assert_eq!(contacts[0].addr, "bob@example.org".to_string());
         assert_eq!(contacts[0].authname, "Bob".to_string());
         assert_eq!(contacts[0].key, None);
-        assert_eq!(contacts[0].profile_image.as_deref().unwrap(), "/9j/4AAQSkZJRgABAQAAAQABAAD/4gIoSUNDX1BST0ZJTEUAAQEAAAIYAAAAAAQwAABtbnRyUkdCIFhZWiAAAAAAAAAAAAAAAABhY3NwAAAAAAAAAAAAAAAAL8bRuAJYoZUYrI4ZY3VWwxw4Ay28AAGBISScmf/2Q==");
+        assert_eq!(
+            contacts[0].profile_image.as_deref().unwrap(),
+            "/9j/4AAQSkZJRgABAQAAAQABAAD/4gIoSUNDX1BST0ZJTEUAAQEAAAIYAAAAAAQwAABtbnRyUkdCIFhZWiAAAAAAAAAAAAAAAABhY3NwAAAAAAAAAAAAAAAAL8bRuAJYoZUYrI4ZY3VWwxw4Ay28AAGBISScmf/2Q=="
+        );
     }
 }
 
@@ -244,7 +247,10 @@ END:VCARD",
     assert_eq!(contacts.len(), 1);
     assert_eq!(&contacts[0].addr, "alice@example.org");
     assert_eq!(&contacts[0].authname, "Alice Wonderland");
-    assert_eq!(contacts[0].key.as_ref().unwrap(), "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    assert_eq!(
+        contacts[0].key.as_ref().unwrap(),
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    );
     assert!(contacts[0].timestamp.is_err());
     assert_eq!(contacts[0].profile_image, None);
 }
@@ -272,9 +278,15 @@ END:VCARD",
     assert_eq!(contacts.len(), 1);
     assert_eq!(&contacts[0].addr, "alice@example.org");
     assert_eq!(&contacts[0].authname, "Alice");
-    assert_eq!(contacts[0].key.as_ref().unwrap(), "xsaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==");
+    assert_eq!(
+        contacts[0].key.as_ref().unwrap(),
+        "xsaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa=="
+    );
     assert!(contacts[0].timestamp.is_err());
-    assert_eq!(contacts[0].profile_image.as_ref().unwrap(), "/9aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Z");
+    assert_eq!(
+        contacts[0].profile_image.as_ref().unwrap(),
+        "/9aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Z"
+    );
 }
 
 #[test]

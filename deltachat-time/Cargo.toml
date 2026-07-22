@@ -2,7 +2,7 @@
 name = "deltachat-time"
 version = "1.0.0"
 description = "Time-related tools"
-edition = "2021"
+edition = "2024"
 license = "MPL-2.0"
 
 [dependencies]
