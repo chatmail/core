@@ -11,7 +11,7 @@ use deltachat_contact_tools::{ContactAddress, addr_normalize, may_be_valid_addr}
 use percent_encoding::{NON_ALPHANUMERIC, percent_decode_str, percent_encode};
 use serde::Deserialize;
 
-use crate::automatic_transport_management::login_param_from_host;
+use crate::automatic_relay_management::login_param_from_host;
 use crate::config::Config;
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
