@@ -586,7 +586,8 @@ impl Context {
         if let Some(limit) = metadata_limit {
             return Ok(limit);
         }
-        if let Some(limit) = crate::provider::legacy_settings_for_addr(&param.addr).max_smtp_rcpt_to
+        if let Some(limit) =
+            crate::provider::legacy_settings_for_addr(&param.addr)?.max_smtp_rcpt_to
         {
             return Ok(limit);
         }
