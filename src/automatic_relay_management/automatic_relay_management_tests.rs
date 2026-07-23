@@ -32,7 +32,7 @@ async fn test_load_transport_candidates_single() -> Result<()> {
         )
         .await?;
 
-    let candidates = load_transport_candidates(&t, now).await?;
+    let candidates = load_relay_candidates(&t, now).await?;
 
     assert_eq!(candidates, vec!["never_tried.example".to_string()]);
 
@@ -54,7 +54,7 @@ async fn test_load_transport_candidates_multiple() -> Result<()> {
             .await?;
     }
 
-    let mut candidates = load_transport_candidates(&t, now).await?;
+    let mut candidates = load_relay_candidates(&t, now).await?;
     candidates.sort();
 
     assert_eq!(
@@ -78,10 +78,10 @@ async fn test_maybe_add_additional_transports_mutex_held() -> Result<()> {
 
     let transports_before = t.count_transports().await?;
 
-    maybe_add_additional_transports_inner(&t, false).await?;
+    maybe_add_additional_relays_inner(&t, false).await?;
 
     let config_after = t
-        .get_config_i64(Config::LastAutomaticTransportManagement)
+        .get_config_i64(Config::LastAutomaticRelayManagement)
         .await?;
     let transports_after = t.count_transports().await?;
 
@@ -98,17 +98,17 @@ async fn test_maybe_add_additional_transports_debounce() -> Result<()> {
 
     // Pretend automatic transport management just ran.
     t.set_config_internal(
-        Config::LastAutomaticTransportManagement,
+        Config::LastAutomaticRelayManagement,
         Some(&some_seconds_ago.to_string()),
     )
     .await?;
 
     let transports_before = t.count_transports().await?;
 
-    maybe_add_additional_transports_inner(&t, false).await?;
+    maybe_add_additional_relays_inner(&t, false).await?;
 
     let config_after = t
-        .get_config_i64(Config::LastAutomaticTransportManagement)
+        .get_config_i64(Config::LastAutomaticRelayManagement)
         .await?;
     let transports_after = t.count_transports().await?;
 
@@ -134,10 +134,10 @@ async fn test_maybe_add_additional_transports_add_one() -> Result<()> {
     let transports_before = t.count_transports().await?;
 
     let skip_network = true;
-    maybe_add_additional_transports_inner(&t, skip_network).await?;
+    maybe_add_additional_relays_inner(&t, skip_network).await?;
 
     let config_after = t
-        .get_config_i64(Config::LastAutomaticTransportManagement)
+        .get_config_i64(Config::LastAutomaticRelayManagement)
         .await?;
     assert!(config_after >= now);
 

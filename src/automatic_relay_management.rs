@@ -12,56 +12,50 @@ use crate::{configure::EnteredLoginParam, context::Context, tools::time};
 
 /// The target number of transports.
 const NUM_TRANSPORTS_TARGET: usize = 3;
-/// How often we want to try adding new transports.
+/// How often we want to try adding new relays.
 const AUTOMATIC_ADDITION_DEBOUNCE_SECONDS: i64 = 60 * 60; // one hour
-/// How long we ignore a transport candidate after failing to connect to it:
-const BACKOFF_PERIOD_FOR_NOT_WORKING_TRANSPORT: i64 = 60 * 60 * 24 * 7; // one week
+/// How long we ignore a relay candidate after failing to connect to it:
+const BACKOFF_PERIOD_FOR_NOT_WORKING_RELAY: i64 = 60 * 60 * 24 * 7; // one week
 
-pub(crate) fn maybe_add_additional_transports(
+pub(crate) fn maybe_add_additional_relays(
     context: Context,
 ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     // We need to Box::pin the future because it wouldn't compile otherwise
     // because Rust async doesn't support recursion:
-    // `maybe_add_additional_transports_inner()` calls `restart_io_if_running()`,
+    // `maybe_add_additional_relays_inner()` calls `restart_io_if_running()`,
     // which (via several other functions) calls `imap_loop()`,
-    // which (via several other functions) calls `maybe_add_additional_transports()`
+    // which (via several other functions) calls `maybe_add_additional_relays()`
     Box::pin(async move {
         let skip_network = false;
-        maybe_add_additional_transports_inner(&context, skip_network)
+        maybe_add_additional_relays_inner(&context, skip_network)
             .await
             .log_err(&context)
             .ok();
     })
 }
 
-async fn maybe_add_additional_transports_inner(
-    context: &Context,
-    skip_network: bool,
-) -> Result<()> {
+async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool) -> Result<()> {
     let now = time();
-    let mut transport_added = false;
+    let mut relay_added = false;
 
     let Ok(_housekeeping_lock) = context.housekeeping_mutex.try_lock() else {
         // Housekeeping or automatic relay management is already running in another thread, do nothing.
         return Ok(());
     };
     let last_timestamp = context
-        .get_config_i64(Config::LastAutomaticTransportManagement)
+        .get_config_i64(Config::LastAutomaticRelayManagement)
         .await?;
     if last_timestamp > now.saturating_sub(AUTOMATIC_ADDITION_DEBOUNCE_SECONDS) {
         if last_timestamp > now {
             // The timestamp is in the future. Cap it to the current time.
             context
-                .set_config_internal(
-                    Config::LastAutomaticTransportManagement,
-                    Some(&now.to_string()),
-                )
+                .set_config_internal(Config::LastAutomaticRelayManagement, Some(&now.to_string()))
                 .await?;
         }
         return Ok(());
     }
     if context
-        .get_config_bool(Config::AutomaticTransportManagement)
+        .get_config_bool(Config::AutomaticRelayManagement)
         .await?
     {
         return Ok(());
@@ -69,10 +63,7 @@ async fn maybe_add_additional_transports_inner(
     // Set the config at the beginning to avoid endless loops.
     // Race conditions are not a concern because we locked the mutex.
     context
-        .set_config_internal(
-            Config::LastAutomaticTransportManagement,
-            Some(&now.to_string()),
-        )
+        .set_config_internal(Config::LastAutomaticRelayManagement, Some(&now.to_string()))
         .await?;
 
     // Using `for` instead of `while` to prevent infinite loop
@@ -83,7 +74,7 @@ async fn maybe_add_additional_transports_inner(
 
         // First, query all candidates that were not tried since `BACKOFF_PERIOD_FOR_NOT_WORKING_TRANSPORT` seconds.
         // Hosts that are already used are excluded.
-        let candidates = load_transport_candidates(context, now).await?;
+        let candidates = load_relay_candidates(context, now).await?;
 
         let Some(host) = candidates.choose(&mut rand::rng()) else {
             info!(
@@ -104,30 +95,27 @@ async fn maybe_add_additional_transports_inner(
         if let Err(e) = res {
             warn!(
                 context,
-                "Failed to automatically add a transport {host}: {e:?}."
+                "Failed to automatically add a relay {host}: {e:?}."
             );
             context
                 .sql
                 .execute("UPDATE relay_candidates SET last_tried=?", (now,))
                 .await?;
         }
-        info!(context, "Successfully added transport {host}");
+        info!(context, "Successfully added relay {host}");
 
-        transport_added = true;
+        relay_added = true;
     }
-    if transport_added {
-        info!(context, "Restarting IO after transports addition");
+    if relay_added {
+        info!(context, "Restarting IO after relay addition");
         context.restart_io_if_running().await;
     }
 
     Ok(())
 }
 
-async fn load_transport_candidates(
-    context: &Context,
-    now: i64,
-) -> Result<Vec<String>, anyhow::Error> {
-    let cutoff_timestamp = now.saturating_sub(BACKOFF_PERIOD_FOR_NOT_WORKING_TRANSPORT);
+async fn load_relay_candidates(context: &Context, now: i64) -> Result<Vec<String>, anyhow::Error> {
+    let cutoff_timestamp = now.saturating_sub(BACKOFF_PERIOD_FOR_NOT_WORKING_RELAY);
     let candidates: Vec<String> = context
         .sql
         .query_map_vec(
@@ -166,4 +154,4 @@ pub(crate) fn login_param_from_host(host: &str) -> EnteredLoginParam {
 }
 
 #[cfg(test)]
-mod automatic_transport_management_tests;
+mod automatic_relay_management_tests;

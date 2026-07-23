@@ -355,10 +355,10 @@ pub enum Config {
 
     /// Timestamp of the last call to
     /// [`crate::automatic_transport_management::maybe_add_additional_transports`]
-    LastAutomaticTransportManagement,
+    LastAutomaticRelayManagement,
 
     /// Whether to automatically add/remove transports
-    AutomaticTransportManagement,
+    AutomaticRelayManagement,
 
     /// Whether to avoid using IMAP IDLE even if the server supports it.
     ///
