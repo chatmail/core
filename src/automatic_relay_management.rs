@@ -38,7 +38,7 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
     let now = time();
     let mut relay_added = false;
 
-    let Ok(_housekeeping_lock) = context.housekeeping_mutex.try_lock() else {
+    let Ok(_lock) = context.background_task_mutex.try_lock() else {
         // Housekeeping or automatic relay management is already running in another thread, do nothing.
         return Ok(());
     };
@@ -86,7 +86,7 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
 
         info!(
             context,
-            "Tring to automatically add relay {host} (there were {} candidates)",
+            "Trying to automatically add relay {host} (there were {} candidates)",
             candidates.len(),
         );
 
