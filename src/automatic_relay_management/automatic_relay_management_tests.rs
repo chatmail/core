@@ -96,7 +96,7 @@ async fn test_maybe_add_additional_relays_mutex_held() -> Result<()> {
 
     // Hold the housekeeping mutex ourselves, simulating another task
     // already running housekeeping or relay management.
-    let _lock = t.housekeeping_mutex.lock().await;
+    let _lock = t.background_task_mutex.lock().await;
 
     assert_automatic_relay_management_does_nothing(t).await;
 

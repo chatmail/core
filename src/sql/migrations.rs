@@ -2539,7 +2539,7 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
                 transaction.execute(
                     "CREATE TABLE relay_candidates(
                         host TEXT PRIMARY KEY NOT NULL,
-                        last_tried TEXT NOT NULL DEFAULT 0
+                        last_tried INTEGER NOT NULL DEFAULT 0
                     ) STRICT",
                     (),
                 )?;

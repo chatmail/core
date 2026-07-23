@@ -234,7 +234,7 @@ pub struct InnerContext {
     /// Mutex to prevent a race condition when a "your pw is wrong" warning is sent, resulting in multiple messages being sent.
     pub(crate) wrong_pw_warning_mutex: Mutex<()>,
     /// Mutex to prevent running housekeeping from multiple threads at once.
-    pub(crate) housekeeping_mutex: Mutex<()>,
+    pub(crate) background_task_mutex: Mutex<()>,
 
     /// Mutex to prevent multiple IMAP loops from fetching the messages at once.
     ///
@@ -483,7 +483,7 @@ impl Context {
             running_state: RwLock::new(Default::default()),
             sql: Sql::new(dbfile),
             wrong_pw_warning_mutex: Mutex::new(()),
-            housekeeping_mutex: Mutex::new(()),
+            background_task_mutex: Mutex::new(()),
             fetch_msgs_mutex: Mutex::new(()),
             translated_stockstrings: stockstrings,
             events,
