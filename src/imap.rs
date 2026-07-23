@@ -1468,7 +1468,7 @@ impl Session {
 
     /// Stores device token into /private/devicetoken IMAP METADATA of the Inbox.
     pub(crate) async fn register_token(&mut self, context: &Context) -> Result<()> {
-        if context.push_subscribed.load(Ordering::Relaxed) {
+        if self.push_token_registered {
             return Ok(());
         }
 
@@ -1478,7 +1478,7 @@ impl Session {
             return Ok(());
         };
 
-        if self.can_metadata() && self.can_push() {
+        if self.can_metadata() {
             info!(
                 context,
                 "Transport {transport_id}: Subscribing for push notifications."
@@ -1496,9 +1496,6 @@ impl Session {
                 let encrypted_device_token = encrypt_device_token(&device_token)
                     .context("Failed to encrypt device token")?;
 
-                // We expect that the server supporting `XDELTAPUSH` capability
-                // has non-synchronizing literals support as well:
-                // <https://www.rfc-editor.org/rfc/rfc7888>.
                 let encrypted_device_token_len = encrypted_device_token.len();
 
                 // Store device token saved on the server
@@ -1535,17 +1532,27 @@ impl Session {
                 new_encrypted_device_token = old_encrypted_device_token;
             }
 
-            // Store new encrypted device token on the server
-            // even if it is the same as the old one.
+            // Attempt to store new encrypted device token on the server
+            // irrespective if the token changed.
+            //
+            // Chatmail relays accept the token and forward it to notifications server
+            // when a new message arrives.
+            // Other servers may reject the metadata entry
+            // or fail because RFC7888 is not supported,
+            // in which case the error is logged and ignored.
             if let Some(encrypted_device_token) = new_encrypted_device_token {
-                self.run_command_and_check_ok(&format_setmetadata(
-                    "INBOX",
-                    &encrypted_device_token,
-                ))
-                .await
-                .context("SETMETADATA command failed")?;
-
-                context.push_subscribed.store(true, Ordering::Relaxed);
+                if let Err(err) = self
+                    .run_command_and_check_ok(&format_setmetadata("INBOX", &encrypted_device_token))
+                    .await
+                {
+                    warn!(
+                        context,
+                        "Transport {transport_id}: Failed to store device token: {err:#}."
+                    );
+                } else {
+                    self.push_token_registered = true;
+                    context.push_subscribed.store(true, Ordering::Relaxed);
+                }
             }
         }
 

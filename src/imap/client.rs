@@ -82,7 +82,6 @@ pub(crate) async fn identify_server(
         can_check_quota: caps.has_str("QUOTA"),
         can_metadata: caps.has_str("METADATA"),
         can_compress: caps.has_str("COMPRESS=DEFLATE"),
-        can_push: caps.has_str("XDELTAPUSH"),
         is_chatmail: caps.has_str("XCHATMAIL"),
         server_id,
     };

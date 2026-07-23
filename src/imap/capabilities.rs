@@ -25,13 +25,6 @@ pub(crate) struct Capabilities {
     /// <https://tools.ietf.org/html/rfc4978>
     pub can_compress: bool,
 
-    /// True if the server supports XDELTAPUSH capability.
-    /// This capability means setting /private/devicetoken IMAP METADATA
-    /// on the INBOX results in new mail notifications
-    /// via notifications.delta.chat service.
-    /// This is supported by <https://github.com/deltachat/chatmail>
-    pub can_push: bool,
-
     /// True if the server has an XCHATMAIL capability
     /// indicating that it is a <https://github.com/deltachat/chatmail> server.
     ///
