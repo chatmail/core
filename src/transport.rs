@@ -831,9 +831,7 @@ pub(crate) async fn sync_transports(
 
 /// Same as `context.restart_io_if_running()`, but `Box::pin`ed and with a `+ Send` bound,
 /// so that it can be called recursively.
-pub(crate) fn restart_io_if_running_boxed(
-    context: Context,
-) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+fn restart_io_if_running_boxed(context: Context) -> Pin<Box<dyn Future<Output = ()> + Send>> {
     Box::pin(async move { context.restart_io_if_running().await })
 }
 

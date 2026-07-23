@@ -593,9 +593,7 @@ impl CommandApi {
     /// UI implementations must use [`Self::set_transport_unpublished`] instead.
     async fn delete_transport(&self, account_id: u32, addr: String) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
-        ctx.delete_transport(&addr)
-            .await
-            .context("delete_transport")
+        ctx.delete_transport(&addr).await
     }
 
     /// Change whether the transport is unpublished.

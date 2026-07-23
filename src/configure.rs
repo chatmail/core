@@ -223,45 +223,39 @@ impl Context {
         let removed_transport_id = self
             .sql
             .transaction(|transaction| {
-                let primary_addr = transaction
-                    .query_row(
-                        "SELECT value FROM config WHERE keyname='configured_addr'",
-                        (),
-                        |row| {
-                            let addr: String = row.get(0)?;
-                            Ok(addr)
-                        },
-                    )
-                    .context("querying addr")?;
+                let primary_addr = transaction.query_row(
+                    "SELECT value FROM config WHERE keyname='configured_addr'",
+                    (),
+                    |row| {
+                        let addr: String = row.get(0)?;
+                        Ok(addr)
+                    },
+                )?;
 
                 if primary_addr == addr {
                     bail!("Cannot delete primary transport");
                 }
-                let (transport_id, add_timestamp) = transaction
-                    .query_row(
-                        "DELETE FROM transports WHERE addr=? RETURNING id, add_timestamp",
-                        (addr,),
-                        |row| {
-                            let id: u32 = row.get(0)?;
-                            let add_timestamp: i64 = row.get(1)?;
-                            Ok((id, add_timestamp))
-                        },
-                    )
-                    .with_context(|| format!("Deleting transport, addr: {addr}"))?;
+                let (transport_id, add_timestamp) = transaction.query_row(
+                    "DELETE FROM transports WHERE addr=? RETURNING id, add_timestamp",
+                    (addr,),
+                    |row| {
+                        let id: u32 = row.get(0)?;
+                        let add_timestamp: i64 = row.get(1)?;
+                        Ok((id, add_timestamp))
+                    },
+                )?;
 
                 // Removal timestamp should not be lower than addition timestamp
                 // to be accepted by other devices when synced.
                 let remove_timestamp = std::cmp::max(now, add_timestamp);
 
-                transaction
-                    .execute(
-                        "INSERT INTO removed_transports (addr, remove_timestamp)
+                transaction.execute(
+                    "INSERT INTO removed_transports (addr, remove_timestamp)
                      VALUES (?, ?)
                      ON CONFLICT (addr)
                      DO UPDATE SET remove_timestamp = excluded.remove_timestamp",
-                        (addr, remove_timestamp),
-                    )
-                    .context("Inserting into removed transport")?;
+                    (addr, remove_timestamp),
+                )?;
 
                 Ok(transport_id)
             })
@@ -599,7 +593,6 @@ async fn get_configured_param(
     Ok(configured_login_param)
 }
 
-// TODO maybe this function name should be changed
 pub(crate) async fn configure(
     ctx: &Context,
     param: &EnteredLoginParam,

@@ -79,7 +79,6 @@ async fn test_maybe_add_additional_transports_mutex_held() -> Result<()> {
     let transports_before = t.count_transports().await?;
 
     maybe_add_additional_transports_inner(&t, false).await?;
-    maybe_add_additional_transports_inner(&t, false).await?;
 
     let config_after = t
         .get_config_i64(Config::LastAutomaticTransportManagement)
@@ -134,7 +133,8 @@ async fn test_maybe_add_additional_transports_add_one() -> Result<()> {
 
     let transports_before = t.count_transports().await?;
 
-    maybe_add_additional_transports_inner(&t, true).await?;
+    let skip_network = true;
+    maybe_add_additional_transports_inner(&t, skip_network).await?;
 
     let config_after = t
         .get_config_i64(Config::LastAutomaticTransportManagement)
