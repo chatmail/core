@@ -350,7 +350,12 @@ impl Context {
         };
         self.set_config_internal(Config::NotifyAboutWrongPw, Some("1"))
             .await?;
-        apply_legacy_domain_config_defaults(self, &param.addr).await?;
+        if provider::legacy_settings_for_addr(&param.addr)?.worse_media_quality
+            && !self.config_exists(Config::MediaQuality).await?
+        {
+            self.set_config_ex(Nosync, Config::MediaQuality, Some("1"))
+                .await?;
+        }
         Ok(())
     }
 
@@ -391,24 +396,6 @@ impl Context {
     }
 }
 
-/// Applies a few select non-default config values that used to come from provider database.
-async fn apply_legacy_domain_config_defaults(context: &Context, addr: &str) -> Result<()> {
-    let settings = provider::legacy_settings_for_addr(addr);
-
-    if settings.disable_mdns && !context.config_exists(Config::MdnsEnabled).await? {
-        context
-            .set_config_ex(Nosync, Config::MdnsEnabled, Some("0"))
-            .await?;
-    }
-
-    if settings.worse_media_quality && !context.config_exists(Config::MediaQuality).await? {
-        context
-            .set_config_ex(Nosync, Config::MediaQuality, Some("1"))
-            .await?;
-    }
-    Ok(())
-}
-
 /// Retrieves data from autoconfig
 /// to transform user-entered login parameters into complete configuration.
 async fn get_configured_param(
@@ -442,13 +429,11 @@ async fn get_configured_param(
         && param.smtp.security == Socket::Automatic
         && param.smtp.user.is_empty()
     {
-        // no advanced parameters entered by the user: do Autoconfig
-        // except for a few known legacy-domain overrides.
-        let legacy_servers = provider::legacy_settings_for_addr(&param.addr).autoconfig_servers;
-        if legacy_servers.is_some() {
-            legacy_servers
-        } else {
-            get_autoconfig(ctx, param, &param_domain).await
+        // No advanced parameters entered by the user:
+        // do Autoconfig unless the domain has hard-coded legacy servers.
+        match provider::legacy_settings_for_addr(&param.addr)?.autoconfig_servers {
+            Some(servers) => Some(servers),
+            None => get_autoconfig(ctx, param, &param_domain).await,
         }
     } else {
         None
@@ -548,7 +533,7 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<()> {
 
     let configured_param = get_configured_param(ctx, param).await?;
     let proxy_config = ProxyConfig::load(ctx).await?;
-    let strict_tls = configured_param.strict_tls(proxy_config.is_some());
+    let strict_tls = configured_param.strict_tls(proxy_config.is_some())?;
 
     progress!(ctx, 550);
 

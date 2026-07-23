@@ -461,17 +461,17 @@ impl ConfiguredLoginParam {
         Ok(serde_json::to_string(&json)?)
     }
 
-    pub(crate) fn strict_tls(&self, connected_through_proxy: bool) -> bool {
+    pub(crate) fn strict_tls(&self, connected_through_proxy: bool) -> Result<bool> {
         let disable_strict_tls =
-            crate::provider::legacy_settings_for_addr(&self.addr).disable_strict_tls;
-        match self.certificate_checks {
+            crate::provider::legacy_settings_for_addr(&self.addr)?.disable_strict_tls;
+        Ok(match self.certificate_checks {
             ConfiguredCertificateChecks::OldAutomatic if disable_strict_tls => false,
             ConfiguredCertificateChecks::OldAutomatic => connected_through_proxy,
             ConfiguredCertificateChecks::Automatic => !disable_strict_tls,
             ConfiguredCertificateChecks::Strict => true,
             ConfiguredCertificateChecks::AcceptInvalidCertificates
             | ConfiguredCertificateChecks::AcceptInvalidCertificates2 => false,
-        }
+        })
     }
 }
 

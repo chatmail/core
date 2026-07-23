@@ -99,7 +99,7 @@ impl Smtp {
             &lp.smtp_password,
             &proxy_config,
             &lp.addr,
-            lp.strict_tls(proxy_config.is_some()),
+            lp.strict_tls(proxy_config.is_some())?,
         )
         .await
     }
