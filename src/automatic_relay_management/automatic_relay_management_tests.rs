@@ -78,9 +78,10 @@ async fn assert_automatic_relay_management_does_nothing(t: &TestContext) {
         .unwrap();
 
     let skip_network = false; // No need to skip network, nothing is supposed to happen
-    maybe_add_additional_relays_inner(t, skip_network)
+    let relay_added = maybe_add_additional_relays_inner(t, skip_network)
         .await
         .unwrap();
+    assert_eq!(relay_added, false);
 
     let config_after = t
         .get_config_i64(Config::LastAutomaticRelayManagement)
@@ -148,7 +149,8 @@ async fn test_maybe_add_additional_relays_add_one() -> Result<()> {
     let transports_before = t.count_transports().await?;
 
     let skip_network = true;
-    maybe_add_additional_relays_inner(t, skip_network).await?;
+    let relay_added = maybe_add_additional_relays_inner(t, skip_network).await?;
+    assert!(relay_added);
 
     let config_after = t
         .get_config_i64(Config::LastAutomaticRelayManagement)
@@ -178,7 +180,8 @@ async fn test_maybe_add_additional_relays_add_multiple() -> Result<()> {
     }
 
     let skip_network = true;
-    maybe_add_additional_relays_inner(t, skip_network).await?;
+    let relay_added = maybe_add_additional_relays_inner(t, skip_network).await?;
+    assert!(relay_added);
 
     let config_after = t
         .get_config_i64(Config::LastAutomaticRelayManagement)
@@ -211,7 +214,8 @@ async fn test_maybe_add_additional_relays_failure() -> Result<()> {
 
     // Don't skip network, since we want the relay addition to fail
     let skip_network = false;
-    maybe_add_additional_relays_inner(t, skip_network).await?;
+    let relay_added = maybe_add_additional_relays_inner(t, skip_network).await?;
+    assert_eq!(relay_added, false);
 
     // The config is still updated:
     let config_after = t
