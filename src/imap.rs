@@ -734,8 +734,7 @@ impl Imap {
         };
 
         let actually_download_messages_future = async {
-            session
-                .fetch_many_msgs(context, folder, uids_fetch, &uid_message_ids, sender)
+            Box::pin(session.fetch_many_msgs(context, folder, uids_fetch, &uid_message_ids, sender))
                 .await
                 .context("fetch_many_msgs")
         };
