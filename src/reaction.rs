@@ -27,6 +27,7 @@ use crate::constants::Chattype;
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::events::EventType;
+use crate::log::warn;
 use crate::message::{Message, MsgId, rfc724_mid_exists};
 use crate::param::Param;
 
@@ -435,6 +436,42 @@ pub async fn get_msg_reactions(context: &Context, msg_id: MsgId) -> Result<React
         .await?;
     reactions.retain(|_contact, reaction| !reaction.is_empty());
     Ok(Reactions { reactions })
+}
+
+/// Sends out accumulated reactions
+/// for all broadcast channels with reactions in `reactions_need_broadcast`.
+///
+/// For every affected `chat_id`,
+/// a single hidden message is sent to all subscribers containing the full, current reaction state (not a diff)
+/// for every message that received a reaction change since the last broadcast.
+pub(crate) async fn broadcast_reactions_for_all_chats(context: &Context) -> Result<()> {
+    let chat_ids: Vec<ChatId> = context
+        .sql
+        .query_map_collect(
+            "SELECT DISTINCT chat_id FROM reactions_need_broadcast",
+            (),
+            |row| {
+                let chat_id: ChatId = row.get(0)?;
+                Ok(chat_id)
+            },
+        )
+        .await?;
+
+    for chat_id in chat_ids {
+        if let Err(err) = broadcast_reactions_for_one_chat(context, chat_id).await {
+            warn!(
+                context,
+                "Failed to broadcast reactions for chat {chat_id}: {err:#}."
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Sends out accumulated reactions for a single broadcast channel
+async fn broadcast_reactions_for_one_chat(_context: &Context, _chat_id: ChatId) -> Result<()> {
+    // TODO
+    Ok(())
 }
 
 impl Chat {
