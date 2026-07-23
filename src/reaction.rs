@@ -23,9 +23,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::chat::{Chat, ChatId, send_msg};
 use crate::chatlist_events;
+use crate::constants::Chattype;
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::events::EventType;
+use crate::log::warn;
 use crate::message::{Message, MsgId, rfc724_mid_exists};
 use crate::param::Param;
 
@@ -188,6 +190,19 @@ async fn set_msg_id_reaction(
                 .set_i64(Param::LastReactionContactId, i64::from(contact_id.to_u32()));
             chat.update_param(context).await?;
         }
+    }
+
+    let chat = Chat::load_from_db(context, chat_id).await?;
+    if chat.typ == Chattype::OutBroadcast {
+        context
+            .sql
+            .execute(
+                "INSERT INTO reactions_need_broadcast (chat_id, msg_id)
+                 VALUES (?1, ?2)
+                 ON CONFLICT(msg_id, contact_id) DO NOTHING;",
+                (chat_id, msg_id),
+            )
+            .await?;
     }
 
     context.emit_event(EventType::ReactionsChanged {
@@ -421,6 +436,103 @@ pub async fn get_msg_reactions(context: &Context, msg_id: MsgId) -> Result<React
         .await?;
     reactions.retain(|_contact, reaction| !reaction.is_empty());
     Ok(Reactions { reactions })
+}
+
+/// Sends out accumulated reactions
+/// for all broadcast channels with reactions in `reactions_need_broadcast`.
+///
+/// For every affected `chat_id`,
+/// a single hidden message is sent to all subscribers containing the full, current reaction state (not a diff)
+/// for every message that received a reaction change since the last broadcast.
+pub(crate) async fn broadcast_reactions_for_all_chats(context: &Context) -> Result<()> {
+    let chat_ids: Vec<ChatId> = context
+        .sql
+        .query_map_collect(
+            "SELECT DISTINCT chat_id FROM reactions_need_broadcast",
+            (),
+            |row| {
+                let chat_id: ChatId = row.get(0)?;
+                Ok(chat_id)
+            },
+        )
+        .await?;
+
+    for chat_id in chat_ids {
+        if let Err(err) = broadcast_reactions_for_one_chat(context, chat_id).await {
+            warn!(
+                context,
+                "Failed to broadcast reactions for chat {chat_id}: {err:#}."
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Sends out accumulated reactions for a single broadcast channel
+async fn broadcast_reactions_for_one_chat(context: &Context, chat_id: ChatId) -> Result<()> {
+    let msg_ids: Vec<MsgId> = context
+        .sql
+        .query_map_collect(
+            "SELECT DISTINCT msg_id FROM reactions_need_broadcast WHERE chat_id=?",
+            (chat_id,),
+            |row| {
+                let msg_id: MsgId = row.get(0)?;
+                Ok(msg_id)
+            },
+        )
+        .await?;
+
+    context
+        .sql
+        .execute(
+            "DELETE FROM reactions_need_broadcast WHERE chat_id=?",
+            (chat_id,),
+        )
+        .await?;
+
+    let mut messages: Vec<BroadcastReactionsMessage> = Vec::new();
+    for msg_id in &msg_ids {
+        let Some(msg) = Message::load_from_db_optional(context, *msg_id).await? else {
+            continue;
+        };
+        let reactions = get_msg_reactions(context, *msg_id).await?;
+        let entries: Vec<BroadcastReactionsEntry> = reactions
+            .emoji_sorted_by_frequency()
+            .into_iter()
+            .map(|(emoji, count)| BroadcastReactionsEntry { emoji, count })
+            .collect();
+        messages.push(BroadcastReactionsMessage {
+            id: msg.rfc724_mid,
+            reactions: entries, // can be empty if all reactions were removed
+        });
+    }
+    if messages.is_empty() {
+        return Ok(());
+    }
+
+    let payload = BroadcastReactionsPayload { messages };
+    let json = serde_json::to_string(&payload)?;
+    let mut msg = Message::new_text(json); // TOOD: maybe json is better put to the header
+    msg.hidden = true;
+    send_msg(context, chat_id, &mut msg).await?;
+
+    Ok(())
+}
+
+/// Wire format for accumulated reactions
+#[derive(Debug, Serialize, Deserialize)]
+struct BroadcastReactionsPayload {
+    messages: Vec<BroadcastReactionsMessage>,
+}
+#[derive(Debug, Serialize, Deserialize)]
+struct BroadcastReactionsMessage {
+    id: String,
+    reactions: Vec<BroadcastReactionsEntry>,
+}
+#[derive(Debug, Serialize, Deserialize)]
+struct BroadcastReactionsEntry {
+    emoji: String,
+    count: usize,
 }
 
 impl Chat {

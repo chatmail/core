@@ -961,6 +961,12 @@ impl Context {
                 .to_string(),
         );
         res.insert(
+            "last_reactions_broadcast",
+            self.get_config_int(Config::LastReactionsBroadcast)
+                .await?
+                .to_string(),
+        );
+        res.insert(
             "last_cant_decrypt_outgoing_msgs",
             self.get_config_int(Config::LastCantDecryptOutgoingMsgs)
                 .await?

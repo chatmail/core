@@ -349,6 +349,9 @@ pub enum Config {
     /// Timestamp of the last time housekeeping was run
     LastHousekeeping,
 
+    /// Timestamp of the last time accumulated broadcast channel reactions were sent
+    LastReactionsBroadcast,
+
     /// Timestamp of the last `CantDecryptOutgoingMsgs` notification.
     LastCantDecryptOutgoingMsgs,
 

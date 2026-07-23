@@ -2675,10 +2675,11 @@ async fn prepare_send_msg(
         // from the chat.
         CantSendReason::NotAMember => msg.param.get_cmd() == SystemMessage::MemberRemovedFromGroup,
         CantSendReason::InBroadcast => {
-            matches!(
-                msg.param.get_cmd(),
-                SystemMessage::MemberRemovedFromGroup | SystemMessage::SecurejoinMessage
-            )
+            msg.param.get_int(Param::Reaction).unwrap_or_default() != 0
+                || matches!(
+                    msg.param.get_cmd(),
+                    SystemMessage::MemberRemovedFromGroup | SystemMessage::SecurejoinMessage
+                )
         }
         CantSendReason::MissingKey => msg
             .param
