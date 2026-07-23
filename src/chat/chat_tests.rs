@@ -6576,3 +6576,34 @@ async fn test_unpromoted_group_start_message() -> Result<()> {
 
     Ok(())
 }
+
+/// Tests that outer To header is ignored for broadcast messages.
+///
+/// Broadcast messages have no recipients in the To field,
+/// but this does not mean that outer To field should be used.
+///
+/// With RFC 9788 header protection all outer headers should be ignored.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_broadcast_message_replaced_to() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_broadcast_id = create_broadcast(alice, "Channel".to_string()).await?;
+    let qr = get_securejoin_qr(alice, Some(alice_broadcast_id))
+        .await
+        .unwrap();
+    let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
+
+    let mut sent = alice.send_text(alice_broadcast_id, "Hello!").await;
+    sent.payload = sent
+        .payload
+        .replace("To: ", "To: mallory@example.org\r\nX-Foobar: ");
+    let bob_msg = bob.recv_msg(&sent).await;
+
+    // The message should be assigned to the broadcast chat
+    // and not to some ad hoc group with mallory@example.org
+    assert_eq!(bob_msg.chat_id, bob_chat_id);
+
+    Ok(())
+}

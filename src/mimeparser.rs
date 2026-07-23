@@ -1739,6 +1739,10 @@ impl MimeMessage {
                 .extract_if(|k, _v| has_header_protection || is_protected(k))
                 .map(|(k, _v)| k.to_string()),
         );
+
+        if has_header_protection {
+            *chat_disposition_notification_to = None;
+        }
         for field in fields {
             // lowercasing all headers is technically not correct, but makes things work better
             let key = field.get_key().to_lowercase();
@@ -1755,20 +1759,20 @@ impl MimeMessage {
             }
         }
         let recipients_new = get_recipients(fields);
-        if !recipients_new.is_empty() {
+        if has_header_protection || !recipients_new.is_empty() {
             *recipients = recipients_new;
         }
         let past_members_addresses =
             get_all_addresses_from_header(fields, "chat-group-past-members");
-        if !past_members_addresses.is_empty() {
+        if has_header_protection || !past_members_addresses.is_empty() {
             *past_members = past_members_addresses;
         }
         let from_new = get_from(fields);
-        if from_new.is_some() {
+        if has_header_protection || from_new.is_some() {
             *from = from_new;
         }
         let list_post_new = get_list_post(fields);
-        if list_post_new.is_some() {
+        if has_header_protection || list_post_new.is_some() {
             *list_post = list_post_new;
         }
     }
