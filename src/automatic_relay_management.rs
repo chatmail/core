@@ -144,7 +144,7 @@ pub(crate) fn login_param_from_host(host: &str) -> EnteredLoginParam {
     // 22 * log2(26 * 2 + 10) = 130 bits of entropy
     let password = Alphanumeric.sample_string(rng, 22);
 
-    let param = EnteredLoginParam {
+    EnteredLoginParam {
         addr,
         imap: EnteredImapLoginParam {
             password,
@@ -152,8 +152,7 @@ pub(crate) fn login_param_from_host(host: &str) -> EnteredLoginParam {
         },
         smtp: Default::default(),
         certificate_checks: EnteredCertificateChecks::Strict,
-    };
-    param
+    }
 }
 
 #[cfg(test)]
