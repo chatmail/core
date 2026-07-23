@@ -8,7 +8,7 @@ use tokio::time::timeout;
 use super::Imap;
 use super::session::Session;
 use crate::context::Context;
-use crate::log::{LogExt as _, warn};
+use crate::log::warn;
 use crate::net::TIMEOUT;
 use crate::tools::{self, time_elapsed};
 
@@ -56,7 +56,6 @@ impl Session {
         tokio::task::spawn(
             crate::automatic_transport_management::maybe_add_additional_transports(context.clone()),
         );
-        info!(context, "dbg spawned transports task");
 
         let mut handle = self.inner.idle();
         handle

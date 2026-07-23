@@ -9,8 +9,6 @@ pub use dclogin_scheme::LoginOptions;
 pub(crate) use dclogin_scheme::login_param_from_login_qr;
 use deltachat_contact_tools::{ContactAddress, addr_normalize, may_be_valid_addr};
 use percent_encoding::{NON_ALPHANUMERIC, percent_decode_str, percent_encode};
-use rand::TryRngCore as _;
-use rand::distr::{Alphanumeric, SampleString};
 use serde::Deserialize;
 
 use crate::automatic_transport_management::login_param_from_host;

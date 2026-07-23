@@ -40,18 +40,15 @@ async fn maybe_add_additional_transports_inner(
 ) -> Result<()> {
     let now = time();
     let mut transport_added = false;
-    info!(context, "dbg maybe_add_additional_transports");
 
     let Ok(_housekeeping_lock) = context.housekeeping_mutex.try_lock() else {
         // Housekeeping or automatic relay management is already running in another thread, do nothing.
-        info!(context, "dbg skipping because of taken mutex");
         return Ok(());
     };
     let last_timestamp = context
         .get_config_i64(Config::LastAutomaticTransportManagement)
         .await?;
     if last_timestamp > now.saturating_sub(AUTOMATIC_ADDITION_DEBOUNCE_SECONDS) {
-        info!(context, "dbg already ran recently");
         if last_timestamp > now {
             // The timestamp is in the future. Cap it to the current time.
             context
@@ -68,7 +65,6 @@ async fn maybe_add_additional_transports_inner(
         .get_config_bool(Config::AutomaticTransportManagement)
         .await?
     {
-        info!(context, "dbg automatic transport management disabled");
         return Ok(());
     }
     // Set the config at the beginning to avoid endless loops.
@@ -83,7 +79,6 @@ async fn maybe_add_additional_transports_inner(
     // Using `for` instead of `while` to prevent infinite loop
     for _ in 0..NUM_TRANSPORTS_TARGET {
         if context.count_transports().await? >= NUM_TRANSPORTS_TARGET {
-            info!(context, "dbg target reached");
             return Ok(());
         }
 
@@ -98,23 +93,31 @@ async fn maybe_add_additional_transports_inner(
             );
             return Ok(());
         };
-        info!(context, "dbg from {candidates:?}, chose {host}");
+
+        info!(
+            context,
+            "Tring to automatically add relay {host} (there were {} candidates)",
+            candidates.len(),
+        );
 
         let param = login_param_from_host(host);
         let res = crate::configure::configure(context, &param, skip_network).await;
         if let Err(e) = res {
-            warn!(context, "Failed to automatically add a transport: {e:?}.");
+            warn!(
+                context,
+                "Failed to automatically add a transport {host}: {e:?}."
+            );
             context
                 .sql
                 .execute("UPDATE relay_candidates SET last_tried=?", (now,))
                 .await?;
         }
+        info!(context, "Successfully added transport {host}");
 
         transport_added = true;
-        info!(context, "dbg success");
     }
     if transport_added {
-        info!(context, "dbg restarting");
+        info!(context, "Restarting IO after transports addition");
         context.restart_io_if_running().await;
     }
 
