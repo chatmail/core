@@ -10,11 +10,11 @@ use crate::log::{LogExt, warn};
 use crate::login_param::{EnteredCertificateChecks, EnteredImapLoginParam};
 use crate::{configure::EnteredLoginParam, context::Context, tools::time};
 
-/// The target number of transports we try to reach.
+/// The target number of transports.
 const NUM_TRANSPORTS_TARGET: usize = 3;
 /// How often we want to try adding new transports.
 const AUTOMATIC_ADDITION_DEBOUNCE_SECONDS: i64 = 60 * 60; // one hour
-/// How long we ignore a transport candidate after failing to create an account there:
+/// How long we ignore a transport candidate after failing to connect to it:
 const BACKOFF_PERIOD_FOR_NOT_WORKING_TRANSPORT: i64 = 60 * 60 * 24 * 7; // one week
 
 pub(crate) fn maybe_add_additional_transports(
@@ -60,7 +60,6 @@ async fn maybe_add_additional_transports_inner(
         }
         return Ok(());
     }
-    // TODO uncomment this after I'm done with testing:
     if context
         .get_config_bool(Config::AutomaticTransportManagement)
         .await?

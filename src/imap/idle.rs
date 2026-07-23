@@ -52,7 +52,7 @@ impl Session {
         }
 
         // we try to add additional relays right before going into IDLE mode,
-        // because apparently we are connected, but don't have anything important to do.
+        // because we are connected and don't have anything important to do.
         tokio::task::spawn(
             crate::automatic_transport_management::maybe_add_additional_transports(context.clone()),
         );
