@@ -3209,8 +3209,8 @@ pub async fn marknoticed_all_chats(context: &Context) -> Result<()> {
                    AND c.blocked=0;",
             (MessageState::InFresh,),
             |row| {
-                let msg_id: ChatId = row.get(0)?;
-                Ok(msg_id)
+                let chat_id: ChatId = row.get(0)?;
+                Ok(chat_id)
             },
         )
         .await?;
