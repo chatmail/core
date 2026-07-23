@@ -116,15 +116,3 @@ fn test_uid_grouper() {
         vec![("INBOX".to_string(), vec![1, 2, 3], "2:3".to_string())]
     );
 }
-
-#[test]
-fn test_setmetadata_device_token() {
-    assert_eq!(
-        format_setmetadata("INBOX", "foobarbaz"),
-        "SETMETADATA \"INBOX\" (/private/devicetoken {9+}\r\nfoobarbaz)"
-    );
-    assert_eq!(
-        format_setmetadata("INBOX", "foo\r\nbar\r\nbaz\r\n"),
-        "SETMETADATA \"INBOX\" (/private/devicetoken {15+}\r\nfoo\r\nbar\r\nbaz\r\n)"
-    );
-}

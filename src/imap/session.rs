@@ -49,6 +49,10 @@ pub(crate) struct Session {
     /// Should be false if no folder is currently selected.
     pub new_mail: bool,
 
+    /// True if storing the device token on the relay
+    /// was already attempted on this connection.
+    pub(crate) push_token_registered: bool,
+
     pub resync_request_sender: async_channel::Sender<()>,
 }
 
@@ -81,6 +85,7 @@ impl Session {
             selected_mailbox: None,
             selected_folder_needs_expunge: false,
             new_mail: false,
+            push_token_registered: false,
             resync_request_sender,
         }
     }
@@ -104,10 +109,6 @@ impl Session {
 
     pub fn can_metadata(&self) -> bool {
         self.capabilities.can_metadata
-    }
-
-    pub fn can_push(&self) -> bool {
-        self.capabilities.can_push
     }
 
     // Returns true if IMAP server has `XCHATMAIL` capability.

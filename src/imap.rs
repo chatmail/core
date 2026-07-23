@@ -126,6 +126,11 @@ pub(crate) struct ServerMetadata {
     /// Maximum number of recipients for SMTP `RCPT TO:`.
     pub max_smtp_rcpt_to: Option<u32>,
 
+    /// True if we think the relay supports push notifications.
+    /// This gates wether we attempt to write an encrypted device token
+    /// to per-transport IMAP metadata key `/private/devicetoken`.
+    pub supports_push: bool,
+
     /// ICE servers for WebRTC calls.
     pub ice_servers: Vec<UnresolvedIceServer>,
 
@@ -1411,6 +1416,7 @@ impl Session {
                 admin,
                 iroh_relay,
                 max_smtp_rcpt_to,
+                supports_push: max_smtp_rcpt_to.is_some() || self.capabilities.has_xdeltapush,
                 ice_servers,
                 ice_servers_expiration_timestamp,
             },
@@ -1420,44 +1426,43 @@ impl Session {
 
     /// Stores device token into /private/devicetoken IMAP METADATA of the Inbox.
     pub(crate) async fn register_token(&mut self, context: &Context) -> Result<()> {
-        if context.push_subscribed.load(Ordering::Relaxed) {
+        // `update_metadata` ran before and computed `supports_push`.
+        if self.push_token_registered
+            || !context
+                .metadata
+                .read()
+                .await
+                .get(&self.transport_id())
+                .is_some_and(|metadata| metadata.supports_push)
+        {
             return Ok(());
         }
-
-        let transport_id = self.transport_id();
 
         let Some(device_token) = context.push_subscriber.device_token() else {
             return Ok(());
         };
 
-        if self.can_metadata() && self.can_push() {
-            info!(
-                context,
-                "Transport {transport_id}: Subscribing for push notifications."
-            );
+        let transport_id = self.transport_id();
 
-            let old_encrypted_device_token =
-                context.get_config(Config::EncryptedDeviceToken).await?;
+        info!(
+            context,
+            "Transport {transport_id}: Subscribing for push notifications."
+        );
 
-            // Whether we need to update encrypted device token.
-            let device_token_changed = old_encrypted_device_token.is_none()
-                || context.get_config(Config::DeviceToken).await?.as_ref() != Some(&device_token);
-
-            let new_encrypted_device_token;
-            if device_token_changed {
+        // Reuse the stored ciphertext if the token is unchanged:
+        // encryption gives a different result each time
+        // and the token must be sent byte-identical on every attempt
+        // so the server can deduplicate registrations.
+        let old_device_token = context.get_config(Config::DeviceToken).await?;
+        let encrypted_device_token = match context.get_config(Config::EncryptedDeviceToken).await? {
+            Some(old_encrypted_device_token)
+                if old_device_token.as_ref() == Some(&device_token) =>
+            {
+                old_encrypted_device_token
+            }
+            _ => {
                 let encrypted_device_token = encrypt_device_token(&device_token)
                     .context("Failed to encrypt device token")?;
-
-                // We expect that the server supporting `XDELTAPUSH` capability
-                // has non-synchronizing literals support as well:
-                // <https://www.rfc-editor.org/rfc/rfc7888>.
-                let encrypted_device_token_len = encrypted_device_token.len();
-
-                // Store device token saved on the server
-                // to prevent storing duplicate tokens.
-                // The server cannot deduplicate on its own
-                // because encryption gives a different
-                // result each time.
                 context
                     .set_config_internal(Config::DeviceToken, Some(&device_token))
                     .await?;
@@ -1467,49 +1472,49 @@ impl Session {
                         Some(&encrypted_device_token),
                     )
                     .await?;
-
-                if encrypted_device_token_len <= 4096 {
-                    new_encrypted_device_token = Some(encrypted_device_token);
-                } else {
-                    // If Apple or Google (FCM) gives us a very large token,
-                    // do not even try to give it to IMAP servers.
-                    //
-                    // Limit of 4096 is arbitrarily selected
-                    // to be the same as required by LITERAL- IMAP extension.
-                    //
-                    // Dovecot supports LITERAL+ and non-synchronizing literals
-                    // of any length, but there is no reason for tokens
-                    // to be that large even after OpenPGP encryption.
-                    warn!(context, "Device token is too long for LITERAL-, ignoring.");
-                    new_encrypted_device_token = None;
-                }
-            } else {
-                new_encrypted_device_token = old_encrypted_device_token;
+                encrypted_device_token
             }
+        };
 
-            // Store new encrypted device token on the server
-            // even if it is the same as the old one.
-            if let Some(encrypted_device_token) = new_encrypted_device_token {
-                self.run_command_and_check_ok(&format_setmetadata(
-                    "INBOX",
-                    &encrypted_device_token,
-                ))
-                .await
-                .context("SETMETADATA command failed")?;
+        // If the token cannot be stored we must not retry
+        // on every IMAP loop iteration / register_token invocation.
+        self.push_token_registered = true;
 
-                context.push_subscribed.store(true, Ordering::Relaxed);
-            }
+        // The token is sent as an IMAP quoted string
+        // (<https://www.rfc-editor.org/rfc/rfc3501#section-4.3>),
+        // which carries printable ASCII without double quotes or backslashes.
+        // The encrypted token is `openpgp:` followed by base64
+        // but let's guard against future changes
+        // rather than send a malformed or oversized command.
+        if encrypted_device_token.len() > 4096
+            || !encrypted_device_token
+                .bytes()
+                .all(|b| b.is_ascii_graphic() && b != b'"' && b != b'\\')
+        {
+            warn!(
+                context,
+                "Device token cannot be stored as metadata, ignoring."
+            );
+            return Ok(());
+        }
+
+        // Store the encrypted device token on the server.
+        //
+        // Chatmail relays accept the token and forward it to notifications server
+        // when a new message arrives but other servers may reject or ignore the metadata entry.
+        let command =
+            format!("SETMETADATA \"INBOX\" (/private/devicetoken \"{encrypted_device_token}\")");
+        if let Err(err) = self.run_command_and_check_ok(&command).await {
+            warn!(
+                context,
+                "Transport {transport_id}: Failed to store device token: {err:#}."
+            );
+        } else {
+            context.push_subscribed.store(true, Ordering::Relaxed);
         }
 
         Ok(())
     }
-}
-
-fn format_setmetadata(folder: &str, device_token: &str) -> String {
-    let device_token_len = device_token.len();
-    format!(
-        "SETMETADATA \"{folder}\" (/private/devicetoken {{{device_token_len}+}}\r\n{device_token})"
-    )
 }
 
 impl Session {
