@@ -77,7 +77,10 @@ async fn assert_automatic_relay_management_does_nothing(t: &TestContext) {
         .await
         .unwrap();
 
-    maybe_add_additional_relays_inner(t, false).await.unwrap();
+    let skip_network = false; // No need to skip network, nothing is supposed to happen
+    maybe_add_additional_relays_inner(t, skip_network)
+        .await
+        .unwrap();
 
     let config_after = t
         .get_config_i64(Config::LastAutomaticRelayManagement)
@@ -154,6 +157,84 @@ async fn test_maybe_add_additional_relays_add_one() -> Result<()> {
 
     let transports_after = t.count_transports().await?;
     assert_eq!(transports_after, transports_before + 1);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_maybe_add_additional_relays_add_multiple() -> Result<()> {
+    let t = &TestContext::new_alice().await;
+    enable_config(t).await;
+    let now = time();
+
+    t.sql.execute("DELETE FROM relay_candidates", ()).await?;
+    for host in ["a.example", "b.example", "c.example", "d.example"] {
+        t.sql
+            .execute(
+                "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
+                (host, 0),
+            )
+            .await?;
+    }
+
+    let skip_network = true;
+    maybe_add_additional_relays_inner(t, skip_network).await?;
+
+    let config_after = t
+        .get_config_i64(Config::LastAutomaticRelayManagement)
+        .await?;
+    assert!(config_after >= now);
+
+    let transports_after = t.count_transports().await?;
+    assert_eq!(transports_after, NUM_TRANSPORTS_TARGET);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_maybe_add_additional_relays_failure() -> Result<()> {
+    let t = &TestContext::new_alice().await;
+    enable_config(t).await;
+    let now = time();
+
+    t.sql.execute("DELETE FROM relay_candidates", ()).await?;
+    for i in 1..10 {
+        t.sql
+            .execute(
+                "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
+                (format!("{i}.invalid.example"), 0),
+            )
+            .await?;
+    }
+
+    let transports_before = t.count_transports().await?;
+
+    // Don't skip network, since we want the relay addition to fail
+    let skip_network = false;
+    maybe_add_additional_relays_inner(t, skip_network).await?;
+
+    // The config is still updated:
+    let config_after = t
+        .get_config_i64(Config::LastAutomaticRelayManagement)
+        .await?;
+    assert!(config_after >= now);
+
+    let transports_after = t.count_transports().await?;
+    assert_eq!(transports_after, transports_before);
+
+    // Some of the candidates should have an updated last_tried:
+    assert!(
+        t.sql
+            .exists(
+                "SELECT COUNT(*) FROM relay_candidates WHERE last_tried>=?",
+                (now,)
+            )
+            .await?
+    );
+
+    // ...but not all, because there might be many relay candidates
+    // and we don't want to try all of them in a single call:
+    assert!(load_relay_candidates(t, now).await?.len() > 0);
 
     Ok(())
 }
