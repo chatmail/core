@@ -6,7 +6,7 @@ use rand::distr::{Alphanumeric, SampleString};
 use rand::seq::IndexedRandom;
 
 use crate::config::Config;
-use crate::log::LogExt as _;
+use crate::log::{LogExt, warn};
 use crate::login_param::{EnteredCertificateChecks, EnteredImapLoginParam};
 use crate::{configure::EnteredLoginParam, context::Context, tools::time};
 
@@ -20,6 +20,11 @@ const BACKOFF_PERIOD_FOR_NOT_WORKING_TRANSPORT: i64 = 60 * 60 * 24 * 7; // one w
 pub(crate) fn maybe_add_additional_transports(
     context: Context,
 ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    // We need to Box::pin the future because it wouldn't compile otherwise
+    // because Rust async doesn't support recursion:
+    // `maybe_add_additional_transports_inner()` calls `restart_io_if_running()`,
+    // which (via several other functions) calls `imap_loop()`,
+    // which (via several other functions) calls `maybe_add_additional_transports()`
     Box::pin(async move {
         maybe_add_additional_transports_inner(&context)
             .await
@@ -72,20 +77,7 @@ async fn maybe_add_additional_transports_inner(context: &Context) -> Result<()> 
 
         // First, query all candidates that were not tried since `BACKOFF_PERIOD_FOR_NOT_WORKING_TRANSPORT` seconds.
         // Domains that are already used are excluded.
-        let cutoff_timestamp = now.saturating_sub(BACKOFF_PERIOD_FOR_NOT_WORKING_TRANSPORT);
-        let candidates: Vec<String> = context
-            .sql
-            .query_map_vec(
-                "SELECT domain FROM relay_candidates WHERE last_tried<?
-                AND NOT EXISTS (
-                    SELECT 1
-                    FROM transports
-                    WHERE substr(addr, instr(addr, '@') + 1) = domain
-                )",
-                (cutoff_timestamp,),
-                |row| Ok(row.get::<_, String>(0)?),
-            )
-            .await?;
+        let candidates = load_transport_candidates(context, now).await?;
 
         let Some(domain) = candidates.choose(&mut rand::rng()) else {
             info!(
@@ -98,17 +90,13 @@ async fn maybe_add_additional_transports_inner(context: &Context) -> Result<()> 
 
         let param = login_param_from_domain(domain);
         let res = crate::configure::configure(context, &param).await;
-        if res.is_err() {
-            info!(context, "dbg error {res:?}");
+        if let Err(e) = res {
+            warn!(context, "Failed to automatically add a transport: {e:?}.");
             context
                 .sql
                 .execute("UPDATE relay_candidates SET last_tried=?", (now,))
                 .await?;
         }
-
-        // TODO: Decide whether we want to immediately try again with another relay,
-        // if this one failed. If yes, remove the next line.
-        res?;
 
         transport_added = true;
         info!(context, "dbg success");
@@ -119,6 +107,28 @@ async fn maybe_add_additional_transports_inner(context: &Context) -> Result<()> 
     }
 
     Ok(())
+}
+
+async fn load_transport_candidates(
+    context: &Context,
+    now: i64,
+) -> Result<Vec<String>, anyhow::Error> {
+    let cutoff_timestamp = now.saturating_sub(BACKOFF_PERIOD_FOR_NOT_WORKING_TRANSPORT);
+    let candidates: Vec<String> = context
+        .sql
+        .query_map_vec(
+            "SELECT domain FROM relay_candidates WHERE last_tried<?
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM transports
+                    WHERE substr(addr, instr(addr, '@') + 1) = domain
+                )",
+            (cutoff_timestamp,),
+            |row| Ok(row.get::<_, String>(0)?),
+        )
+        .await?;
+
+    Ok(candidates)
 }
 
 pub(crate) fn login_param_from_domain(domain: &str) -> EnteredLoginParam {
@@ -140,3 +150,6 @@ pub(crate) fn login_param_from_domain(domain: &str) -> EnteredLoginParam {
     };
     param
 }
+
+#[cfg(test)]
+mod automatic_transport_management_tests;
