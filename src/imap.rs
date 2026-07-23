@@ -1474,7 +1474,7 @@ impl Session {
 
         let transport_id = self.transport_id();
 
-        let Some(device_token) = context.push_subscriber.device_token().await else {
+        let Some(device_token) = context.push_subscriber.device_token() else {
             return Ok(());
         };
 
@@ -1547,10 +1547,6 @@ impl Session {
 
                 context.push_subscribed.store(true, Ordering::Relaxed);
             }
-        } else if !context.push_subscriber.heartbeat_subscribed().await {
-            let context = context.clone();
-            // Subscribe for heartbeat notifications.
-            tokio::spawn(async move { context.push_subscriber.subscribe(&context).await });
         }
 
         Ok(())

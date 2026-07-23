@@ -398,7 +398,7 @@ pub unsafe extern "C" fn dc_get_push_state(context: *const dc_context_t) -> libc
         return 0;
     }
     let ctx = &*context;
-    block_on(ctx.push_state()) as libc::c_int
+    ctx.push_state() as libc::c_int
 }
 
 fn spawn_configure(ctx: Context) {
@@ -5010,7 +5010,7 @@ pub unsafe extern "C" fn dc_accounts_set_push_device_token(
 
     block_on(async move {
         let accounts = accounts.read().await;
-        if let Err(err) = accounts.set_push_device_token(&token).await {
+        if let Err(err) = accounts.set_push_device_token(&token) {
             accounts.emit_event(EventType::Error(format!(
                 "Failed to set notify token: {err:#}."
             )));
