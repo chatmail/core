@@ -13,7 +13,7 @@ use rand::TryRngCore as _;
 use rand::distr::{Alphanumeric, SampleString};
 use serde::Deserialize;
 
-use crate::automatic_transport_management::login_param_from_domain;
+use crate::automatic_transport_management::login_param_from_host;
 use crate::config::Config;
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
@@ -829,7 +829,7 @@ pub(crate) async fn login_param_from_account_qr(
         .context("Invalid DCACCOUNT scheme")?;
 
     if !payload.starts_with(HTTPS_SCHEME) {
-        let param = login_param_from_domain(payload);
+        let param = login_param_from_host(payload);
         return Ok(param);
     }
 

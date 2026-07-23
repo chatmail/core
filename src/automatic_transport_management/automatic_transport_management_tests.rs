@@ -8,26 +8,26 @@ async fn test_load_transport_candidates_single() -> Result<()> {
 
     t.sql.execute("DELETE FROM relay_candidates", ()).await?;
 
-    // This domain should be returned by load_transport_candidates():
+    // This host should be returned by load_transport_candidates():
     t.sql
         .execute(
-            "INSERT INTO relay_candidates (domain, last_tried) VALUES (?, ?)",
+            "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
             ("never_tried.example", 0),
         )
         .await?;
 
-    // This domain was recently tried and should not be returned:
+    // This host was recently tried and should not be returned:
     t.sql
         .execute(
-            "INSERT INTO relay_candidates (domain, last_tried) VALUES (?, ?)",
+            "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
             ("recent.example", now),
         )
         .await?;
 
-    // This domain is already in use (alice@example.org) and should not be returned:
+    // This host is already in use (alice@example.org) and should not be returned:
     t.sql
         .execute(
-            "INSERT INTO relay_candidates (domain, last_tried) VALUES (?, ?)",
+            "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
             ("example.org", 0),
         )
         .await?;
@@ -45,11 +45,11 @@ async fn test_load_transport_candidates_multiple() -> Result<()> {
     let now = time();
 
     t.sql.execute("DELETE FROM relay_candidates", ()).await?;
-    for domain in ["a.example", "b.example", "c.example"] {
+    for host in ["a.example", "b.example", "c.example"] {
         t.sql
             .execute(
-                "INSERT INTO relay_candidates (domain, last_tried) VALUES (?, ?)",
-                (domain, 0),
+                "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
+                (host, 0),
             )
             .await?;
     }
@@ -127,7 +127,7 @@ async fn test_maybe_add_additional_transports_add_one() -> Result<()> {
     t.sql.execute("DELETE FROM relay_candidates", ()).await?;
     t.sql
         .execute(
-            "INSERT INTO relay_candidates (domain, last_tried) VALUES (?, ?)",
+            "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
             ("relay.example", 0),
         )
         .await?;

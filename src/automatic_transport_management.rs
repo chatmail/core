@@ -80,19 +80,19 @@ async fn maybe_add_additional_transports_inner(
         }
 
         // First, query all candidates that were not tried since `BACKOFF_PERIOD_FOR_NOT_WORKING_TRANSPORT` seconds.
-        // Domains that are already used are excluded.
+        // Hosts that are already used are excluded.
         let candidates = load_transport_candidates(context, now).await?;
 
-        let Some(domain) = candidates.choose(&mut rand::rng()) else {
+        let Some(host) = candidates.choose(&mut rand::rng()) else {
             info!(
                 context,
                 "maybe_add_additional_relays: No suitable candidates"
             );
             return Ok(());
         };
-        info!(context, "dbg from {candidates:?}, chose {domain}");
+        info!(context, "dbg from {candidates:?}, chose {host}");
 
-        let param = login_param_from_domain(domain);
+        let param = login_param_from_host(host);
         let res = crate::configure::configure(context, &param, skip_network).await;
         if let Err(e) = res {
             warn!(context, "Failed to automatically add a transport: {e:?}.");
@@ -121,11 +121,11 @@ async fn load_transport_candidates(
     let candidates: Vec<String> = context
         .sql
         .query_map_vec(
-            "SELECT domain FROM relay_candidates WHERE last_tried<?
+            "SELECT host FROM relay_candidates WHERE last_tried<?
                 AND NOT EXISTS (
                     SELECT 1
                     FROM transports
-                    WHERE substr(addr, instr(addr, '@') + 1) = domain
+                    WHERE substr(addr, instr(addr, '@') + 1) = host
                 )",
             (cutoff_timestamp,),
             |row| Ok(row.get::<_, String>(0)?),
@@ -135,10 +135,10 @@ async fn load_transport_candidates(
     Ok(candidates)
 }
 
-pub(crate) fn login_param_from_domain(domain: &str) -> EnteredLoginParam {
+pub(crate) fn login_param_from_host(host: &str) -> EnteredLoginParam {
     let rng = &mut rand::rng();
     let username = Alphanumeric.sample_string(rng, 9);
-    let addr = username + "@" + domain;
+    let addr = username + "@" + host;
     let addr = addr_normalize(&addr);
     // 22 * log2(26 * 2 + 10) = 130 bits of entropy
     let password = Alphanumeric.sample_string(rng, 22);

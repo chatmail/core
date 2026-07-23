@@ -2539,15 +2539,15 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
             |transaction| {
                 transaction.execute(
                     "CREATE TABLE relay_candidates(
-                        domain TEXT PRIMARY KEY NOT NULL,
+                        host TEXT PRIMARY KEY NOT NULL,
                         last_tried TEXT NOT NULL DEFAULT 0
                     ) STRICT",
                     (),
                 )?;
                 let mut statement =
-                    transaction.prepare("INSERT INTO relay_candidates(domain) VALUES (?)")?;
-                for domain in DEFAULT_RELAY_CANDIDATES {
-                    statement.execute((domain,))?;
+                    transaction.prepare("INSERT INTO relay_candidates(host) VALUES (?)")?;
+                for host in DEFAULT_RELAY_CANDIDATES {
+                    statement.execute((host,))?;
                 }
                 Ok(())
             },
