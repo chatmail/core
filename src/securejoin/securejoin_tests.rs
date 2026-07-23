@@ -235,7 +235,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     assert!(contact_bob.get_name().is_empty());
     assert_eq!(contact_bob.is_bot(), false);
 
-    // exactly one one-to-one chat should be visible for both now
+    // exactly one single chat should be visible for both now
     // (check this before calling alice.get_chat() explicitly below)
     assert_eq!(
         Chatlist::try_load(&alice, 0, None, None)
@@ -249,7 +249,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
         1
     );
 
-    // Check Alice got the verified message in her 1:1 chat.
+    // Check Alice got the verified message in her single chat.
     {
         let chat = alice.get_chat(&bob).await;
         let msg = get_chat_msg(&alice, chat.get_id(), 0, 1).await;
@@ -620,7 +620,7 @@ async fn test_secure_join_group_ex(v3: bool, remove_invite: bool) -> Result<()> 
             assert_eq!(
                 chat.blocked,
                 Blocked::Yes,
-                "Alice's 1:1 chat with Bob is not hidden"
+                "Alice's single chat with Bob is not hidden"
             );
         }
 
@@ -648,7 +648,7 @@ async fn test_secure_join_group_ex(v3: bool, remove_invite: bool) -> Result<()> 
         assert_eq!(
             chat.blocked,
             Blocked::Yes,
-            "Bob's 1:1 chat with Alice is not hidden"
+            "Bob's single chat with Alice is not hidden"
         );
         for item in chat::get_chat_msgs(&bob.ctx, bob_chatid).await.unwrap() {
             if let chat::ChatItem::Message { msg_id } = item {
@@ -667,12 +667,12 @@ async fn test_secure_join_group_ex(v3: bool, remove_invite: bool) -> Result<()> 
     assert_eq!(chat::get_chat_contacts(&bob, bob_chatid).await?.len(), 2);
 
     // On this "happy path", Alice and Bob get only a group-chat where all information are added to.
-    // The one-to-one chats are used internally for the hidden handshake messages,
+    // The single chats are used internally for the hidden handshake messages,
     // however, should not be visible in the UIs.
     assert_eq!(Chatlist::try_load(&alice, 0, None, None).await?.len(), 1);
     assert_eq!(Chatlist::try_load(&bob, 0, None, None).await?.len(), 1);
 
-    // If Bob then sends a direct message to alice, however, the one-to-one with Alice should appear.
+    // If Bob then sends a single chat message to alice, however, the single chat with Alice should appear.
     let bobs_chat_with_alice = bob.create_chat(&alice).await;
     let sent = bob.send_text(bobs_chat_with_alice.id, "Hello").await;
     alice.recv_msg(&sent).await;

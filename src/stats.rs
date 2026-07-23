@@ -74,8 +74,8 @@ struct ContactStat {
     #[serde(skip_serializing_if = "is_false")]
     bot: bool,
 
-    #[serde(skip_serializing_if = "is_false")]
-    direct_chat: bool,
+    #[serde(skip_serializing_if = "is_false", rename = "direct_chat")]
+    single_chat: bool,
 
     last_seen: u64,
 
@@ -163,7 +163,7 @@ struct JoinedInvite {
     /// this tells us whether the contact was verified already.
     already_verified: bool,
     /// The type of the invite:
-    /// "contact" for 1:1 invites that setup a verified contact,
+    /// "contact" for single chat invites that setup a verified contact,
     /// "group" for invites that invite to a group,
     /// "broadcast" for invites that invite to a broadcast channel.
     /// The invite also performs the contact verification 'along the way'.
@@ -473,7 +473,7 @@ async fn get_contact_stats(context: &Context, last_old_contact: u32) -> Result<V
                     id,
                     verified,
                     bot,
-                    direct_chat: false, // will be filled later
+                    single_chat: false, // will be filled later
                     last_seen,
                     transitive_chain: None, // will be filled later
                     new: id.to_u32() > last_old_contact,
@@ -516,9 +516,9 @@ async fn get_contact_stats(context: &Context, last_old_contact: u32) -> Result<V
         }
     }
 
-    // Fill direct_chat
+    // Fill single_chat
     for contact in &mut contacts {
-        let direct_chat = context
+        let single_chat = context
             .sql
             .exists(
                 "SELECT COUNT(*)
@@ -527,16 +527,12 @@ async fn get_contact_stats(context: &Context, last_old_contact: u32) -> Result<V
                 (contact.id, Chattype::Single),
             )
             .await?;
-        contact.direct_chat = direct_chat;
+        contact.single_chat = single_chat;
     }
 
     Ok(contacts)
 }
 
-/// - `last_msg_id`: The last msg_id that was already counted in the previous stats.
-///   Only messages newer than that will be counted.
-/// - `one_one_chats`: If true, only messages in 1:1 chats are counted.
-///   If false, only messages in other chats (groups and broadcast channels) are counted.
 async fn get_message_stats(context: &Context) -> Result<BTreeMap<Chattype, MessageStats>> {
     let mut map: BTreeMap<Chattype, MessageStats> = context
         .sql
@@ -650,7 +646,7 @@ async fn update_message_stats_inner(context: &Context, chattype: Chattype) -> Re
             (),
         )?;
 
-        // This table will hold all 1:1 chats.
+        // This table will hold all single chats.
         t.execute(
             "CREATE TEMP TABLE temp.chat_with_correct_type (
                 id INTEGER PRIMARY KEY

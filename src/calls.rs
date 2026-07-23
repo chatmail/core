@@ -201,7 +201,7 @@ impl Context {
         let chat = Chat::load_from_db(self, chat_id).await?;
         ensure!(
             chat.typ == Chattype::Single,
-            "Can only place calls in 1:1 chats"
+            "Can only place calls in single chats"
         );
         ensure!(!chat.is_self_talk(), "Cannot call self");
 

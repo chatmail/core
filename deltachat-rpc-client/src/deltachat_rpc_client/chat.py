@@ -252,7 +252,7 @@ class Chat:
     def get_contacts(self) -> list[Contact]:
         """Get the contacts belonging to this chat.
 
-        For single/direct chats self-address is not included.
+        For single chats self-address is not included.
         """
         contacts = self._rpc.get_chat_contacts(self.account.id, self.id)
         return [Contact(self.account, contact_id) for contact_id in contacts]

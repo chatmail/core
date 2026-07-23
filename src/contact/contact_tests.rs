@@ -337,7 +337,7 @@ async fn test_contact_name_changes() -> Result<()> {
     let t = TestContext::new_alice().await;
     t.allow_unencrypted().await?;
 
-    // first message creates contact and one-to-one-chat without name set
+    // first message creates contact and single-chat without name set
     receive_imf(
         &t,
         b"From: f@example.org\n\
