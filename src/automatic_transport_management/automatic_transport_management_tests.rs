@@ -78,8 +78,8 @@ async fn test_maybe_add_additional_transports_mutex_held() -> Result<()> {
 
     let transports_before = t.count_transports().await?;
 
-    maybe_add_additional_transports_inner(&t).await?;
-    maybe_add_additional_transports_inner(&t).await?;
+    maybe_add_additional_transports_inner(&t, false).await?;
+    maybe_add_additional_transports_inner(&t, false).await?;
 
     let config_after = t
         .get_config_i64(Config::LastAutomaticTransportManagement)
@@ -106,7 +106,7 @@ async fn test_maybe_add_additional_transports_debounce() -> Result<()> {
 
     let transports_before = t.count_transports().await?;
 
-    maybe_add_additional_transports_inner(&t).await?;
+    maybe_add_additional_transports_inner(&t, false).await?;
 
     let config_after = t
         .get_config_i64(Config::LastAutomaticTransportManagement)
@@ -115,6 +115,34 @@ async fn test_maybe_add_additional_transports_debounce() -> Result<()> {
 
     assert_eq!(config_after, some_seconds_ago);
     assert_eq!(transports_before, transports_after);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_maybe_add_additional_transports_add_one() -> Result<()> {
+    let t = TestContext::new_alice().await;
+    let now = time();
+
+    t.sql.execute("DELETE FROM relay_candidates", ()).await?;
+    t.sql
+        .execute(
+            "INSERT INTO relay_candidates (domain, last_tried) VALUES (?, ?)",
+            ("relay.example", 0),
+        )
+        .await?;
+
+    let transports_before = t.count_transports().await?;
+
+    maybe_add_additional_transports_inner(&t, true).await?;
+
+    let config_after = t
+        .get_config_i64(Config::LastAutomaticTransportManagement)
+        .await?;
+    assert!(config_after >= now);
+
+    let transports_after = t.count_transports().await?;
+    assert_eq!(transports_after, transports_before + 1);
 
     Ok(())
 }
