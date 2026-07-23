@@ -234,7 +234,7 @@ async fn test_maybe_add_additional_relays_failure() -> Result<()> {
 
     // ...but not all, because there might be many relay candidates
     // and we don't want to try all of them in a single call:
-    assert!(load_relay_candidates(t, now).await?.len() > 0);
+    assert_eq!(load_relay_candidates(t, now).await?.is_empty(), false);
 
     Ok(())
 }
