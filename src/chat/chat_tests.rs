@@ -259,9 +259,9 @@ async fn test_quote_replies() -> Result<()> {
     let grp_msg_id = send_text_msg(&alice, grp_chat_id, "bar".to_string()).await?;
     let grp_msg = Message::load_from_db(&alice, grp_msg_id).await?;
 
-    let one2one_chat_id = alice.create_chat(&bob).await.id;
-    let one2one_msg_id = send_text_msg(&alice, one2one_chat_id, "foo".to_string()).await?;
-    let one2one_msg = Message::load_from_db(&alice, one2one_msg_id).await?;
+    let single_chat_id = alice.create_chat(&bob).await.id;
+    let single_chat_msg_id = send_text_msg(&alice, single_chat_id, "foo".to_string()).await?;
+    let single_chat_msg = Message::load_from_db(&alice, single_chat_msg_id).await?;
 
     // quoting messages in same chat is okay
     let mut msg = Message::new_text("baz".to_string());
@@ -270,25 +270,25 @@ async fn test_quote_replies() -> Result<()> {
     assert!(result.is_ok());
 
     let mut msg = Message::new_text("baz".to_string());
-    msg.set_quote(&alice, Some(&one2one_msg)).await?;
-    let result = send_msg(&alice, one2one_chat_id, &mut msg).await;
+    msg.set_quote(&alice, Some(&single_chat_msg)).await?;
+    let result = send_msg(&alice, single_chat_id, &mut msg).await;
     assert!(result.is_ok());
-    let one2one_quote_reply_msg_id = result.unwrap();
+    let single_chat_quote_reply_msg_id = result.unwrap();
 
-    // quoting messages from groups to one-to-ones is okay ("reply privately")
+    // quoting messages from groups to single chats is okay ("reply privately")
     let mut msg = Message::new_text("baz".to_string());
     msg.set_quote(&alice, Some(&grp_msg)).await?;
-    let result = send_msg(&alice, one2one_chat_id, &mut msg).await;
+    let result = send_msg(&alice, single_chat_id, &mut msg).await;
     assert!(result.is_ok());
 
-    // quoting messages from one-to-one chats in groups is an error; usually this is also not allowed by UI at all ...
+    // quoting messages from single chats in groups is an error; usually this is also not allowed by UI at all ...
     let mut msg = Message::new_text("baz".to_string());
-    msg.set_quote(&alice, Some(&one2one_msg)).await?;
+    msg.set_quote(&alice, Some(&single_chat_msg)).await?;
     let result = send_msg(&alice, grp_chat_id, &mut msg).await;
     assert!(result.is_err());
 
     // ... but forwarding messages with quotes is allowed
-    let result = forward_msgs(&alice, &[one2one_quote_reply_msg_id], grp_chat_id).await;
+    let result = forward_msgs(&alice, &[single_chat_quote_reply_msg_id], grp_chat_id).await;
     assert!(result.is_ok());
 
     // ... and bots are not restricted
@@ -775,7 +775,7 @@ async fn test_leave_group() -> Result<()> {
     Ok(())
 }
 
-/// Test that adding or removing contacts in 1:1 chat is not allowed.
+/// Test that adding or removing contacts in single chat is not allowed.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_add_remove_contact_for_single() {
     let ctx = TestContext::new_alice().await;
@@ -785,7 +785,7 @@ async fn test_add_remove_contact_for_single() {
     assert_eq!(chat.typ, Chattype::Single);
     assert_eq!(get_chat_contacts(&ctx, chat.id).await.unwrap().len(), 1);
 
-    // adding or removing contacts from one-to-one-chats result in an error
+    // adding or removing contacts from single chats result in an error
     let claire = Contact::create(&ctx, "", "claire@foo.de").await.unwrap();
     let added = add_contact_to_chat_ex(&ctx, Nosync, chat.id, claire, false).await;
     assert!(added.is_err());
@@ -3624,7 +3624,7 @@ async fn test_broadcast_joining_golden() -> Result<()> {
         .await;
 
     let alice_bob_contact = alice.add_or_lookup_contact_no_key(bob).await;
-    // The 1:1 chat with Bob should not be visible to the user:
+    // The single chat with Bob should not be visible to the user:
     assert!(
         ChatIdBlocked::lookup_by_contact(alice, alice_bob_contact.id)
             .await?
@@ -3937,11 +3937,11 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
     bob1.recv_msg_trash(&request_with_auth).await;
     bob1.recv_msg(&member_added).await;
 
-    // The 1:1 chat should not be visible to the user on any of the devices.
+    // The single chat should not be visible to the user on any of the devices.
     // The contact should be marked as verified.
-    check_direct_chat_is_hidden_and_contact_is_verified(alice, bob0).await;
-    check_direct_chat_is_hidden_and_contact_is_verified(bob0, alice).await;
-    check_direct_chat_is_hidden_and_contact_is_verified(bob1, alice).await;
+    check_single_chat_is_hidden_and_contact_is_verified(alice, bob0).await;
+    check_single_chat_is_hidden_and_contact_is_verified(bob0, alice).await;
+    check_single_chat_is_hidden_and_contact_is_verified(bob1, alice).await;
 
     tcm.section("Alice sends first message to broadcast.");
     let sent_msg = alice.send_text(alice_chat_id, "Hello!").await;
@@ -3968,16 +3968,16 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
     Ok(())
 }
 
-async fn check_direct_chat_is_hidden_and_contact_is_verified(
+async fn check_single_chat_is_hidden_and_contact_is_verified(
     t: &TestContext,
     contact: &TestContext,
 ) {
     let contact = t.add_or_lookup_contact_no_key(contact).await;
-    if let Some(direct_chat) = ChatIdBlocked::lookup_by_contact(t, contact.id)
+    if let Some(single_chat) = ChatIdBlocked::lookup_by_contact(t, contact.id)
         .await
         .unwrap()
     {
-        assert_eq!(direct_chat.blocked, Blocked::Yes);
+        assert_eq!(single_chat.blocked, Blocked::Yes);
     }
     assert!(contact.is_verified(t).await.unwrap());
 }
@@ -4020,7 +4020,7 @@ async fn test_only_broadcast_owner_can_send_1() -> Result<()> {
         .await?;
 
     tcm.section(
-        "Bob receives an answer, but shows it in 1:1 chat because of a fingerprint mismatch",
+        "Bob receives an answer, but shows it in a single chat because of a fingerprint mismatch",
     );
     let rcvd = bob.recv_msg(&member_added).await;
     assert_eq!(rcvd.text, "Member bob@example.net was added.");
@@ -4607,7 +4607,7 @@ async fn test_sync_blocked() -> Result<()> {
     sync(alice0, alice1).await;
     assert_eq!(alice1.get_chat(bob).await.blocked, Blocked::Not);
 
-    // Unblocking a 1:1 chat doesn't unblock the contact currently.
+    // Unblocking a single chat doesn't unblock the contact currently.
     Contact::unblock(alice0, a0b_contact_id).await?;
 
     assert!(!alice1.add_or_lookup_contact(bob).await.is_blocked());
@@ -5153,7 +5153,7 @@ async fn test_blocked_bob_cant_join_chat() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_blocked_bob_cant_create_11_chat_via_securejoin() -> Result<()> {
+async fn test_blocked_bob_cant_create_single_chat_via_securejoin() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice1 = &tcm.alice().await;
     let alice2 = &tcm.alice().await;
@@ -5834,7 +5834,7 @@ async fn test_restore_backup_after_60_days() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_one_to_one_chat_no_group_member_timestamps() {
+async fn test_single_chat_no_group_member_timestamps() {
     let t = TestContext::new_alice().await;
     t.allow_unencrypted().await.unwrap();
     let chat = t.create_chat_with_contact("bob", "bob@example.com").await;
@@ -6225,9 +6225,9 @@ async fn test_forward_msgs_2ctx_missing_blob() -> Result<()> {
 
 /// Tests that in multi-device setup
 /// second device learns the key of a contact
-/// via Autocrypt-Gossip in 1:1 chats.
+/// via Autocrypt-Gossip in single chats.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_oneone_gossip() -> Result<()> {
+async fn test_single_gossip() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let alice2 = &tcm.alice().await;

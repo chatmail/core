@@ -97,7 +97,7 @@ pub(crate) enum CantSendReason {
     /// Not a member of the chat.
     NotAMember,
 
-    /// State for 1:1 chat with a key-contact that does not have a key.
+    /// State for single chat with a key-contact that does not have a key.
     MissingKey,
 }
 
@@ -194,7 +194,7 @@ impl ChatId {
         Some(msg.chat_id)
     }
 
-    /// Returns the [`ChatId`] for the 1:1 chat with `contact_id`
+    /// Returns the [`ChatId`] for the single chat with `contact_id`
     /// if it exists and is not blocked.
     ///
     /// If the chat does not exist or is blocked, `None` is returned.
@@ -214,7 +214,7 @@ impl ChatId {
         Ok(chat_id)
     }
 
-    /// Returns the [`ChatId`] for the 1:1 chat with `contact_id`.
+    /// Returns the [`ChatId`] for the single chat with `contact_id`.
     ///
     /// If the chat does not yet exist an unblocked chat ([`Blocked::Not`]) is created.
     ///
@@ -227,9 +227,9 @@ impl ChatId {
             .map(|chat| chat.id)
     }
 
-    /// Returns the unblocked 1:1 chat with `contact_id`.
+    /// Returns the unblocked single chat with `contact_id`.
     ///
-    /// This should be used when **a user action** creates a chat 1:1, it ensures the chat
+    /// This should be used when **a user action** creates a single chat, it ensures the chat
     /// exists, is unblocked and scales the [`Contact`]'s origin.
     pub async fn create_for_contact(context: &Context, contact_id: ContactId) -> Result<Self> {
         ChatId::create_for_contact_with_blocked(context, contact_id, Blocked::Not).await
@@ -374,7 +374,7 @@ impl ChatId {
                     if contact_id != ContactId::SELF {
                         info!(
                             context,
-                            "Blocking the contact {contact_id} to block 1:1 chat."
+                            "Blocking the contact {contact_id} to block a single chat."
                         );
                         contact::set_blocked(context, Nosync, contact_id, true).await?;
                     }
@@ -393,7 +393,7 @@ impl ChatId {
         chatlist_events::emit_chatlist_changed(context);
 
         if sync.into() {
-            // NB: For a 1:1 chat this currently triggers `Contact::block()` on other devices.
+            // NB: For a single chat this currently triggers `Contact::block()` on other devices.
             chat.sync(context, SyncAction::Block)
                 .await
                 .log_err(context)
@@ -417,7 +417,7 @@ impl ChatId {
 
         if sync.into() {
             let chat = Chat::load_from_db(context, self).await?;
-            // TODO: For a 1:1 chat this currently triggers `Contact::unblock()` on other devices.
+            // TODO: For a single chat this currently triggers `Contact::unblock()` on other devices.
             // Maybe we should unblock the contact locally too, this would also resolve discrepancy
             // with `block()` which also blocks the contact.
             chat.sync(context, SyncAction::Unblock)
@@ -1154,7 +1154,7 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
             MessageState::InSeen as u32,
             state_out_min as u32,
             // Do not reply to not fully downloaded messages. Such a message could be a group chat
-            // message that we assigned to 1:1 chat.
+            // message that we assigned to a single chat.
             DownloadState::Done as u32,
             // Do not reference info messages, they are not actually sent out
             // and have Message-IDs unknown to other chat members.
@@ -1347,7 +1347,7 @@ pub struct Chat {
     /// Database ID.
     pub id: ChatId,
 
-    /// Chat type, e.g. 1:1 chat, group chat, mailing list.
+    /// Chat type, e.g. a single chat, group chat, mailing list.
     pub typ: Chattype,
 
     /// Chat name.
@@ -1356,7 +1356,7 @@ pub struct Chat {
     /// Whether the chat is archived or pinned.
     pub visibility: ChatVisibility,
 
-    /// Group ID. For [`Chattype::Mailinglist`] -- mailing list address. Empty for 1:1 chats and
+    /// Group ID. For [`Chattype::Mailinglist`] -- mailing list address. Empty for single chats and
     /// ad-hoc groups.
     pub grpid: String,
 
@@ -1584,7 +1584,7 @@ impl Chat {
                 Path::new(&get_unencrypted_icon(context).await?),
             )));
         } else if self.typ == Chattype::Single {
-            // For 1:1 chats, we always use the same avatar as for the contact
+            // For single chats, we always use the same avatar as for the contact
             // This is before the `self.is_encrypted()` check, because that function
             // has two database calls, i.e. it's slow
             let contacts = get_chat_contacts(context, self.id).await?;
@@ -1603,7 +1603,7 @@ impl Chat {
 
     /// Returns chat avatar color.
     ///
-    /// For 1:1 chats, the color is calculated from the contact's address
+    /// For single chats, the color is calculated from the contact's address
     /// for address-contacts and from the OpenPGP key fingerprint for key-contacts.
     /// For group chats the color is calculated from the grpid, if present, or the chat name.
     pub async fn get_color(&self, context: &Context) -> Result<u32> {
@@ -2338,7 +2338,7 @@ pub(crate) struct ChatIdBlocked {
 }
 
 impl ChatIdBlocked {
-    /// Searches the database for the 1:1 chat with this contact.
+    /// Searches the database for the single chat with this contact.
     ///
     /// If no chat is found `None` is returned.
     pub async fn lookup_by_contact(
@@ -2371,7 +2371,7 @@ impl ChatIdBlocked {
             .await
     }
 
-    /// Returns the chat for the 1:1 chat with this contact.
+    /// Returns the chat for the single chat with this contact.
     ///
     /// If the chat does not yet exist a new one is created, using the provided [`Blocked`]
     /// state.
@@ -2579,11 +2579,11 @@ pub async fn is_contact_in_chat(
     chat_id: ChatId,
     contact_id: ContactId,
 ) -> Result<bool> {
-    // this function works for group and for normal chats, however, it is more useful
+    // this function works for group and for single chats, however, it is more useful
     // for group chats.
     // ContactId::SELF may be used to check whether oneself
     // is in a group or incoming broadcast chat
-    // (ContactId::SELF is not added to 1:1 chats or outgoing broadcast channels)
+    // (ContactId::SELF is not added to single chats or outgoing broadcast channels)
 
     let exists = context
         .sql
@@ -3492,7 +3492,7 @@ pub async fn get_chat_media(
 
 /// Returns a vector of contact IDs for given chat ID.
 pub async fn get_chat_contacts(context: &Context, chat_id: ChatId) -> Result<Vec<ContactId>> {
-    // Normal chats do not include SELF.  Group chats do (as it may happen that one is deleted from a
+    // Single chats do not include SELF.  Group chats do (as it may happen that one is deleted from a
     // groupchat but the chats stays visible, moreover, this makes displaying lists easier)
     context
         .sql
@@ -3876,7 +3876,7 @@ pub(crate) async fn add_contact_to_chat_ex(
 
     chat_id.reset_gossiped_timestamp(context).await?;
 
-    // this also makes sure, no contacts are added to special or normal chats
+    // this also makes sure, no contacts are added to special or single chats
     let mut chat = Chat::load_from_db(context, chat_id).await?;
     ensure!(
         chat.typ == Chattype::Group || (from_handshake && chat.typ == Chattype::OutBroadcast),
@@ -4349,7 +4349,7 @@ async fn rename_ex(
     new_name: &str,
 ) -> Result<()> {
     let new_name = sanitize_single_line(new_name);
-    /* the function only sets the names of group chats; normal chats get their names from the contacts */
+    /* the function only sets the names of group chats; single chats get their names from the contacts */
     let mut success = false;
 
     ensure!(!new_name.is_empty(), "Invalid name");

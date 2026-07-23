@@ -74,7 +74,7 @@ class Chat:
         return lib.dc_chat_get_type(self._dc_chat) == const.DC_CHAT_TYPE_GROUP
 
     def is_single(self) -> bool:
-        """Return True if this chat is a single/direct chat, False otherwise."""
+        """Return True if this chat is a single chat, False otherwise."""
         return lib.dc_chat_get_type(self._dc_chat) == const.DC_CHAT_TYPE_SINGLE
 
     def is_mailinglist(self) -> bool:
