@@ -353,8 +353,7 @@ pub enum Config {
     /// Timestamp of the last `CantDecryptOutgoingMsgs` notification.
     LastCantDecryptOutgoingMsgs,
 
-    /// Timestamp of the last call to
-    /// [`crate::automatic_relay_management::maybe_add_additional_relays`]
+    /// Timestamp of the last time automatic relay management was run
     LastAutomaticRelayManagement,
 
     /// Whether to automatically add/remove transports
