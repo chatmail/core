@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::chat::{Chat, ChatId, send_msg};
 use crate::chatlist_events;
+use crate::constants::Chattype;
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::events::EventType;
@@ -188,6 +189,19 @@ async fn set_msg_id_reaction(
                 .set_i64(Param::LastReactionContactId, i64::from(contact_id.to_u32()));
             chat.update_param(context).await?;
         }
+    }
+
+    let chat = Chat::load_from_db(context, chat_id).await?;
+    if chat.typ == Chattype::OutBroadcast {
+        context
+            .sql
+            .execute(
+                "INSERT INTO reactions_need_broadcast (chat_id, msg_id)
+                 VALUES (?1, ?2)
+                 ON CONFLICT(msg_id, contact_id) DO NOTHING;",
+                (chat_id, msg_id),
+            )
+            .await?;
     }
 
     context.emit_event(EventType::ReactionsChanged {
