@@ -293,8 +293,7 @@ pub struct InnerContext {
     /// because the lock is used from synchronous [`Context::emit_event`].
     pub(crate) debug_logging: std::sync::RwLock<Option<DebugLogging>>,
 
-    /// Push subscriber to store device token
-    /// and register for heartbeat notifications.
+    /// Push subscriber to store device token.
     pub(crate) push_subscriber: PushSubscriber,
 
     /// True if account has subscribed to push notifications via IMAP.

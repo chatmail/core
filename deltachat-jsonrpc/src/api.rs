@@ -333,7 +333,7 @@ impl CommandApi {
     /// Get the current push notification state.
     async fn get_push_state(&self, account_id: u32) -> Result<JsonrpcNotifyState> {
         let ctx = self.get_context(account_id).await?;
-        Ok(ctx.push_state().await.into())
+        Ok(ctx.push_state().into())
     }
 
     /// Get the combined filesize of an account in bytes

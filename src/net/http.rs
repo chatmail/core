@@ -423,35 +423,6 @@ pub(crate) async fn post_empty(context: &Context, url: &str) -> Result<(String, 
     Ok((response_text, response_status.is_success()))
 }
 
-/// Posts string to the given URL.
-///
-/// Returns true if successful HTTP response code was returned.
-///
-/// Does not follow redirects.
-#[allow(dead_code)]
-pub(crate) async fn post_string(context: &Context, url: &str, body: String) -> Result<bool> {
-    let parsed_url = url
-        .parse::<hyper::Uri>()
-        .with_context(|| format!("Failed to parse URL {url:?}"))?;
-    let scheme = parsed_url.scheme_str().context("URL has no scheme")?;
-    if scheme != "https" {
-        bail!("POST requests to non-HTTPS URLs are not allowed");
-    }
-
-    let mut sender = get_http_sender(context, parsed_url.clone(), true).await?;
-    let authority = parsed_url
-        .authority()
-        .context("URL has no authority")?
-        .clone();
-
-    let request = hyper::Request::post(parsed_url)
-        .header(hyper::header::HOST, authority.as_str())
-        .body(body)?;
-    let response = sender.send_request(request).await?;
-
-    Ok(response.status().is_success())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

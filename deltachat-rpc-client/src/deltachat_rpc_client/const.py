@@ -250,7 +250,6 @@ class PushNotifyState(IntEnum):
     """Push notifications state."""
 
     NOT_CONNECTED = 0
-    HEARTBEAT = 1
     CONNECTED = 2
 
 

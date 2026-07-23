@@ -640,14 +640,12 @@ char*           dc_get_connectivity_html     (dc_context_t* context);
 
 
 #define DC_PUSH_NOT_CONNECTED 0
-#define DC_PUSH_HEARTBEAT     1
 #define DC_PUSH_CONNECTED     2
 
 /**
  * Get the current push notification state.
  * One of:
  * - DC_PUSH_NOT_CONNECTED
- * - DC_PUSH_HEARTBEAT
  * - DC_PUSH_CONNECTED
  *
  * @memberof dc_context_t
