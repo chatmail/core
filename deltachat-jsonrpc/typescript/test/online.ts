@@ -148,23 +148,6 @@ describe("online tests", function () {
     expect(message2.text).equal("super secret message");
     expect(message2.showPadlock).equal(true);
   });
-
-  it("get provider info for example.com", async () => {
-    const acc = await dc.rpc.addAccount();
-    const info = await dc.rpc.getProviderInfo(acc, "example.com");
-    expect(info).to.be.not.null;
-    expect(info?.overviewPage).to.equal(
-      "https://providers.delta.chat/example-com",
-    );
-    expect(info?.status).to.equal(3);
-  });
-
-  it("get provider info - domain and email should give same result", async () => {
-    const acc = await dc.rpc.addAccount();
-    const info_domain = await dc.rpc.getProviderInfo(acc, "example.com");
-    const info_email = await dc.rpc.getProviderInfo(acc, "hi@example.com");
-    expect(info_email).to.deep.equal(info_domain);
-  });
 });
 
 async function waitForEvent<T extends DcEvent["kind"]>(

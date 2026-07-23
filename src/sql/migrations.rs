@@ -5,7 +5,6 @@ use std::collections::BTreeSet;
 use std::time::Duration;
 
 use anyhow::{Context as _, Result, ensure};
-use deltachat_contact_tools::EmailAddress;
 use deltachat_contact_tools::addr_cmp;
 use pgp::composed::SignedPublicKey;
 use rusqlite::OptionalExtension;
@@ -15,7 +14,7 @@ use crate::configure::EnteredLoginParam;
 use crate::context::Context;
 use crate::key::DcKey;
 use crate::log::warn;
-use crate::provider::get_provider_info;
+
 use crate::sql::Sql;
 use crate::tools::{self, Time, inc_and_check, time_elapsed};
 use crate::transport::ConfiguredLoginParam;
@@ -1118,22 +1117,7 @@ UPDATE chats SET protected=1, type=120 WHERE type=130;"#,
         .await?;
     }
 
-    if dbversion < 71 {
-        if let Ok(addr) = context.get_primary_self_addr().await {
-            if let Ok(domain) = EmailAddress::new(&addr).map(|email| email.domain) {
-                context
-                    .set_config_internal(
-                        Config::ConfiguredProvider,
-                        get_provider_info(&domain).map(|provider| provider.id),
-                    )
-                    .await?;
-            } else {
-                warn!(context, "Can't parse configured address: {:?}", addr);
-            }
-        }
-
-        sql.set_db_version(71).await?;
-    }
+    // Migration 71 was removed together with the provider database it read from.
     if dbversion < 72 && !sql.col_exists("msgs", "mime_modified").await? {
         sql.execute_migration(
             r#"

@@ -585,11 +585,12 @@ impl Context {
         if let Some(limit) = metadata_limit {
             return Ok(limit);
         }
-        let val = param
-            .provider
-            .and_then(|provider| provider.opt.max_smtp_rcpt_to)
-            .map_or(constants::DEFAULT_MAX_SMTP_RCPT_TO, u32::from);
-        Ok(val)
+        if let Some(limit) =
+            crate::provider::legacy_settings_for_addr(&param.addr)?.max_smtp_rcpt_to
+        {
+            return Ok(limit);
+        }
+        Ok(constants::DEFAULT_MAX_SMTP_RCPT_TO)
     }
 
     /// Does a single round of fetching from IMAP and returns.

@@ -5,10 +5,10 @@ use anyhow::{Context as _, Result, bail};
 use deltachat_contact_tools::may_be_valid_addr;
 
 use super::{DCLOGIN_SCHEME, Qr};
+use crate::configure::server_params::Socket;
 use crate::login_param::{
     EnteredCertificateChecks, EnteredImapLoginParam, EnteredLoginParam, EnteredSmtpLoginParam,
 };
-use crate::provider::Socket;
 
 /// Options for `dclogin:` scheme.
 #[derive(Debug, Clone, PartialEq, Eq)]

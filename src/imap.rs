@@ -231,7 +231,7 @@ impl Imap {
         let lp = param.imap.clone();
         let password = param.imap_password.clone();
         let proxy_config = ProxyConfig::load(context).await?;
-        let strict_tls = param.strict_tls(proxy_config.is_some());
+        let strict_tls = param.strict_tls(proxy_config.is_some())?;
         let folder = param
             .imap_folder
             .clone()

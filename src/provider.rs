@@ -1,28 +1,10 @@
-//! [Provider database](https://providers.delta.chat/) module.
-
-pub(crate) mod data;
+//! Provider types.
 
 use anyhow::Result;
 use deltachat_contact_tools::EmailAddress;
 use serde::{Deserialize, Serialize};
 
-use crate::config::Config;
-use crate::provider::data::{PROVIDER_DATA, PROVIDER_IDS};
-
-/// Provider status according to manual testing.
-#[derive(Debug, Display, Copy, Clone, PartialEq, Eq, FromPrimitive, ToPrimitive)]
-#[repr(u8)]
-pub enum Status {
-    /// Provider is known to be working with Delta Chat.
-    Ok = 1,
-
-    /// Provider works with Delta Chat, but requires some preparation,
-    /// such as changing the settings in the web interface.
-    Preparation = 2,
-
-    /// Provider is known not to work with Delta Chat.
-    Broken = 3,
-}
+use crate::configure::server_params::ServerParams;
 
 /// Server protocol.
 #[derive(Debug, Display, PartialEq, Eq, Copy, Clone, FromPrimitive, ToPrimitive)]
@@ -65,130 +47,51 @@ pub enum Socket {
     Plain = 3,
 }
 
-/// Pattern used to construct login usernames from email addresses.
-#[derive(Debug, PartialEq, Eq, Clone)]
-#[repr(u8)]
-pub enum UsernamePattern {
-    /// Whole email is used as username.
-    Email = 1,
+/// Non-default settings that used to be looked up in provider.db for a few domains.
+#[derive(Debug, Default)]
+pub(crate) struct LegacyProviderSettings {
+    /// Servers to use instead of autoconfig, if any.
+    pub autoconfig_servers: Option<Vec<ServerParams>>,
 
-    /// Part of address before `@` is used as username.
-    Emaillocalpart = 2,
+    /// Maximum number of recipients allowed in a single SMTP send, if limited.
+    pub max_smtp_rcpt_to: Option<u32>,
+
+    /// Whether to disable strict TLS certificate checks by default.
+    pub disable_strict_tls: bool,
+
+    /// Whether to default to worse media quality (for slow/expensive connections).
+    pub worse_media_quality: bool,
 }
 
-/// Email server endpoint.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Server {
-    /// Server protocol, e.g. SMTP or IMAP.
-    pub protocol: Protocol,
-
-    /// Port security, e.g. TLS or STARTTLS.
-    pub socket: Socket,
-
-    /// Server host.
-    pub hostname: &'static str,
-
-    /// Server port.
-    pub port: u16,
-
-    /// Pattern used to construct login usernames from email addresses.
-    pub username_pattern: UsernamePattern,
-}
-
-/// Pair of key and value for default configuration.
-#[derive(Debug, PartialEq, Eq)]
-pub struct ConfigDefault {
-    /// Configuration variable name.
-    pub key: Config,
-
-    /// Configuration variable value.
-    pub value: &'static str,
-}
-
-/// Provider database entry.
-#[derive(Debug, PartialEq, Eq)]
-pub struct Provider {
-    /// Unique ID, corresponding to provider database filename.
-    pub id: &'static str,
-
-    /// Provider status according to manual testing.
-    pub status: Status,
-
-    /// Hint to be shown to the user on the login screen.
-    pub before_login_hint: &'static str,
-
-    /// Hint to be added to the device chat after provider configuration.
-    pub after_login_hint: &'static str,
-
-    /// URL of the page with provider overview.
-    pub overview_page: &'static str,
-
-    /// List of provider servers.
-    pub server: &'static [Server],
-
-    /// Default configuration values to set when provider is configured.
-    pub config_defaults: Option<&'static [ConfigDefault]>,
-
-    /// Options with good defaults.
-    pub opt: ProviderOptions,
-}
-
-/// Provider options with good defaults.
-#[derive(Debug, PartialEq, Eq)]
-#[non_exhaustive]
-pub struct ProviderOptions {
-    /// True if provider is known to use use proper,
-    /// not self-signed certificates.
-    pub strict_tls: bool,
-
-    /// Maximum number of recipients the provider allows to send a single email to.
-    pub max_smtp_rcpt_to: Option<u16>,
-}
-
-impl ProviderOptions {
-    const fn new() -> Self {
-        Self {
-            strict_tls: true,
-            max_smtp_rcpt_to: None,
-        }
+/// Returns hard-coded legacy settings for the domain of `addr`.
+pub(crate) fn legacy_settings_for_addr(addr: &str) -> Result<LegacyProviderSettings> {
+    if !EmailAddress::new(addr)?
+        .domain
+        .eq_ignore_ascii_case("nauta.cu")
+    {
+        return Ok(LegacyProviderSettings::default());
     }
-}
-
-/// Returns provider for the given an e-mail address.
-///
-/// Returns an error if provided address is not valid.
-pub fn get_provider_info_by_addr(addr: &str) -> Result<Option<&'static Provider>> {
-    let addr = EmailAddress::new(addr)?;
-
-    Ok(get_provider_info(&addr.domain))
-}
-
-/// Finds a provider in offline database based on domain.
-pub fn get_provider_info(domain: &str) -> Option<&'static Provider> {
-    let domain = domain.to_lowercase();
-    for (pattern, provider) in PROVIDER_DATA {
-        if let Some(suffix) = pattern.strip_prefix('*') {
-            // Wildcard domain pattern.
-            //
-            // For example, `suffix` is ".hermes.radio" for "*.hermes.radio" pattern.
-            if domain.ends_with(suffix) {
-                return Some(provider);
-            }
-        } else if pattern == domain {
-            return Some(provider);
-        }
-    }
-
-    None
-}
-
-/// Returns a provider with the given ID from the database.
-pub fn get_provider_by_id(id: &str) -> Option<&'static Provider> {
-    if let Some(provider) = PROVIDER_IDS.get(id) {
-        Some(provider)
-    } else {
-        None
-    }
+    Ok(LegacyProviderSettings {
+        autoconfig_servers: Some(vec![
+            ServerParams {
+                protocol: Protocol::Imap,
+                socket: Socket::Starttls,
+                hostname: "imap.nauta.cu".to_string(),
+                port: 143,
+                username: String::new(),
+            },
+            ServerParams {
+                protocol: Protocol::Smtp,
+                socket: Socket::Starttls,
+                hostname: "smtp.nauta.cu".to_string(),
+                port: 25,
+                username: String::new(),
+            },
+        ]),
+        max_smtp_rcpt_to: Some(20),
+        disable_strict_tls: true,
+        worse_media_quality: true,
+    })
 }
 
 #[cfg(test)]
@@ -196,58 +99,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_get_provider_by_domain_unexistant() {
-        let provider = get_provider_info("unexistant.org");
-        assert!(provider.is_none());
-    }
+    fn test_legacy_domain_overrides() -> Result<()> {
+        let nauta = legacy_settings_for_addr("alice@nauta.cu")?;
+        assert_eq!(nauta.max_smtp_rcpt_to, Some(20));
+        assert!(nauta.disable_strict_tls);
+        assert!(nauta.worse_media_quality);
+        let servers = nauta.autoconfig_servers.unwrap();
+        assert_eq!(servers.len(), 2);
+        assert_eq!(servers[0].hostname, "imap.nauta.cu");
+        assert_eq!(servers[1].hostname, "smtp.nauta.cu");
 
-    #[test]
-    fn test_get_provider_by_domain_mixed_case() {
-        let provider = get_provider_info("nAUta.Cu").unwrap();
-        assert!(provider.status == Status::Ok);
-    }
+        let unknown = legacy_settings_for_addr("alice@example.org")?;
+        assert_eq!(unknown.autoconfig_servers, None);
+        assert_eq!(unknown.max_smtp_rcpt_to, None);
+        assert!(!unknown.disable_strict_tls);
+        assert!(!unknown.worse_media_quality);
 
-    #[test]
-    fn test_get_provider_info() {
-        let addr = "nauta.cu";
-        let provider = get_provider_info(addr).unwrap();
-        assert!(provider.status == Status::Ok);
-        let server = &provider.server[0];
-        assert_eq!(server.protocol, Protocol::Imap);
-        assert_eq!(server.socket, Socket::Starttls);
-        assert_eq!(server.hostname, "imap.nauta.cu");
-        assert_eq!(server.port, 143);
-        assert_eq!(server.username_pattern, UsernamePattern::Email);
-        let server = &provider.server[1];
-        assert_eq!(server.protocol, Protocol::Smtp);
-        assert_eq!(server.socket, Socket::Starttls);
-        assert_eq!(server.hostname, "smtp.nauta.cu");
-        assert_eq!(server.port, 25);
-        assert_eq!(server.username_pattern, UsernamePattern::Email);
-
-        let provider = get_provider_info("gmail.com").unwrap();
-        assert!(provider.status == Status::Preparation);
-        assert!(!provider.before_login_hint.is_empty());
-        assert!(!provider.overview_page.is_empty());
-
-        let provider = get_provider_info("googlemail.com").unwrap();
-        assert!(provider.status == Status::Preparation);
-
-        assert!(get_provider_info("").is_none());
-        assert!(get_provider_info("google.com").unwrap().id == "gmail");
-        assert!(get_provider_info("example@google.com").is_none());
-    }
-
-    #[test]
-    fn test_get_provider_by_id() {
-        let provider = get_provider_by_id("gmail").unwrap();
-        assert!(provider.id == "gmail");
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_get_provider_info_by_addr() -> Result<()> {
-        assert!(get_provider_info_by_addr("google.com").is_err());
-        assert!(get_provider_info_by_addr("example@google.com")?.unwrap().id == "gmail");
+        assert!(legacy_settings_for_addr("not-an-email").is_err());
         Ok(())
     }
 }
