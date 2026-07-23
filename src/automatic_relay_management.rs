@@ -27,20 +27,25 @@ pub(crate) fn maybe_add_additional_relays(
     // which (via several other functions) calls `maybe_add_additional_relays()`
     Box::pin(async move {
         let skip_network = false;
-        maybe_add_additional_relays_inner(&context, skip_network)
+        let relay_added = maybe_add_additional_relays_inner(&context, skip_network)
             .await
             .log_err(&context)
-            .ok();
+            .unwrap_or(false);
+
+        if relay_added {
+            info!(context, "Restarting IO after relay addition");
+            context.restart_io_if_running().await;
+        }
     })
 }
 
-async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool) -> Result<()> {
+async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool) -> Result<bool> {
     let now = time();
     let mut relay_added = false;
 
     let Ok(_lock) = context.background_task_mutex.try_lock() else {
         // Housekeeping or automatic relay management is already running in another thread, do nothing.
-        return Ok(());
+        return Ok(relay_added);
     };
     let last_timestamp = context
         .get_config_i64(Config::LastAutomaticRelayManagement)
@@ -52,13 +57,13 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
                 .set_config_internal(Config::LastAutomaticRelayManagement, Some(&now.to_string()))
                 .await?;
         }
-        return Ok(());
+        return Ok(relay_added);
     }
     if !context
         .get_config_bool(Config::AutomaticRelayManagement)
         .await?
     {
-        return Ok(());
+        return Ok(relay_added);
     }
     // Set the config at the beginning to avoid endless loops.
     // Race conditions are not a concern because we locked the mutex.
@@ -69,7 +74,7 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
     // Using `for` instead of `while` to prevent infinite loop
     for _ in 0..NUM_TRANSPORTS_TARGET {
         if context.count_transports().await? >= NUM_TRANSPORTS_TARGET {
-            return Ok(());
+            return Ok(relay_added);
         }
 
         // First, query all candidates that were not tried since `BACKOFF_PERIOD_FOR_NOT_WORKING_TRANSPORT` seconds.
@@ -81,7 +86,7 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
                 context,
                 "maybe_add_additional_relays: No suitable candidates"
             );
-            return Ok(());
+            return Ok(relay_added);
         };
 
         info!(
@@ -109,12 +114,8 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
             relay_added = true;
         }
     }
-    if relay_added {
-        info!(context, "Restarting IO after relay addition");
-        context.restart_io_if_running().await;
-    }
 
-    Ok(())
+    Ok(relay_added)
 }
 
 async fn load_relay_candidates(context: &Context, now: i64) -> Result<Vec<String>, anyhow::Error> {
