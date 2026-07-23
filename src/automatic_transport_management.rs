@@ -47,12 +47,20 @@ async fn maybe_add_additional_transports_inner(
         info!(context, "dbg skipping because of taken mutex");
         return Ok(());
     };
-    if context
+    let last_timestamp = context
         .get_config_i64(Config::LastAutomaticTransportManagement)
-        .await?
-        > now.saturating_sub(AUTOMATIC_ADDITION_DEBOUNCE_SECONDS)
-    {
+        .await?;
+    if last_timestamp > now.saturating_sub(AUTOMATIC_ADDITION_DEBOUNCE_SECONDS) {
         info!(context, "dbg already ran recently");
+        if last_timestamp > now {
+            // The timestamp is in the future. Cap it to the current time.
+            context
+                .set_config_internal(
+                    Config::LastAutomaticTransportManagement,
+                    Some(&now.to_string()),
+                )
+                .await?;
+        }
         return Ok(());
     }
     // TODO uncomment this after I'm done with testing:
