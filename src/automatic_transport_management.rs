@@ -26,14 +26,18 @@ pub(crate) fn maybe_add_additional_transports(
     // which (via several other functions) calls `imap_loop()`,
     // which (via several other functions) calls `maybe_add_additional_transports()`
     Box::pin(async move {
-        maybe_add_additional_transports_inner(&context)
+        let skip_network = false;
+        maybe_add_additional_transports_inner(&context, skip_network)
             .await
             .log_err(&context)
             .ok();
     })
 }
 
-async fn maybe_add_additional_transports_inner(context: &Context) -> Result<()> {
+async fn maybe_add_additional_transports_inner(
+    context: &Context,
+    skip_network: bool,
+) -> Result<()> {
     let now = time();
     let mut transport_added = false;
     info!(context, "dbg maybe_add_additional_transports");
@@ -89,7 +93,7 @@ async fn maybe_add_additional_transports_inner(context: &Context) -> Result<()> 
         info!(context, "dbg from {candidates:?}, chose {domain}");
 
         let param = login_param_from_domain(domain);
-        let res = crate::configure::configure(context, &param).await;
+        let res = crate::configure::configure(context, &param, skip_network).await;
         if let Err(e) = res {
             warn!(context, "Failed to automatically add a transport: {e:?}.");
             context
