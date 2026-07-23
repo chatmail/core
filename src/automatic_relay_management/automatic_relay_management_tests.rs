@@ -2,13 +2,14 @@ use super::*;
 use crate::test_utils::TestContext;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_load_transport_candidates_single() -> Result<()> {
-    let t = TestContext::new_alice().await;
+async fn test_load_relay_candidates_single() -> Result<()> {
+    let t = &TestContext::new_alice().await;
+    enable_config(t).await;
     let now = time();
 
     t.sql.execute("DELETE FROM relay_candidates", ()).await?;
 
-    // This host should be returned by load_transport_candidates():
+    // This host should be returned by load_relay_candidates():
     t.sql
         .execute(
             "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
@@ -32,7 +33,7 @@ async fn test_load_transport_candidates_single() -> Result<()> {
         )
         .await?;
 
-    let candidates = load_relay_candidates(&t, now).await?;
+    let candidates = load_relay_candidates(t, now).await?;
 
     assert_eq!(candidates, vec!["never_tried.example".to_string()]);
 
@@ -40,8 +41,9 @@ async fn test_load_transport_candidates_single() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_load_transport_candidates_multiple() -> Result<()> {
-    let t = TestContext::new().await;
+async fn test_load_relay_candidates_multiple() -> Result<()> {
+    let t = &TestContext::new().await;
+    enable_config(t).await;
     let now = time();
 
     t.sql.execute("DELETE FROM relay_candidates", ()).await?;
@@ -54,7 +56,7 @@ async fn test_load_transport_candidates_multiple() -> Result<()> {
             .await?;
     }
 
-    let mut candidates = load_relay_candidates(&t, now).await?;
+    let mut candidates = load_relay_candidates(t, now).await?;
     candidates.sort();
 
     assert_eq!(
@@ -68,59 +70,68 @@ async fn test_load_transport_candidates_multiple() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_maybe_add_additional_transports_mutex_held() -> Result<()> {
-    let t = TestContext::new().await;
+async fn assert_automatic_relay_management_does_nothing(t: &TestContext) {
+    let transports_before = t.count_transports().await.unwrap();
+    let config_before = t
+        .get_config_i64(Config::LastAutomaticRelayManagement)
+        .await
+        .unwrap();
 
-    // Hold the housekeeping mutex ourselves, simulating another task
-    // already running housekeeping or transport management.
-    let _lock = t.housekeeping_mutex.lock().await;
-
-    let transports_before = t.count_transports().await?;
-
-    maybe_add_additional_relays_inner(&t, false).await?;
+    maybe_add_additional_relays_inner(t, false).await.unwrap();
 
     let config_after = t
         .get_config_i64(Config::LastAutomaticRelayManagement)
-        .await?;
-    let transports_after = t.count_transports().await?;
+        .await
+        .unwrap();
+    let transports_after = t.count_transports().await.unwrap();
 
-    assert_eq!(0, config_after); // Assert the config still has the default value (0)
+    assert_eq!(config_after, config_before);
     assert_eq!(transports_before, transports_after);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_maybe_add_additional_relays_mutex_held() -> Result<()> {
+    let t = &TestContext::new().await;
+    enable_config(t).await;
+
+    // Hold the housekeeping mutex ourselves, simulating another task
+    // already running housekeeping or relay management.
+    let _lock = t.housekeeping_mutex.lock().await;
+
+    assert_automatic_relay_management_does_nothing(t).await;
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_maybe_add_additional_transports_debounce() -> Result<()> {
-    let t = TestContext::new_alice().await;
+async fn test_maybe_add_additional_relays_debounce() -> Result<()> {
+    let t = &TestContext::new_alice().await;
+    enable_config(t).await;
     let some_seconds_ago = time() - 10;
 
-    // Pretend automatic transport management just ran.
+    // Pretend automatic relay management just ran.
     t.set_config_internal(
         Config::LastAutomaticRelayManagement,
         Some(&some_seconds_ago.to_string()),
     )
     .await?;
 
-    let transports_before = t.count_transports().await?;
-
-    maybe_add_additional_relays_inner(&t, false).await?;
-
-    let config_after = t
-        .get_config_i64(Config::LastAutomaticRelayManagement)
-        .await?;
-    let transports_after = t.count_transports().await?;
-
-    assert_eq!(config_after, some_seconds_ago);
-    assert_eq!(transports_before, transports_after);
+    assert_automatic_relay_management_does_nothing(t).await;
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_maybe_add_additional_transports_add_one() -> Result<()> {
-    let t = TestContext::new_alice().await;
+async fn test_maybe_add_additional_relays_disabled() {
+    // By default, automatic relay management is disabled:
+    let t = &TestContext::new_alice().await;
+    assert_automatic_relay_management_does_nothing(t).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_maybe_add_additional_relays_add_one() -> Result<()> {
+    let t = &TestContext::new_alice().await;
+    enable_config(t).await;
     let now = time();
 
     t.sql.execute("DELETE FROM relay_candidates", ()).await?;
@@ -134,7 +145,7 @@ async fn test_maybe_add_additional_transports_add_one() -> Result<()> {
     let transports_before = t.count_transports().await?;
 
     let skip_network = true;
-    maybe_add_additional_relays_inner(&t, skip_network).await?;
+    maybe_add_additional_relays_inner(t, skip_network).await?;
 
     let config_after = t
         .get_config_i64(Config::LastAutomaticRelayManagement)
@@ -145,4 +156,11 @@ async fn test_maybe_add_additional_transports_add_one() -> Result<()> {
     assert_eq!(transports_after, transports_before + 1);
 
     Ok(())
+}
+
+async fn enable_config(context: &Context) {
+    context
+        .set_config_bool(Config::AutomaticRelayManagement, true)
+        .await
+        .unwrap();
 }

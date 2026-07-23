@@ -54,7 +54,7 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
         }
         return Ok(());
     }
-    if context
+    if !context
         .get_config_bool(Config::AutomaticRelayManagement)
         .await?
     {
@@ -99,12 +99,15 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
             );
             context
                 .sql
-                .execute("UPDATE relay_candidates SET last_tried=?", (now,))
+                .execute(
+                    "UPDATE relay_candidates SET last_tried=? WHERE host=?",
+                    (now, host),
+                )
                 .await?;
+        } else {
+            info!(context, "Successfully added relay {host}");
+            relay_added = true;
         }
-        info!(context, "Successfully added relay {host}");
-
-        relay_added = true;
     }
     if relay_added {
         info!(context, "Restarting IO after relay addition");
