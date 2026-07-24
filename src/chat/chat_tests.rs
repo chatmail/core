@@ -854,6 +854,7 @@ async fn test_add_device_msg_unlabelled() {
 
     // add two device-messages
     let mut msg1 = Message::new_text("first message".to_string());
+    msg1.state = MessageState::InNoticed;
     let msg1_id = add_device_msg(&t, None, Some(&mut msg1)).await;
     assert!(msg1_id.is_ok());
 
@@ -869,12 +870,20 @@ async fn test_add_device_msg_unlabelled() {
     assert_eq!(msg1.text, "first message");
     assert_eq!(msg1.from_id, ContactId::DEVICE);
     assert_eq!(msg1.to_id, ContactId::SELF);
+    assert_eq!(msg1.get_state(), MessageState::InNoticed);
+    assert!(
+        t.evtracker
+            .get_matching_opt(&t, |e| matches!(e, EventType::IncomingMsg { .. }))
+            .await
+            .is_none()
+    );
     assert!(!msg1.is_info());
 
     let msg2 = message::Message::load_from_db(&t, msg2_id.unwrap()).await;
     assert!(msg2.is_ok());
     let msg2 = msg2.unwrap();
     assert_eq!(msg2.text, "second message");
+    assert_eq!(msg2.get_state(), MessageState::InFresh);
 
     // check device chat
     assert_eq!(msg2.chat_id.get_msg_cnt(&t).await.unwrap(), 2);
