@@ -593,33 +593,9 @@ impl Imap {
                 .size
                 .context("imap fetch response does not contain size")?;
 
-            // Determine the target folder where the message should be moved to.
-            //
-            // We only move the messages from the INBOX and Spam folders.
-            // This is required to avoid infinite MOVE loop on IMAP servers
-            // that alias `DeltaChat` folder to other names.
-            // For example, some Dovecot servers alias `DeltaChat` folder to `INBOX.DeltaChat`.
-            // In this case moving from `INBOX.DeltaChat` to `DeltaChat`
-            // results in the messages getting a new UID,
-            // so the messages will be detected as new
-            // in the `INBOX.DeltaChat` folder again.
-            let delete = if let Some(message_id) = &message_id {
-                message::rfc724_mid_exists_ex(context, message_id, "deleted=1")
-                    .await?
-                    .is_some_and(|(_msg_id, deleted)| deleted)
-            } else {
-                false
-            };
-
             // Generate a fake Message-ID to identify the message in the database
             // if the message has no real Message-ID.
             let message_id = message_id.unwrap_or_else(create_message_id);
-
-            if delete {
-                info!(context, "Deleting locally deleted message {message_id}.");
-            }
-
-            let target = if delete { "" } else { folder };
 
             context
                 .sql
@@ -635,21 +611,14 @@ impl Imap {
                         &folder,
                         uid,
                         uid_validity,
-                        target,
+                        &folder,
                     ),
                 )
                 .await?;
 
-            // Download only the messages which have reached their target folder if there are
-            // multiple devices. This prevents race conditions in multidevice case, where one
-            // device tries to download the message while another device moves the message at the
-            // same time. Even in single device case it is possible to fail downloading the first
-            // message, move it to the movebox and then download the second message before
-            // downloading the first one, if downloading from inbox before moving is allowed.
-            if folder == target
-                && prefetch_should_download(context, &headers, &message_id, fetch_response.flags())
-                    .await
-                    .context("prefetch_should_download")?
+            if prefetch_should_download(context, &headers, &message_id, fetch_response.flags())
+                .await
+                .context("prefetch_should_download")?
             {
                 if headers
                     .get_header_value(HeaderDef::ChatIsPostMessage)
