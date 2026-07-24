@@ -7,16 +7,19 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::chat::{ChatId, send_msg};
+use crate::EventType;
+use crate::chat::{Chat, ChatId, send_msg};
 use crate::config::Config;
+use crate::constants::Chattype;
+use crate::contact::ContactId;
 use crate::context::Context;
 use crate::log::warn;
-use crate::message::{Message, MsgId};
+use crate::message::{Message, MsgId, rfc724_mid_exists};
 use crate::param::Param;
 use crate::reaction::get_msg_reactions;
 use crate::tools::time;
 
-// Wire format for accumulated reactions
+/// Wire format for accumulated reactions
 #[derive(Debug, Serialize, Deserialize)]
 struct BroadcastReactionsPayload {
     messages: Vec<BroadcastReactionsMessage>,
@@ -32,7 +35,7 @@ struct BroadcastReactionsEntry {
     count: usize,
 }
 
-// Seconds between sending out accumulated reaction updates for broadcast channels from `reactions_need_broadcast` table
+/// Seconds between sending out accumulated reaction updates for broadcast channels from `reactions_need_broadcast` table
 const REACTION_BROADCAST_PERIOD: i64 = 10 * 60;
 
 /// Starts broadcasting if last broadcasting so more than `REACTION_BROADCAST_PERIOD` seconds in the past.
@@ -129,6 +132,54 @@ async fn broadcast_reactions_for_one_chat(context: &Context, chat_id: ChatId) ->
     reaction_msg.param.set(Param::BroadcastReactions, json);
     reaction_msg.hidden = true;
     send_msg(context, chat_id, &mut reaction_msg).await?;
+
+    Ok(())
+}
+
+/// Applies incoming, accumulated reactions received via the `Broadcast-Reactions:` header
+/// to the `reactions_accumulated` table.
+pub(crate) async fn receive_broadcast_reactions(context: &Context, json: &str) -> Result<()> {
+    let payload: BroadcastReactionsPayload = serde_json::from_str(json)?;
+
+    for message in payload.messages {
+        let Some(msg_id) = rfc724_mid_exists(context, &message.id).await? else {
+            continue; // no need for a pending reaction, the next periodic update has the state again
+        };
+        let Some(msg) = Message::load_from_db_optional(context, msg_id).await? else {
+            continue; // there may have been a deletion race, ignore error
+        };
+        let Ok(chat) = Chat::load_from_db(context, msg.chat_id).await else {
+            continue; // there may have been a deletion race, ignore error
+        };
+        if chat.typ != Chattype::InBroadcast {
+            continue;
+        }
+
+        context
+            .sql
+            .transaction(move |transaction| {
+                transaction.execute(
+                    "DELETE FROM reactions_accumulated WHERE msg_id=?",
+                    (msg_id,),
+                )?;
+                for entry in &message.reactions {
+                    transaction.execute(
+                        "INSERT INTO reactions_accumulated (msg_id, reaction, count)
+                         VALUES (?1, ?2, ?3)",
+                        (msg_id, &entry.emoji, entry.count),
+                    )?;
+                }
+                Ok(())
+            })
+            .await?;
+
+        context.emit_event(EventType::ReactionsChanged {
+            // the event is for the subscriber, ReactionsIncoming is not needed
+            chat_id: msg.chat_id,
+            msg_id: msg_id,
+            contact_id: ContactId::UNDEFINED,
+        });
+    }
 
     Ok(())
 }
