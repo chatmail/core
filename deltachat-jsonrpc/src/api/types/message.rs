@@ -390,11 +390,11 @@ pub enum SystemMessageType {
     LocationOnly,
     InvalidUnencryptedMail,
 
-    /// 1:1 chats info message telling that SecureJoin has started and the user should wait for it
+    /// Single chats info message telling that SecureJoin has started and the user should wait for it
     /// to complete.
     SecurejoinWait,
 
-    /// 1:1 chats info message telling that SecureJoin is still running, but the user may already
+    /// Single chats info message telling that SecureJoin is still running, but the user may already
     /// send messages.
     SecurejoinWaitTimeout,
 

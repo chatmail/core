@@ -653,7 +653,7 @@ mod tests {
         let t = TestContext::new_alice().await;
         t.allow_unencrypted().await?;
 
-        // receive a one-to-one-message
+        // receive a single chat message
         receive_imf(
             &t,
             b"From: Bob Authname <bob@example.org>\n\
@@ -681,12 +681,12 @@ mod tests {
         let chat = Chat::load_from_db(&t, chat_id).await?;
         assert_eq!(chat.get_name(), "Bob Authname");
 
-        // check, the one-to-one-chat can be found using chatlist search query
+        // check, the single chat can be found using chatlist search query
         let chats = Chatlist::try_load(&t, 0, Some("bob authname"), None).await?;
         assert_eq!(chats.len(), 1);
         assert_eq!(chats.get_chat_id(0).unwrap(), chat_id);
 
-        // change the name of the contact; this also changes the name of the one-to-one-chat
+        // change the name of the contact; this also changes the name of the single chat
         let test_id = Contact::create(&t, "Bob Nickname", "bob@example.org").await?;
         assert_eq!(contact_id, test_id);
         let chat = Chat::load_from_db(&t, chat_id).await?;
@@ -696,7 +696,7 @@ mod tests {
         let chats = Chatlist::try_load(&t, 0, Some("bob nickname"), None).await?;
         assert_eq!(chats.len(), 1);
 
-        // revert contact to authname, this again changes the name of the one-to-one-chat
+        // revert contact to authname, this again changes the name of the single chat
         let test_id = Contact::create(&t, "", "bob@example.org").await?;
         assert_eq!(contact_id, test_id);
         let chat = Chat::load_from_db(&t, chat_id).await?;
@@ -714,7 +714,7 @@ mod tests {
         let t = TestContext::new_alice().await;
         t.allow_unencrypted().await?;
 
-        // receive a one-to-one-message without authname set
+        // receive a single chat message without authname set
         receive_imf(
             &t,
             b"From: bob@example.org\n\
@@ -737,12 +737,12 @@ mod tests {
         let chat = Chat::load_from_db(&t, chat_id).await?;
         assert_eq!(chat.get_name(), "bob@example.org");
 
-        // check, the one-to-one-chat can be found using chatlist search query
+        // check, the single chat can be found using chatlist search query
         let chats = Chatlist::try_load(&t, 0, Some("bob@example.org"), None).await?;
         assert_eq!(chats.len(), 1);
         assert_eq!(chats.get_chat_id(0)?, chat_id);
 
-        // change the name of the contact; this also changes the name of the one-to-one-chat
+        // change the name of the contact; this also changes the name of the single chat
         let test_id = Contact::create(&t, "Bob Nickname", "bob@example.org").await?;
         assert_eq!(contact_id, test_id);
         let chat = Chat::load_from_db(&t, chat_id).await?;
@@ -753,7 +753,7 @@ mod tests {
         assert_eq!(chats.len(), 1);
         assert_eq!(chats.get_chat_id(0)?, chat_id);
 
-        // revert name change, this again changes the name of the one-to-one-chat to the email-address
+        // revert name change, this again changes the name of the single chat to the email-address
         let test_id = Contact::create(&t, "", "bob@example.org").await?;
         assert_eq!(contact_id, test_id);
         let chat = Chat::load_from_db(&t, chat_id).await?;

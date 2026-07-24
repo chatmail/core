@@ -99,7 +99,7 @@ pub const DC_CHAT_ID_LAST_SPECIAL: ChatId = ChatId::new(9);
 )]
 #[repr(u32)]
 pub enum Chattype {
-    /// A 1:1 chat, i.e. a normal chat with a single contact.
+    /// A single chat (a chat with a single contact).
     ///
     /// Created by [`ChatId::create_for_contact`].
     Single = 100,

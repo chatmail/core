@@ -212,8 +212,8 @@ async fn test_get_original_msg_id() -> Result<()> {
     let bob = TestContext::new_bob().await;
 
     // normal sending of messages does not have an original ID
-    let one2one_chat = alice.create_chat(&bob).await;
-    let sent = alice.send_text(one2one_chat.id, "foo").await;
+    let single_chat = alice.create_chat(&bob).await;
+    let sent = alice.send_text(single_chat.id, "foo").await;
     let orig_msg = Message::load_from_db(&alice, sent.sender_msg_id).await?;
     assert!(orig_msg.get_original_msg_id(&alice).await?.is_none());
     assert!(orig_msg.parent(&alice).await?.is_none());
@@ -232,8 +232,8 @@ async fn test_get_original_msg_id() -> Result<()> {
     assert!(saved_msg.quoted_message(&alice).await?.is_none());
 
     // forwarding from "Saved Messages" back to another chat, detaches original ID
-    forward_msgs(&alice, &[saved_msg.get_id()], one2one_chat.get_id()).await?;
-    let forwarded_msg = alice.get_last_msg_in(one2one_chat.get_id()).await;
+    forward_msgs(&alice, &[saved_msg.get_id()], single_chat.get_id()).await?;
+    let forwarded_msg = alice.get_last_msg_in(single_chat.get_id()).await;
     assert_ne!(forwarded_msg.get_id(), saved_msg.get_id());
     assert_ne!(forwarded_msg.get_id(), orig_msg.get_id());
     assert!(forwarded_msg.get_original_msg_id(&alice).await?.is_none());
@@ -275,7 +275,7 @@ async fn test_markseen_msgs() -> Result<()> {
     bob_chat_id.accept(&bob).await.unwrap();
 
     // bob sends to alice,
-    // alice knows bob and messages appear in normal chat
+    // alice knows bob and messages appear in single chat
     let mut msg = Message::new_text("this is the text!".to_string());
     let msg1 = alice
         .recv_msg(&bob.send_msg(bob_chat_id, &mut msg).await)

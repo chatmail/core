@@ -143,14 +143,14 @@ enum ChatAssignment {
         chat_id_blocked: Blocked,
     },
 
-    /// 1:1 chat with a single contact.
+    /// Single chat with a single contact.
     ///
     /// The chat may be encrypted or not,
     /// it does not matter.
     /// It is not possible to mix
     /// email address contacts
-    /// with key-contacts in a single 1:1 chat anyway.
-    OneOneChat,
+    /// with key-contacts in a single chat anyway.
+    SingleChat,
 }
 
 /// Emulates reception of a message from the network.
@@ -208,7 +208,7 @@ async fn get_to_and_past_contact_ids(
     // Note that this is not necessarily the chat we want to assign the message to.
     // In case of an outgoing private reply to a group message we may
     // lookup the address of receipient in the list of addresses used in the group,
-    // but want to assign the message to 1:1 chat.
+    // but want to assign the message to a single chat.
     let chat_id = match chat_assignment {
         ChatAssignment::Trash => None,
         ChatAssignment::GroupChat { grpid } => {
@@ -227,7 +227,7 @@ async fn get_to_and_past_contact_ids(
         }
         ChatAssignment::ExistingChat { chat_id, .. } => Some(*chat_id),
         ChatAssignment::MailingListOrBroadcast => None,
-        ChatAssignment::OneOneChat => {
+        ChatAssignment::SingleChat => {
             if !mime_parser.incoming {
                 parent_message.as_ref().map(|m| m.chat_id)
             } else {
@@ -356,8 +356,8 @@ async fn get_to_and_past_contact_ids(
         }
         // Sometimes, messages are sent just to a single recipient
         // in a broadcast (e.g. securejoin messages).
-        // In this case, we need to look them up like in a 1:1 chat:
-        ChatAssignment::OneOneChat | ChatAssignment::MailingListOrBroadcast => {
+        // In this case, we need to look them up like in a single chat:
+        ChatAssignment::SingleChat | ChatAssignment::MailingListOrBroadcast => {
             let pgp_to_ids = add_or_lookup_key_contacts(
                 context,
                 &mime_parser.recipients,
@@ -372,7 +372,7 @@ async fn get_to_and_past_contact_ids(
             {
                 // There is a single recipient and we have
                 // mapped it to a key contact.
-                // This is an encrypted 1:1 chat.
+                // This is an encrypted single chat.
                 to_ids = pgp_to_ids
             } else {
                 let ids = if mime_parser.was_encrypted() {
@@ -612,7 +612,7 @@ pub(crate) async fn receive_imf_inner(
     //
     // This can be also used to lookup
     // key-contact by email address
-    // when receiving a private 1:1 reply
+    // when receiving a single chat reply
     // to a group chat message.
     let parent_message = get_parent_message(
         context,
@@ -1327,12 +1327,12 @@ async fn decide_chat_assignment(
             num_recipients += 1;
         }
     }
-    let mut can_be_11_chat_log = String::new();
+    let mut can_be_single_chat_log = String::new();
     let mut l = |cond: bool, s: String| {
-        can_be_11_chat_log += &s;
+        can_be_single_chat_log += &s;
         cond
     };
-    let can_be_11_chat = l(
+    let can_be_single_chat = l(
         num_recipients <= 1,
         format!("num_recipients={num_recipients}."),
     ) && (l(from_id != ContactId::SELF, format!(" from_id={from_id}."))
@@ -1396,21 +1396,21 @@ async fn decide_chat_assignment(
         } else if mime_parser.get_header(HeaderDef::ChatGroupName).is_some() {
             chat_assignment_log = "Reply with Chat-Group-Name.".to_string();
             ChatAssignment::AdHocGroup
-        } else if can_be_11_chat {
-            chat_assignment_log = format!("Non-group reply. {can_be_11_chat_log}");
-            ChatAssignment::OneOneChat
+        } else if can_be_single_chat {
+            chat_assignment_log = format!("Non-group reply. {can_be_single_chat_log}");
+            ChatAssignment::SingleChat
         } else {
-            chat_assignment_log = format!("Non-group reply. {can_be_11_chat_log}");
+            chat_assignment_log = format!("Non-group reply. {can_be_single_chat_log}");
             ChatAssignment::AdHocGroup
         }
     } else if mime_parser.get_header(HeaderDef::ChatGroupName).is_some() {
         chat_assignment_log = "Message with Chat-Group-Name, no parent.".to_string();
         ChatAssignment::AdHocGroup
-    } else if can_be_11_chat {
-        chat_assignment_log = format!("Non-group message, no parent. {can_be_11_chat_log}");
-        ChatAssignment::OneOneChat
+    } else if can_be_single_chat {
+        chat_assignment_log = format!("Non-group message, no parent. {can_be_single_chat_log}");
+        ChatAssignment::SingleChat
     } else {
-        chat_assignment_log = format!("Non-group message, no parent. {can_be_11_chat_log}");
+        chat_assignment_log = format!("Non-group message, no parent. {can_be_single_chat_log}");
         ChatAssignment::AdHocGroup
     };
 
@@ -1450,14 +1450,14 @@ async fn do_chat_assignment(
     let mut chat_created = false;
 
     if mime_parser.incoming {
-        let test_normal_chat = ChatIdBlocked::lookup_by_contact(context, from_id).await?;
+        let test_single_chat = ChatIdBlocked::lookup_by_contact(context, from_id).await?;
 
         let create_blocked_default = if is_bot {
             Blocked::Not
         } else {
             Blocked::Request
         };
-        let create_blocked = if let Some(ChatIdBlocked { id: _, blocked }) = test_normal_chat {
+        let create_blocked = if let Some(ChatIdBlocked { id: _, blocked }) = test_single_chat {
             match blocked {
                 Blocked::Request => create_blocked_default,
                 Blocked::Not => Blocked::Not,
@@ -1467,8 +1467,8 @@ async fn do_chat_assignment(
                         // Block the group contact created as well.
                         Blocked::Yes
                     } else {
-                        // 1:1 chat is blocked, but the contact is not.
-                        // This happens when 1:1 chat is hidden
+                        // Single chat is blocked, but the contact is not.
+                        // This happens when single chat is hidden
                         // during scanning of a group invitation code.
                         create_blocked_default
                     }
@@ -1487,7 +1487,7 @@ async fn do_chat_assignment(
                 if let Some((id, blocked)) = chat::get_chat_id_by_grpid(context, grpid).await? {
                     chat_id = Some(id);
                     chat_id_blocked = blocked;
-                } else if (allow_creation || test_normal_chat.is_some())
+                } else if (allow_creation || test_single_chat.is_some())
                     && let Some((new_chat_id, new_chat_id_blocked)) = create_group(
                         context,
                         mime_parser,
@@ -1537,7 +1537,7 @@ async fn do_chat_assignment(
                         context,
                         mime_parser,
                         to_ids,
-                        allow_creation || test_normal_chat.is_some(),
+                        allow_creation || test_single_chat.is_some(),
                         create_blocked,
                     )
                     .await?
@@ -1547,7 +1547,7 @@ async fn do_chat_assignment(
                     chat_created = new_created;
                 }
             }
-            ChatAssignment::OneOneChat => {}
+            ChatAssignment::SingleChat => {}
         }
 
         // if the chat is somehow blocked but we want to create a non-blocked chat,
@@ -1562,7 +1562,7 @@ async fn do_chat_assignment(
         }
 
         if chat_id.is_none() {
-            // Try to create a 1:1 chat.
+            // Try to create a single chat.
             let contact = Contact::get_by_id(context, from_id).await?;
             let create_blocked = match contact.is_blocked() {
                 true => Blocked::Yes,
@@ -1570,7 +1570,7 @@ async fn do_chat_assignment(
                 false => Blocked::Request,
             };
 
-            if let Some(chat) = test_normal_chat {
+            if let Some(chat) = test_single_chat {
                 chat_id = Some(chat.id);
                 chat_id_blocked = chat.blocked;
             } else if allow_creation {
@@ -1691,7 +1691,7 @@ async fn do_chat_assignment(
                     chat_created = new_chat_created;
                 }
             }
-            ChatAssignment::OneOneChat => {}
+            ChatAssignment::SingleChat => {}
         }
 
         if !to_ids.is_empty() {
@@ -1803,10 +1803,10 @@ async fn add_parts(
                     context,
                     "Not assigning msg '{rfc724_mid}' to broadcast {chat_id}: wrong sender: {from_id}."
                 );
-                let direct_chat =
+                let single_chat =
                     ChatIdBlocked::get_for_contact(context, from_id, Blocked::Request).await?;
-                chat_id = direct_chat.id;
-                chat_id_blocked = direct_chat.blocked;
+                chat_id = single_chat.id;
+                chat_id_blocked = single_chat.blocked;
                 chat = Chat::load_from_db(context, chat_id).await?;
             }
         }
@@ -2668,8 +2668,8 @@ async fn lookup_chat_by_reply(
         return Ok(None);
     }
 
-    // If the parent chat is a 1:1 chat, and the sender added
-    // a new person to TO/CC, then the message should not go to the 1:1 chat, but to a
+    // If the parent chat is a single chat, and the sender added
+    // a new person to TO/CC, then the message should not go to the single chat, but to a
     // newly created ad-hoc group.
     let parent_chat = Chat::load_from_db(context, parent_chat_id).await?;
     if parent_chat.typ == Chattype::Single && mime_parser.recipients.len() > 1 {
@@ -2795,7 +2795,7 @@ async fn lookup_or_create_adhoc_group(
     .map(|(chat_id, blocked)| (chat_id, blocked, true)))
 }
 
-/// If this method returns true, the message shall be assigned to the 1:1 chat with the sender.
+/// If this method returns true, the message shall be assigned to the single chat with the sender.
 /// If it returns false, it shall be assigned to the parent chat.
 async fn is_probably_private_reply(
     context: &Context,
@@ -2808,7 +2808,7 @@ async fn is_probably_private_reply(
     }
 
     // Usually we don't want to show private replies in the parent chat, but in the
-    // 1:1 chat with the sender.
+    // single chat with the sender.
     //
     // There is one exception: Classical MUA replies to two-member groups
     // should be assigned to the group chat. We restrict this exception to classical emails, as chat-group-messages
@@ -2921,7 +2921,7 @@ async fn create_group(
         // yet unknown group, which was rejected because
         // Chat-Group-Name, which is in the encrypted part, was
         // not found. We can't create a properly named group in
-        // this case, so assign error message to 1:1 chat with the
+        // this case, so assign error message to a single chat with the
         // sender instead.
         Ok(None)
     } else {
@@ -3577,7 +3577,7 @@ async fn create_or_lookup_mailinglist_or_broadcast(
             name,
             if chattype == Chattype::InBroadcast {
                 // If we joined the broadcast, we have scanned a QR code.
-                // Even if 1:1 chat does not exist or is in a contact request,
+                // Even if a single chat does not exist or is in a contact request,
                 // create the channel as unblocked.
                 Blocked::Not
             } else {

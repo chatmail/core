@@ -433,7 +433,7 @@ fn migrate_key_contacts(
                 Ok(())
             };
             let old_and_new_members: Vec<(u32, bool, Option<u32>)> = match typ {
-                // 1:1 chats retain:
+                // Single chats retain:
                 // - address-contact if peerstate is in the "reset" state,
                 //   or if there is no key-contact that has the right email address.
                 // - key-contact identified by the Autocrypt key if Autocrypt key does not match the verified key.
@@ -444,7 +444,7 @@ fn migrate_key_contacts(
                     let Some((old_member, _)) = old_members.first() else {
                         info!(
                             context,
-                            "1:1 chat {chat_id} doesn't contain contact, probably it's self or device chat."
+                            "Single chat {chat_id} doesn't contain contact, probably it's self or device chat."
                         );
                         continue;
                     };
@@ -2390,7 +2390,7 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
         sql.execute_migration_transaction(
             |transaction| {
                 // Newest timestamp of message sent to unencrypted chat with contacts.
-                // This is for 1:1 chats and ad hoc groups.
+                // This is for single chats and ad hoc groups.
                 //
                 // Corner case of ad hoc groups with only self as a member is ignored.
                 let max_unencrypted_timestamp: i64 = transaction.query_row(
