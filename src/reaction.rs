@@ -158,6 +158,7 @@ async fn set_msg_id_reaction(
     timestamp: i64,
     reaction: &Reaction,
 ) -> Result<()> {
+    let mut chat = Chat::load_from_db(context, chat_id).await?;
     if reaction.is_empty() {
         // Simply remove the record instead of setting it to empty string.
         context
@@ -180,7 +181,6 @@ async fn set_msg_id_reaction(
                 (msg_id, contact_id, reaction.as_str()),
             )
             .await?;
-        let mut chat = Chat::load_from_db(context, chat_id).await?;
         if chat
             .param
             .update_timestamp(Param::LastReactionTimestamp, timestamp)?
@@ -193,7 +193,6 @@ async fn set_msg_id_reaction(
         }
     }
 
-    let chat = Chat::load_from_db(context, chat_id).await?;
     if chat.typ == Chattype::OutBroadcast {
         context
             .sql
