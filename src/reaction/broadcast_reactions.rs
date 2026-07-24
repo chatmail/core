@@ -132,3 +132,81 @@ async fn broadcast_reactions_for_one_chat(context: &Context, chat_id: ChatId) ->
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::chat::create_broadcast;
+    use crate::reaction::send_reaction;
+    use crate::securejoin::get_securejoin_qr;
+    use crate::test_utils::TestContextManager;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_broadcast_channel_reaction() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+        let claire = &tcm.charlie().await;
+
+        // Alice creates a channel
+        let alice_chat_id = create_broadcast(alice, "Channel".to_string()).await?;
+        let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
+
+        // Bob and claire join the channel via QR code
+        let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
+        bob_chat_id.accept(bob).await?;
+        let claire_chat_id = tcm.exec_securejoin_qr(claire, alice, &qr).await;
+        claire_chat_id.accept(claire).await?;
+
+        // Alice sends a message to the channel
+        let sent_msg = alice.send_text(alice_chat_id, "hi channel!").await;
+        let alice_msg_id = sent_msg.load_from_db().await.id;
+
+        // Bob and Claire receive the message
+        let bob_msg = bob.recv_msg(&sent_msg).await;
+        let claire_msg = claire.recv_msg(&sent_msg).await;
+        assert_eq!(bob_msg.get_text(), "hi channel!");
+        assert_eq!(claire_msg.get_text(), "hi channel!");
+
+        // Bob reacts to the message
+        send_reaction(bob, bob_msg.id, "🏳️‍🌈").await?;
+        let sent_msg = bob.pop_sent_msg().await;
+        let reactions = get_msg_reactions(bob, bob_msg.id).await?;
+        assert_eq!(reactions.to_string(), "🏳️‍🌈1");
+
+        // Alice receives Bob's reaction
+        alice.recv_msg_hidden(&sent_msg).await;
+        let reactions = get_msg_reactions(alice, alice_msg_id).await?;
+        assert_eq!(reactions.to_string(), "🏳️‍🌈1");
+        assert_eq!(
+            alice
+                .sql
+                .count("SELECT COUNT(*) FROM reactions_need_broadcast", ())
+                .await?,
+            1
+        );
+
+        // Alice broadcasts reaction to Claire
+        // On the wire, the hidden message has a header like
+        // `Chat-Reactions: {"messages":[{"id":"123@adc","reactions":[{"emoji":"🏳️‍🌈","count":1}]}]}`
+        maybe_broadcast_reactions(alice).await?;
+        assert_eq!(
+            alice
+                .sql
+                .count("SELECT COUNT(*) FROM reactions_need_broadcast", ())
+                .await?,
+            0
+        );
+        let sent_msg = alice.pop_sent_msg().await;
+        claire.recv_msg_hidden(&sent_msg).await;
+        assert_eq!(
+            claire
+                .sql
+                .count("SELECT COUNT(*) FROM reactions_accumulated", ())
+                .await?,
+            1
+        );
+
+        Ok(())
+    }
+}
