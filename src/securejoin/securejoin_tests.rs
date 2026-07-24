@@ -29,25 +29,26 @@ enum SetupContactCase {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_setup_contact_basic() {
-    test_setup_contact_ex(SetupContactCase::Normal).await
+    test_setup_contact_ex(SetupContactCase::Normal).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_setup_contact_wrong_alice_gossip() {
-    test_setup_contact_ex(SetupContactCase::WrongAliceGossip).await
+    let (alice, _) = test_setup_contact_ex(SetupContactCase::WrongAliceGossip).await;
+    alice.assert_warn("No self addr+pubkey gossip found").await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_setup_contact_alice_is_bot() {
-    test_setup_contact_ex(SetupContactCase::AliceIsBot).await
+    test_setup_contact_ex(SetupContactCase::AliceIsBot).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_setup_contact_alice_has_name() {
-    test_setup_contact_ex(SetupContactCase::AliceHasName).await
+    test_setup_contact_ex(SetupContactCase::AliceHasName).await;
 }
 
-async fn test_setup_contact_ex(case: SetupContactCase) {
+async fn test_setup_contact_ex(case: SetupContactCase) -> (TestContext, TestContext) {
     let _n = TimeShiftFalsePositiveNote;
 
     let mut tcm = TestContextManager::new();
@@ -217,7 +218,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
             .unwrap();
         assert_eq!(handshake_msg, HandshakeMessage::Ignore);
         assert!(contact_bob.is_verified(&alice).await.unwrap());
-        return;
+        return (alice, bob);
     }
 
     // Alice should not yet have Bob verified
@@ -300,6 +301,8 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     let msg = get_chat_msg(&bob, bob_chat.get_id(), 0, 1).await;
     assert!(msg.is_info());
     assert_eq!(msg.get_text(), messages_e2ee_info_msg(&bob));
+
+    (alice, bob)
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -307,6 +310,8 @@ async fn test_setup_contact_bad_qr() {
     let bob = TestContext::new_bob().await;
     let ret = join_securejoin(&bob.ctx, "not a qr code").await;
     assert!(ret.is_err());
+    bob.assert_warn("Unsupported QR type").await;
+    bob.assert_error("QR process failed").await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -791,6 +796,7 @@ First thread."#;
     let chat_id = msg.chat_id;
 
     assert!(get_securejoin_qr(&alice, Some(chat_id)).await.is_err());
+    alice.assert_error("Can't generate QR code").await;
     Ok(())
 }
 
@@ -983,6 +989,13 @@ async fn test_parallel_setup_contact(bob_deletes_fiona_contact: bool) -> Result<
     let bob_alice_contact = Contact::get_by_id(bob, bob_alice_contact_id).await.unwrap();
     assert_eq!(bob_alice_contact.is_verified(bob).await.unwrap(), true);
 
+    bob.assert_warn("Message does not match expected fingerprint")
+        .await;
+    if bob_deletes_fiona_contact {
+        bob.assert_warn("Message does not match expected fingerprint")
+            .await;
+    }
+
     Ok(())
 }
 
@@ -1013,7 +1026,7 @@ async fn test_wrong_auth_token() -> Result<()> {
 
     let alice_bob_contact = alice.add_or_lookup_contact(bob).await;
     assert!(!alice_bob_contact.is_verified(alice).await?);
-
+    alice.assert_warn("invalid auth code").await;
     Ok(())
 }
 
@@ -1377,6 +1390,10 @@ async fn test_qr_no_implicit_inviter_addition() -> Result<()> {
     let charlie_chat_contacts = chat::get_chat_contacts(charlie, charlie_chat_id).await?;
     assert_eq!(charlie_chat_contacts.len(), 2);
 
+    bob.assert_error("self not in group").await;
+    bob.assert_warn("the account is not part of the group/broadcast")
+        .await;
+
     Ok(())
 }
 
@@ -1588,6 +1605,9 @@ async fn test_auth_token_is_synchronized() -> Result<()> {
         .unwrap();
     assert_eq!(auth_count, 2);
 
+    bob.assert_warn("Could not find symmetric secret for session key")
+        .await;
+    bob.assert_warn("unencrypted message").await;
     Ok(())
 }
 

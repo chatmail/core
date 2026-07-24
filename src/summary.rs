@@ -490,5 +490,6 @@ mod tests {
             msg.get_summary_text_without_prefix(ctx).await,
             "📎 foo.bar \u{2013} bla bla"
         ); // skipping prefix used for reactions summaries
+        d.assert_warn("Not a valid DeltaChat vCard").await;
     }
 }

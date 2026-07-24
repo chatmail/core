@@ -759,6 +759,8 @@ mod tests {
             .unwrap();
         t.set_config(Config::MailPw, Some("123456")).await.unwrap();
         assert!(t.configure().await.is_err());
+
+        t.assert_warns_or_errors(&["DNS resolution"]).await;
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

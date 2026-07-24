@@ -163,3 +163,15 @@ pub struct Event {
     /// These are documented in `deltachat.h` as the `DC_EVENT_*` constants.
     pub typ: EventType,
 }
+
+impl Event {
+    /// Returns whether this event is a warning.
+    pub fn is_warn(&self) -> bool {
+        self.typ.get_warn().is_some()
+    }
+
+    /// Returns whether this event is an error.
+    pub fn is_error(&self) -> bool {
+        self.typ.get_error().is_some()
+    }
+}

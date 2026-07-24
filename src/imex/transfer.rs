@@ -488,11 +488,15 @@ mod tests {
         // Try to overwrite an existing profile.
         let err = get_backup(ctx1, provider.qr()).await.unwrap_err();
         assert!(format!("{err:#}").contains("Cannot import backups to accounts in use"));
+        ctx1.assert_error("Cannot import backups to accounts in use")
+            .await;
 
         // ctx0 is supposed to also finish, and emit an error:
         provider.await.unwrap();
         ctx0.evtracker
             .get_matching(|e| matches!(e, EventType::Error(_)))
+            .await;
+        ctx0.assert_error("Error while handling backup connection")
             .await;
 
         assert_eq!(ctx1.get_primary_self_addr().await?, "bob@example.net");

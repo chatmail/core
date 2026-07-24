@@ -363,7 +363,7 @@ async fn test_pre_and_post_msgs_deleted_ex(reorder: bool) -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
-    let alice_chat_id = alice.create_group_with_members("", &[bob]).await;
+    let alice_chat_id = alice.create_group_with_members("group", &[bob]).await;
 
     let file_bytes = include_bytes!("../../test-data/image/screenshot.gif");
     let mut msg = Message::new(Viewtype::Image);
@@ -438,6 +438,7 @@ async fn test_get_state() -> Result<()> {
 
     set_msg_failed(&alice, &mut alice_msg, "badly failed").await?;
     assert_state(&alice, alice_msg.id, MessageState::OutFailed).await;
+    alice.assert_warn("badly failed").await;
 
     // check incoming message states on receiver side
     let bob_msg = bob.recv_msg(&payload).await;

@@ -267,7 +267,7 @@ async fn test_mdn_and_alias() -> Result<()> {
 
     let chats = Chatlist::try_load(&alice, 0, None, None).await?;
     assert_eq!(chats.len(), 1);
-
+    alice.assert_warn("unencrypted message").await;
     Ok(())
 }
 
@@ -298,6 +298,8 @@ async fn test_no_from() {
     .await
     .unwrap()
     .unwrap();
+
+    t.assert_warn("No from in message").await;
 
     // Check that tombstone MsgId is returned.
     assert_eq!(received.msg_ids.len(), 1);
@@ -355,6 +357,8 @@ async fn test_no_message_id_header() {
     let chats = Chatlist::try_load(&t, 0, None, None).await.unwrap();
     // Check that the message is not shown to the user:
     assert!(chats.is_empty());
+
+    t.assert_warn("No from in message").await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -481,43 +485,51 @@ async fn test_cc_to_contact() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_parse_ndn_tiscali() {
-    test_parse_ndn(
-            "alice@tiscali.it",
-            "shenauithz@testrun.org",
-            "Mr.un2NYERi1RM.lbQ5F9q-QyJ@tiscali.it",
-            include_bytes!("../../test-data/message/tiscali_ndn.eml"),
-            Some("Delivery status notification –       This is an automatically generated Delivery Status Notification.      \n\nDelivery to the following recipients was aborted after 2 second(s):\n\n  * shenauithz@testrun.org"),
-        )
-        .await;
+    let msg = "Delivery status notification –       This is an automatically generated Delivery Status Notification.      \n\nDelivery to the following recipients was aborted after 2 second(s):\n\n  * shenauithz@testrun.org";
+    let (t, _) = test_parse_ndn(
+        "alice@tiscali.it",
+        "shenauithz@testrun.org",
+        "Mr.un2NYERi1RM.lbQ5F9q-QyJ@tiscali.it",
+        include_bytes!("../../test-data/message/tiscali_ndn.eml"),
+        Some(msg),
+    )
+    .await;
+    t.assert_warn("DSN without action").await;
+    t.assert_warn(msg).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_parse_ndn_testrun() {
-    test_parse_ndn(
-            "alice@testrun.org",
-            "hcksocnsofoejx@five.chat",
-            "Mr.A7pTA5IgrUA.q4bP41vAJOp@testrun.org",
-            include_bytes!("../../test-data/message/testrun_ndn.eml"),
-            Some("Undelivered Mail Returned to Sender – This is the mail system at host hq5.merlinux.eu.\n\nI\'m sorry to have to inform you that your message could not\nbe delivered to one or more recipients. It\'s attached below.\n\nFor further assistance, please send mail to postmaster.\n\nIf you do so, please include this problem report. You can\ndelete your own text from the attached returned message.\n\n                   The mail system\n\n<hcksocnsofoejx@five.chat>: host mail.five.chat[195.62.125.103] said: 550 5.1.1\n    <hcksocnsofoejx@five.chat>: Recipient address rejected: User unknown in\n    virtual mailbox table (in reply to RCPT TO command)"),
-        )
-        .await;
+    let msg = "Undelivered Mail Returned to Sender – This is the mail system at host hq5.merlinux.eu.\n\nI\'m sorry to have to inform you that your message could not\nbe delivered to one or more recipients. It\'s attached below.\n\nFor further assistance, please send mail to postmaster.\n\nIf you do so, please include this problem report. You can\ndelete your own text from the attached returned message.\n\n                   The mail system\n\n<hcksocnsofoejx@five.chat>: host mail.five.chat[195.62.125.103] said: 550 5.1.1\n    <hcksocnsofoejx@five.chat>: Recipient address rejected: User unknown in\n    virtual mailbox table (in reply to RCPT TO command)";
+    let (t, _) = test_parse_ndn(
+        "alice@testrun.org",
+        "hcksocnsofoejx@five.chat",
+        "Mr.A7pTA5IgrUA.q4bP41vAJOp@testrun.org",
+        include_bytes!("../../test-data/message/testrun_ndn.eml"),
+        Some(msg),
+    )
+    .await;
+    t.assert_warn(msg).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_parse_ndn_yahoo() {
-    test_parse_ndn(
-            "alice@yahoo.com",
-            "haeclirth.sinoenrat@yahoo.com",
-            "1680295672.3657931.1591783872936@mail.yahoo.com",
-            include_bytes!("../../test-data/message/yahoo_ndn.eml"),
-            Some("Failure Notice – Sorry, we were unable to deliver your message to the following address.\n\n<haeclirth.sinoenrat@yahoo.com>:\n554: delivery error: dd Not a valid recipient - atlas117.free.mail.ne1.yahoo.com [...]"),
-        )
-        .await;
+    let msg = "Failure Notice – Sorry, we were unable to deliver your message to the following address.\n\n<haeclirth.sinoenrat@yahoo.com>:\n554: delivery error: dd Not a valid recipient - atlas117.free.mail.ne1.yahoo.com [...]";
+    let (t, _) = test_parse_ndn(
+        "alice@yahoo.com",
+        "haeclirth.sinoenrat@yahoo.com",
+        "1680295672.3657931.1591783872936@mail.yahoo.com",
+        include_bytes!("../../test-data/message/yahoo_ndn.eml"),
+        Some(msg),
+    )
+    .await;
+    t.assert_warn(msg).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_parse_ndn_gmail() {
-    test_parse_ndn(
+    let msg = "Delivery Status Notification (Failure) – ** Die Adresse wurde nicht gefunden **\n\nIhre Nachricht wurde nicht an assidhfaaspocwaeofi@gmail.com zugestellt, weil die Adresse nicht gefunden wurde oder keine E-Mails empfangen kann.\n\nHier erfahren Sie mehr: https://support.google.com/mail/?p=NoSuchUser\n\nAntwort:\n\n550 5.1.1 The email account that you tried to reach does not exist. Please try double-checking the recipient\'s email address for typos or unnecessary spaces. Learn more at https://support.google.com/mail/?p=NoSuchUser i18sor6261697wrs.38 - gsmtp";
+    let (t, _) = test_parse_ndn(
             "alice@gmail.com",
             "assidhfaaspocwaeofi@gmail.com",
             "CABXKi8zruXJc_6e4Dr087H5wE7sLp+u250o0N2q5DdjF_r-8wg@mail.gmail.com",
@@ -525,55 +537,65 @@ async fn test_parse_ndn_gmail() {
             Some("Delivery Status Notification (Failure) – ** Die Adresse wurde nicht gefunden **\n\nIhre Nachricht wurde nicht an assidhfaaspocwaeofi@gmail.com zugestellt, weil die Adresse nicht gefunden wurde oder keine E-Mails empfangen kann.\n\nHier erfahren Sie mehr: https://support.google.com/mail/?p=NoSuchUser\n\nAntwort:\n\n550 5.1.1 The email account that you tried to reach does not exist. Please try double-checking the recipient\'s email address for typos or unnecessary spaces. Learn more at https://support.google.com/mail/?p=NoSuchUser i18sor6261697wrs.38 - gsmtp"),
         )
         .await;
+    t.assert_warn(msg).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_parse_ndn_gmx() {
-    test_parse_ndn(
-            "alice@gmx.com",
-            "snaerituhaeirns@gmail.com",
-            "9c9c2a32-056b-3592-c372-d7e8f0bd4bc2@gmx.de",
-            include_bytes!("../../test-data/message/gmx_ndn.eml"),
-            Some("Mail delivery failed: returning message to sender – This message was created automatically by mail delivery software.\n\nA message that you sent could not be delivered to one or more of\nits recipients. This is a permanent error. The following address(es)\nfailed:\n\nsnaerituhaeirns@gmail.com:\nSMTP error from remote server for RCPT TO command, host: gmail-smtp-in.l.google.com (66.102.1.27) reason: 550-5.1.1 The email account that you tried to reach does not exist. Please\n try\n550-5.1.1 double-checking the recipient\'s email address for typos or\n550-5.1.1 unnecessary spaces. Learn more at\n550 5.1.1  https://support.google.com/mail/?p=NoSuchUser f6si2517766wmc.21\n9 - gsmtp [...]"),
-        )
-        .await;
+    let msg = "Mail delivery failed: returning message to sender – This message was created automatically by mail delivery software.\n\nA message that you sent could not be delivered to one or more of\nits recipients. This is a permanent error. The following address(es)\nfailed:\n\nsnaerituhaeirns@gmail.com:\nSMTP error from remote server for RCPT TO command, host: gmail-smtp-in.l.google.com (66.102.1.27) reason: 550-5.1.1 The email account that you tried to reach does not exist. Please\n try\n550-5.1.1 double-checking the recipient\'s email address for typos or\n550-5.1.1 unnecessary spaces. Learn more at\n550 5.1.1  https://support.google.com/mail/?p=NoSuchUser f6si2517766wmc.21\n9 - gsmtp [...]";
+    let (t, _) = test_parse_ndn(
+        "alice@gmx.com",
+        "snaerituhaeirns@gmail.com",
+        "9c9c2a32-056b-3592-c372-d7e8f0bd4bc2@gmx.de",
+        include_bytes!("../../test-data/message/gmx_ndn.eml"),
+        Some(msg),
+    )
+    .await;
+    t.assert_warn(msg).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_parse_ndn_posteo() {
-    test_parse_ndn(
-            "alice@posteo.org",
-            "hanerthaertidiuea@gmx.de",
-            "04422840-f884-3e37-5778-8192fe22d8e1@posteo.de",
-            include_bytes!("../../test-data/message/posteo_ndn.eml"),
-            Some("Undelivered Mail Returned to Sender – This is the mail system at host mout01.posteo.de.\n\nI\'m sorry to have to inform you that your message could not\nbe delivered to one or more recipients. It\'s attached below.\n\nFor further assistance, please send mail to postmaster.\n\nIf you do so, please include this problem report. You can\ndelete your own text from the attached returned message.\n\n                   The mail system\n\n<hanerthaertidiuea@gmx.de>: host mx01.emig.gmx.net[212.227.17.5] said: 550\n    Requested action not taken: mailbox unavailable (in reply to RCPT TO\n    command)"),
-        )
-        .await;
+    let msg = "Undelivered Mail Returned to Sender – This is the mail system at host mout01.posteo.de.\n\nI\'m sorry to have to inform you that your message could not\nbe delivered to one or more recipients. It\'s attached below.\n\nFor further assistance, please send mail to postmaster.\n\nIf you do so, please include this problem report. You can\ndelete your own text from the attached returned message.\n\n                   The mail system\n\n<hanerthaertidiuea@gmx.de>: host mx01.emig.gmx.net[212.227.17.5] said: 550\n    Requested action not taken: mailbox unavailable (in reply to RCPT TO\n    command)";
+    let (t, _) = test_parse_ndn(
+        "alice@posteo.org",
+        "hanerthaertidiuea@gmx.de",
+        "04422840-f884-3e37-5778-8192fe22d8e1@posteo.de",
+        include_bytes!("../../test-data/message/posteo_ndn.eml"),
+        Some(msg),
+    )
+    .await;
+    t.assert_warn(msg).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_parse_ndn_testrun_2() {
-    test_parse_ndn(
-            "alice@example.org",
-            "bob@example.org",
-            "Mr.5xqflwt0YFv.IXDFfHauvWx@testrun.org",
-            include_bytes!("../../test-data/message/testrun_ndn_2.eml"),
-            Some("Undelivered Mail Returned to Sender – This is the mail system at host hq5.merlinux.eu.\n\nI'm sorry to have to inform you that your message could not\nbe delivered to one or more recipients. It's attached below.\n\nFor further assistance, please send mail to postmaster.\n\nIf you do so, please include this problem report. You can\ndelete your own text from the attached returned message.\n\n                   The mail system\n\n<bob@example.org>: Host or domain name not found. Name service error for\n    name=echedelyr.tk type=AAAA: Host not found"),
-        )
-        .await;
+    let msg = "Undelivered Mail Returned to Sender – This is the mail system at host hq5.merlinux.eu.\n\nI'm sorry to have to inform you that your message could not\nbe delivered to one or more recipients. It's attached below.\n\nFor further assistance, please send mail to postmaster.\n\nIf you do so, please include this problem report. You can\ndelete your own text from the attached returned message.\n\n                   The mail system\n\n<bob@example.org>: Host or domain name not found. Name service error for\n    name=echedelyr.tk type=AAAA: Host not found";
+    let (t, _) = test_parse_ndn(
+        "alice@example.org",
+        "bob@example.org",
+        "Mr.5xqflwt0YFv.IXDFfHauvWx@testrun.org",
+        include_bytes!("../../test-data/message/testrun_ndn_2.eml"),
+        Some(msg),
+    )
+    .await;
+    t.assert_warn(msg).await;
 }
 
 /// Tests that text part is not squashed into OpenPGP attachment.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_parse_ndn_with_attachment() {
-    test_parse_ndn(
-            "alice@example.org",
-            "bob@example.net",
-            "Mr.I6Da6dXcTel.TroC5J3uSDH@example.org",
-            include_bytes!("../../test-data/message/ndn_with_attachment.eml"),
-            Some("Undelivered Mail Returned to Sender – This is the mail system at host relay01.example.org.\n\nI'm sorry to have to inform you that your message could not\nbe delivered to one or more recipients. It's attached below.\n\nFor further assistance, please send mail to postmaster.\n\nIf you do so, please include this problem report. You can\ndelete your own text from the attached returned message.\n\n                   The mail system\n\n<bob@example.net>: host mx2.example.net[80.241.60.215] said: 552 5.2.2\n    <bob@example.net>: Recipient address rejected: Mailbox quota exceeded (in\n    reply to RCPT TO command)\n\n<bob2@example.net>: host mx1.example.net[80.241.60.212] said: 552 5.2.2\n    <bob2@example.net>: Recipient address rejected: Mailbox quota\n    exceeded (in reply to RCPT TO command)")
-        )
-        .await;
+    let msg = "Undelivered Mail Returned to Sender – This is the mail system at host relay01.example.org.\n\nI'm sorry to have to inform you that your message could not\nbe delivered to one or more recipients. It's attached below.\n\nFor further assistance, please send mail to postmaster.\n\nIf you do so, please include this problem report. You can\ndelete your own text from the attached returned message.\n\n                   The mail system\n\n<bob@example.net>: host mx2.example.net[80.241.60.215] said: 552 5.2.2\n    <bob@example.net>: Recipient address rejected: Mailbox quota exceeded (in\n    reply to RCPT TO command)\n\n<bob2@example.net>: host mx1.example.net[80.241.60.212] said: 552 5.2.2\n    <bob2@example.net>: Recipient address rejected: Mailbox quota\n    exceeded (in reply to RCPT TO command)";
+    let (t, _) = test_parse_ndn(
+        "alice@example.org",
+        "bob@example.net",
+        "Mr.I6Da6dXcTel.TroC5J3uSDH@example.org",
+        include_bytes!("../../test-data/message/ndn_with_attachment.eml"),
+        Some(msg),
+    )
+    .await;
+    t.assert_warn("Missing attachment").await;
+    t.assert_warn(msg).await;
 }
 
 /// Test that DSN is not treated as NDN if Action: is not "failed"
@@ -658,6 +680,7 @@ async fn test_resend_after_ndn() -> Result<()> {
         )
         .await;
     chat::resend_msgs(&t, &[msg_id]).await?;
+    t.assert_warn("Undelivered Mail Returned to Sender").await;
     let msg = Message::load_from_db(&t, msg_id).await?;
     assert_eq!(msg.state, MessageState::OutPending);
     assert_eq!(msg.error(), None);
@@ -719,6 +742,10 @@ async fn test_parse_ndn_group_msg() -> Result<()> {
         *msgs.last().unwrap(),
         ChatItem::Message { msg_id } if msg_id == msg.id
     ));
+
+    t.assert_warn("Delivery Status Notification (Failure)")
+        .await;
+
     Ok(())
 }
 
@@ -767,7 +794,10 @@ async fn test_concat_multiple_ndns() -> Result<()> {
     receive_imf(&t, raw.as_bytes(), false).await?;
     let msg = Message::load_from_db(&t, msg_id).await?;
 
-    assert_eq!(msg.error(), Some([err.clone(), err].join("\n\n")));
+    assert_eq!(msg.error(), Some([err.clone(), err.clone()].join("\n\n")));
+
+    t.assert_warn(&err).await;
+    t.assert_warn(&err).await;
     Ok(())
 }
 
@@ -790,6 +820,7 @@ async fn test_html_only_mail() {
         msg.text,
         "Guten Abend,\n\nLots of text\n\ntext with Umlaut ä...\n\nMfG\n\n--------------------------------------\n\n[Camping ](https://example.com/)\n\nsomeaddress\n\nsometown"
     );
+    t.assert_warn("Missing attachment").await;
 }
 
 static GH_MAILINGLIST: &[u8] =
@@ -1666,6 +1697,7 @@ async fn test_save_mime_headers_off() -> anyhow::Result<()> {
     assert_eq!(msg.get_text(), "hi!");
     let html = msg.id.get_html(&bob).await?;
     assert!(html.is_none());
+    bob.assert_warn("get_html: no mime").await;
     Ok(())
 }
 
@@ -2634,10 +2666,16 @@ Second thread."#;
     chat::add_contact_to_chat(&alice, alice_first_msg.chat_id, alice_fiona_contact_id).await?;
     let alice_first_invite = alice.pop_sent_msg().await;
     let fiona_first_invite = fiona.recv_msg(&alice_first_invite).await;
+    fiona
+        .assert_warn(r#"Added "fiona@example.net" has no gossiped key."#)
+        .await;
 
     chat::add_contact_to_chat(&alice, alice_second_msg.chat_id, alice_fiona_contact_id).await?;
     let alice_second_invite = alice.pop_sent_msg().await;
     let fiona_second_invite = fiona.recv_msg(&alice_second_invite).await;
+    fiona
+        .assert_warn(r#"Added "fiona@example.net" has no gossiped key."#)
+        .await;
 
     // Fiona was added to two separate chats and should see two separate chats, even though they
     // don't have different group IDs to distinguish them.
@@ -2900,7 +2938,7 @@ async fn test_invalid_to_address() -> Result<()> {
 
     // receive_imf should not fail on this mail with invalid To: field
     receive_imf(&alice, mime, false).await?;
-
+    alice.assert_warn("unencrypted message").await;
     Ok(())
 }
 
@@ -3353,6 +3391,8 @@ async fn test_outgoing_undecryptable() -> Result<()> {
     // The device message mustn't be added too frequently.
     assert_eq!(alice.get_last_msg_in(dev_chat_id).await.id, dev_msg.id);
 
+    alice.assert_warn("decryption failed").await;
+    alice.assert_warn("decryption failed").await;
     Ok(())
 }
 
@@ -3478,7 +3518,9 @@ async fn test_forged_from_and_no_valid_signatures() -> Result<()> {
     let raw = String::from_utf8(raw.to_vec())?.replace("alice@example.org", "clarice@example.org");
     let received_msg = receive_imf(t, raw.as_bytes(), false).await?.unwrap();
     assert!(received_msg.chat_id.is_trash());
-
+    t.assert_warn("From header in encrypted part doesn't match the outer one")
+        .await;
+    t.assert_warn("From header is forged").await;
     Ok(())
 }
 
@@ -4495,6 +4537,7 @@ async fn test_outgoing_msg_forgery() -> Result<()> {
     bob.configure_addr("bob@example.net").await;
     imex(bob, ImexMode::ImportSelfKeys, export_dir.path(), None).await?;
     assert_eq!(crate::key::load_self_secret_keyring(bob).await?.len(), 1);
+    bob.assert_warn("Failed to import secret key").await;
     let malice = &tcm.unconfigured().await;
     malice.configure_addr(alice_addr).await;
 
@@ -4507,7 +4550,7 @@ async fn test_outgoing_msg_forgery() -> Result<()> {
     let sent_msg = malice.send_text(malice_chat_id, "hi from malice").await;
     let msg = alice.recv_msg_opt(&sent_msg).await;
     assert!(msg.is_none());
-
+    alice.assert_warn("unencrypted message").await;
     Ok(())
 }
 
@@ -4594,6 +4637,8 @@ async fn test_protected_group_add_remove_member_missing_key() -> Result<()> {
         msg.get_text(),
         stock_str::msg_del_member_local(alice, alice_bob_id, ContactId::SELF).await
     );
+    alice.assert_warn("Missing key for bob@example.net").await;
+    alice.assert_warn("Missing key for bob@example.net").await;
     Ok(())
 }
 
@@ -4651,6 +4696,7 @@ Chat-Group-Member-Removed: charlie@example.com",
         false,
     )
     .await?;
+    bob.assert_warn("unencrypted message").await;
     assert_eq!(get_chat_cnt(bob).await?, chat_cnt);
     Ok(())
 }
@@ -4742,7 +4788,12 @@ async fn test_forged_from() -> Result<()> {
     // We take the address from the encrypted part
     // and send replies there.
     assert_eq!(contact.get_addr(), "bob@example.net");
-
+    alice
+        .assert_warn(r#"Autocrypt header address "bob@example.net" is not "notbob@example.net""#)
+        .await;
+    alice
+        .assert_warn("From header in encrypted part doesn't match the outer one")
+        .await;
     Ok(())
 }
 
@@ -4889,6 +4940,7 @@ async fn test_receive_vcard() -> Result<()> {
             assert_eq!(&parsed[0].addr, "claire@example.org");
         } else {
             assert_eq!(&parsed[0].addr, "");
+            alice.assert_warn("Not a valid DeltaChat vCard").await;
         }
         Ok(())
     }
@@ -5136,7 +5188,7 @@ async fn test_dont_verify_by_verified_by_unknown() -> Result<()> {
     let a0_fiona = a0.add_or_lookup_contact(fiona).await;
     assert_eq!(a0_fiona.get_verifier_id(a0).await?, Some(Some(a0_bob.id)));
 
-    let chat_id = a0.create_group_with_members("", &[fiona]).await;
+    let chat_id = a0.create_group_with_members("group", &[fiona]).await;
     a0.set_chat_protected(chat_id).await;
     a1.recv_msg(&a0.send_text(chat_id, "Hi").await).await;
     let a1_fiona = a1.add_or_lookup_contact(fiona).await;
@@ -5217,6 +5269,9 @@ async fn test_recv_outgoing_msg_no_intended_recipient_fingerprint() -> Result<()
     // Alice does not have Bob's key.
     // Message is encrypted, but is received in ad hoc group with Bob's address.
     let rcvd_msg = receive_imf(alice, payload, false).await?.unwrap();
+    alice
+        .assert_warn("No key-contact looked up. Downgrading to AdHocGroup.")
+        .await;
     let msg_alice = Message::load_from_db(alice, rcvd_msg.msg_ids[0]).await?;
 
     assert!(msg_alice.get_showpadlock());
@@ -5327,6 +5382,7 @@ async fn test_no_address_contact_added_into_group() -> Result<()> {
     // Unencrypted message should not even be assigned to encrypted chat.
     assert_ne!(msg.chat_id, alice_chat_id);
 
+    alice.assert_warn("unencrypted message").await;
     Ok(())
 }
 
@@ -5360,7 +5416,7 @@ async fn test_outgoing_plaintext_two_member_group() -> Result<()> {
 
     let chat = Chat::load_from_db(alice, msg.chat_id).await?;
     assert_eq!(chat.typ, Chattype::Group);
-
+    alice.assert_warn("unencrypted message").await;
     Ok(())
 }
 
@@ -5599,6 +5655,9 @@ async fn test_small_unencrypted_group() -> Result<()> {
     let alice_bob_id = alice.add_or_lookup_address_contact_id(bob).await;
     add_contact_to_chat(alice, alice_chat_id, alice_bob_id).await?;
     send_text_msg(alice, alice_chat_id, "Hello!".to_string()).await?;
+    alice
+        .assert_warn("No good message identifying the chat found")
+        .await;
 
     let sent_msg = alice.pop_sent_msg().await;
     let bob_chat_id = bob.recv_msg(&sent_msg).await.chat_id;

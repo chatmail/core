@@ -254,7 +254,7 @@ async fn test_message_stats() -> Result<()> {
     expected.get_mut(&Chattype::Single).unwrap().verified += 1;
 
     check_stats(&send_and_read_stats(alice).await, &expected);
-
+    alice.assert_warn("Missing securejoin source").await;
     Ok(())
 }
 
@@ -319,10 +319,12 @@ async fn test_stats_securejoin_sources() -> Result<()> {
     join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::InternalLink), None).await?;
     expected.internal_link += 1;
     check_stats(alice, &expected).await;
+    alice.assert_warn("Missing securejoin source").await;
 
     join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::ImageLoaded), None).await?;
     expected.image_loaded += 1;
     check_stats(alice, &expected).await;
+    alice.assert_warn("Missing securejoin source").await;
 
     join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::Scan), None).await?;
     expected.scan += 1;
@@ -370,22 +372,27 @@ async fn test_stats_securejoin_uipaths() -> Result<()> {
     join_securejoin(alice, &qr).await?;
     expected.other += 1;
     check_stats(alice, &expected).await;
+    alice.assert_warn("Missing securejoin source").await;
 
     join_securejoin(alice, &qr).await?;
     expected.other += 1;
     check_stats(alice, &expected).await;
+    alice.assert_warn("Missing securejoin source").await;
 
     join_securejoin_with_ux_info(alice, &qr, None, Some(SecurejoinUiPath::NewContact)).await?;
     expected.new_contact += 1;
     check_stats(alice, &expected).await;
+    alice.assert_warn("Missing securejoin source").await;
 
     join_securejoin_with_ux_info(alice, &qr, None, Some(SecurejoinUiPath::NewContact)).await?;
     expected.new_contact += 1;
     check_stats(alice, &expected).await;
+    alice.assert_warn("Missing securejoin source").await;
 
     join_securejoin_with_ux_info(alice, &qr, None, Some(SecurejoinUiPath::QrIcon)).await?;
     expected.qr_icon += 1;
     check_stats(alice, &expected).await;
+    alice.assert_warn("Missing securejoin source").await;
 
     Ok(())
 }
@@ -460,6 +467,13 @@ async fn test_stats_securejoin_invites() -> Result<()> {
         typ: "group".to_string(),
     });
     check_stats(alice, &expected).await;
+
+    alice.assert_warn("Missing securejoin source").await;
+    alice.assert_warn("Missing securejoin source").await;
+    alice.assert_warn("Missing securejoin source").await;
+    alice.assert_warn("Missing securejoin source").await;
+    bob.assert_warn("missing key").await;
+    bob.assert_warn("unencrypted message").await;
 
     Ok(())
 }

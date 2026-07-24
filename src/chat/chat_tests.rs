@@ -309,6 +309,8 @@ async fn test_add_contact_to_chat_ex_add_self() {
         .await
         .unwrap();
     assert_eq!(added, false);
+    t.assert_warn("Invalid attempt to add self e-mail address to group")
+        .await;
 }
 
 /// Test adding and removing members in a group chat.
@@ -2714,7 +2716,7 @@ async fn test_resend_doesnt_resort_msg() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
-    let alice_grp = create_group(alice, "").await?;
+    let alice_grp = create_group(alice, "group").await?;
     let sent1 = alice.send_text(alice_grp, "hi").await;
     let sent1_ts = Message::load_from_db(alice, sent1.sender_msg_id)
         .await?
@@ -2878,6 +2880,9 @@ async fn test_broadcast_members_cant_see_each_other() -> Result<()> {
         let parsed_by_bob = bob.parse_msg(&vc_pubkey).await;
         assert!(parsed_by_bob.decryption_error.is_some());
 
+        bob.assert_warn("Could not find symmetric secret for session key")
+            .await;
+
         charlie.recv_msg_trash(&vc_pubkey).await;
     }
 
@@ -2915,6 +2920,8 @@ async fn test_broadcast_members_cant_see_each_other() -> Result<()> {
 
         let parsed_by_bob = bob.parse_msg(&member_added).await;
         assert!(parsed_by_bob.decryption_error.is_some());
+        bob.assert_warn("decryption failed: decrypt_the_ring: missing key")
+            .await;
 
         let rcvd = charlie.recv_msg(&member_added).await;
         assert_eq!(rcvd.param.get_cmd(), SystemMessage::MemberAddedToGroup);
@@ -2947,6 +2954,8 @@ async fn test_broadcast_members_cant_see_each_other() -> Result<()> {
 
         let parsed_by_bob = bob.parse_msg(&member_removed).await;
         assert!(parsed_by_bob.decryption_error.is_some());
+        bob.assert_warn("decryption failed: decrypt_the_ring: missing key")
+            .await;
 
         let rcvd = charlie.recv_msg(&member_removed).await;
         assert_eq!(rcvd.param.get_cmd(), SystemMessage::MemberRemovedFromGroup);
@@ -3122,6 +3131,9 @@ async fn test_broadcast_resend_to_new_member() -> Result<()> {
                 .is_some()
         );
         bob.recv_msg_trash(&resent_msg).await;
+        bob.assert_warn("missing key").await;
+        bob.assert_warn("missing key").await;
+        bob.assert_warn("unencrypted message").await;
     }
     assert!(alice.pop_sent_msg_opt().await.is_none());
     Ok(())
@@ -3140,6 +3152,7 @@ async fn test_broadcast_resend_failed_msg_to_new_member() -> Result<()> {
     let alice_msg_id = alice.send_text(alice_bc_id, "text").await.sender_msg_id;
     let mut msg = Message::load_from_db(alice, alice_msg_id).await?;
     message::set_msg_failed(alice, &mut msg, "error").await?;
+    alice.assert_warn("error").await;
     let fiona_bc_id = tcm.exec_securejoin_qr(fiona, alice, &qr).await;
     let resent_msg = alice.pop_sent_msg().await;
     let fiona_msg = fiona.recv_msg(&resent_msg).await;
@@ -3231,6 +3244,7 @@ async fn test_broadcast_recipients_sync1() -> Result<()> {
     sync(alice1, alice2).await;
     let a2_chatlist = Chatlist::try_load(alice2, 0, Some("Channel"), None).await?;
     assert!(a2_chatlist.is_empty());
+    alice2.assert_warn("No chat for grpid").await;
 
     // Alice1 adds Charlie to the broadcast channel,
     // and now, Alice2 receives the messages
@@ -3246,6 +3260,7 @@ async fn test_broadcast_recipients_sync1() -> Result<()> {
     let request_with_auth = charlie.pop_sent_msg().await;
     alice1.recv_msg_trash(&request_with_auth).await;
     alice2.recv_msg_trash(&request_with_auth).await;
+    alice2.assert_warn("unknown grpid").await;
 
     let member_added = alice1.pop_sent_msg().await;
     let a2_charlie_added = alice2.recv_msg(&member_added).await;
@@ -3572,6 +3587,7 @@ async fn test_chat_description(
 
         tcm.section("Check Alice's second device");
         alice2.recv_msg(&sent).await;
+
         let alice2_chat_id = get_chat_id_by_grpid(
             alice2,
             &Chat::load_from_db(alice, alice_chat_id).await?.grpid,
@@ -3958,6 +3974,8 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
 
     tcm.section("Bob's second device also receives these messages");
     bob1.recv_msg_trash(&vc_pubkey).await;
+    bob1.assert_warn("decryption failed").await;
+    bob1.assert_warn("unencrypted message").await;
     bob1.recv_msg_trash(&request_with_auth).await;
     bob1.recv_msg(&member_added).await;
 
@@ -4047,6 +4065,7 @@ async fn test_only_broadcast_owner_can_send_1() -> Result<()> {
         "Bob receives an answer, but shows it in a single chat because of a fingerprint mismatch",
     );
     let rcvd = bob.recv_msg(&member_added).await;
+    bob.assert_warn("wrong sender").await;
     assert_eq!(rcvd.text, "Member bob@example.net was added.");
 
     let bob_alice_chat_id = bob.get_chat(alice).await.id;
@@ -4111,6 +4130,8 @@ async fn test_only_broadcast_owner_can_send_2() -> Result<()> {
     tcm.section("Alice sends a message, which is trashed");
     let sent = alice.send_text(alice_broadcast_id, "Hi").await;
     bob.recv_msg_trash(&sent).await;
+    bob.assert_warn("This sender is not allowed to encrypt with this secret key")
+        .await;
     let EventType::Warning(warning) = bob
         .evtracker
         .get_matching(|ev| matches!(ev, EventType::Warning(_)))
@@ -4224,6 +4245,10 @@ async fn test_encrypt_decrypt_broadcast() -> Result<()> {
 
     tcm.section("If Bob doesn't know the secret, he can't decrypt the message");
     bob_without_secret.recv_msg_trash(&sent).await;
+    bob_without_secret
+        .assert_warn("Could not find symmetric secret for session key")
+        .await;
+    bob_without_secret.assert_warn("unencrypted message").await;
 
     Ok(())
 }
@@ -4339,7 +4364,9 @@ async fn test_out_failed_on_all_keys_missing() -> Result<()> {
     let bob = &tcm.bob().await;
     let fiona = &tcm.fiona().await;
 
-    let bob_chat_id = bob.create_group_with_members("", &[alice, fiona]).await;
+    let bob_chat_id = bob
+        .create_group_with_members("group", &[alice, fiona])
+        .await;
     bob.send_text(bob_chat_id, "Gossiping Fiona's key").await;
     alice
         .recv_msg(&bob.send_text(bob_chat_id, "No key gossip").await)
@@ -4351,6 +4378,8 @@ async fn test_out_failed_on_all_keys_missing() -> Result<()> {
     let mut msg = Message::new_text("Hi".to_string());
     send_msg(alice, alice_chat_id, &mut msg).await.ok();
     assert_eq!(msg.id.get_state(alice).await?, MessageState::OutFailed);
+    alice.assert_warn("Missing key").await;
+    alice.assert_warn("cannot encrypt").await;
     Ok(())
 }
 
@@ -4971,6 +5000,9 @@ async fn test_sync_broadcast_and_send_message() -> Result<()> {
     let bob_broadcast_id = tcm
         .exec_securejoin_qr_multi_device(bob, &[alice1, alice2], &qr)
         .await;
+    bob.assert_warn("Could not find symmetric secret for session key")
+        .await;
+    bob.assert_warn("unencrypted message").await;
 
     let a2b_contact_id = alice2.add_or_lookup_contact_no_key(bob).await.id;
     assert_eq!(
@@ -5142,7 +5174,7 @@ async fn test_blocked_bob_cant_join_chat() -> Result<()> {
     let alice2_bob_id = alice2.add_or_lookup_contact_id(bob).await;
     Contact::block(alice2, alice2_bob_id).await?;
 
-    let alice1_chat_id = create_group(alice1, "").await?;
+    let alice1_chat_id = create_group(alice1, "group").await?;
     sync(alice1, alice2).await;
     let alice1_chat = Chat::load_from_db(alice1, alice1_chat_id).await?;
     let (alice2_chat_id, _blocked) = get_chat_id_by_grpid(alice2, &alice1_chat.grpid)
@@ -5153,6 +5185,8 @@ async fn test_blocked_bob_cant_join_chat() -> Result<()> {
 
     tcm.exec_securejoin_qr_multi_device(bob, &[alice1, alice2], &qr)
         .await;
+    alice2.assert_warn("blocked").await;
+    alice2.assert_warn("blocked").await;
     let alice1_bob_id = alice1.add_or_lookup_contact_id(bob).await;
     assert_eq!(get_chat_contacts(alice1, alice1_chat_id).await?.len(), 2);
     // "vg-member-added" from alice1 adds bob for alice2 to provide membership consistency on
@@ -5167,6 +5201,7 @@ async fn test_blocked_bob_cant_join_chat() -> Result<()> {
     remove_contact_from_chat(alice1, alice1_chat_id, alice1_bob_id).await?;
     bob.recv_msg(&alice1.pop_sent_msg().await).await;
     tcm.exec_securejoin_qr(bob, alice1, &qr).await;
+    alice1.assert_warn("blocked").await;
     let members = get_chat_contacts(alice1, alice1_chat_id).await?;
     assert_eq!(members.len(), 1);
     assert!(members.contains(&ContactId::SELF));
@@ -5197,6 +5232,9 @@ async fn test_blocked_bob_cant_create_single_chat_via_securejoin() -> Result<()>
     assert_eq!(get_chat_cnt(alice2).await?, chat_cnt);
     tcm.exec_securejoin_qr_multi_device(bob, &[alice1, alice2], &qr)
         .await;
+    for _ in 0..3 {
+        alice2.assert_warn("blocked").await;
+    }
     assert_eq!(get_chat_cnt(alice1).await?, chat_cnt + 1);
     assert_eq!(get_chat_cnt(alice2).await?, chat_cnt);
     Ok(())
@@ -5292,6 +5330,7 @@ async fn test_nonimage_with_png_ext() -> Result<()> {
             msg.get_filename().unwrap().contains("screenshot"),
             vt == Viewtype::File
         );
+        alice.assert_error("Unknown format").await;
         let msg_bob = bob.recv_msg(&sent_msg).await;
         assert_eq!(msg_bob.viewtype, Viewtype::File);
         assert_eq!(msg_bob.get_filemime().unwrap(), "application/octet-stream");
@@ -5615,6 +5654,7 @@ async fn test_non_member_cannot_modify_member_list() -> Result<()> {
     remove_contact_from_chat(bob, bob_chat_id, bob_alice_contact_id).await?;
     let bob_sent_add_msg = bob.pop_sent_msg().await;
     alice.recv_msg_trash(&bob_sent_add_msg).await;
+    alice.assert_warn("no contact id").await;
     assert_eq!(get_chat_contacts(alice, alice_chat_id).await?.len(), 1);
     Ok(())
 }
@@ -5991,6 +6031,8 @@ async fn test_receive_edit_request_after_removal() -> Result<()> {
 
     bob.recv_msg_trash(&sent2).await;
     assert_eq!(bob_chat_id.get_msg_cnt(bob).await?, E2EE_INFO_MSGS);
+    bob.assert_warn("Edit message: Database entry does not exist")
+        .await;
 
     Ok(())
 }
@@ -6084,6 +6126,7 @@ async fn test_send_delete_request() -> Result<()> {
     let bob2 = &tcm.bob().await;
     bob2.recv_msg_opt(&sent2).await;
     assert!(bob2.recv_msg_opt(&sent1).await.is_none());
+    bob2.assert_warn("not found").await;
 
     // Alice has another device, and there is also nothing at the end
     let alice2 = &tcm.alice().await;
@@ -6375,6 +6418,9 @@ async fn test_create_unencrypted_group_chat() -> Result<()> {
     assert!(res.is_err());
 
     add_contact_to_chat(alice, chat_id, charlie_address_contact_id).await?;
+    alice
+        .assert_warn("No good message identifying the chat found")
+        .await;
 
     let chat = Chat::load_from_db(alice, chat_id).await?;
     assert!(!chat.is_encrypted(alice).await?);
@@ -6391,6 +6437,7 @@ async fn test_create_group_invalid_name() -> Result<()> {
     let chat_id = create_group(alice, " ").await?;
     let chat = Chat::load_from_db(alice, chat_id).await?;
     assert_eq!(chat.get_name(), "…");
+    alice.assert_error("Invalid chat name").await;
     Ok(())
 }
 
@@ -6414,6 +6461,7 @@ async fn test_no_avatar_in_adhoc_chats() -> Result<()> {
     .await?
     .unwrap()
     .chat_id;
+    alice.assert_warn("unencrypted message").await;
 
     // Test that setting avatar in ad hoc group is not possible.
     let file = alice.dir.path().join("avatar.png");

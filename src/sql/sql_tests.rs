@@ -99,6 +99,8 @@ async fn test_housekeeping_db_closed() {
             _ => {}
         }
     }
+
+    t.assert_warns_or_errors(&["no SQL connection"]).await;
 }
 
 /// Regression test for a bug where housekeeping deleted drafts since their
