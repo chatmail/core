@@ -1,14 +1,5 @@
 use super::*;
-use crate::chat::ChatId;
-use crate::contact::Contact;
 use crate::test_utils::TestContext;
-
-#[test]
-fn test_get_folder_meaning_by_name() {
-    assert_eq!(get_folder_meaning_by_name("xxx"), FolderMeaning::Unknown);
-    assert_eq!(get_folder_meaning_by_name("SPAM"), FolderMeaning::Spam);
-    assert_eq!(get_folder_meaning_by_name("Trash"), FolderMeaning::Trash);
-}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_set_uid_next_validity() {
@@ -97,112 +88,6 @@ fn test_build_sequence_sets() {
     for &number in &numbers {
         assert!(result.iter().any(|r| has_number(r, number)));
     }
-}
-
-async fn check_target_folder_combination(
-    folder: &str,
-    chat_msg: bool,
-    expected_destination: &str,
-    accepted_chat: bool,
-    outgoing: bool,
-) -> Result<()> {
-    println!(
-        "Testing: For folder {folder}, chat_msg {chat_msg}, accepted {accepted_chat}, outgoing {outgoing}"
-    );
-
-    let t = TestContext::new_alice().await;
-
-    if accepted_chat {
-        let contact_id = Contact::create(&t.ctx, "", "bob@example.net").await?;
-        ChatId::create_for_contact(&t.ctx, contact_id).await?;
-    }
-    let temp;
-
-    let bytes = {
-        temp = format!(
-            "Received: (Postfix, from userid 1000); Mon, 4 Dec 2006 14:51:39 +0100 (CET)\n\
-                    {}\
-                    Subject: foo\n\
-                    Message-ID: <abc@example.com>\n\
-                    {}\
-                    Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
-                    \n\
-                    hello\n",
-            if outgoing {
-                "From: alice@example.org\nTo: bob@example.net\n"
-            } else {
-                "From: bob@example.net\nTo: alice@example.org\n"
-            },
-            if chat_msg { "Chat-Version: 1.0\n" } else { "" },
-        );
-        temp.as_bytes()
-    };
-
-    let (headers, _) = mailparse::parse_headers(bytes)?;
-    let actual = if let Some(config) =
-        target_folder_cfg(&t, folder, get_folder_meaning_by_name(folder), &headers).await?
-    {
-        t.get_config(config).await?
-    } else {
-        None
-    };
-
-    let expected = if expected_destination == folder {
-        None
-    } else {
-        Some(expected_destination)
-    };
-    assert_eq!(
-        expected,
-        actual.as_deref(),
-        "For folder {folder}, chat_msg {chat_msg}, accepted {accepted_chat}, outgoing {outgoing}: expected {expected:?}, got {actual:?}"
-    );
-    Ok(())
-}
-
-// chat_msg means that the message was sent by Delta Chat
-// The tuples are (folder, chat_msg, expected_destination)
-const COMBINATIONS_ACCEPTED_CHAT: &[(&str, bool, &str)] = &[
-    ("INBOX", false, "INBOX"),
-    ("INBOX", true, "INBOX"),
-    ("Spam", false, "INBOX"), // Move classical emails in accepted chats from Spam to Inbox, not 100% sure on this, we could also just never move non-chat-msgs
-    ("Spam", true, "INBOX"),
-];
-
-// These are the same as above, but non-chat messages in Spam stay in Spam
-const COMBINATIONS_REQUEST: &[(&str, bool, &str)] = &[
-    ("INBOX", false, "INBOX"),
-    ("INBOX", true, "INBOX"),
-    ("Spam", false, "Spam"),
-    ("Spam", true, "INBOX"),
-];
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_target_folder_incoming_accepted() -> Result<()> {
-    for (folder, chat_msg, expected_destination) in COMBINATIONS_ACCEPTED_CHAT {
-        check_target_folder_combination(folder, *chat_msg, expected_destination, true, false)
-            .await?;
-    }
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_target_folder_incoming_request() -> Result<()> {
-    for (folder, chat_msg, expected_destination) in COMBINATIONS_REQUEST {
-        check_target_folder_combination(folder, *chat_msg, expected_destination, false, false)
-            .await?;
-    }
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_target_folder_outgoing() -> Result<()> {
-    // Test outgoing emails
-    for (folder, chat_msg, expected_destination) in COMBINATIONS_ACCEPTED_CHAT {
-        check_target_folder_combination(folder, *chat_msg, expected_destination, true, true)
-            .await?;
-    }
-    Ok(())
 }
 
 #[test]

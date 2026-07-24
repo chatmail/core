@@ -25,7 +25,7 @@ use crate::debug_logging::maybe_set_logging_xdc_inner;
 use crate::download::{DownloadState, msg_is_downloaded_for};
 use crate::ephemeral::{Timer as EphemeralTimer, stock_ephemeral_timer_changed};
 use crate::events::EventType;
-use crate::headerdef::{HeaderDef, HeaderDefMap};
+use crate::headerdef::HeaderDef;
 use crate::imap::{GENERATED_PREFIX, markseen_on_imap_table};
 use crate::key::{DcKey, Fingerprint};
 use crate::key::{
@@ -4124,18 +4124,6 @@ async fn get_parent_message(
         mids.append(&mut parse_message_ids(field));
     }
     message::get_by_rfc724_mids(context, &mids).await
-}
-
-pub(crate) async fn get_prefetch_parent_message(
-    context: &Context,
-    headers: &[mailparse::MailHeader<'_>],
-) -> Result<Option<Message>> {
-    get_parent_message(
-        context,
-        headers.get_header_value(HeaderDef::References).as_deref(),
-        headers.get_header_value(HeaderDef::InReplyTo).as_deref(),
-    )
-    .await
 }
 
 /// Looks up contact IDs from the database given the list of recipients.

@@ -16,29 +16,27 @@ use std::{
 
 use anyhow::{Context as _, Result, bail, ensure, format_err};
 use async_channel::{self, Receiver, Sender};
-use async_imap::types::{Fetch, Flag, Name, NameAttribute, UnsolicitedResponse};
+use async_imap::types::{Fetch, Flag, UnsolicitedResponse};
 use futures::{FutureExt as _, TryStreamExt};
 use futures_lite::FutureExt;
 use ratelimit::Ratelimit;
 use url::Url;
 
-use crate::chat::{self, ChatIdBlocked, add_device_msg};
+use crate::chat::{self, add_device_msg};
 use crate::config::Config;
-use crate::constants::{Blocked, DC_VERSION_STR};
-use crate::contact::ContactId;
+use crate::constants::DC_VERSION_STR;
 use crate::context::Context;
 use crate::ensure_and_debug_assert;
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
-use crate::log::{LogExt, warn};
+use crate::log::LogExt;
+use crate::log::warn;
 use crate::message::{self, Message};
 use crate::mimeparser;
 use crate::net::proxy::ProxyConfig;
 use crate::net::session::SessionStream;
 use crate::push::encrypt_device_token;
-use crate::receive_imf::{
-    ReceivedMsg, from_field_to_contact_id, get_prefetch_parent_message, receive_imf_inner,
-};
+use crate::receive_imf::{ReceivedMsg, from_field_to_contact_id, receive_imf_inner};
 use crate::scheduler::connectivity::ConnectivityStore;
 use crate::stock_str;
 use crate::tools::{self, create_id, duration_to_str, time};
@@ -138,24 +136,6 @@ pub(crate) struct ServerMetadata {
     /// should be fetched from the server
     /// to be ready for WebRTC calls.
     pub ice_servers_expiration_timestamp: i64,
-}
-
-#[derive(Debug, Display, PartialEq, Eq, Clone, Copy)]
-pub enum FolderMeaning {
-    Unknown,
-
-    /// Spam folder.
-    Spam,
-    Inbox,
-    Trash,
-
-    /// Virtual folders.
-    ///
-    /// On Gmail there are virtual folders marked as \\All, \\Important and \\Flagged.
-    /// Delta Chat ignores these folders because the same messages can be fetched
-    /// from the real folder and the result of moving and deleting messages via
-    /// virtual folder is unclear.
-    Virtual,
 }
 
 struct UidGrouper<T: Iterator<Item = (i64, u32, String)>> {
@@ -805,36 +785,16 @@ impl Imap {
 }
 
 impl Session {
-    /// Synchronizes UIDs for all folders.
-    pub(crate) async fn resync_folders(&mut self, context: &Context) -> Result<()> {
-        let all_folders = self
-            .list_folders()
-            .await
-            .context("listing folders for resync")?;
-        for folder in all_folders {
-            let folder_meaning = get_folder_meaning(&folder);
-            if !matches!(
-                folder_meaning,
-                FolderMeaning::Virtual | FolderMeaning::Unknown
-            ) {
-                self.resync_folder_uids(context, folder.name(), folder_meaning)
-                    .await?;
-            }
-        }
-        Ok(())
-    }
-
     /// Synchronizes UIDs in the database with UIDs on the server.
     ///
     /// It is assumed that no operations are taking place on the same
     /// folder at the moment. Make sure to run it in the same
     /// thread/task as other network operations on this folder to
     /// avoid race conditions.
-    pub(crate) async fn resync_folder_uids(
+    pub(crate) async fn resync_uids_with_server(
         &mut self,
         context: &Context,
         folder: &str,
-        folder_meaning: FolderMeaning,
     ) -> Result<()> {
         let uid_validity;
         // Collect pairs of UID and Message-ID.
@@ -858,25 +818,19 @@ impl Session {
                 let message_id = prefetch_get_message_id(&headers);
 
                 if let (Some(uid), Some(rfc724_mid)) = (fetch.uid, message_id) {
-                    msgs.insert(
-                        uid,
-                        (
-                            rfc724_mid,
-                            target_folder(context, folder, folder_meaning, &headers).await?,
-                        ),
-                    );
+                    msgs.insert(uid, rfc724_mid);
                 }
             }
 
             info!(
                 context,
-                "resync_folder_uids: Collected {} message IDs in {folder}.",
+                "resync_uids_with_server: Collected {} message IDs in {folder}.",
                 msgs.len(),
             );
 
             uid_validity = get_uidvalidity(context, transport_id, folder).await?;
         } else {
-            warn!(context, "resync_folder_uids: No folder {folder}.");
+            warn!(context, "resync_uids_with_server: No folder {folder}.");
             uid_validity = 0;
         }
 
@@ -885,7 +839,7 @@ impl Session {
             .sql
             .transaction(move |transaction| {
                 transaction.execute("DELETE FROM imap WHERE transport_id=? AND folder=?", (transport_id, folder,))?;
-                for (uid, (rfc724_mid, target)) in &msgs {
+                for (uid, rfc724_mid) in &msgs {
                     // This may detect previously undetected moved
                     // messages, so we update server_folder too.
                     transaction.execute(
@@ -894,7 +848,7 @@ impl Session {
                          ON CONFLICT(transport_id, folder, uid, uidvalidity)
                          DO UPDATE SET rfc724_mid=excluded.rfc724_mid,
                                        target=excluded.target",
-                        (transport_id, rfc724_mid, folder, uid, uid_validity, target),
+                        (transport_id, rfc724_mid, folder, uid, uid_validity, folder),
                     )?;
                 }
                 Ok(())
@@ -1637,204 +1591,6 @@ impl Session {
             }
         }
         Ok(should_refetch)
-    }
-}
-
-async fn should_move_out_of_spam(
-    context: &Context,
-    headers: &[mailparse::MailHeader<'_>],
-) -> Result<bool> {
-    if headers.get_header_value(HeaderDef::ChatVersion).is_some() {
-        // If this is a chat message (i.e. has a ChatVersion header), then this might be
-        // a securejoin message. We can't find out at this point as we didn't prefetch
-        // the SecureJoin header. So, we always move chat messages out of Spam.
-        // Two possibilities to change this would be:
-        // 1. Remove the `&& !context.is_spam_folder(folder).await?` check from
-        // `fetch_new_messages()`, and then let `receive_imf()` check
-        // if it's a spam message and should be hidden.
-        // 2. Or add a flag to the ChatVersion header that this is a securejoin
-        // request, and return `true` here only if the message has this flag.
-        // `receive_imf()` can then check if the securejoin request is valid.
-        return Ok(true);
-    }
-
-    if let Some(msg) = get_prefetch_parent_message(context, headers).await? {
-        if msg.chat_blocked != Blocked::Not {
-            // Blocked or contact request message in the spam folder, leave it there.
-            return Ok(false);
-        }
-    } else {
-        let from = match mimeparser::get_from(headers) {
-            Some(f) => f,
-            None => return Ok(false),
-        };
-        // No chat found.
-        let (from_id, blocked_contact, _origin) =
-            match from_field_to_contact_id(context, &from, None, true, true)
-                .await
-                .context("from_field_to_contact_id")?
-            {
-                Some(res) => res,
-                None => {
-                    warn!(
-                        context,
-                        "Contact with From address {:?} cannot exist, not moving out of spam", from
-                    );
-                    return Ok(false);
-                }
-            };
-        if blocked_contact {
-            // Contact is blocked, leave the message in spam.
-            return Ok(false);
-        }
-
-        if let Some(chat_id_blocked) = ChatIdBlocked::lookup_by_contact(context, from_id).await? {
-            if chat_id_blocked.blocked != Blocked::Not {
-                return Ok(false);
-            }
-        } else if from_id != ContactId::SELF {
-            // No chat with this contact found.
-            return Ok(false);
-        }
-    }
-
-    Ok(true)
-}
-
-/// Returns target folder for a message found in the Spam folder.
-/// If this returns None, the message will not be moved out of the
-/// Spam folder, and as `fetch_new_messages()` doesn't download
-/// messages from the Spam folder, the message will be ignored.
-async fn spam_target_folder_cfg(
-    context: &Context,
-    headers: &[mailparse::MailHeader<'_>],
-) -> Result<Option<Config>> {
-    if !should_move_out_of_spam(context, headers).await? {
-        return Ok(None);
-    }
-
-    Ok(Some(Config::ConfiguredInboxFolder))
-}
-
-/// Returns `ConfiguredInboxFolder` or `ConfiguredMvboxFolder` if
-/// the message needs to be moved from `folder`. Otherwise returns `None`.
-pub async fn target_folder_cfg(
-    context: &Context,
-    folder: &str,
-    folder_meaning: FolderMeaning,
-    headers: &[mailparse::MailHeader<'_>],
-) -> Result<Option<Config>> {
-    if folder == "DeltaChat" {
-        return Ok(None);
-    }
-
-    if folder_meaning == FolderMeaning::Spam {
-        spam_target_folder_cfg(context, headers).await
-    } else {
-        Ok(None)
-    }
-}
-
-pub async fn target_folder(
-    context: &Context,
-    folder: &str,
-    folder_meaning: FolderMeaning,
-    headers: &[mailparse::MailHeader<'_>],
-) -> Result<String> {
-    match target_folder_cfg(context, folder, folder_meaning, headers).await? {
-        Some(config) => match context.get_config(config).await? {
-            Some(target) => Ok(target),
-            None => Ok(folder.to_string()),
-        },
-        None => Ok(folder.to_string()),
-    }
-}
-
-/// Try to get the folder meaning by the name of the folder only used if the server does not support XLIST.
-// TODO: lots languages missing - maybe there is a list somewhere on other MUAs?
-// however, if we fail to find out the sent-folder,
-// only watching this folder is not working. at least, this is no show stopper.
-// CAVE: if possible, take care not to add a name here that is "sent" in one language
-// but sth. different in others - a hard job.
-fn get_folder_meaning_by_name(folder_name: &str) -> FolderMeaning {
-    // source: <https://stackoverflow.com/questions/2185391/localized-gmail-imap-folders>
-    const SPAM_NAMES: &[&str] = &[
-        "spam",
-        "junk",
-        "Correio electrónico não solicitado",
-        "Correo basura",
-        "Lixo",
-        "Nettsøppel",
-        "Nevyžádaná pošta",
-        "No solicitado",
-        "Ongewenst",
-        "Posta indesiderata",
-        "Skräp",
-        "Wiadomości-śmieci",
-        "Önemsiz",
-        "Ανεπιθύμητα",
-        "Спам",
-        "垃圾邮件",
-        "垃圾郵件",
-        "迷惑メール",
-        "스팸",
-    ];
-    const TRASH_NAMES: &[&str] = &[
-        "Trash",
-        "Bin",
-        "Caixote do lixo",
-        "Cestino",
-        "Corbeille",
-        "Papelera",
-        "Papierkorb",
-        "Papirkurv",
-        "Papperskorgen",
-        "Prullenbak",
-        "Rubujo",
-        "Κάδος απορριμμάτων",
-        "Корзина",
-        "Кошик",
-        "ゴミ箱",
-        "垃圾桶",
-        "已删除邮件",
-        "휴지통",
-    ];
-    let lower = folder_name.to_lowercase();
-
-    if lower == "inbox" {
-        FolderMeaning::Inbox
-    } else if SPAM_NAMES.iter().any(|s| s.to_lowercase() == lower) {
-        FolderMeaning::Spam
-    } else if TRASH_NAMES.iter().any(|s| s.to_lowercase() == lower) {
-        FolderMeaning::Trash
-    } else {
-        FolderMeaning::Unknown
-    }
-}
-
-fn get_folder_meaning_by_attrs(folder_attrs: &[NameAttribute]) -> FolderMeaning {
-    for attr in folder_attrs {
-        match attr {
-            NameAttribute::Trash => return FolderMeaning::Trash,
-            NameAttribute::Junk => return FolderMeaning::Spam,
-            NameAttribute::All | NameAttribute::Flagged => return FolderMeaning::Virtual,
-            NameAttribute::Extension(label) => {
-                match label.as_ref() {
-                    "\\Spam" => return FolderMeaning::Spam,
-                    "\\Important" => return FolderMeaning::Virtual,
-                    _ => {}
-                };
-            }
-            _ => {}
-        }
-    }
-    FolderMeaning::Unknown
-}
-
-pub(crate) fn get_folder_meaning(folder: &Name) -> FolderMeaning {
-    match get_folder_meaning_by_attrs(folder.attributes()) {
-        FolderMeaning::Unknown => get_folder_meaning_by_name(folder.name()),
-        meaning => meaning,
     }
 }
 
