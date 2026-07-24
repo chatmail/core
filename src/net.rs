@@ -184,10 +184,6 @@ where
     let mut all_errors = Vec::new();
 
     let res = loop {
-        if let Some(fut) = futures.next() {
-            connection_attempt_set.spawn(fut);
-        }
-
         tokio::select! {
             biased;
 
@@ -209,14 +205,18 @@ where
                         }
                     }
                     None => {
-                        // Out of connection attempts.
-                        //
-                        // Break out of the loop and return error.
-                        break if all_errors.is_empty() {
-                            Err(format_err!("No connection attempts were made"))
+                        if let Some(fut) = futures.next() {
+                            connection_attempt_set.spawn(fut);
                         } else {
-                            Err(format_err!("All connection attempts failed: {}", all_errors.into_iter().map(|err| format!("{err:#}")).collect::<Vec<String>>().join("; ")))
-                        };
+                            // Out of connection attempts.
+                            //
+                            // Break out of the loop and return error.
+                            break if all_errors.is_empty() {
+                                Err(format_err!("No connection attempts were made"))
+                            } else {
+                                Err(format_err!("All connection attempts failed: {}", all_errors.into_iter().map(|err| format!("{err:#}")).collect::<Vec<String>>().join("; ")))
+                            };
+                        }
                     }
                 }
             },
