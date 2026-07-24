@@ -477,8 +477,8 @@ pub(crate) async fn delete_expired_messages(context: &Context, now: i64) -> Resu
                 // and other places it references.
                 let mut del_msg_stmt = transaction.prepare(
                     "
-INSERT OR REPLACE INTO msgs (id, rfc724_mid, pre_rfc724_mid, timestamp, chat_id)
-SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ? FROM msgs WHERE id=?1
+INSERT OR REPLACE INTO msgs (id, rfc724_mid, pre_rfc724_mid, timestamp, chat_id, deleted)
+SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE id=?1
                     ",
                 )?;
                 let mut del_location_stmt =
@@ -673,6 +673,10 @@ pub(crate) async fn delete_expired_imap_messages(
         //
         // Pre-messages can be deleted even if the message wasn't fully downloaded yet,
         // because it's only the post-message that hasn't been downloaded.
+        // I didn't change this query, but I noticed that I can get a lot more performance (~70ms rather than ~110ms on my laptop) by removing `AND id>9`
+        // because otherwise, SQLite thinks that it's smart to use the index on `id` for the search
+        // rather than a simple scan. And it needs to do a full scan,
+        // because we need all `rfc724_mid`s
         context
             .sql
             .execute(
@@ -695,6 +699,9 @@ pub(crate) async fn delete_expired_imap_messages(
         // There may be other devices using this relay,
         // either because there is multi-device or because this is a classical email server.
         // Only delete expired ephemeral messages.
+        // I looked at the performance a bit. First thing I did was remove the `AND id>9`,
+        // which is not necessary and brought down the time from ~120ms to ~30ms on my laptop.
+        // Adding `OR (chat_id=?3 AND deleted=1)` worsened it to ~45ms again.
         context
             .sql
             .execute(
@@ -703,18 +710,19 @@ pub(crate) async fn delete_expired_imap_messages(
                 WHERE transport_id=?1
                 AND rfc724_mid IN (
                     SELECT rfc724_mid FROM msgs
-                    WHERE ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9
+                    WHERE (ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9) OR (chat_id=?3 AND deleted=1)
                     UNION
                     SELECT pre_rfc724_mid FROM msgs
-                    WHERE pre_rfc724_mid!=''
-                        AND ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9
+                    WHERE (pre_rfc724_mid!=''
+                        AND ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9) OR (chat_id=?3 AND deleted=1)
                 )",
-                (transport_id, now),
+                (transport_id, now, DC_CHAT_ID_TRASH),
             )
             .await?;
     } else {
         // Single device.
         // Delete all expired and encrypted messages.
+        // This one takes ~130ms no matter what. It needs to do a full SCAN over the database no matter what because it looks at the param.
         context
             .sql
             .execute(
@@ -725,13 +733,15 @@ pub(crate) async fn delete_expired_imap_messages(
                     SELECT rfc724_mid FROM msgs
                     WHERE id>9
                       AND ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR
-                           ((param GLOB '*\nc=1*' OR param GLOB 'c=1*') AND download_state=?3))
+                           ((param GLOB '*\nc=1*' OR param GLOB 'c=1*') AND download_state=?3) OR
+                           deleted=1)
                     UNION
                     SELECT pre_rfc724_mid FROM msgs
                     WHERE pre_rfc724_mid!=''
                       AND id>9
                       AND ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR
-                           (param GLOB '*\nc=1*' OR param GLOB 'c=1*'))
+                           (param GLOB '*\nc=1*' OR param GLOB 'c=1*') OR
+                           deleted=1)
                 )",
                 (transport_id, now, DownloadState::Done),
             )
