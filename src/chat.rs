@@ -777,7 +777,14 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
     }
 
     /// Set provided message as draft message for specified chat.
-    /// Returns true if the draft was added or updated in place.
+    ///
+    /// If there is an existing draft message,
+    /// this function tries to update it instead of creating a new one,
+    /// thus preserving the ID and possible WebXDC status updates
+    /// associated with the draft message.
+    ///
+    /// Returns `false` if the existing draft is already at the state
+    /// that the caller tried to set it to, so it was unchanged.
     async fn do_set_draft(self, context: &Context, msg: &mut Message) -> Result<bool> {
         match msg.viewtype {
             Viewtype::Unknown => bail!("Can not set draft of unknown type."),
