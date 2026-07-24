@@ -157,7 +157,8 @@ pub(crate) async fn connect_tls_inner(
 /// and runs them until one of them succeeds
 /// or all of them fail.
 ///
-/// If all connection attempts fail, returns the first error.
+/// If all connection attempts fail, returns an error
+/// that includes the reasons for all failures.
 ///
 /// This functions starts with one connection attempt and maintains
 /// up to five parallel connection attempts if connecting takes time.
