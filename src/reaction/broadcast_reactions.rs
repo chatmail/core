@@ -126,7 +126,7 @@ async fn broadcast_reactions_for_one_chat(context: &Context, chat_id: ChatId) ->
     let json = serde_json::to_string(&payload)?;
     let mut reaction_msg = Message::new_text("".to_string());
     reaction_msg.set_reaction();
-    reaction_msg.param.set(Param::ChatReactions, json);
+    reaction_msg.param.set(Param::BroadcastReactions, json);
     reaction_msg.hidden = true;
     send_msg(context, chat_id, &mut reaction_msg).await?;
 
@@ -188,7 +188,7 @@ mod tests {
 
         // Alice broadcasts reaction to Claire
         // On the wire, the hidden message has a header like
-        // `Chat-Reactions: {"messages":[{"id":"123@adc","reactions":[{"emoji":"🏳️‍🌈","count":1}]}]}`
+        // `Broadcast-Reactions: {"messages":[{"id":"123@adc","reactions":[{"emoji":"🏳️‍🌈","count":1}]}]}`
         maybe_broadcast_reactions(alice).await?;
         assert_eq!(
             alice

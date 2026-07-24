@@ -116,6 +116,10 @@ pub(crate) struct MimeMessage {
     pub(crate) mdn_reports: Vec<Report>,
     pub(crate) delivery_report: Option<DeliveryReport>,
 
+    /// Parsed `Broadcast-Reactions` header, if any:
+    /// accumulated reaction updates sent by a broadcast channel owner.
+    pub(crate) broadcast_reactions: Option<String>,
+
     /// Standard USENET signature, if any.
     ///
     /// `None` means no text part was received, empty string means a text part without a footer is
@@ -657,6 +661,7 @@ impl MimeMessage {
             user_avatar: None,
             group_avatar: None,
             delivery_report: None,
+            broadcast_reactions: None,
             footer: None,
             is_mime_modified: false,
             decoded_data: Vec::new(),
@@ -793,6 +798,12 @@ impl MimeMessage {
         }
     }
 
+    fn parse_broadcast_reactions_header(&mut self) {
+        self.broadcast_reactions = self
+            .get_header(HeaderDef::BroadcastReactions)
+            .map(|s| s.to_string());
+    }
+
     /// Squashes mutitpart chat messages with attachment into single-part messages.
     ///
     /// Delta Chat sends attachments, such as images, in two-part messages, with the first message
@@ -874,6 +885,7 @@ impl MimeMessage {
         self.parse_system_message_headers();
         self.parse_avatar_headers(context)?;
         self.parse_videochat_headers();
+        self.parse_broadcast_reactions_header();
         if self.delivery_report.is_none() {
             self.squash_attachment_parts();
         }

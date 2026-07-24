@@ -1986,10 +1986,10 @@ impl MimeFactory {
             ))
         }
 
-        if let Some(chat_reactions) = msg.param.get(Param::ChatReactions) {
+        if let Some(broadcast_reactions) = msg.param.get(Param::BroadcastReactions) {
             headers.push((
-                "Chat-Reactions",
-                mail_builder::headers::raw::Raw::new(b_encode(chat_reactions)).into(),
+                "Broadcast-Reactions",
+                mail_builder::headers::raw::Raw::new(b_encode(broadcast_reactions)).into(),
             ));
         }
 
