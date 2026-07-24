@@ -93,7 +93,7 @@ async fn test_receive_both() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
-    let alice_chat_id = alice.create_group_with_members("", &[bob]).await;
+    let alice_chat_id = alice.create_group_with_members("group", &[bob]).await;
 
     let (pre_message, post_message, alice_msg_id) =
         send_large_file_message(alice, alice_chat_id, Viewtype::File, &vec![0u8; 200_000]).await?;

@@ -275,6 +275,12 @@ async fn test_maybe_add_additional_relays_failure() -> Result<()> {
     // and we don't want to try all of them in a single call:
     assert_eq!(load_relay_candidates(t, now).await?.is_empty(), false);
 
+    t.assert_many(vec![
+        (false, "DNS lookup with memory cache failure", 48),
+        (false, "Could not find DNS resolutions", 39),
+    ])
+    .await;
+
     Ok(())
 }
 

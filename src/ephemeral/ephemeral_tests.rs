@@ -223,6 +223,8 @@ async fn test_ephemeral_timer_rollback() -> Result<()> {
         Timer::Disabled
     );
     assert_eq!(chat_bob.get_ephemeral_timer(&bob.ctx).await?, enabled(60));
+    bob.assert_warn("Ignoring ephemeral timer change to Disabled")
+        .await;
 
     // Alice receives message from Bob
     alice.recv_msg(&sent_timer_change).await;
@@ -838,6 +840,10 @@ async fn test_ephemeral_timer_non_member() -> Result<()> {
         Timer::Disabled
     );
 
+    alice
+        .assert_warn("Ignoring ephemeral timer change to Enabled")
+        .await;
+
     Ok(())
 }
 
@@ -870,7 +876,11 @@ async fn test_disappearing_unknown_viewtype() -> Result<()> {
 
     // This should not fail.
     delete_expired_messages(alice, time()).await?;
-
+    alice
+        .assert_warn(
+            "Using default viewtype for ephemeral handling.: Integer 70 out of range at index 2",
+        )
+        .await;
     Ok(())
 }
 
@@ -902,6 +912,10 @@ async fn test_delete_device_after_unknown_viewtype() -> Result<()> {
 
     // This should not fail.
     delete_expired_messages(alice, time()).await?;
-
+    alice
+        .assert_warn(
+            "Using default viewtype for delete-old handling.: Integer 70 out of range at index 2",
+        )
+        .await;
     Ok(())
 }

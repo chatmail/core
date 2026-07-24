@@ -57,6 +57,7 @@ async fn check_verified_single_chat_protection_not_broken(by_classical_email: bo
         .await
         .unwrap()
         .unwrap();
+        alice.assert_warn("unencrypted message").await;
         let contact = alice.add_or_lookup_contact(&bob).await;
         assert_eq!(contact.is_verified(&alice).await.unwrap(), true);
         assert_verified(&alice, &bob).await;
@@ -597,6 +598,13 @@ async fn test_verified_lost_member_added() -> Result<()> {
     let mut msg = Message::new_text("No key for Fiona".to_string());
     let result = send_msg(bob, bob_chat_id, &mut msg).await;
     assert!(result.is_err());
+
+    bob.assert_warn("Missing key for fiona@example.net").await;
+    fiona.assert_warn("missing key").await;
+    fiona.assert_warn("unencrypted message").await;
+    bob.assert_warn("Missing key for fiona@example.net").await;
+    bob.assert_warn(r#"No recipient keys are available, cannot encrypt to ["fiona@example.net"]"#)
+        .await;
 
     Ok(())
 }

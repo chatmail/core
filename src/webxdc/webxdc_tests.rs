@@ -90,7 +90,7 @@ async fn test_send_webxdc_instance() -> Result<()> {
     let mut instance = Message::new(Viewtype::Webxdc);
     instance.set_file_from_bytes(&t, "index.html", b"<html>ola!</html>", None)?;
     assert!(send_msg(&t, chat_id, &mut instance).await.is_err());
-
+    t.assert_warn("cannot be opened as zip-file").await;
     Ok(())
 }
 
@@ -119,7 +119,8 @@ async fn test_send_invalid_webxdc() -> Result<()> {
         None,
     )?;
     assert!(send_msg(&t, chat_id, &mut instance).await.is_err());
-
+    t.assert_warn("cannot be opened as zip-file").await;
+    t.assert_warn("cannot be opened as zip-file").await;
     Ok(())
 }
 
@@ -1298,6 +1299,7 @@ async fn test_get_webxdc_info() -> Result<()> {
     let result = msg.get_webxdc_info(&t).await;
     assert!(result.is_err());
 
+    t.assert_warn("empty name given in manifest").await;
     Ok(())
 }
 
@@ -1695,6 +1697,7 @@ async fn test_webxdc_reject_updates_from_non_groupmembers() -> Result<()> {
         status,
         r#"[{"payload":7,"info":"i","summary":"s","serial":1,"max_serial":1}]"#
     );
+    alice.assert_warn("not a member of chat").await;
     Ok(())
 }
 

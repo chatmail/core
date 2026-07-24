@@ -141,7 +141,10 @@ async fn test_broadcast_security_attacker_signature() -> Result<()> {
         Some(charlie),
         Some("This sender is not allowed to encrypt with this secret key"),
     )
-    .await
+    .await?;
+    bob.assert_warn("This sender is not allowed to encrypt with this secret key")
+        .await;
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -163,7 +166,10 @@ async fn test_broadcast_security_no_signature() -> Result<()> {
         None,
         Some("Unsigned message is not allowed to be encrypted with this shared secret"),
     )
-    .await
+    .await?;
+    bob.assert_warn("Unsigned message is not allowed to be encrypted with this shared secret")
+        .await;
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -211,7 +217,10 @@ async fn test_qr_code_security() -> Result<()> {
         Some(charlie),
         Some("This sender is not allowed to encrypt with this secret key"),
     )
-    .await
+    .await?;
+    bob.assert_warn("This sender is not allowed to encrypt with this secret key")
+        .await;
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -253,5 +262,9 @@ async fn test_unknown_secret() -> Result<()> {
         Some(alice),
         Some("Could not find symmetric secret for session key"),
     )
-    .await
+    .await?;
+    bob.assert_warn("Could not find symmetric secret for session key")
+        .await;
+    bob.assert_warn("unencrypted message").await;
+    Ok(())
 }

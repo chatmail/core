@@ -617,6 +617,11 @@ async fn test_cache_is_cleared_when_io_is_started() -> Result<()> {
     // but it should invalidate the caches:
     alice.start_io().await;
 
+    alice
+        .assert_warn("No IMAP connection candidates provided")
+        .await;
+    alice.assert_warn("IMAP got rate limited").await;
+
     assert_eq!(
         alice.get_config(Config::Displayname).await?,
         Some("Alice 2".to_string())

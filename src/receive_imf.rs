@@ -2473,7 +2473,7 @@ async fn handle_post_message(
         .context("expected Post-Message to have a message id")?;
 
     let Some(msg_id) = message::rfc724_mid_exists(context, &rfc724_mid).await? else {
-        warn!(
+        info!(
             context,
             "handle_post_message: {rfc724_mid}: Database entry does not exist."
         );
@@ -3484,13 +3484,13 @@ async fn group_changes_msgs(
 ) -> Result<Vec<(String, SystemMessage, Option<ContactId>)>> {
     let mut group_changes_msgs: Vec<(String, SystemMessage, Option<ContactId>)> = Vec::new();
     if !added_ids.is_empty() {
-        warn!(
+        info!(
             context,
             "Implicit addition of {added_ids:?} to chat {chat_id}."
         );
     }
     if !removed_ids.is_empty() {
-        warn!(
+        info!(
             context,
             "Implicit removal of {removed_ids:?} from chat {chat_id}."
         );

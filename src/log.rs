@@ -143,9 +143,11 @@ mod tests {
         assert_eq!(t.get_last_error(), "");
 
         error!(t, "foo-error");
+        t.assert_error("foo-error").await;
         assert_eq!(t.get_last_error(), "foo-error");
 
         warn!(t, "foo-warning");
+        t.assert_warn("foo-warning").await;
         assert_eq!(t.get_last_error(), "foo-error");
 
         info!(t, "foo-info");
@@ -153,6 +155,8 @@ mod tests {
 
         error!(t, "bar-error");
         error!(t, "baz-error");
+        t.assert_error("bar-error").await;
+        t.assert_error("baz-error").await;
         assert_eq!(t.get_last_error(), "baz-error");
 
         Ok(())
