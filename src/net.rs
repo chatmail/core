@@ -264,3 +264,43 @@ pub(crate) async fn connect_tcp(
         .map(connect_tcp_inner);
     run_connection_attempts(connection_futures).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_run_connection_attempts() {
+        let futures: Vec<Pin<Box<dyn Future<Output = Result<u32>> + Send>>> =
+            vec![Box::pin(async { Ok(1) }), Box::pin(async { Ok(2) })];
+        assert_eq!(
+            run_connection_attempts(futures.into_iter()).await.unwrap(),
+            1
+        );
+
+        let futures: Vec<Pin<Box<dyn Future<Output = Result<u32>> + Send>>> = vec![
+            Box::pin(async { Err(format_err!("fail")) }),
+            Box::pin(async { Ok(2) }),
+        ];
+        assert_eq!(
+            run_connection_attempts(futures.into_iter()).await.unwrap(),
+            2
+        );
+
+        let futures: Vec<Pin<Box<dyn Future<Output = Result<u32>> + Send>>> = vec![
+            Box::pin(async { Err(format_err!("fail")) }),
+            Box::pin(async { Err(format_err!("fail")) }),
+            Box::pin(async { Err(format_err!("fail")) }),
+            Box::pin(async { Err(format_err!("fail")) }),
+            Box::pin(async { Err(format_err!("fail")) }),
+            Box::pin(async { Err(format_err!("last")) }),
+        ];
+        assert!(
+            run_connection_attempts(futures.into_iter())
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("last"),
+        );
+    }
+}
