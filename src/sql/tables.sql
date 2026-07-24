@@ -1,14 +1,3 @@
-                 UPDATE imap
-                SET target=''
-                WHERE transport_id=?1
-                AND rfc724_mid IN (
-                    SELECT rfc724_mid FROM msgs
-                    WHERE (ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9) OR deleted=1
-                    UNION
-                    SELECT pre_rfc724_mid FROM msgs
-                    WHERE (pre_rfc724_mid!=''
-                        AND ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9) OR deleted=1
-
 CREATE TABLE config (
   id INTEGER PRIMARY KEY,
   keyname TEXT,
