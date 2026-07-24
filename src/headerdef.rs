@@ -122,6 +122,9 @@ pub enum HeaderDef {
     /// This is an unprotected header.
     ChatIsPostMessage,
 
+    /// Broadcasted reactions.
+    ChatReactionBroadcast,
+
     /// [Autocrypt](https://autocrypt.org/) header.
     Autocrypt,
     AutocryptGossip,

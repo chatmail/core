@@ -20,6 +20,7 @@ use crate::events::EventType;
 use crate::imap::{Imap, session::Session};
 use crate::location;
 use crate::log::{LogExt, warn};
+use crate::reaction::broadcast_reactions::maybe_broadcast_reactions;
 use crate::smtp::{Smtp, send_smtp_messages};
 use crate::sql;
 use crate::stats::maybe_send_stats;
@@ -448,31 +449,7 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
         }
     };
 
-    match ctx.get_config_i64(Config::LastReactionsBroadcast).await {
-        Ok(last_reaction_broadcast_time) => {
-            let next_reaction_broadcast_time =
-                last_reaction_broadcast_time.saturating_add(constants::REACTION_BROADCAST_PERIOD);
-            if next_reaction_broadcast_time <= time() {
-                if let Err(err) = crate::reaction::broadcast_reactions_for_all_chats(ctx).await {
-                    warn!(
-                        ctx,
-                        "Transport {transport_id}: Failed to broadcast reactions: {err:#}."
-                    );
-                }
-                ctx.set_config_internal(Config::LastReactionsBroadcast, Some(&time().to_string()))
-                    .await
-                    .log_err(ctx)
-                    .ok();
-            }
-        }
-        Err(err) => {
-            warn!(
-                ctx,
-                "Transport {transport_id}: Failed to get last reaction broadcast time: {err:#}"
-            );
-        }
-    };
-
+    maybe_broadcast_reactions(ctx).await.log_err(ctx).ok();
     maybe_send_stats(ctx).await.log_err(ctx).ok();
 
     session
