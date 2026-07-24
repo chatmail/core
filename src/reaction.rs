@@ -200,7 +200,7 @@ async fn set_msg_id_reaction(
             .execute(
                 "INSERT INTO reactions_need_broadcast (chat_id, msg_id)
                  VALUES (?1, ?2)
-                 ON CONFLICT(msg_id, contact_id) DO NOTHING;",
+                 ON CONFLICT(chat_id, msg_id) DO NOTHING;",
                 (chat_id, msg_id),
             )
             .await?;

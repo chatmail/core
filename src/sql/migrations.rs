@@ -2551,6 +2551,7 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
             CREATE TABLE reactions_need_broadcast (
                 chat_id INTEGER NOT NULL DEFAULT 0,
                 msg_id INTEGER NOT NULL DEFAULT 0,
+                UNIQUE (chat_id, msg_id),
                 FOREIGN KEY(msg_id) REFERENCES msgs(id) ON DELETE CASCADE -- delete reactions when message is deleted
             ) STRICT;
             CREATE INDEX reactions_need_broadcast_index1 ON reactions_need_broadcast (chat_id);",
