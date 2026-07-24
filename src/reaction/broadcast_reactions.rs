@@ -12,6 +12,7 @@ use crate::config::Config;
 use crate::context::Context;
 use crate::log::warn;
 use crate::message::{Message, MsgId};
+use crate::param::Param;
 use crate::reaction::get_msg_reactions;
 use crate::tools::time;
 
@@ -123,8 +124,9 @@ async fn broadcast_reactions_for_one_chat(context: &Context, chat_id: ChatId) ->
 
     let payload = BroadcastReactionsPayload { messages };
     let json = serde_json::to_string(&payload)?;
-    let mut reaction_msg = Message::new_text(json); // TOOD: maybe json is better put to the header
+    let mut reaction_msg = Message::new_text("".to_string());
     reaction_msg.set_reaction();
+    reaction_msg.param.set(Param::ChatReactions, json);
     reaction_msg.hidden = true;
     send_msg(context, chat_id, &mut reaction_msg).await?;
 

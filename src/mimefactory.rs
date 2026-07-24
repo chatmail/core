@@ -1986,6 +1986,13 @@ impl MimeFactory {
             ))
         }
 
+        if let Some(chat_reactions) = msg.param.get(Param::ChatReactions) {
+            headers.push((
+                "Chat-Reactions",
+                mail_builder::headers::raw::Raw::new(b_encode(chat_reactions)).into(),
+            ));
+        }
+
         if msg.viewtype == Viewtype::Voice
             || msg.viewtype == Viewtype::Audio
             || msg.viewtype == Viewtype::Video
