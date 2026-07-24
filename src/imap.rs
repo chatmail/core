@@ -840,8 +840,6 @@ impl Session {
             .transaction(move |transaction| {
                 transaction.execute("DELETE FROM imap WHERE transport_id=? AND folder=?", (transport_id, folder,))?;
                 for (uid, rfc724_mid) in &msgs {
-                    // This may detect previously undetected moved
-                    // messages, so we update server_folder too.
                     transaction.execute(
                         "INSERT INTO imap (transport_id, rfc724_mid, folder, uid, uidvalidity, target)
                          VALUES           (?,            ?,          ?,      ?,   ?,           ?)
