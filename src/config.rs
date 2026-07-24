@@ -352,6 +352,12 @@ pub enum Config {
     /// Timestamp of the last `CantDecryptOutgoingMsgs` notification.
     LastCantDecryptOutgoingMsgs,
 
+    /// Timestamp of the last time automatic relay management was run
+    LastAutomaticRelayManagement,
+
+    /// Whether to automatically add/remove transports
+    AutomaticRelayManagement,
+
     /// Whether to avoid using IMAP IDLE even if the server supports it.
     ///
     /// This is a developer option for testing "fake idle".

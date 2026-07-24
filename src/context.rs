@@ -233,8 +233,8 @@ pub struct InnerContext {
     running_state: RwLock<RunningState>,
     /// Mutex to prevent a race condition when a "your pw is wrong" warning is sent, resulting in multiple messages being sent.
     pub(crate) wrong_pw_warning_mutex: Mutex<()>,
-    /// Mutex to prevent running housekeeping from multiple threads at once.
-    pub(crate) housekeeping_mutex: Mutex<()>,
+    /// Mutex to prevent running housekeeping or relay management from multiple threads at once.
+    pub(crate) background_task_mutex: Mutex<()>,
 
     /// Mutex to prevent multiple IMAP loops from fetching the messages at once.
     ///
@@ -482,7 +482,7 @@ impl Context {
             running_state: RwLock::new(Default::default()),
             sql: Sql::new(dbfile),
             wrong_pw_warning_mutex: Mutex::new(()),
-            housekeeping_mutex: Mutex::new(()),
+            background_task_mutex: Mutex::new(()),
             fetch_msgs_mutex: Mutex::new(()),
             translated_stockstrings: stockstrings,
             events,
@@ -1034,6 +1034,18 @@ impl Context {
         res.insert(
             "force_encryption",
             self.get_config_bool(Config::ForceEncryption)
+                .await?
+                .to_string(),
+        );
+        res.insert(
+            "last_automatic_relay_management",
+            self.get_config_i64(Config::LastAutomaticRelayManagement)
+                .await?
+                .to_string(),
+        );
+        res.insert(
+            "automatic_relay_management",
+            self.get_config_bool(Config::AutomaticRelayManagement)
                 .await?
                 .to_string(),
         );

@@ -2522,6 +2522,39 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 159)?;
+    if dbversion < migration_version {
+        // TODO put a better list here
+        const DEFAULT_RELAY_CANDIDATES: &[&str] = &[
+            "mehl.cloud",
+            "mailchat.pl",
+            "chatmail.woodpeckersnest.space",
+            "chatmail.culturanerd.it",
+            "tarpit.fun",
+            "d.gaufr.es",
+        ];
+
+        sql.execute_migration_transaction(
+            |transaction| {
+                transaction.execute(
+                    "CREATE TABLE relay_candidates(
+                        host TEXT PRIMARY KEY NOT NULL,
+                        last_tried INTEGER NOT NULL DEFAULT 0
+                    ) STRICT",
+                    (),
+                )?;
+                let mut statement =
+                    transaction.prepare("INSERT INTO relay_candidates(host) VALUES (?)")?;
+                for host in DEFAULT_RELAY_CANDIDATES {
+                    statement.execute((host,))?;
+                }
+                Ok(())
+            },
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
