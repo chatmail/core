@@ -209,6 +209,9 @@ where
                         }
                     }
                     None => {
+                        // We should never return an error with connection attempts left to try.
+                        debug_assert!(futures.next().is_none());
+
                         // Out of connection attempts.
                         //
                         // Break out of the loop and return error.
