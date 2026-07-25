@@ -33,7 +33,8 @@ pub struct JsonrpcReactions {
 impl From<Reactions> for JsonrpcReactions {
     fn from(reactions: Reactions) -> Self {
         let reactions_by_contact: BTreeMap<u32, Vec<String>> = reactions
-            .by_contact.iter()
+            .by_contact
+            .iter()
             .map(|(key, value)| (key.to_u32(), vec![value.as_str().to_string()]))
             .collect();
 

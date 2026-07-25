@@ -98,11 +98,6 @@ pub struct Reactions {
 }
 
 impl Reactions {
-    /// Returns vector of contacts that reacted to the message.
-    pub fn contacts(&self) -> Vec<ContactId> {
-        self.by_contact.keys().copied().collect()
-    }
-
     /// Returns reaction of a given contact to message.
     ///
     /// If contact did not react to message or removed the reaction,
@@ -543,6 +538,12 @@ mod tests {
     use crate::test_utils::TestContextManager;
     use crate::tools::SystemTime;
     use std::time::Duration;
+
+    impl Reactions {
+        fn contacts(&self) -> Vec<ContactId> {
+            self.by_contact.keys().copied().collect()
+        }
+    }
 
     #[test]
     fn test_parse_reaction() {
