@@ -755,24 +755,26 @@ pub(crate) async fn receive_imf_inner(
         contact::update_last_seen(context, from_id, mime_parser.timestamp_sent).await?;
     }
 
-    // Update gossiped timestamp for the chat if someone else or our other device sent
-    // Autocrypt-Gossip header to avoid sending Autocrypt-Gossip ourselves
-    // and waste traffic.
+    // Update gossiped timestamp for the chat if someone else or our other device
+    // distributed keys to this chat, via Autocrypt-Gossip headers
+    // or the sender's own Autocrypt header which is a kind of self-gossip.
     let chat_id = received_msg.chat_id;
     if !chat_id.is_special() {
-        for gossiped_key in mime_parser.gossiped_keys.values() {
+        let fingerprints = mime_parser.distributed_key_fingerprints();
+        if !fingerprints.is_empty() {
+            let timestamp_sent = mime_parser.timestamp_sent;
             context
                 .sql
                 .transaction(move |transaction| {
-                    let fingerprint = gossiped_key.public_key.dc_fingerprint().hex();
-                    transaction.execute(
+                    let mut stmt = transaction.prepare(
                         "INSERT INTO gossip_timestamp (chat_id, fingerprint, timestamp)
                          VALUES                       (?, ?, ?)
                          ON CONFLICT                  (chat_id, fingerprint)
                          DO UPDATE SET timestamp=MAX(timestamp, excluded.timestamp)",
-                        (chat_id, &fingerprint, mime_parser.timestamp_sent),
                     )?;
-
+                    for fingerprint in &fingerprints {
+                        stmt.execute((chat_id, fingerprint, timestamp_sent))?;
+                    }
                     Ok(())
                 })
                 .await?;

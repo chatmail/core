@@ -5503,6 +5503,35 @@ async fn test_group_introduction_no_gossip() -> Result<()> {
     Ok(())
 }
 
+/// Tests that the sender's own Autocrypt header counts like received gossip:
+/// members do not re-gossip a key that its owner just distributed themselves.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_autocrypt_header_suppresses_gossip() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let fiona = &tcm.fiona().await;
+
+    let alice_chat_id = alice
+        .create_group_with_members("Group", &[bob, fiona])
+        .await;
+    let sent = alice.send_text(alice_chat_id, "Hello group").await;
+
+    // Alice's first message gossips the other members' keys.
+    let msg = bob.recv_msg(&sent).await;
+    assert!(!bob.parse_msg(&sent).await.gossiped_keys.is_empty());
+
+    // Bob got Alice's key from her Autocrypt header
+    // and the other members' keys from her gossip,
+    // so Bob has nothing left to gossip.
+    let bob_chat_id = msg.chat_id;
+    bob_chat_id.accept(bob).await?;
+    let sent = bob.send_text(bob_chat_id, "Hello back").await;
+    assert!(fiona.parse_msg(&sent).await.gossiped_keys.is_empty());
+
+    Ok(())
+}
+
 /// Tests reception of an encrypted group message
 /// without Chat-Group-ID.
 ///

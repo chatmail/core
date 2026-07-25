@@ -1027,6 +1027,24 @@ impl MimeMessage {
         self.signature.is_some()
     }
 
+    /// Returns the fingerprints of all keys distributed by this message:
+    /// - keys from Autocrypt-Gossip headers
+    /// - the key from the sender's Autocrypt header ("self-gossip")
+    ///
+    /// Nothing is returned unless the message was correctly encrypted.
+    pub(crate) fn distributed_key_fingerprints(&self) -> Vec<String> {
+        let sender_fingerprint = if self.was_encrypted() {
+            self.autocrypt_fingerprint.clone()
+        } else {
+            None
+        };
+        self.gossiped_keys
+            .values()
+            .map(|gossiped_key| gossiped_key.public_key.dc_fingerprint().hex())
+            .chain(sender_fingerprint)
+            .collect()
+    }
+
     /// Returns whether the email contains a `chat-version` header.
     /// This indicates that the email is a DC-email.
     pub(crate) fn has_chat_version(&self) -> bool {
