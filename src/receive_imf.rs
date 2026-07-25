@@ -12,7 +12,7 @@ use deltachat_contact_tools::{
     sanitize_single_line,
 };
 use mailparse::SingleInfo;
-use regex::Regex;
+use regex::{Regex, regex};
 
 use crate::chat::{
     self, Chat, ChatId, ChatIdBlocked, ChatVisibility, is_contact_in_chat, save_broadcast_secret,
@@ -3636,9 +3636,8 @@ fn compute_mailinglist_name(
     // (as that part is much more visible, we assume, that names is shorter and comes more to the point,
     // than the sometimes longer part from ListId)
     let subject = mime_parser.get_subject().unwrap_or_default();
-    static SUBJECT: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r"^.{0,5}\[(.+?)\](\s*\[.+\])?").unwrap()); // remove square brackets around first name
-    if let Some(cap) = SUBJECT.captures(&subject) {
+    let subject_re: &Regex = regex!(r"^.{0,5}\[(.+?)\](\s*\[.+\])?"); // remove square brackets around first name
+    if let Some(cap) = subject_re.captures(&subject) {
         name = cap[1].to_string() + cap.get(2).map_or("", |m| m.as_str());
     }
 
@@ -3663,9 +3662,8 @@ fn compute_mailinglist_name(
     // but strip some known, long hash prefixes
     if name.is_empty() {
         // 51231231231231231231231232869f58.xing.com -> xing.com
-        static PREFIX_32_CHARS_HEX: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"([0-9a-fA-F]{32})\.(.{6,})").unwrap());
-        if let Some(cap) = PREFIX_32_CHARS_HEX
+        let prefix_32_chars_hex: &Regex = regex!(r"([0-9a-fA-F]{32})\.(.{6,})");
+        if let Some(cap) = prefix_32_chars_hex
             .captures(listid)
             .and_then(|caps| caps.get(2))
         {
