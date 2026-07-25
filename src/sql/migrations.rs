@@ -2520,6 +2520,20 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 160)?;
+    if dbversion < migration_version {
+        // Tracks when own key was last attached to an MDN
+        // so it is not attached to every MDN.
+        sql.execute_migration(
+            "CREATE TABLE mdn_autocrypt_timestamp (
+                fingerprint TEXT PRIMARY KEY NOT NULL, -- Upper-case fingerprint of the recipient key.
+                attached_timestamp INTEGER NOT NULL
+            ) STRICT",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?

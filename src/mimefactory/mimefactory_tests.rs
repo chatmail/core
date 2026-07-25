@@ -328,6 +328,60 @@ async fn test_mdn_create_encrypted() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_mdn_autocrypt_throttle() -> Result<()> {
+    async fn mdn_has_aheader(
+        bob: &TestContext,
+        alice: &TestContext,
+        rcvd: &Message,
+    ) -> Result<bool> {
+        let mf = MimeFactory::from_mdn(bob, rcvd.from_id, rcvd.rfc724_mid.clone(), vec![]).await?;
+        let rendered_msg = mf.render(bob).await?;
+        let mime = MimeMessage::from_bytes(alice, rendered_msg.message.as_bytes()).await?;
+        Ok(mime.autocrypt_fingerprint.is_some())
+    }
+
+    let mut tcm = TestContextManager::new();
+    let alice = tcm.alice().await;
+    let bob = tcm.bob().await;
+    bob.set_config_bool(Config::MdnsEnabled, true).await?;
+
+    let rcvd = tcm.send_recv_accept(&alice, &bob, "Heyho").await;
+    message::markseen_msgs(&bob, vec![rcvd.id]).await?;
+
+    assert!(mdn_has_aheader(&bob, &alice, &rcvd).await?);
+    assert!(!mdn_has_aheader(&bob, &alice, &rcvd).await?);
+
+    // Own key change forces the header:
+    // a relay list change bumps the transports timestamp
+    // which becomes the key signature timestamp,
+    // so drop the cached self key to re-derive it.
+    SystemTime::shift(Duration::from_secs(100));
+    bob.sql
+        .execute("UPDATE transports SET add_timestamp=?", (time(),))
+        .await?;
+    *bob.self_public_key.lock().await = None;
+    assert!(mdn_has_aheader(&bob, &alice, &rcvd).await?);
+    assert!(!mdn_has_aheader(&bob, &alice, &rcvd).await?);
+
+    // A stored timestamp from the future is ignored
+    // and replaced by one from the current clock.
+    bob.sql
+        .execute(
+            "UPDATE mdn_autocrypt_timestamp SET attached_timestamp=?",
+            (time() + 1000,),
+        )
+        .await?;
+    assert!(mdn_has_aheader(&bob, &alice, &rcvd).await?);
+    assert!(!mdn_has_aheader(&bob, &alice, &rcvd).await?);
+
+    let gossip_period = bob.get_config_i64(Config::GossipPeriod).await?;
+    SystemTime::shift(Duration::from_secs(gossip_period.try_into()?));
+    assert!(mdn_has_aheader(&bob, &alice, &rcvd).await?);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_subject_in_group() -> Result<()> {
     async fn send_msg_get_subject(
         t: &TestContext,
