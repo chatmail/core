@@ -578,10 +578,12 @@ impl MimeFactory {
         let timestamp = time();
 
         let addr = contact.get_addr().to_string();
+        let mut recipients = vec![addr.clone()];
         let encryption_pubkeys = if from_id == ContactId::SELF {
             Some(Vec::new())
         } else if contact.is_key_contact() {
             if let Some(key) = contact.public_key(context).await? {
+                recipients = addresses_from_public_key(&key).unwrap_or_else(|| vec![addr.clone()]);
                 Some(vec![(addr.clone(), key)])
             } else {
                 Some(Vec::new())
@@ -595,7 +597,7 @@ impl MimeFactory {
             from_displayname: "".to_string(),
             sender_displayname: None,
             selfstatus: "".to_string(),
-            recipients: vec![addr],
+            recipients,
             encryption_pubkeys,
             to: vec![("".to_string(), contact.get_addr().to_string())],
             past_members: vec![],
