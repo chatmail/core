@@ -2465,118 +2465,121 @@ impl ChatIdBlocked {
 async fn prepare_msg_blob(context: &Context, msg: &mut Message) -> Result<()> {
     if msg.viewtype == Viewtype::Text || msg.viewtype == Viewtype::Call {
         // the caller should check if the message text is empty
-    } else if msg.viewtype.has_file() {
-        let viewtype_orig = msg.viewtype;
-        let mut blob = msg
-            .param
-            .get_file_blob(context)?
-            .with_context(|| format!("attachment missing for message of type #{}", msg.viewtype))?;
-        let mut maybe_image = false;
-
-        if msg.viewtype == Viewtype::File || msg.viewtype == Viewtype::Image {
-            // Correct the type, take care not to correct already very special
-            // formats as GIF or VOICE.
-            //
-            // Typical conversions:
-            // - from FILE to AUDIO/VIDEO/IMAGE
-            // - from FILE/IMAGE to GIF */
-            if let Some((better_type, _)) = message::guess_msgtype_from_suffix(msg) {
-                if better_type == Viewtype::Image {
-                    maybe_image = true;
-                } else if better_type != Viewtype::Webxdc
-                    || context
-                        .ensure_sendable_webxdc_file(&blob.to_abs_path())
-                        .await
-                        .is_ok()
-                {
-                    msg.viewtype = better_type;
-                }
-            }
-        } else if msg.viewtype == Viewtype::Webxdc {
-            context
-                .ensure_sendable_webxdc_file(&blob.to_abs_path())
-                .await?;
-        }
-
-        if msg.viewtype == Viewtype::Vcard {
-            msg.try_set_vcard(context, &blob.to_abs_path()).await?;
-        }
-        if msg.viewtype == Viewtype::File && maybe_image || msg.viewtype == Viewtype::Image {
-            let new_name = blob
-                .check_or_recode_image(context, msg.get_filename(), &mut msg.viewtype)
-                .await?;
-            msg.param.set(Param::Filename, new_name);
-            msg.param.set(Param::File, blob.as_name());
-        }
-
-        if !msg.param.exists(Param::MimeType)
-            && let Some((viewtype, mime)) = message::guess_msgtype_from_suffix(msg)
-        {
-            // If we unexpectedly didn't recognize the file as image, don't send it as such,
-            // either the format is unsupported or the image is corrupted.
-            let mime = match viewtype != Viewtype::Image
-                || matches!(msg.viewtype, Viewtype::Image | Viewtype::Sticker)
-            {
-                true => mime,
-                false => "application/octet-stream",
-            };
-            msg.param.set(Param::MimeType, mime);
-        }
-
-        msg.try_calc_and_set_dimensions(context).await?;
-
-        let filename = msg.get_filename().context("msg has no file")?;
-        let suffix = Path::new(&filename)
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("dat");
-        // Get file name to use for sending. For privacy purposes, we do not transfer the original
-        // filenames e.g. for images; these names are normally not needed and contain timestamps,
-        // running numbers, etc.
-        let filename: String = match viewtype_orig {
-            Viewtype::Voice => format!(
-                "voice-messsage_{}.{suffix}",
-                chrono::Utc
-                    .timestamp_opt(msg.timestamp_sort, 0)
-                    .single()
-                    .map_or_else(
-                        || "YY-mm-dd_hh:mm:ss".to_string(),
-                        |ts| ts.format("%Y-%m-%d_%H-%M-%S").to_string()
-                    ),
-            ),
-            Viewtype::Image | Viewtype::Gif => format!(
-                "image_{}.{suffix}",
-                chrono::Utc
-                    .timestamp_opt(msg.timestamp_sort, 0)
-                    .single()
-                    .map_or_else(
-                        || "YY-mm-dd_hh:mm:ss".to_string(),
-                        |ts| ts.format("%Y-%m-%d_%H-%M-%S").to_string(),
-                    ),
-            ),
-            Viewtype::Video => format!(
-                "video_{}.{suffix}",
-                chrono::Utc
-                    .timestamp_opt(msg.timestamp_sort, 0)
-                    .single()
-                    .map_or_else(
-                        || "YY-mm-dd_hh:mm:ss".to_string(),
-                        |ts| ts.format("%Y-%m-%d_%H-%M-%S").to_string()
-                    ),
-            ),
-            _ => filename,
-        };
-        msg.param.set(Param::Filename, filename);
-
-        info!(
-            context,
-            "Attaching \"{}\" for message type #{}.",
-            blob.to_abs_path().display(),
-            msg.viewtype
-        );
-    } else {
+        return Ok(());
+    }
+    if !msg.viewtype.has_file() {
         bail!("Cannot send messages of type #{}.", msg.viewtype);
     }
+
+    let viewtype_orig = msg.viewtype;
+    let mut blob = msg
+        .param
+        .get_file_blob(context)?
+        .with_context(|| format!("attachment missing for message of type #{}", msg.viewtype))?;
+    let mut maybe_image = false;
+
+    if msg.viewtype == Viewtype::File || msg.viewtype == Viewtype::Image {
+        // Correct the type, take care not to correct already very special
+        // formats as GIF or VOICE.
+        //
+        // Typical conversions:
+        // - from FILE to AUDIO/VIDEO/IMAGE
+        // - from FILE/IMAGE to GIF */
+        if let Some((better_type, _)) = message::guess_msgtype_from_suffix(msg) {
+            if better_type == Viewtype::Image {
+                maybe_image = true;
+            } else if better_type != Viewtype::Webxdc
+                || context
+                    .ensure_sendable_webxdc_file(&blob.to_abs_path())
+                    .await
+                    .is_ok()
+            {
+                msg.viewtype = better_type;
+            }
+        }
+    } else if msg.viewtype == Viewtype::Webxdc {
+        context
+            .ensure_sendable_webxdc_file(&blob.to_abs_path())
+            .await?;
+    }
+
+    if msg.viewtype == Viewtype::Vcard {
+        msg.try_set_vcard(context, &blob.to_abs_path()).await?;
+    }
+    if msg.viewtype == Viewtype::File && maybe_image || msg.viewtype == Viewtype::Image {
+        let new_name = blob
+            .check_or_recode_image(context, msg.get_filename(), &mut msg.viewtype)
+            .await?;
+        msg.param.set(Param::Filename, new_name);
+        msg.param.set(Param::File, blob.as_name());
+    }
+
+    if !msg.param.exists(Param::MimeType)
+        && let Some((viewtype, mime)) = message::guess_msgtype_from_suffix(msg)
+    {
+        // If we unexpectedly didn't recognize the file as image, don't send it as such,
+        // either the format is unsupported or the image is corrupted.
+        let mime = match viewtype != Viewtype::Image
+            || matches!(msg.viewtype, Viewtype::Image | Viewtype::Sticker)
+        {
+            true => mime,
+            false => "application/octet-stream",
+        };
+        msg.param.set(Param::MimeType, mime);
+    }
+
+    msg.try_calc_and_set_dimensions(context).await?;
+
+    let filename = msg.get_filename().context("msg has no file")?;
+    let suffix = Path::new(&filename)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("dat");
+    // Get file name to use for sending. For privacy purposes, we do not transfer the original
+    // filenames e.g. for images; these names are normally not needed and contain timestamps,
+    // running numbers, etc.
+    let filename: String = match viewtype_orig {
+        Viewtype::Voice => format!(
+            "voice-messsage_{}.{suffix}",
+            chrono::Utc
+                .timestamp_opt(msg.timestamp_sort, 0)
+                .single()
+                .map_or_else(
+                    || "YY-mm-dd_hh:mm:ss".to_string(),
+                    |ts| ts.format("%Y-%m-%d_%H-%M-%S").to_string()
+                ),
+        ),
+        Viewtype::Image | Viewtype::Gif => format!(
+            "image_{}.{suffix}",
+            chrono::Utc
+                .timestamp_opt(msg.timestamp_sort, 0)
+                .single()
+                .map_or_else(
+                    || "YY-mm-dd_hh:mm:ss".to_string(),
+                    |ts| ts.format("%Y-%m-%d_%H-%M-%S").to_string(),
+                ),
+        ),
+        Viewtype::Video => format!(
+            "video_{}.{suffix}",
+            chrono::Utc
+                .timestamp_opt(msg.timestamp_sort, 0)
+                .single()
+                .map_or_else(
+                    || "YY-mm-dd_hh:mm:ss".to_string(),
+                    |ts| ts.format("%Y-%m-%d_%H-%M-%S").to_string()
+                ),
+        ),
+        _ => filename,
+    };
+    msg.param.set(Param::Filename, filename);
+
+    info!(
+        context,
+        "Attaching \"{}\" for message type #{}.",
+        blob.to_abs_path().display(),
+        msg.viewtype
+    );
+
     Ok(())
 }
 
