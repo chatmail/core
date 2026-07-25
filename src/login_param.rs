@@ -141,7 +141,7 @@ pub struct EnteredLoginParam {
     /// invalid hostnames
     pub certificate_checks: EnteredCertificateChecks,
 
-    /// Deprecated, always false
+    /// Deprecated 2026-07, always false
     #[serde(default)]
     pub oauth2: bool,
 }

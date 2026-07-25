@@ -213,6 +213,7 @@ pub(crate) struct ConfiguredLoginParamJson {
 
     pub certificate_checks: ConfiguredCertificateChecks,
 
+    /// Deprecated 2026-07, always false
     #[serde(default)]
     pub oauth2: bool,
 }
