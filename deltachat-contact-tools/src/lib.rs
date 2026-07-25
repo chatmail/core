@@ -29,11 +29,10 @@
 
 use std::fmt;
 use std::ops::Deref;
-use std::sync::LazyLock;
 
 use anyhow::bail;
 use anyhow::Result;
-use regex::Regex;
+use regex::regex;
 
 mod vcard;
 pub use vcard::{make_vcard, parse_vcard, VcardContact};
@@ -88,9 +87,7 @@ impl rusqlite::types::ToSql for ContactAddress {
 /// - Removes special characters from the name, see [`sanitize_name()`]
 /// - Removes the name if it is equal to the address by setting it to ""
 pub fn sanitize_name_and_addr(name: &str, addr: &str) -> (String, String) {
-    static ADDR_WITH_NAME_REGEX: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new("(.*)<(.*)>").unwrap());
-    let (name, addr) = if let Some(captures) = ADDR_WITH_NAME_REGEX.captures(addr.as_ref()) {
+    let (name, addr) = if let Some(captures) = regex!("(.*)<(.*)>").captures(addr.as_ref()) {
         (
             if name.is_empty() {
                 captures.get(1).map_or("", |m| m.as_str())
