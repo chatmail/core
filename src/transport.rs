@@ -212,6 +212,10 @@ pub(crate) struct ConfiguredLoginParamJson {
     pub smtp_password: String,
 
     pub certificate_checks: ConfiguredCertificateChecks,
+
+    /// Deprecated 2026-07, always false
+    #[serde(default)]
+    pub oauth2: bool,
 }
 
 impl fmt::Display for ConfiguredLoginParam {
@@ -488,6 +492,7 @@ impl From<ConfiguredLoginParam> for ConfiguredLoginParamJson {
             smtp_password: configured_login_param.smtp_password,
 
             certificate_checks: configured_login_param.certificate_checks,
+            oauth2: false,
         }
     }
 }
