@@ -2506,6 +2506,20 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 159)?;
+    if dbversion < migration_version {
+        // Core 2.56.0 stored login parameters without the `oauth2` field,
+        // but older cores require it when deserializing.
+        // Set it to false as OAuth2 is not supported anymore.
+        sql.execute_migration(
+            "UPDATE transports
+             SET entered_param=json_set(entered_param, '$.oauth2', json('false')),
+                 configured_param=json_set(configured_param, '$.oauth2', json('false'))",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
