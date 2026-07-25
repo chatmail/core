@@ -112,9 +112,12 @@ async fn broadcast_reactions_for_one_chat(context: &Context, chat_id: ChatId) ->
         };
         let reactions = get_msg_reactions(context, *msg_id).await?;
         let entries: Vec<BroadcastReactionsEntry> = reactions
-            .emoji_sorted_by_frequency()
+            .frequencies
             .into_iter()
-            .map(|(emoji, count)| BroadcastReactionsEntry { emoji, count })
+            .map(|entry| BroadcastReactionsEntry {
+                emoji: entry.reaction.as_str().to_string(),
+                count: entry.count,
+            })
             .collect();
         messages.push(BroadcastReactionsMessage {
             id: msg.rfc724_mid,

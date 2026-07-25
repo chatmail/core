@@ -111,7 +111,7 @@ impl Reactions {
 
     /// Returns true if the message has no reactions.
     pub fn is_empty(&self) -> bool {
-        self.by_contact.is_empty()
+        self.frequencies.is_empty()
     }
 
     /// Returns a map from emojis to their frequencies.
@@ -132,7 +132,7 @@ impl Reactions {
     ///
     /// This function can be used to display the reactions in
     /// the message bubble in the UIs.
-    pub(crate) fn emoji_sorted_by_frequency(&self) -> Vec<(String, usize)> {
+    fn emoji_sorted_by_frequency(&self) -> Vec<(String, usize)> {
         let mut emoji_frequencies: Vec<(String, usize)> =
             self.emoji_frequencies().into_iter().collect();
         emoji_frequencies.sort_by(|(a, a_count), (b, b_count)| {
@@ -165,14 +165,13 @@ impl Reactions {
 
 impl fmt::Display for Reactions {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let emoji_frequencies = self.emoji_sorted_by_frequency();
         let mut first = true;
-        for (emoji, frequency) in emoji_frequencies {
+        for entry in &self.frequencies {
             if !first {
                 write!(f, " ")?;
             }
             first = false;
-            write!(f, "{emoji}{frequency}")?;
+            write!(f, "{}{}", entry.reaction.as_str(), entry.count)?;
         }
         Ok(())
     }
@@ -897,11 +896,9 @@ Content-Disposition: reaction\n\
             .unwrap();
         let reactions = get_msg_reactions(&alice, alice_msg.sender_msg_id).await?;
         assert_eq!(reactions.to_string(), "👍2");
-
-        assert_eq!(
-            reactions.emoji_sorted_by_frequency(),
-            vec![("👍".to_string(), 2)]
-        );
+        assert_eq!(reactions.frequencies.len(), 1);
+        assert_eq!(reactions.frequencies[0].reaction.as_str(), "👍");
+        assert_eq!(reactions.frequencies[0].count, 2);
 
         Ok(())
     }
@@ -1286,10 +1283,9 @@ Content-Transfer-Encoding: 7bit\r
         // MDN request was ignored, but reaction was not.
         let reactions = get_msg_reactions(bob, bob_msg.id).await?;
         assert_eq!(reactions.by_contact.len(), 1);
-        assert_eq!(
-            reactions.emoji_sorted_by_frequency(),
-            vec![("👀".to_string(), 1)]
-        );
+        assert_eq!(reactions.frequencies.len(), 1);
+        assert_eq!(reactions.frequencies[0].reaction.as_str(), "👀");
+        assert_eq!(reactions.frequencies[0].count, 1);
 
         Ok(())
     }
