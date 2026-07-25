@@ -98,68 +98,9 @@ pub struct Reactions {
 }
 
 impl Reactions {
-    /// Returns reaction of a given contact to message.
-    ///
-    /// If contact did not react to message or removed the reaction,
-    /// this method returns an empty reaction.
-    pub fn get(&self, contact_id: ContactId) -> Reaction {
-        self.by_contact
-            .get(&contact_id)
-            .cloned()
-            .unwrap_or_default()
-    }
-
     /// Returns true if the message has no reactions.
     pub fn is_empty(&self) -> bool {
         self.frequencies.is_empty()
-    }
-
-    /// Returns a map from emojis to their frequencies.
-    #[expect(clippy::arithmetic_side_effects)]
-    fn emoji_frequencies(&self) -> BTreeMap<String, usize> {
-        let mut emoji_frequencies: BTreeMap<String, usize> = BTreeMap::new();
-        for reaction in self.by_contact.values() {
-            emoji_frequencies
-                .entry(reaction.as_str().to_string())
-                .and_modify(|x| *x += 1)
-                .or_insert(1);
-        }
-        emoji_frequencies
-    }
-
-    /// Returns a vector of emojis
-    /// sorted in descending order of frequencies.
-    ///
-    /// This function can be used to display the reactions in
-    /// the message bubble in the UIs.
-    fn emoji_sorted_by_frequency(&self) -> Vec<(String, usize)> {
-        let mut emoji_frequencies: Vec<(String, usize)> =
-            self.emoji_frequencies().into_iter().collect();
-        emoji_frequencies.sort_by(|(a, a_count), (b, b_count)| {
-            match a_count.cmp(b_count).reverse() {
-                Ordering::Equal => a.cmp(b),
-                other => other,
-            }
-        });
-        emoji_frequencies
-    }
-
-    /// Returns unique reactions with their frequency and whether self reacted,
-    /// sorted in descending order of frequency.
-    fn get_frequencies(&self) -> Vec<ReactionFrequency> {
-        let self_reaction = self.get(ContactId::SELF);
-        self.emoji_sorted_by_frequency()
-            .into_iter()
-            .map(|(emoji, count)| {
-                let is_from_self = !self_reaction.is_empty() && self_reaction.as_str() == emoji;
-                let reaction = Reaction::new(&emoji);
-                ReactionFrequency {
-                    reaction,
-                    count,
-                    is_from_self,
-                }
-            })
-            .collect()
     }
 }
 
@@ -447,6 +388,34 @@ pub(crate) async fn apply_pending_reactions(
     Ok(())
 }
 
+/// Returns unique reactions with their frequency and whether self reacted,
+/// sorted in descending order of frequency.
+fn calc_frequencies(by_contact: &BTreeMap<ContactId, Reaction>) -> Vec<ReactionFrequency> {
+    let mut self_reaction = Reaction::new("");
+    let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
+    for (contact_id, reaction) in by_contact {
+        *counts.entry(reaction.as_str()).or_insert(0) += 1;
+        if *contact_id == ContactId::SELF {
+            self_reaction = reaction.clone();
+        }
+    }
+
+    let mut frequencies: Vec<ReactionFrequency> = counts
+        .into_iter()
+        .map(|(emoji, count)| ReactionFrequency {
+            reaction: Reaction::new(emoji),
+            count,
+            is_from_self: !self_reaction.is_empty() && self_reaction.as_str() == emoji,
+        })
+        .collect();
+
+    frequencies.sort_by(|a, b| match b.count.cmp(&a.count) {
+        Ordering::Equal => a.reaction.as_str().cmp(b.reaction.as_str()),
+        other => other,
+    });
+    frequencies
+}
+
 /// Returns a structure containing all reactions to the message.
 pub async fn get_msg_reactions(context: &Context, msg_id: MsgId) -> Result<Reactions> {
     let mut by_contact: BTreeMap<ContactId, Reaction> = context
@@ -463,12 +432,11 @@ pub async fn get_msg_reactions(context: &Context, msg_id: MsgId) -> Result<React
         .await?;
     by_contact.retain(|_contact, reaction| !reaction.is_empty());
 
-    let mut ret = Reactions {
+    let frequencies = calc_frequencies(&by_contact);
+    Ok(Reactions {
         by_contact,
-        frequencies: Vec::new(),
-    };
-    ret.frequencies = ret.get_frequencies();
-    Ok(ret)
+        frequencies,
+    })
 }
 
 impl Chat {
@@ -541,6 +509,14 @@ mod tests {
     impl Reactions {
         fn contacts(&self) -> Vec<ContactId> {
             self.by_contact.keys().copied().collect()
+        }
+
+        // Returns reaction of a given contact to message or an empty reaction.
+        fn get(&self, contact_id: ContactId) -> Reaction {
+            self.by_contact
+                .get(&contact_id)
+                .cloned()
+                .unwrap_or_default()
         }
     }
 
