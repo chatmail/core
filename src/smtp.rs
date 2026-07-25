@@ -596,13 +596,14 @@ async fn send_mdn_rfc724_mid(
     )
     .await?;
     let encrypted = mimefactory.will_be_encrypted();
+    let mut recipients = if contact_id == ContactId::SELF {
+        Vec::new()
+    } else {
+        mimefactory.recipients()
+    };
     let rendered_msg = Box::pin(mimefactory.render(context)).await?;
     let body = rendered_msg.message;
 
-    let mut recipients = Vec::new();
-    if contact_id != ContactId::SELF {
-        recipients.push(contact.get_addr().to_string());
-    }
     if context.get_config_bool(Config::BccSelf).await? {
         add_self_recipients(context, &mut recipients, encrypted).await?;
     }
