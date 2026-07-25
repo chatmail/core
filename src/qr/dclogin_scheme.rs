@@ -196,6 +196,7 @@ pub(crate) fn login_param_from_login_qr(
                     password: smtp_password.unwrap_or_default(),
                 },
                 certificate_checks: certificate_checks.unwrap_or_default(),
+                oauth2: false,
             };
             Ok(param)
         }

@@ -140,6 +140,10 @@ pub struct EnteredLoginParam {
     /// TLS options: whether to allow invalid certificates and/or
     /// invalid hostnames
     pub certificate_checks: EnteredCertificateChecks,
+
+    /// Deprecated, always false
+    #[serde(default)]
+    pub oauth2: bool,
 }
 
 impl EnteredLoginParam {
@@ -235,6 +239,7 @@ impl EnteredLoginParam {
                 password: send_pw,
             },
             certificate_checks,
+            oauth2: false,
         })
     }
 
@@ -396,6 +401,7 @@ mod tests {
                 password: "".to_string(),
             },
             certificate_checks: Default::default(),
+            oauth2: false,
         };
         param.save_legacy(&t).await?;
         assert_eq!(

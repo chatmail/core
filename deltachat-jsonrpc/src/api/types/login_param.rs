@@ -122,6 +122,7 @@ impl TryFrom<EnteredLoginParam> for dc::EnteredLoginParam {
                 password: param.smtp_password.unwrap_or_default(),
             },
             certificate_checks: param.certificate_checks.unwrap_or_default().into(),
+            oauth2: false,
         })
     }
 }
