@@ -1,5 +1,8 @@
+use std::time::Duration;
+
 use super::*;
 use crate::test_utils::TestContext;
+use crate::tools::SystemTime;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_load_relay_candidates_single() -> Result<()> {
@@ -130,6 +133,38 @@ async fn test_maybe_add_additional_relays_disabled() {
     // By default, automatic relay management is disabled:
     let t = &TestContext::new_alice().await;
     assert_automatic_relay_management_does_nothing(t).await;
+}
+
+/// Runs maybe_add_additional_relays_inner(), then deletes one of the transports.
+/// Even after AUTOMATIC_ADDITION_DEBOUNCE_SECONDS,
+/// running automatic transport management again should not add back a transport.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_maybe_add_additional_relays_does_nothing_after_finishing_once() -> Result<()> {
+    let t = &TestContext::new_alice().await;
+    enable_config(t).await;
+
+    let skip_network = true;
+    let relay_added = maybe_add_additional_relays_inner(t, skip_network).await?;
+    assert!(relay_added);
+
+    let transports = t.list_transports().await?;
+    t.delete_transport(&transports.last().unwrap().param.addr)
+        .await?;
+
+    SystemTime::shift(Duration::from_secs(
+        AUTOMATIC_ADDITION_DEBOUNCE_SECONDS as u64 + 1,
+    ));
+
+    let transports_count = t.count_transports().await?;
+    assert_eq!(transports_count, NUM_TRANSPORTS_TARGET - 1);
+
+    assert!(
+        t.get_config_bool(Config::AutomaticRelayManagementFinished)
+            .await?
+    );
+    assert_automatic_relay_management_does_nothing(t).await;
+
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

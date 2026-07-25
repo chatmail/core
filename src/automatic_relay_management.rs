@@ -5,7 +5,7 @@ use deltachat_contact_tools::addr_normalize;
 use rand::distr::{Alphanumeric, SampleString};
 use rand::seq::IndexedRandom;
 
-use crate::config::Config;
+use crate::config::{self, Config};
 use crate::log::{LogExt, warn};
 use crate::login_param::{EnteredCertificateChecks, EnteredImapLoginParam};
 use crate::{configure::EnteredLoginParam, context::Context, tools::time};
@@ -65,6 +65,12 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
     {
         return Ok(relay_added);
     }
+    if context
+        .get_config_bool(Config::AutomaticRelayManagementFinished)
+        .await?
+    {
+        return Ok(relay_added);
+    }
     // Set the config at the beginning to avoid endless loops.
     // Race conditions are not a concern because we locked the mutex.
     context
@@ -74,6 +80,13 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
     // Using `for` instead of `while` to prevent infinite loop
     for _ in 0..NUM_TRANSPORTS_TARGET {
         if context.count_transports().await? >= NUM_TRANSPORTS_TARGET {
+            context
+                .set_config_internal(
+                    Config::AutomaticRelayManagementFinished,
+                    config::from_bool(true),
+                )
+                .await?;
+
             return Ok(relay_added);
         }
 

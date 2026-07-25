@@ -355,6 +355,9 @@ pub enum Config {
     /// Whether to automatically add/remove transports
     AutomaticRelayManagement,
 
+    /// Whether automatic relay management successfully added the desired number of relays
+    AutomaticRelayManagementFinished,
+
     /// Whether to avoid using IMAP IDLE even if the server supports it.
     ///
     /// This is a developer option for testing "fake idle".
