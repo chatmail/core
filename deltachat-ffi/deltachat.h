@@ -638,22 +638,6 @@ int             dc_get_connectivity          (dc_context_t* context);
 char*           dc_get_connectivity_html     (dc_context_t* context);
 
 
-#define DC_PUSH_NOT_CONNECTED 0
-#define DC_PUSH_CONNECTED     2
-
-/**
- * Get the current push notification state.
- * One of:
- * - DC_PUSH_NOT_CONNECTED
- * - DC_PUSH_CONNECTED
- *
- * @memberof dc_context_t
- * @param context The context object.
- * @return Push notification state.
- */
-int              dc_get_push_state           (dc_context_t* context);
-
-
 // connect
 
 /**

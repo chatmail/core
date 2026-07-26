@@ -8,8 +8,6 @@ pub mod http;
 pub mod location;
 pub mod login_param;
 pub mod message;
-pub mod notify_state;
-
 pub mod qr;
 pub mod reactions;
 pub mod webxdc;

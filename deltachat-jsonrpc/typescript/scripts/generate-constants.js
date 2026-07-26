@@ -44,7 +44,6 @@ const constants = data
       key.startsWith("DC_CERTCK_") ||
       key.startsWith("DC_SOCKET_") ||
       key.startsWith("DC_LP_AUTH_") ||
-      key.startsWith("DC_PUSH_") ||
       key.startsWith("DC_TEXT1_") ||
       key.startsWith("DC_CHAT_TYPE")
     );

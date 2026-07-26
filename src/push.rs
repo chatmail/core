@@ -7,14 +7,12 @@
 //! which holds push notification token for the device,
 //! shared by all accounts.
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 
 use anyhow::{Context as _, Result};
 use base64::Engine as _;
 use pgp::crypto::aead::{AeadAlgorithm, ChunkSize};
 use pgp::crypto::sym::SymmetricKeyAlgorithm;
 
-use crate::context::Context;
 use crate::key::DcKey;
 
 /// Manages subscription to Apple Push Notification services.
@@ -114,29 +112,6 @@ impl PushSubscriber {
     /// and send the token to the email server if it supports push notifications.
     pub(crate) fn device_token(&self) -> Option<String> {
         self.device_token.read().clone()
-    }
-}
-
-/// Push notification state
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, FromPrimitive, ToPrimitive)]
-#[repr(i8)]
-pub enum NotifyState {
-    /// Not subscribed to push notifications.
-    #[default]
-    NotConnected = 0,
-
-    /// Subscribed to push notifications for new messages.
-    Connected = 2,
-}
-
-impl Context {
-    /// Returns push notification subscriber state.
-    pub fn push_state(&self) -> NotifyState {
-        if self.push_subscribed.load(Ordering::Relaxed) {
-            NotifyState::Connected
-        } else {
-            NotifyState::NotConnected
-        }
     }
 }
 

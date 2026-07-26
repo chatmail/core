@@ -246,13 +246,6 @@ class ProviderStatus(IntEnum):
     BROKEN = 3
 
 
-class PushNotifyState(IntEnum):
-    """Push notifications state."""
-
-    NOT_CONNECTED = 0
-    CONNECTED = 2
-
-
 class ShowEmails(IntEnum):
     """Show emails mode."""
 
