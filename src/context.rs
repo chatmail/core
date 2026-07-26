@@ -308,6 +308,9 @@ pub struct InnerContext {
     /// Iroh for realtime peer channels.
     pub(crate) iroh: Arc<RwLock<Option<Iroh>>>,
 
+    /// Mutex to serialize initializations of [`Self::iroh`].
+    pub(crate) iroh_init_mutex: Mutex<()>,
+
     /// The own fingerprint, if it was computed already.
     /// tokio::sync::OnceCell would be possible to use, but overkill for our usecase;
     /// the standard library's OnceLock is enough, and it's a lot smaller in memory.
@@ -496,6 +499,7 @@ impl Context {
             tls_session_store: TlsSessionStore::new(),
             spki_hash_store: SpkiHashStore::new(),
             iroh: Arc::new(RwLock::new(None)),
+            iroh_init_mutex: Mutex::new(()),
             self_fingerprint: OnceLock::new(),
             self_public_key: Mutex::new(None),
             connectivities: parking_lot::Mutex::new(Vec::new()),

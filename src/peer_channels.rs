@@ -26,27 +26,35 @@
 use anyhow::{Context as _, Result, anyhow, bail};
 use data_encoding::BASE32_NOPAD;
 use futures_lite::StreamExt;
-use iroh::{Endpoint, NodeAddr, NodeId, PublicKey, RelayMode, RelayUrl, SecretKey};
+use iroh::{Endpoint, NodeAddr, NodeId, PublicKey, RelayMap, RelayMode, RelayUrl, SecretKey};
 use iroh_gossip::net::{Event, GOSSIP_ALPN, Gossip, GossipEvent, JoinOptions};
 use iroh_gossip::proto::TopicId;
 use parking_lot::Mutex;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::env;
+use std::time::Duration;
 use tokio::sync::{RwLock, oneshot};
 use tokio::task::JoinHandle;
+use tokio::time::timeout;
 use url::Url;
 
 use crate::EventType;
 use crate::chat::send_msg;
 use crate::config::Config;
 use crate::context::Context;
-use crate::log::warn;
+use crate::log::{LogExt, warn};
 use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::SystemMessage;
+use crate::net::http::probe_iroh_url;
+use crate::net::run_connection_attempts;
+use crate::transport::published_transports;
 
 /// The length of an ed25519 `PublicKey`, in bytes.
 const PUBLIC_KEY_LENGTH: usize = 32;
 const PUBLIC_KEY_STUB: &[u8] = "static_string".as_bytes();
+
+/// Timeout for probing an iroh relay candidate.
+const RELAY_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Store Iroh peer channels for the context.
 #[derive(Debug)]
@@ -67,6 +75,9 @@ pub struct Iroh {
     ///
     /// This is attached to every message to work around `iroh_gossip` deduplication.
     pub(crate) public_key: PublicKey,
+
+    /// Home relay URL verified to work, None if peers cannot reach us.
+    working_relay_url: Option<RelayUrl>,
 }
 
 impl Iroh {
@@ -184,16 +195,21 @@ impl Iroh {
         *entry
     }
 
-    /// Get the iroh [NodeAddr] without direct IP addresses.
-    ///
-    /// The address is guaranteed to have home relay URL set
-    /// as it is the only way to reach the node
-    /// without global discovery mechanisms.
-    pub(crate) async fn get_node_addr(&self) -> Result<NodeAddr> {
-        let mut addr = self.router.endpoint().node_addr().await?;
-        addr.direct_addresses = BTreeSet::new();
-        debug_assert!(addr.relay_url().is_some());
-        Ok(addr)
+    /// Returns whether the endpoint can still be used.
+    async fn is_usable(&self) -> bool {
+        // We don't have a working relay but might still
+        // have dialed a peer and have active channels.
+        self.working_relay_url.is_some() || !self.iroh_channels.read().await.is_empty()
+    }
+
+    /// Returns the iroh [NodeAddr] with the working relay URL
+    /// and without direct IP addresses.
+    pub(crate) fn get_working_node_addr(&self) -> Result<NodeAddr> {
+        let relay_url = self
+            .working_relay_url
+            .clone()
+            .context("No working iroh relay, peers cannot reach us")?;
+        Ok(NodeAddr::new(self.public_key).with_relay_url(relay_url))
     }
 
     /// Leave the realtime channel for a given topic.
@@ -231,28 +247,73 @@ impl ChannelState {
     }
 }
 
+/// Selects a working iroh relay among the candidates.
+async fn select_iroh_relay(context: &Context, candidates: &[Url]) -> Result<Url> {
+    let probes = candidates.iter().cloned().map(|candidate| {
+        let context = context.clone();
+        async move {
+            let probe_target = candidate.join("/generate_204")?;
+            timeout(
+                RELAY_PROBE_TIMEOUT,
+                probe_iroh_url(&context, probe_target.as_str()),
+            )
+            .await
+            .with_context(|| format!("Timeout probing iroh relay {candidate}"))?
+            .with_context(|| format!("Failed to probe iroh relay {candidate}"))?;
+            Ok(candidate)
+        }
+    });
+    let selected = run_connection_attempts(probes).await?;
+    info!(context, "Selected iroh relay {selected}.");
+    Ok(selected)
+}
+
+/// Downgrades a write lock on an initialized `iroh` into a read guard on the value.
+fn downgrade_iroh_write_lock(
+    lock: tokio::sync::RwLockWriteGuard<'_, Option<Iroh>>,
+) -> Result<tokio::sync::RwLockReadGuard<'_, Iroh>> {
+    tokio::sync::RwLockWriteGuard::try_downgrade_map(lock, |opt_iroh| opt_iroh.as_ref())
+        .map_err(|_| anyhow!("Downgrade should succeed as the value is `Some`"))
+}
+
 impl Context {
     /// Create iroh endpoint and gossip.
     async fn init_peer_channels(&self) -> Result<Iroh> {
         info!(self, "Initializing peer channels.");
-        let secret_key = SecretKey::generate(rand_old::rngs::OsRng);
-        let public_key = secret_key.public();
-
-        let relay_mode = if let Some(relay_url) = self
-            .metadata
-            .read()
+        // Iroh relays from unpublished transports are not advertised.
+        let published = published_transports(self).await?;
+        let metadata = self.metadata.read().await;
+        let mut relay_candidates: Vec<Url> = Vec::new();
+        for (_, transport_id) in published {
+            if let Some(url) = metadata
+                .get(&transport_id)
+                .and_then(|conf| conf.iroh_relay.clone())
+                && !relay_candidates.contains(&url)
+            {
+                relay_candidates.push(url);
+            }
+        }
+        drop(metadata);
+        if relay_candidates.is_empty() {
+            // FIXME: this should be RelayMode::Disabled instead
+            // once multi-relay usage makes missing iroh relays rare
+            // and tests can deal with it (best after Iroh 1.0 upgrade?).
+            warn!(self, "No iroh relay found, using fallback one.");
+            relay_candidates.push(Url::parse("https://nine.testrun.org")?);
+        }
+        let working_relay_url = select_iroh_relay(self, &relay_candidates)
             .await
-            .values()
-            .next()
-            .and_then(|conf| conf.iroh_relay.clone())
-        {
-            RelayMode::Custom(RelayUrl::from(relay_url).into())
-        } else {
-            // FIXME: this should be RelayMode::Disabled instead.
-            // Currently using default relays because otherwise Rust tests fail.
-            RelayMode::Default
+            .context("No working iroh relay")
+            .log_err(self)
+            .ok()
+            .map(RelayUrl::from);
+        let relay_mode = match &working_relay_url {
+            Some(relay_url) => RelayMode::Custom(RelayMap::from(relay_url.clone())),
+            None => RelayMode::Disabled,
         };
 
+        let secret_key = SecretKey::generate(rand_old::rngs::OsRng);
+        let public_key = secret_key.public();
         let endpoint = Endpoint::builder()
             .tls_x509() // For compatibility with iroh <0.34.0
             .secret_key(secret_key)
@@ -281,6 +342,7 @@ impl Context {
             sequence_numbers: Mutex::new(HashMap::new()),
             iroh_channels: RwLock::new(HashMap::new()),
             public_key,
+            working_relay_url,
         })
     }
 
@@ -301,26 +363,35 @@ impl Context {
             bail!("Attempt to initialize Iroh when realtime is disabled");
         }
 
-        if let Some(lock) = self.get_peer_channels().await {
-            return Ok(lock);
+        // Return an already usable endpoint under a read lock so that
+        // concurrent realtime joins/sends do not serialize on the init mutex.
+        if let Some(iroh) = self.get_peer_channels().await
+            && iroh.is_usable().await
+        {
+            return Ok(iroh);
         }
 
-        let lock = self.iroh.write().await;
-        match tokio::sync::RwLockWriteGuard::<'_, std::option::Option<Iroh>>::try_downgrade_map(
-            lock,
-            |opt_iroh| opt_iroh.as_ref(),
-        ) {
-            Ok(lock) => Ok(lock),
-            Err(mut lock) => {
-                let iroh = self.init_peer_channels().await?;
-                *lock = Some(iroh);
-                tokio::sync::RwLockWriteGuard::<'_, std::option::Option<Iroh>>::try_downgrade_map(
-                    lock,
-                    |opt_iroh| opt_iroh.as_ref(),
-                )
-                .map_err(|_| anyhow!("Downgrade should succeed as we just stored `Some` value"))
-            }
+        let _guard = self.iroh_init_mutex.lock().await;
+
+        // Check again, another task may have initialized in the meantime.
+        let mut lock = self.iroh.write().await;
+        if let Some(iroh) = &*lock
+            && iroh.is_usable().await
+        {
+            return downgrade_iroh_write_lock(lock);
         }
+
+        // Drop the unused endpoint that has no working relay and no topics.
+        let stale = lock.take();
+        drop(lock);
+        if let Some(stale) = stale {
+            stale.close().await.log_err(self).ok();
+        }
+
+        let iroh = self.init_peer_channels().await?;
+        let mut lock = self.iroh.write().await;
+        *lock = Some(iroh);
+        downgrade_iroh_write_lock(lock)
     }
 
     pub(crate) async fn maybe_add_gossip_peer(&self, topic: TopicId, peer: NodeAddr) -> Result<()> {
@@ -458,6 +529,9 @@ pub(crate) async fn get_iroh_topic_for_msg(
 
 /// Send a gossip advertisement to the chat that [MsgId] belongs to.
 /// This method should be called from the frontend when `joinRealtimeChannel` is called.
+///
+/// No advertisement is sent without a working relay,
+/// peers could not reach us anyway.
 pub async fn send_webxdc_realtime_advertisement(
     ctx: &Context,
     msg_id: MsgId,
@@ -466,8 +540,17 @@ pub async fn send_webxdc_realtime_advertisement(
         return Ok(None);
     }
 
-    let iroh = ctx.get_or_try_init_peer_channel().await?;
-    let conn = iroh.join_and_subscribe_gossip(ctx, msg_id).await?;
+    // Rendering the message in send_msg() locks `iroh` again,
+    // so the guard must not be held across it.
+    let conn = {
+        let iroh = ctx.get_or_try_init_peer_channel().await?;
+        let conn = iroh.join_and_subscribe_gossip(ctx, msg_id).await?;
+        if iroh.working_relay_url.is_none() {
+            warn!(ctx, "Not sending realtime advertisement without a relay.");
+            return Ok(conn);
+        }
+        conn
+    };
 
     let webxdc = Message::load_from_db(ctx, msg_id).await?;
     let mut msg = Message::new(Viewtype::Text);
@@ -589,10 +672,73 @@ mod tests {
     use crate::{
         EventType,
         chat::{self, ChatId, add_contact_to_chat, resend_msgs, send_msg},
+        imap::ServerMetadata,
         message::{Message, Viewtype},
         receive_imf::receive_imf,
         test_utils::{TestContext, TestContextManager},
+        transport::add_pseudo_transport,
     };
+
+    /// Adds a transport announcing an iroh relay,
+    /// like a chatmail server does via IMAP METADATA.
+    async fn announce_relay(ctx: &TestContext, addr: &str, url: &str) -> Result<()> {
+        add_pseudo_transport(ctx, addr).await?;
+        let (_, transport_id) = published_transports(ctx)
+            .await?
+            .into_iter()
+            .find(|(a, _)| a == addr)
+            .context("Transport not found")?;
+        ctx.metadata.write().await.insert(
+            transport_id,
+            ServerMetadata {
+                iroh_relay: Some(Url::parse(url)?),
+                ..Default::default()
+            },
+        );
+        Ok(())
+    }
+
+    /// Returns the relay of the node address to advertise, if any.
+    async fn selected_iroh_relay(ctx: &TestContext) -> Result<Option<RelayUrl>> {
+        let iroh = ctx.get_or_try_init_peer_channel().await?;
+        Ok(iroh
+            .get_working_node_addr()
+            .ok()
+            .and_then(|addr| addr.relay_url().cloned()))
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_select_working_iroh_relay() -> Result<()> {
+        // CI chatmail relay is used as a known-working candidate because
+        // mocking out the serving of https requests is not worth it, and,
+        // besides, it's also useful to exercise production code paths
+        // which the core Python tests do a lot already.
+        const WORKING_RELAY: &str = "https://ci-chatmail.testrun.org";
+
+        let mut tcm = TestContextManager::new();
+        let alice = &mut tcm.alice().await;
+
+        announce_relay(alice, "one@example.net", "https://127.0.0.1:9").await?;
+        assert_eq!(selected_iroh_relay(alice).await?, None);
+
+        // Relays announced by unpublished transports are not used
+        announce_relay(alice, "two@example.net", WORKING_RELAY).await?;
+        alice
+            .set_transport_unpublished("two@example.net", true)
+            .await?;
+        assert_eq!(selected_iroh_relay(alice).await?, None);
+
+        // The endpoint is initialized again on the next use
+        // because it has no working relay and is not in use yet.
+        announce_relay(alice, "three@example.net", "https://192.0.2.1").await?;
+        announce_relay(alice, "four@example.net", WORKING_RELAY).await?;
+        announce_relay(alice, "five@example.net", "https://192.0.2.2").await?;
+        assert_eq!(
+            selected_iroh_relay(alice).await?,
+            Some(RelayUrl::from(Url::parse(WORKING_RELAY)?))
+        );
+        Ok(())
+    }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_can_communicate() {
@@ -651,8 +797,7 @@ mod tests {
                     .get_or_try_init_peer_channel()
                     .await
                     .unwrap()
-                    .get_node_addr()
-                    .await
+                    .get_working_node_addr()
                     .unwrap()
                     .node_id
             ]
@@ -726,8 +871,7 @@ mod tests {
                 bob.get_or_try_init_peer_channel()
                     .await
                     .unwrap()
-                    .get_node_addr()
-                    .await
+                    .get_working_node_addr()
                     .unwrap()
                     .node_id
             ]
@@ -813,8 +957,7 @@ mod tests {
                     .get_or_try_init_peer_channel()
                     .await
                     .unwrap()
-                    .get_node_addr()
-                    .await
+                    .get_working_node_addr()
                     .unwrap()
                     .node_id
             ]
@@ -878,8 +1021,7 @@ mod tests {
                     .get_or_try_init_peer_channel()
                     .await
                     .unwrap()
-                    .get_node_addr()
-                    .await
+                    .get_working_node_addr()
                     .unwrap()
                     .node_id
             ]

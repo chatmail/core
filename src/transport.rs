@@ -678,6 +678,19 @@ fn restart_io_if_running_boxed(context: Context) -> Pin<Box<dyn Future<Output = 
     Box::pin(async move { context.restart_io_if_running().await })
 }
 
+/// Returns the address and id of each published transport, newest first.
+pub(crate) async fn published_transports(context: &Context) -> Result<Vec<(String, u32)>> {
+    context
+        .sql
+        .query_map_vec(
+            "SELECT addr, id FROM transports WHERE is_published=1
+             ORDER BY add_timestamp DESC, id DESC",
+            (),
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .await
+}
+
 /// Adds transport entry to the `transports` table with empty configuration.
 pub(crate) async fn add_pseudo_transport(context: &Context, addr: &str) -> Result<()> {
     context.sql
