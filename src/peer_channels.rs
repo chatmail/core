@@ -248,9 +248,12 @@ impl Context {
         {
             RelayMode::Custom(RelayUrl::from(relay_url).into())
         } else {
-            // FIXME: this should be RelayMode::Disabled instead.
-            // Currently using default relays because otherwise Rust tests fail.
-            RelayMode::Default
+            // FIXME: this should be RelayMode::Disabled instead once
+            // - multi-relay usage is more common so "no-iroh-relay" is rare
+            // - tests can deal with it (best after Iroh 1.0 upgrade)
+            // For now, if the chatmail relay does not announce an iroh relay,
+            // fall back to a stable community operated Iroh 0.35 relay.
+            RelayMode::Custom(RelayUrl::from(Url::parse("https://nine.testrun.org")?).into())
         };
 
         let endpoint = Endpoint::builder()
