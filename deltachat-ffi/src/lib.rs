@@ -397,16 +397,6 @@ pub unsafe extern "C" fn dc_get_connectivity_html(
     }
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn dc_get_push_state(context: *const dc_context_t) -> libc::c_int {
-    if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_push_state()");
-        return 0;
-    }
-    let ctx = unsafe { &*context };
-    ctx.push_state() as libc::c_int
-}
-
 fn spawn_configure(ctx: Context) {
     spawn(async move {
         ctx.configure()

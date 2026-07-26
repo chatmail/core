@@ -4,7 +4,6 @@ use std::collections::{BTreeMap, HashMap};
 use std::ffi::OsString;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, OnceLock, Weak};
 use std::time::Duration;
 
@@ -296,9 +295,6 @@ pub struct InnerContext {
     /// Push subscriber to store device token.
     pub(crate) push_subscriber: PushSubscriber,
 
-    /// True if account has subscribed to push notifications via IMAP.
-    pub(crate) push_subscribed: AtomicBool,
-
     /// TLS session resumption cache.
     pub(crate) tls_session_store: TlsSessionStore,
 
@@ -497,7 +493,6 @@ impl Context {
             migration_error: parking_lot::RwLock::new(None),
             debug_logging: std::sync::RwLock::new(None),
             push_subscriber,
-            push_subscribed: AtomicBool::new(false),
             tls_session_store: TlsSessionStore::new(),
             spki_hash_store: SpkiHashStore::new(),
             iroh: Arc::new(RwLock::new(None)),

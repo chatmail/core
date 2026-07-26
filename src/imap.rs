@@ -10,7 +10,6 @@ use std::{
     iter::Peekable,
     mem::take,
     str::FromStr,
-    sync::atomic::Ordering,
     time::{Duration, UNIX_EPOCH},
 };
 
@@ -1509,8 +1508,6 @@ impl Session {
                 context,
                 "Transport {transport_id}: Failed to store device token: {err:#}."
             );
-        } else {
-            context.push_subscribed.store(true, Ordering::Relaxed);
         }
 
         Ok(())
