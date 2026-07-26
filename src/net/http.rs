@@ -52,6 +52,7 @@ async fn get_http_sender<B>(
     context: &Context,
     parsed_url: hyper::Uri,
     strict_tls: bool,
+    use_proxy: bool,
 ) -> Result<hyper::client::conn::http1::SendRequest<B>>
 where
     B: hyper::body::Body + 'static + Send,
@@ -60,7 +61,11 @@ where
 {
     let scheme = parsed_url.scheme_str().context("URL has no scheme")?;
     let host = parsed_url.host().context("URL has no host")?;
-    let proxy_config_opt = ProxyConfig::load(context).await?;
+    let proxy_config_opt = if use_proxy {
+        ProxyConfig::load(context).await?
+    } else {
+        None
+    };
 
     let stream: Box<dyn SessionStream> = match scheme {
         "http" => {
@@ -279,7 +284,7 @@ async fn fetch_url(context: &Context, original_url: &str, strict_tls: bool) -> R
             .parse::<hyper::Uri>()
             .with_context(|| format!("Failed to parse URL {url:?}"))?;
 
-        let mut sender = get_http_sender(context, parsed_url.clone(), strict_tls).await?;
+        let mut sender = get_http_sender(context, parsed_url.clone(), strict_tls, true).await?;
         let authority = parsed_url
             .authority()
             .context("URL has no authority")?
@@ -399,6 +404,34 @@ pub(crate) async fn read_url_blob_with_tls(
     Ok(response)
 }
 
+/// Probes an iroh relay URL with a non-cached GET request,
+/// failing unless a successful response status is received.
+pub(crate) async fn probe_iroh_url(context: &Context, url: &str) -> Result<()> {
+    let parsed_url = url
+        .parse::<hyper::Uri>()
+        .with_context(|| format!("Failed to parse URL {url:?}"))?;
+
+    // Connects directly, proxy off, like iroh does.
+    let strict_tls = true;
+    let use_proxy = false;
+    let mut sender = get_http_sender(context, parsed_url.clone(), strict_tls, use_proxy).await?;
+    let authority = parsed_url
+        .authority()
+        .context("URL has no authority")?
+        .clone();
+    let req = hyper::Request::get(parsed_url)
+        .header(hyper::header::HOST, authority.as_str())
+        .body(http_body_util::Empty::<Bytes>::new())?;
+
+    let response = sender.send_request(req).await?;
+    let status = response.status();
+    if !status.is_success() {
+        bail!("The server returned a non-successful response code: {status}");
+    }
+
+    Ok(())
+}
+
 /// Sends an empty POST request to the URL.
 ///
 /// Returns response text and whether request was successful or not.
@@ -413,7 +446,7 @@ pub(crate) async fn post_empty(context: &Context, url: &str) -> Result<(String, 
         bail!("POST requests to non-HTTPS URLs are not allowed");
     }
 
-    let mut sender = get_http_sender(context, parsed_url.clone(), true).await?;
+    let mut sender = get_http_sender(context, parsed_url.clone(), true, true).await?;
     let authority = parsed_url
         .authority()
         .context("URL has no authority")?

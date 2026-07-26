@@ -2,10 +2,73 @@ use super::*;
 use crate::{
     EventType,
     chat::{self, ChatId, add_contact_to_chat, resend_msgs, send_msg},
+    imap::ServerMetadata,
     message::{Message, Viewtype},
     receive_imf::receive_imf,
     test_utils::{TestContext, TestContextManager},
+    transport::add_pseudo_transport,
 };
+
+/// Adds a transport announcing an iroh relay,
+/// like a chatmail server does via IMAP METADATA.
+async fn announce_relay(ctx: &TestContext, addr: &str, url: &str) -> Result<()> {
+    add_pseudo_transport(ctx, addr).await?;
+    let (_, transport_id) = published_transports(ctx)
+        .await?
+        .into_iter()
+        .find(|(a, _)| a == addr)
+        .context("Transport not found")?;
+    ctx.metadata.write().await.insert(
+        transport_id,
+        ServerMetadata {
+            iroh_relay: Some(Url::parse(url)?),
+            ..Default::default()
+        },
+    );
+    Ok(())
+}
+
+/// Returns the relay of the node address to advertise, if any.
+async fn selected_iroh_relay(ctx: &TestContext) -> Result<Option<RelayUrl>> {
+    let iroh = ctx.get_or_try_init_peer_channel().await?;
+    Ok(iroh
+        .get_working_node_addr()
+        .ok()
+        .and_then(|addr| addr.relay_url().cloned()))
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_select_working_iroh_relay() -> Result<()> {
+    // CI chatmail relay is used as a known-working candidate because
+    // mocking out the serving of https requests is not worth it, and,
+    // besides, it's also useful to exercise production code paths
+    // which the core Python tests do a lot already.
+    const WORKING_RELAY: &str = "https://ci-chatmail.testrun.org";
+
+    let mut tcm = TestContextManager::new();
+    let alice = &mut tcm.alice().await;
+
+    announce_relay(alice, "one@example.net", "https://127.0.0.1:9").await?;
+    assert_eq!(selected_iroh_relay(alice).await?, None);
+
+    // Relays announced by unpublished transports are not used
+    announce_relay(alice, "two@example.net", WORKING_RELAY).await?;
+    alice
+        .set_transport_unpublished("two@example.net", true)
+        .await?;
+    assert_eq!(selected_iroh_relay(alice).await?, None);
+
+    // The endpoint is initialized again on the next use
+    // because it has no working relay and is not in use yet.
+    announce_relay(alice, "three@example.net", "https://192.0.2.1").await?;
+    announce_relay(alice, "four@example.net", WORKING_RELAY).await?;
+    announce_relay(alice, "five@example.net", "https://192.0.2.2").await?;
+    assert_eq!(
+        selected_iroh_relay(alice).await?,
+        Some(RelayUrl::from(Url::parse(WORKING_RELAY)?))
+    );
+    Ok(())
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_can_communicate() {
@@ -64,8 +127,7 @@ async fn test_can_communicate() {
                 .get_or_try_init_peer_channel()
                 .await
                 .unwrap()
-                .get_node_addr()
-                .await
+                .get_working_node_addr()
                 .unwrap()
                 .node_id
         ]
@@ -139,8 +201,7 @@ async fn test_can_communicate() {
             bob.get_or_try_init_peer_channel()
                 .await
                 .unwrap()
-                .get_node_addr()
-                .await
+                .get_working_node_addr()
                 .unwrap()
                 .node_id
         ]
@@ -226,8 +287,7 @@ async fn test_duplicated_out_of_order_advertisement() -> Result<()> {
                 .get_or_try_init_peer_channel()
                 .await
                 .unwrap()
-                .get_node_addr()
-                .await
+                .get_working_node_addr()
                 .unwrap()
                 .node_id
         ]
@@ -292,8 +352,7 @@ async fn test_can_reconnect() {
                 .get_or_try_init_peer_channel()
                 .await
                 .unwrap()
-                .get_node_addr()
-                .await
+                .get_working_node_addr()
                 .unwrap()
                 .node_id
         ]
