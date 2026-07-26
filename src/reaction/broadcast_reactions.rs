@@ -6,6 +6,7 @@
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 
 use crate::EventType;
 use crate::chat::{Chat, ChatId, send_msg};
@@ -16,7 +17,7 @@ use crate::context::Context;
 use crate::log::warn;
 use crate::message::{Message, MsgId, rfc724_mid_exists};
 use crate::param::Param;
-use crate::reaction::get_msg_reactions;
+use crate::reaction::{Reaction, ReactionFrequency, get_msg_reactions};
 use crate::tools::time;
 
 /// Wire format for accumulated reactions
@@ -187,6 +188,42 @@ pub(crate) async fn receive_broadcast_reactions(context: &Context, json: &str) -
     Ok(())
 }
 
+/// Load broadcasted reactios from `reactions_accumulated`.
+/// This table is filled only for the broadcast channel subscribers (`Chattype::InBroadcast`),
+/// in other cases, `None` is returned.
+pub(crate) async fn load_broadcast_reactions(
+    context: &Context,
+    msg_id: MsgId,
+) -> Result<Option<Vec<ReactionFrequency>>> {
+    let mut frequencies: Vec<ReactionFrequency> = context
+        .sql
+        .query_map_collect(
+            "SELECT reaction, count FROM reactions_accumulated WHERE msg_id=?",
+            (msg_id,),
+            |row| {
+                let reaction: String = row.get(0)?;
+                let count: i64 = row.get(1)?;
+                Ok(ReactionFrequency {
+                    reaction: Reaction::new(&reaction),
+                    count: count as usize,
+                    is_from_self: false,
+                })
+            },
+        )
+        .await?;
+
+    if frequencies.is_empty() {
+        return Ok(None);
+    }
+
+    frequencies.sort_by(|a, b| match b.count.cmp(&a.count) {
+        Ordering::Equal => a.reaction.as_str().cmp(b.reaction.as_str()),
+        other => other,
+    });
+
+    Ok(Some(frequencies))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -240,7 +277,7 @@ mod tests {
             1
         );
 
-        // Alice broadcasts reaction to Claire
+        // Alice broadcasts recent reaction changes to Bob and Claire.
         // On the wire, the hidden message has a header like
         // `Broadcast-Reactions: {"messages":[{"id":"123@adc","reactions":[{"emoji":"🏳️‍🌈","count":1}]}]}`
         maybe_broadcast_reactions(alice).await?;
@@ -260,6 +297,8 @@ mod tests {
                 .await?,
             1
         );
+        let reactions = get_msg_reactions(claire, claire_msg.id).await?;
+        assert_eq!(reactions.to_string(), "🏳️‍🌈1");
 
         Ok(())
     }
