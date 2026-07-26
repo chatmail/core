@@ -1915,8 +1915,7 @@ impl MimeFactory {
                 let node_addr = context
                     .get_or_try_init_peer_channel()
                     .await?
-                    .get_node_addr()
-                    .await?;
+                    .get_working_node_addr()?;
 
                 // We should not send `null` as relay URL
                 // as this is the only way to reach the node.
