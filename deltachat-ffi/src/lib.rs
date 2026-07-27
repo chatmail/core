@@ -101,7 +101,7 @@ pub unsafe extern "C" fn dc_context_new(
         // generate random ID as this functionality is not yet available on the C-api.
         let id = rand::random();
         block_on(
-            ContextBuilder::new(as_path(dbfile).to_path_buf())
+            ContextBuilder::new(unsafe { as_path(dbfile) }.to_path_buf())
                 .with_id(id)
                 .open(),
         )
@@ -129,7 +129,7 @@ pub unsafe extern "C" fn dc_context_new_closed(dbfile: *const libc::c_char) -> *
 
     let id = rand::random();
     match block_on(
-        ContextBuilder::new(as_path(dbfile).to_path_buf())
+        ContextBuilder::new(unsafe { as_path(dbfile) }.to_path_buf())
             .with_id(id)
             .build(),
     ) {
@@ -3728,7 +3728,7 @@ pub unsafe extern "C" fn dc_msg_set_file_and_deduplicate(
         .message
         .set_file_and_deduplicate(
             ctx,
-            as_path(file),
+            unsafe { as_path(file) },
             to_opt_string_lossy(name).as_deref(),
             to_opt_string_lossy(filemime).as_deref(),
         )
@@ -4448,7 +4448,7 @@ pub unsafe extern "C" fn dc_accounts_new(
         return ptr::null_mut();
     }
 
-    let accs = block_on(Accounts::new(as_path(dir).into(), writable != 0));
+    let accs = block_on(Accounts::new(unsafe { as_path(dir) }.into(), writable != 0));
 
     match accs {
         Ok(accs) => Arc::into_raw(Arc::new(RwLock::new(accs))),
@@ -4542,7 +4542,7 @@ pub unsafe extern "C" fn dc_accounts_new_with_event_channel(
     };
 
     let accs = block_on(Accounts::new_with_events(
-        as_path(dir).into(),
+        unsafe { as_path(dir) }.into(),
         writable != 0,
         event_channel,
     ));
