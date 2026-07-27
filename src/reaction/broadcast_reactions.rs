@@ -262,6 +262,99 @@ mod tests {
     use crate::securejoin::get_securejoin_qr;
     use crate::test_utils::TestContextManager;
 
+    #[test]
+    fn test_refine_broadcast_reactions() {
+        // Test for empty inputs
+        let broadcasted = vec![];
+        let by_contact: BTreeMap<ContactId, Reaction> = BTreeMap::new();
+        let result = refine_broadcast_reactions(broadcasted, &by_contact);
+        assert!(result.is_empty());
+
+        // Test broadcasted reactions only, no by_contact reactions
+        let broadcasted = vec![ReactionFrequency {
+            reaction: Reaction::new("👍"),
+            count: 2,
+            is_from_self: false,
+        }];
+        let by_contact: BTreeMap<ContactId, Reaction> = BTreeMap::new();
+        let result = refine_broadcast_reactions(broadcasted, &by_contact);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].reaction.as_str(), "👍");
+        assert_eq!(result[0].count, 2);
+        assert_eq!(result[0].is_from_self, false);
+
+        // Test `by_contact` adding a completely new reaction not yet in `broadcasted`
+        let broadcasted = vec![ReactionFrequency {
+            reaction: Reaction::new("👍"),
+            count: 2,
+            is_from_self: false,
+        }];
+        let mut by_contact: BTreeMap<ContactId, Reaction> = BTreeMap::new();
+        by_contact.insert(ContactId::new(10), Reaction::new("❤️"));
+        let result = refine_broadcast_reactions(broadcasted, &by_contact);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].reaction.as_str(), "👍");
+        assert_eq!(result[0].count, 2);
+        assert_eq!(result[1].reaction.as_str(), "❤️");
+        assert_eq!(result[1].count, 1);
+        assert_eq!(result[1].is_from_self, false);
+
+        // Test `by_contact` contains SELF reaction, ensuring it is marked correctly
+        let broadcasted = vec![
+            ReactionFrequency {
+                reaction: Reaction::new("❤️"),
+                count: 1,
+                is_from_self: false,
+            },
+            ReactionFrequency {
+                reaction: Reaction::new("👍"),
+                count: 2,
+                is_from_self: false,
+            },
+        ];
+        let mut by_contact: BTreeMap<ContactId, Reaction> = BTreeMap::new();
+        by_contact.insert(ContactId::SELF, Reaction::new("❤️"));
+        let result = refine_broadcast_reactions(broadcasted, &by_contact);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].reaction.as_str(), "👍");
+        assert_eq!(result[0].is_from_self, false);
+        assert_eq!(result[1].reaction.as_str(), "❤️");
+        assert_eq!(result[1].is_from_self, true);
+
+        // Test `by_contact` contains a reaction already in broadcasted; count must NOT increase
+        let broadcasted = vec![ReactionFrequency {
+            reaction: Reaction::new("👍"),
+            count: 2,
+            is_from_self: false,
+        }];
+        let mut by_contact: BTreeMap<ContactId, Reaction> = BTreeMap::new();
+        by_contact.insert(ContactId::new(10), Reaction::new("👍"));
+        let result = refine_broadcast_reactions(broadcasted, &by_contact);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].reaction.as_str(), "👍");
+        assert_eq!(result[0].count, 2);
+
+        // Test scenario with multiple contacts, overlapping reactions, and SELF
+        let broadcasted = vec![ReactionFrequency {
+            reaction: Reaction::new("👍"),
+            count: 3,
+            is_from_self: false,
+        }];
+        let mut by_contact: BTreeMap<ContactId, Reaction> = BTreeMap::new();
+        by_contact.insert(ContactId::new(11), Reaction::new("👍"));
+        by_contact.insert(ContactId::SELF, Reaction::new("❤️"));
+        let result = refine_broadcast_reactions(broadcasted, &by_contact);
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].reaction.as_str(), "👍");
+        assert_eq!(result[0].count, 3);
+        assert_eq!(result[0].is_from_self, false);
+
+        assert_eq!(result[1].reaction.as_str(), "❤️");
+        assert_eq!(result[1].count, 1);
+        assert_eq!(result[1].is_from_self, true);
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_broadcast_channel_reaction() -> Result<()> {
         let mut tcm = TestContextManager::new();
