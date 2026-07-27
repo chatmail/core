@@ -421,11 +421,11 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
     }
 
     if let Ok(()) = imap.resync_request_receiver.try_recv()
-        && let Err(err) = session.resync_folders(ctx).await
+        && let Err(err) = session.resync_uids_with_server(ctx, &imap.folder).await
     {
         warn!(
             ctx,
-            "Transport {transport_id}: Failed to resync folders: {err:#}."
+            "Transport {transport_id}: Failed to resync UIDs: {err:#}."
         );
         imap.resync_request_sender.try_send(()).ok();
     }

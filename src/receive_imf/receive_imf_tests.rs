@@ -11,6 +11,7 @@ use crate::chat::{
 use crate::chatlist::Chatlist;
 use crate::constants::DC_GCL_FOR_FORWARDING;
 use crate::contact;
+use crate::headerdef::HeaderDefMap as _;
 use crate::imap::prefetch_should_download;
 use crate::imex::{ImexMode, imex};
 use crate::key;
