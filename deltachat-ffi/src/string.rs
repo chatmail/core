@@ -263,7 +263,7 @@ pub(crate) fn to_opt_string_lossy(s: *const libc::c_char) -> Option<String> {
 ///
 /// [Path]: std::path::Path
 #[cfg(not(target_os = "windows"))]
-pub(crate) fn as_path<'a>(s: *const libc::c_char) -> &'a std::path::Path {
+pub(crate) unsafe fn as_path<'a>(s: *const libc::c_char) -> &'a std::path::Path {
     assert!(!s.is_null(), "cannot be used on null pointers");
     use std::os::unix::ffi::OsStrExt;
     let c_str = unsafe { std::ffi::CStr::from_ptr(s) }.to_bytes();
@@ -273,8 +273,8 @@ pub(crate) fn as_path<'a>(s: *const libc::c_char) -> &'a std::path::Path {
 
 // as_path() implementation for windows, documented above.
 #[cfg(target_os = "windows")]
-pub(crate) fn as_path<'a>(s: *const libc::c_char) -> &'a std::path::Path {
-    as_path_unicode(s)
+pub(crate) unsafe fn as_path<'a>(s: *const libc::c_char) -> &'a std::path::Path {
+    unsafe { as_path_unicode(s) }
 }
 
 // Implementation for as_path() on Windows.
@@ -282,7 +282,7 @@ pub(crate) fn as_path<'a>(s: *const libc::c_char) -> &'a std::path::Path {
 // Having this as a separate function means it can be tested on unix
 // too.
 #[allow(dead_code)]
-fn as_path_unicode<'a>(s: *const libc::c_char) -> &'a std::path::Path {
+unsafe fn as_path_unicode<'a>(s: *const libc::c_char) -> &'a std::path::Path {
     assert!(!s.is_null(), "cannot be used on null pointers");
 
     let cstr = unsafe { CStr::from_ptr(s) };
@@ -370,14 +370,20 @@ mod tests {
     fn test_as_path() {
         let some_path = CString::new("/some/path").unwrap();
         let ptr = some_path.as_ptr();
-        assert_eq!(as_path(ptr), std::ffi::OsString::from("/some/path"))
+        assert_eq!(
+            unsafe { as_path(ptr) },
+            std::ffi::OsString::from("/some/path")
+        )
     }
 
     #[test]
     fn test_as_path_unicode_fn() {
         let some_path = CString::new("/some/path").unwrap();
         let ptr = some_path.as_ptr();
-        assert_eq!(as_path_unicode(ptr), std::ffi::OsString::from("/some/path"));
+        assert_eq!(
+            unsafe { as_path_unicode(ptr) },
+            std::ffi::OsString::from("/some/path")
+        );
     }
 
     #[test]
