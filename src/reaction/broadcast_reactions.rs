@@ -233,7 +233,7 @@ pub(crate) async fn load_broadcast_reactions(
 pub(crate) fn refine_broadcast_reactions(
     mut broadcasted_reactions: Vec<ReactionFrequency>,
     by_contact: &BTreeMap<ContactId, Reaction>,
-) -> Result<Vec<ReactionFrequency>> {
+) -> Vec<ReactionFrequency> {
     let self_reaction = by_contact.get(&ContactId::SELF).cloned();
 
     for (_contact_id, reaction) in by_contact {
@@ -258,7 +258,7 @@ pub(crate) fn refine_broadcast_reactions(
         }
     }
 
-    Ok(broadcasted_reactions)
+    broadcasted_reactions
 }
 
 #[cfg(test)]
