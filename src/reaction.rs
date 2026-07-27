@@ -410,11 +410,18 @@ fn calc_frequencies(by_contact: &BTreeMap<ContactId, Reaction>) -> Vec<ReactionF
         })
         .collect();
 
+    sort_frequencies(&mut frequencies);
+    frequencies
+}
+
+/// Sorts reaction frequencies by descending count. when equal, order by emoji string.
+///
+/// This is the order UIs shall use to display reactions in the message bubble.
+pub(crate) fn sort_frequencies(frequencies: &mut [ReactionFrequency]) {
     frequencies.sort_by(|a, b| match b.count.cmp(&a.count) {
         Ordering::Equal => a.reaction.as_str().cmp(b.reaction.as_str()),
         other => other,
     });
-    frequencies
 }
 
 /// Returns a structure containing all reactions to the message.

@@ -218,11 +218,7 @@ pub(crate) async fn load_broadcast_reactions(
         return Ok(None);
     }
 
-    frequencies.sort_by(|a, b| match b.count.cmp(&a.count) {
-        Ordering::Equal => a.reaction.as_str().cmp(b.reaction.as_str()),
-        other => other,
-    });
-
+    sort_frequencies(&mut frequencies);
     Ok(Some(frequencies))
 }
 
@@ -255,11 +251,7 @@ pub(crate) fn refine_broadcast_reactions(
         }
     }
 
-    broadcasted_reactions.sort_by(|a, b| match b.count.cmp(&a.count) {
-        Ordering::Equal => a.reaction.as_str().cmp(b.reaction.as_str()),
-        other => other,
-    });
-
+    sort_frequencies(&mut broadcasted_reactions);
     broadcasted_reactions
 }
 
