@@ -166,6 +166,7 @@ pub(crate) fn login_param_from_host(host: &str) -> EnteredLoginParam {
         },
         smtp: Default::default(),
         certificate_checks: EnteredCertificateChecks::Strict,
+        oauth2: false,
     }
 }
 

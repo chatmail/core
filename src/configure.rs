@@ -323,7 +323,7 @@ impl Context {
         let skip_network = false;
         if let Err(error) = configure(self, param, skip_network).await {
             // Log entered and actual params
-            let configured_param = get_configured_param(self, param).await;
+            let configured_param = get_configured_param(self, param, skip_network).await;
             warn!(
                 self,
                 "configure failed: Entered params: {}. Used params: {}. Error: {error}.",
