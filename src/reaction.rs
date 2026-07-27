@@ -439,7 +439,7 @@ pub async fn get_msg_reactions(context: &Context, msg_id: MsgId) -> Result<React
 
     let frequencies =
         if let Some(broadcast_reactions) = load_broadcast_reactions(context, msg_id).await? {
-            refine_broadcast_reactions(broadcast_reactions, by_contact.clone())?
+            refine_broadcast_reactions(broadcast_reactions, &by_contact)?
         } else {
             calc_frequencies(&by_contact)
         };

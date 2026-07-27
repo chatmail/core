@@ -232,11 +232,11 @@ pub(crate) async fn load_broadcast_reactions(
 /// Moreover, `by_contact` may contain direct reaction from the broadcast owner.
 pub(crate) fn refine_broadcast_reactions(
     mut broadcasted_reactions: Vec<ReactionFrequency>,
-    by_contact: BTreeMap<ContactId, Reaction>,
+    by_contact: &BTreeMap<ContactId, Reaction>,
 ) -> Result<Vec<ReactionFrequency>> {
     let self_reaction = by_contact.get(&ContactId::SELF).cloned();
 
-    for (_contact_id, reaction) in &by_contact {
+    for (_contact_id, reaction) in by_contact {
         if !broadcasted_reactions
             .iter()
             .any(|entry| entry.reaction == *reaction)
