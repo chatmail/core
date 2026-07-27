@@ -104,7 +104,7 @@ class ACFactory:
         return ac_clone
 
     def get_accepted_chat(self, ac1: Account, ac2: Account) -> Chat:
-        """Create a new 1:1 chat between ac1 and ac2 accepted on both sides.
+        """Create a new single chat between ac1 and ac2 accepted on both sides.
 
         Returned chat is a chat with ac2 from ac1 point of view.
         """

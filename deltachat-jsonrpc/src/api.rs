@@ -1351,7 +1351,7 @@ impl CommandApi {
     /// The concrete action depends on the type of the chat and on the users settings
     /// (dc_msgs_presented() may be a better name therefore, but well. :)
     ///
-    /// - For normal chats, the IMAP state is updated, MDN is sent
+    /// - For single chats, the IMAP state is updated, MDN is sent
     ///   (if set_config()-options `mdns_enabled` is set)
     ///   and the internal state is changed to @ref DC_STATE_IN_SEEN to reflect these actions.
     ///
@@ -1893,7 +1893,7 @@ impl CommandApi {
     //                   chat
     // ---------------------------------------------
 
-    /// Returns the [`ChatId`] for the 1:1 chat with `contact_id` if it exists.
+    /// Returns the [`ChatId`] for the single chat with `contact_id` if it exists.
     ///
     /// If it does not exist, `None` is returned.
     async fn get_chat_id_by_contact_id(

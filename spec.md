@@ -196,7 +196,7 @@ If the messenger finds a valid but not existent group-id,
 the messenger MAY create a new group.
 If no group-id is found,
 the message MAY be assigned
-to a normal single-user chat with the email-address given in `From`.
+to a single chat with the email-address given in `From`.
 
 
 ## Add and remove members

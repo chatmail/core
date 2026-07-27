@@ -55,7 +55,7 @@ class Contact:
         return snapshot
 
     def create_chat(self) -> "Chat":
-        """Create or get an existing 1:1 chat for this contact."""
+        """Create or get an existing single chat for this contact."""
         from .chat import Chat
 
         return Chat(

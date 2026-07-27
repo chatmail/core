@@ -888,14 +888,14 @@ uint32_t        dc_create_chat_by_contact_id (dc_context_t* context, uint32_t co
 
 
 /**
- * Check, if there is a normal chat with a given contact.
+ * Check, if there is a single chat with a given contact.
  * To get the chat messages, use dc_get_chat_msgs().
  *
  * @memberof dc_context_t
  * @param context The context object as returned from dc_context_new().
  * @param contact_id The contact ID to check.
- * @return If there is a normal chat with the given contact_id, this chat_id is
- *     returned. If there is no normal chat with the contact_id, the function
+ * @return If there is a single chat with the given contact_id, this chat_id is
+ *     returned. If there is no single chat with the contact_id, the function
  *     returns 0.
  */
 uint32_t        dc_get_chat_id_by_contact_id (dc_context_t* context, uint32_t contact_id);
@@ -1192,7 +1192,7 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  * @memberof dc_context_t
  * @param context The context object.
  * @param chat_id The chat to place a call for.
- *     This needs to be a one-to-one chat.
+ *     This needs to be a single chat.
  * @param place_call_info any data that other devices receive
  *     in #DC_EVENT_INCOMING_CALL.
  * @param has_video Whether the call has video initially.
@@ -1598,7 +1598,7 @@ void            dc_set_chat_visibility       (dc_context_t* context, uint32_t ch
  * - The chat or the contact is **not blocked**, so new messages from the user/the group may appear
  *   and the user may create the chat again.
  * - **Groups are not left** - this would
- *   be unexpected as (1) deleting a normal chat also does not prevent new mails
+ *   be unexpected as (1) deleting a single chat also does not prevent new mails
  *   from arriving, (2) leaving a group requires sending a message to
  *   all group members - especially for groups not used for a longer time, this is
  *   really unexpected when deletion results in contacting all members again,
@@ -1616,7 +1616,7 @@ void            dc_delete_chat               (dc_context_t* context, uint32_t ch
 /**
  * Block a chat.
  *
- * Blocking 1:1 chats blocks the corresponding contact. Blocking
+ * Blocking single chats blocks the corresponding contact. Blocking
  * mailing lists creates a pseudo-contact in the list of blocked
  * contacts, so blocked mailing lists can be discovered and unblocked
  * the same way as the contacts. Blocking group chats deletes the
@@ -1645,7 +1645,7 @@ void            dc_accept_chat               (dc_context_t* context, uint32_t ch
 /**
  * Get the contact IDs belonging to a chat.
  *
- * - for normal chats, the function always returns exactly one contact,
+ * - for single chats, the function always returns exactly one contact,
  *   DC_CONTACT_ID_SELF is returned only for SELF-chats.
  *
  * - for group chats all members are returned, DC_CONTACT_ID_SELF is returned
@@ -2083,7 +2083,7 @@ int             dc_resend_msgs               (dc_context_t* context, const uint3
  * The concrete action depends on the type of the chat and on the users settings
  * (dc_msgs_presented() may be a better name therefore, but well. :)
  *
- * - For normal chats, the IMAP state is updated, MDN is sent
+ * - For single chats, the IMAP state is updated, MDN is sent
  *   (if dc_set_config()-options `mdns_enabled` is set)
  *   and the internal state is changed to @ref DC_STATE_IN_SEEN to reflect these actions.
  *
@@ -3667,7 +3667,7 @@ char*           dc_chat_get_mailinglist_addr (const dc_chat_t* chat);
 
 
 /**
- * Get name of a chat. For one-to-one chats, this is the name of the contact.
+ * Get name of a chat. For single chats, this is the name of the contact.
  * For group chats, this is the name given e.g. to dc_create_group_chat() or
  * received by a group-creation message.
  *
@@ -3684,7 +3684,7 @@ char*           dc_chat_get_name             (const dc_chat_t* chat);
  * Get the chat's profile image.
  * For groups, this is the image set by any group member
  * using dc_set_chat_profile_image().
- * For normal chats, this is the image set by each remote user on their own
+ * For single chats, this is the image set by each remote user on their own
  * using dc_set_config(context, "selfavatar", image).
  *
  * @memberof dc_chat_t
@@ -3698,7 +3698,7 @@ char*           dc_chat_get_profile_image    (const dc_chat_t* chat);
 
 /**
  * Get a color for the chat.
- * For 1:1 chats, the color is calculated from the contact's e-mail address.
+ * For single chats, the color is calculated from the contact's e-mail address.
  * Otherwise, the chat name is used.
  * The color can be used for an fallback avatar with white initials
  * as well as for headlines in bubbles of group chats.
@@ -3765,7 +3765,7 @@ int             dc_chat_is_unpromoted        (const dc_chat_t* chat);
 
 
 /**
- * Check if a chat is a self talk. Self talks are normal chats with
+ * Check if a chat is a self talk. Self talks are single chats with
  * the only contact DC_CONTACT_ID_SELF.
  *
  * @memberof dc_chat_t
@@ -3820,9 +3820,9 @@ int             dc_chat_is_protected         (const dc_chat_t* chat);
 /**
  * Check if the chat is encrypted.
  *
- * 1:1 chats with key-contacts and group chats with key-contacts
+ * Single chats with key-contacts and group chats with key-contacts
  * are encrypted.
- * 1:1 chats with emails contacts and ad-hoc groups
+ * Single chats with emails contacts and ad-hoc groups
  * created for email threads are not encrypted.
  *
  * @memberof dc_chat_t
@@ -4356,16 +4356,16 @@ char*           dc_msg_get_summarytext        (const dc_msg_t* msg, int approx_c
  * display name, or NULL.
  *
  * If this returns non-NULL, put a `~` before the override-sender-name and show the
- * override-sender-name and the sender's avatar even in 1:1 chats.
+ * override-sender-name and the sender's avatar even in single chats.
  *
  * In mailing lists, sender display name and sender address do not always belong together.
  * In this case, this function gives you the name that should actually be shown over the message.
  *
- * Also, sometimes, we need to indicate a different sender in 1:1 chats:
+ * Also, sometimes, we need to indicate a different sender in single chats:
  * Suppose that our user writes an e-mail to support@delta.chat, which forwards to 
  * Bob <bob@delta.chat>, and Bob replies.
  * 
- * Then, Bob's reply is shown in our 1:1 chat with support@delta.chat and the override-sender-name is
+ * Then, Bob's reply is shown in our single chat with support@delta.chat and the override-sender-name is
  * set to `Bob`. The UI should show the sender name as `~Bob` and show the avatar, just
  * as in group messages. If the user then taps on the avatar, they can see that this message
  * comes from bob@delta.chat.
@@ -5510,7 +5510,7 @@ int64_t         dc_lot_get_timestamp     (const dc_lot_t* lot);
 #define         DC_CHAT_TYPE_UNDEFINED       0
 
 /**
- * A one-to-one chat with a single contact.
+ * A single chat with a single contact.
  *
  * dc_get_chat_contacts() contains one record for the user.
  * DC_CONTACT_ID_SELF is added _only_ for a self talk.
@@ -6740,7 +6740,7 @@ void dc_event_unref(dc_event_t* event);
 
 /// "Message from %1$s"
 ///
-/// Used in subjects of outgoing messages in one-to-one chats.
+/// Used in subjects of outgoing messages in single chats.
 /// - %1$s will be replaced by the name of the sender,
 ///   this is the dc_set_config()-option `displayname` or `addr`
 #define DC_STR_SUBJECT_FOR_NEW_CONTACT    73

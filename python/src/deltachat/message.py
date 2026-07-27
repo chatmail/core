@@ -283,7 +283,7 @@ class Message:
         lib.dc_msg_set_override_sender_name(self._dc_msg, as_dc_charpointer(name))
 
     def get_sender_chat(self):
-        """return the 1:1 chat with the sender of this message.
+        """return the single chat with the sender of this message.
 
         :returns: :class:`deltachat.chat.Chat` instance
         """
