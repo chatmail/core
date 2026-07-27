@@ -306,49 +306,28 @@ mod tests {
         alice.recv_msg_hidden(&sent_msg).await;
         let reactions = get_msg_reactions(alice, alice_msg_id).await?;
         assert_eq!(reactions.to_string(), "🏳️‍🌈1");
-        assert_eq!(
-            alice
-                .sql
-                .count("SELECT COUNT(*) FROM reactions_need_broadcast", ())
-                .await?,
-            1
-        );
 
         // Alice broadcasts recent reaction changes to Bob and Claire.
         // On the wire, the hidden message has a header like
         // `Broadcast-Reactions: {"messages":[{"id":"123@adc","reactions":[{"emoji":"🏳️‍🌈","count":1}]}]}`
         maybe_broadcast_reactions(alice).await?;
-        assert_eq!(
-            alice
-                .sql
-                .count("SELECT COUNT(*) FROM reactions_need_broadcast", ())
-                .await?,
-            0
-        );
         let sent_msg = alice.pop_sent_msg().await;
         bob.recv_msg_hidden(&sent_msg).await;
         claire.recv_msg_hidden(&sent_msg).await;
 
+        // Check that there is nothing left for Alice to broadcast
+        maybe_broadcast_reactions(alice).await?;
+        broadcast_reactions_for_all_chats(alice).await?;
+        assert!(alice.pop_sent_msg_opt().await.is_none());
+
         // Claire got the broadcasted reaction, and then reacts herself.
         // This means, her local view on reactions are a mix `broadcasted_reactions`and `reactions`.
-        assert_eq!(
-            claire
-                .sql
-                .count("SELECT COUNT(*) FROM broadcasted_reactions", ())
-                .await?,
-            1
-        );
         let reactions = get_msg_reactions(claire, claire_msg.id).await?;
         assert_eq!(reactions.to_string(), "🏳️‍🌈1");
+        assert_eq!(reactions.frequencies.len(), 1);
+        assert_eq!(reactions.by_contact.len(), 0);
 
         send_reaction(claire, claire_msg.id, "💪").await?;
-        assert_eq!(
-            claire
-                .sql
-                .count("SELECT COUNT(*) FROM reactions", ())
-                .await?,
-            1
-        );
         let reactions = get_msg_reactions(claire, claire_msg.id).await?;
         assert_eq!(reactions.to_string(), "🏳️‍🌈1 💪1");
         assert_eq!(reactions.frequencies.len(), 2);
@@ -366,20 +345,6 @@ mod tests {
         let sent_msg = alice.pop_sent_msg().await;
         bob.recv_msg_hidden(&sent_msg).await;
         claire.recv_msg_hidden(&sent_msg).await;
-        assert_eq!(
-            claire
-                .sql
-                .count("SELECT COUNT(*) FROM broadcasted_reactions", ())
-                .await?,
-            2
-        );
-        assert_eq!(
-            claire
-                .sql
-                .count("SELECT COUNT(*) FROM reactions", ())
-                .await?,
-            1
-        );
         let reactions = get_msg_reactions(claire, claire_msg.id).await?;
         assert_eq!(reactions.to_string(), "🏳️‍🌈1 💪1");
         assert_eq!(reactions.frequencies.len(), 2);
