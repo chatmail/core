@@ -858,7 +858,7 @@ impl CommandApi {
     /// - The chat or the contact is **not blocked**, so new messages from the user/the group may appear as a contact request
     ///   and the user may create the chat again.
     /// - **Groups are not left** - this would
-    ///   be unexpected as (1) deleting a normal chat also does not prevent new mails
+    ///   be unexpected as (1) deleting a single chat also does not prevent new mails
     ///   from arriving, (2) leaving a group requires sending a message to
     ///   all group members - especially for groups not used for a longer time, this is
     ///   really unexpected when deletion results in contacting all members again,
@@ -1023,7 +1023,7 @@ impl CommandApi {
 
     /// Get the contact IDs belonging to a chat.
     ///
-    /// - for normal chats, the function always returns exactly one contact,
+    /// - for single chats, the function always returns exactly one contact,
     ///   DC_CONTACT_ID_SELF is returned only for SELF-chats.
     ///
     /// - for group chats all members are returned, DC_CONTACT_ID_SELF is returned
@@ -1351,7 +1351,7 @@ impl CommandApi {
     /// The concrete action depends on the type of the chat and on the users settings
     /// (dc_msgs_presented() may be a better name therefore, but well. :)
     ///
-    /// - For normal chats, the IMAP state is updated, MDN is sent
+    /// - For single chats, the IMAP state is updated, MDN is sent
     ///   (if set_config()-options `mdns_enabled` is set)
     ///   and the internal state is changed to @ref DC_STATE_IN_SEEN to reflect these actions.
     ///
@@ -1893,7 +1893,7 @@ impl CommandApi {
     //                   chat
     // ---------------------------------------------
 
-    /// Returns the [`ChatId`] for the 1:1 chat with `contact_id` if it exists.
+    /// Returns the [`ChatId`] for the single chat with `contact_id` if it exists.
     ///
     /// If it does not exist, `None` is returned.
     async fn get_chat_id_by_contact_id(

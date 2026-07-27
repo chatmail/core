@@ -11,8 +11,6 @@ import subprocess
 import sys
 from typing import AsyncGenerator, Optional
 
-import execnet
-import py
 import pytest
 
 from . import Account, AttrDict, Bot, Chat, Client, DeltaChat, EventType, Message
@@ -104,7 +102,7 @@ class ACFactory:
         return ac_clone
 
     def get_accepted_chat(self, ac1: Account, ac2: Account) -> Chat:
-        """Create a new 1:1 chat between ac1 and ac2 accepted on both sides.
+        """Create a new single chat between ac1 and ac2 accepted on both sides.
 
         Returned chat is a chat with ac2 from ac1 point of view.
         """
@@ -176,9 +174,9 @@ def data():
 
     class Data:
         def __init__(self) -> None:
-            for path in reversed(py.path.local(__file__).parts()):
-                datadir = path.join("test-data")
-                if datadir.isdir():
+            for path in pathlib.Path(__file__).parents:
+                datadir = path / "test-data"
+                if datadir.is_dir():
                     self.path = datadir
                     return
             raise Exception("Data path cannot be found")
@@ -274,10 +272,11 @@ def alice_and_remote_bob(tmp_path, acfactory, get_core_python_env):
     The 'eval' function allows to remote-execute arbitrary expressions
     that can use the `bob` online account, and the `bob_contact_alice`.
     """
+    from execnet import makegateway
 
     def factory(core_version):
         python, rpc_server_path = get_core_python_env(core_version)
-        gw = execnet.makegateway(f"popen//python={python}")
+        gw = makegateway(f"popen//python={python}")
 
         accounts_dir = str(tmp_path.joinpath("account1_venv1"))
         channel = gw.remote_exec(remote_bob_loop)

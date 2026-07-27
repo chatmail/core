@@ -397,7 +397,7 @@ class Account:
         return (x for x in iter_array(dc_array, lambda x: Message.from_db(self, x)) if x is not None)
 
     def create_chat(self, obj) -> Chat:
-        """Create a 1:1 chat with Account, Contact or e-mail address."""
+        """Create a single chat with Account, Contact or e-mail address."""
         return self.create_contact(obj).create_chat()
 
     def create_group_chat(

@@ -97,7 +97,7 @@ class ChatType(str, Enum):
     """Chat type."""
 
     SINGLE = "Single"
-    """1:1 chat, i.e. a direct chat with a single contact"""
+    """Single chat (a chat with a with a single contact)"""
 
     GROUP = "Group"
 

@@ -657,7 +657,7 @@ pub(crate) async fn handle_securejoin_handshake(
                 return Ok(HandshakeMessage::Ignore);
             }
             contact_id.regossip_keys(context).await?;
-            // for setup-contact, make Alice's one-to-one chat with Bob visible
+            // for setup-contact, make Alice's single chat with Bob visible
             // (secure-join-information are shown in the group chat)
             if grpid.is_empty() {
                 ChatId::create_for_contact(context, contact_id).await?;

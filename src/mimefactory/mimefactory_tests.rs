@@ -14,8 +14,9 @@ use crate::chat::{
 };
 use crate::chatlist::Chatlist;
 use crate::constants;
-use crate::contact::{Origin, import_vcard};
+use crate::contact::{Origin, import_public_key, import_vcard};
 use crate::headerdef::HeaderDef;
+use crate::key::{load_self_secret_key, secret_key_to_public_key};
 use crate::message;
 use crate::mimeparser::MimeMessage;
 use crate::receive_imf::receive_imf;
@@ -323,6 +324,87 @@ async fn test_mdn_create_encrypted() -> Result<()> {
     assert!(rendered_msg.is_encrypted);
     assert!(!rendered_msg.message.contains("Bob Examplenet"));
     assert!(!rendered_msg.message.contains("Alice Exampleorg"));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_mdn_sent_to_all_relays() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let rcvd = tcm.send_recv_accept(bob, alice, "Heyho").await;
+
+    // Bob's key gets a second relay address and Alice merges the newer key.
+    let bob_secret_key = load_self_secret_key(bob).await?;
+    let bob_public_key = secret_key_to_public_key(
+        bob,
+        bob_secret_key,
+        u32::try_from(time())? + 100,
+        "bob@example.net",
+        "bob@example.net,bob@relay2.example",
+    )?;
+    import_public_key(alice, &bob_public_key).await?;
+
+    let mimefactory = MimeFactory::from_mdn(alice, rcvd.from_id, rcvd.rfc724_mid, vec![]).await?;
+    let mut recipients = mimefactory.recipients();
+    recipients.sort();
+    assert_eq!(recipients, vec!["bob@example.net", "bob@relay2.example"]);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_mdn_autocrypt_throttle() -> Result<()> {
+    async fn mdn_has_aheader(
+        bob: &TestContext,
+        alice: &TestContext,
+        rcvd: &Message,
+    ) -> Result<bool> {
+        let mf = MimeFactory::from_mdn(bob, rcvd.from_id, rcvd.rfc724_mid.clone(), vec![]).await?;
+        let rendered_msg = mf.render(bob).await?;
+        let mime = MimeMessage::from_bytes(alice, rendered_msg.message.as_bytes()).await?;
+        Ok(mime.autocrypt_fingerprint.is_some())
+    }
+
+    let mut tcm = TestContextManager::new();
+    let alice = tcm.alice().await;
+    let bob = tcm.bob().await;
+    bob.set_config_bool(Config::MdnsEnabled, true).await?;
+
+    let rcvd = tcm.send_recv_accept(&alice, &bob, "Heyho").await;
+    message::markseen_msgs(&bob, vec![rcvd.id]).await?;
+
+    assert!(mdn_has_aheader(&bob, &alice, &rcvd).await?);
+    assert!(!mdn_has_aheader(&bob, &alice, &rcvd).await?);
+
+    // Own key change forces the header:
+    // a relay list change bumps the transports timestamp
+    // which becomes the key signature timestamp,
+    // so drop the cached self key to re-derive it.
+    SystemTime::shift(Duration::from_secs(100));
+    bob.sql
+        .execute("UPDATE transports SET add_timestamp=?", (time(),))
+        .await?;
+    *bob.self_public_key.lock().await = None;
+    assert!(mdn_has_aheader(&bob, &alice, &rcvd).await?);
+    assert!(!mdn_has_aheader(&bob, &alice, &rcvd).await?);
+
+    // A stored timestamp from the future is ignored
+    // and replaced by one from the current clock.
+    bob.sql
+        .execute(
+            "UPDATE mdn_autocrypt_timestamp SET attached_timestamp=?",
+            (time() + 1000,),
+        )
+        .await?;
+    assert!(mdn_has_aheader(&bob, &alice, &rcvd).await?);
+    assert!(!mdn_has_aheader(&bob, &alice, &rcvd).await?);
+
+    let gossip_period = bob.get_config_i64(Config::GossipPeriod).await?;
+    SystemTime::shift(Duration::from_secs(gossip_period.try_into()?));
+    assert!(mdn_has_aheader(&bob, &alice, &rcvd).await?);
 
     Ok(())
 }

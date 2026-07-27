@@ -43,10 +43,10 @@ use crate::{chatlist_events, mimefactory};
 ///
 /// # Returns
 ///
-/// The [`ChatId`] of the created chat is returned, for a SetupContact QR this is the 1:1
+/// The [`ChatId`] of the created chat is returned, for a SetupContact QR this is the single
 /// chat with Alice, for a SecureJoin QR this is the group chat.
 pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Result<ChatId> {
-    // A 1:1 chat is needed to send messages to Alice.  When joining a group this chat is
+    // A single chat is needed to send messages to Alice.  When joining a group this chat is
     // hidden, if a user starts sending messages in it it will be unhidden in
     // receive_imf.
     let private_chat_id = private_chat_id(context, &invite).await?;
@@ -168,7 +168,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             Ok(joining_chat_id)
         }
         QrInvite::Contact { .. } => {
-            // For setup-contact the BobState already ensured the 1:1 chat exists because it is
+            // For setup-contact the BobState already ensured the single chat exists because it is
             // used to send the handshake messages.
             if !key_contains_all_invite_addrs {
                 chat::add_info_msg_with_cmd(
@@ -288,7 +288,7 @@ pub(super) async fn handle_auth_required_or_pubkey(
             QrInvite::Contact { .. } | QrInvite::Broadcast { .. } => {}
             QrInvite::Group { .. } => {
                 // The message reads "Alice replied, waiting to be added to the group…",
-                // so only show it when joining a group and not for a 1:1 chat or broadcast channel.
+                // so only show it when joining a group and not for a single chat or broadcast channel.
                 let contact_id = invite.contact_id();
                 let msg = stock_str::secure_join_replies(context, contact_id).await;
                 let chat_id = joining_chat_id(context, &invite, chat_id).await?;
@@ -430,10 +430,10 @@ impl BobHandshakeMsg {
     }
 }
 
-/// Returns the 1:1 chat with the inviter.
+/// Returns the single chat with the inviter.
 ///
 /// This is the chat in which securejoin messages are sent.
-/// The 1:1 chat will be created if it does not yet exist.
+/// The single chat will be created if it does not yet exist.
 async fn private_chat_id(context: &Context, invite: &QrInvite) -> Result<ChatId> {
     let hidden = match invite {
         QrInvite::Contact { .. } => Blocked::Not,
@@ -451,7 +451,7 @@ async fn private_chat_id(context: &Context, invite: &QrInvite) -> Result<ChatId>
 /// This is the chat in which you want to notify the user as well.
 ///
 /// When joining a group this is the [`ChatId`] of the group chat, when verifying a
-/// contact this is the [`ChatId`] of the 1:1 chat.
+/// contact this is the [`ChatId`] of the single chat.
 /// The group chat will be created if it does not yet exist.
 async fn joining_chat_id(
     context: &Context,

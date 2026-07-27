@@ -25,7 +25,7 @@ use crate::e2ee::EncryptHelper;
 use crate::ensure_and_debug_assert;
 use crate::ephemeral::Timer as EphemeralTimer;
 use crate::headerdef::HeaderDef;
-use crate::key::{DcKey, SignedPublicKey, self_fingerprint};
+use crate::key::{DcKey, SignedPublicKey, load_self_public_key, self_fingerprint};
 use crate::location;
 use crate::log::warn;
 use crate::message::{Message, MsgId, Viewtype};
@@ -578,10 +578,12 @@ impl MimeFactory {
         let timestamp = time();
 
         let addr = contact.get_addr().to_string();
+        let mut recipients = vec![addr.clone()];
         let encryption_pubkeys = if from_id == ContactId::SELF {
             Some(Vec::new())
         } else if contact.is_key_contact() {
             if let Some(key) = contact.public_key(context).await? {
+                recipients = addresses_from_public_key(&key).unwrap_or_else(|| vec![addr.clone()]);
                 Some(vec![(addr.clone(), key)])
             } else {
                 Some(Vec::new())
@@ -595,7 +597,7 @@ impl MimeFactory {
             from_displayname: "".to_string(),
             sender_displayname: None,
             selfstatus: "".to_string(),
-            recipients: vec![addr],
+            recipients,
             encryption_pubkeys,
             to: vec![("".to_string(), contact.get_addr().to_string())],
             past_members: vec![],
@@ -619,11 +621,68 @@ impl MimeFactory {
         Ok(res)
     }
 
-    fn should_skip_autocrypt(&self) -> bool {
-        match &self.loaded {
-            Loaded::Message { .. } => false,
-            Loaded::Mdn { .. } => true,
+    /// Returns whether own Autocrypt key should be attached to this MDN
+    /// and if so, records the attachment.
+    ///
+    /// The key is attached to encrypted MDNs
+    /// once per `gossip_period` for each recipient
+    /// and immediately when own key gains a newer self-signature,
+    /// so that contacts we only read messages from
+    /// still learn our current key and relay list
+    /// and will likely re-gossip it to group chats.
+    async fn update_mdn_pubkey_attachment(&self, context: &Context) -> Result<bool> {
+        debug_assert!(
+            self.encryption_pubkeys
+                .as_deref()
+                .is_none_or(|keys| keys.len() <= 1),
+            "MDNs have at most one recipient key; own key is only added at encryption time"
+        );
+        let Some([(_, key)]) = self.encryption_pubkeys.as_deref() else {
+            return Ok(false);
+        };
+        let fingerprint = key.dc_fingerprint().hex();
+        let self_key_created = load_self_public_key(context)
+            .await?
+            .details
+            .direct_signatures
+            .iter()
+            .filter_map(|sig| sig.created())
+            .max()
+            .map_or(0, |created| i64::from(created.as_secs()));
+        let gossip_period = context.get_config_i64(Config::GossipPeriod).await?;
+        let now = time();
+        let attached_timestamp: Option<i64> = context
+            .sql
+            .query_get_value(
+                "SELECT attached_timestamp FROM mdn_autocrypt_timestamp WHERE fingerprint=?",
+                (&fingerprint,),
+            )
+            .await?;
+
+        // Attach when our key gained a newer self-signature
+        // (e.g. relay addresses changed) or every `gossip_period`.
+        // If clocks are skewed, attach always.
+        let should_attach = attached_timestamp.is_none_or(|attached_timestamp| {
+            self_key_created > attached_timestamp
+                || now >= attached_timestamp.saturating_add(gossip_period)
+                || now < attached_timestamp
+        });
+        if should_attach {
+            // We don't track or care if the MDN fails to be send or received
+            // because attaching a potentially fresh key is only best-effort
+            // and we want to keep the attach-key mechanism simple and localized.
+            context
+                .sql
+                .execute(
+                    "INSERT INTO mdn_autocrypt_timestamp (fingerprint, attached_timestamp)
+                     VALUES                              (?, ?)
+                     ON CONFLICT                         (fingerprint)
+                     DO UPDATE SET attached_timestamp=excluded.attached_timestamp",
+                    (&fingerprint, now),
+                )
+                .await?;
         }
+        Ok(should_attach)
     }
 
     fn should_attach_profile_data(msg: &Message) -> bool {
@@ -945,11 +1004,13 @@ impl MimeFactory {
         }
 
         let grpimage = self.grpimage();
-        let skip_autocrypt = self.should_skip_autocrypt();
+        let should_attach_pubkey = match &self.loaded {
+            Loaded::Message { .. } => true,
+            Loaded::Mdn { .. } => self.update_mdn_pubkey_attachment(context).await?,
+        };
         let encrypt_helper = EncryptHelper::new(context).await?;
 
-        if !skip_autocrypt {
-            // unless determined otherwise we add the Autocrypt header
+        if should_attach_pubkey {
             let aheader = encrypt_helper.get_aheader().to_string();
             headers.push((
                 "Autocrypt",

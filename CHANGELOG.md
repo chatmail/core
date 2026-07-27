@@ -1,5 +1,42 @@
 # Changelog
 
+## [2.57.0] - 2026-07-25
+
+### API-Changes
+
+- [**breaking**] remove heartbeat push notifications.
+- [**breaking**] remove provider-db handling and provider lookup APIs.
+  - provider lookup APIs were removed from CFFI and JSON-RPC.
+
+also removes offline provider database code and generated provider data,
+provider-specific fields in configure/transport paths, and REPL providerinfo.
+
+### Documentation
+
+- remove oauth2 from standards.
+
+### Features / Changes
+
+- accept messages from key contacts with forged From address.
+- enable TLS certificate compression.
+- read SMTP recipient limit from relay IMAP metadata.
+
+### Fixes
+
+- fixup CI failures.
+- never merge outer To headers if standard header protection is used.
+- Re-add oauth2 to serialized structs ([#8464](https://github.com/chatmail/core/pull/8464)).
+- migrate transports configured on 2.56 to also have a oauth:false flag.
+
+### Miscellaneous Tasks
+
+- bump version to 2.57.0-dev.
+- deps: bump actions/setup-node from 6 to 7.
+- deps: bump cachix/install-nix-action from 31.10.6 to 31.11.0.
+- deps: bump EmbarkStudios/cargo-deny-action from 2.0.20 to 2.1.1.
+- deps: bump taiki-e/install-action from 2.82.10 to 2.83.4.
+- cargo: bump quinn-proto from 0.11.14 to 0.11.16.
+
 ## [2.56.0] - 2026-07-21
 
 ### API-Changes
@@ -8504,3 +8541,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.54.0]: https://github.com/chatmail/core/compare/v2.53.0..v2.54.0
 [2.55.0]: https://github.com/chatmail/core/compare/v2.54.0..v2.55.0
 [2.56.0]: https://github.com/chatmail/core/compare/v2.55.0..v2.56.0
+[2.57.0]: https://github.com/chatmail/core/compare/v2.56.0..v2.57.0

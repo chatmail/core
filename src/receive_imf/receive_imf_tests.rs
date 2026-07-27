@@ -11,6 +11,7 @@ use crate::chat::{
 use crate::chatlist::Chatlist;
 use crate::constants::DC_GCL_FOR_FORWARDING;
 use crate::contact;
+use crate::headerdef::HeaderDefMap as _;
 use crate::imap::prefetch_should_download;
 use crate::imex::{ImexMode, imex};
 use crate::key;
@@ -58,7 +59,7 @@ static MSGRMSG: &[u8] =
                     \n\
                     hello\n";
 
-static ONETOONE_NOREPLY_MAIL: &[u8] =
+static SINGLE_NOREPLY_MAIL: &[u8] =
     b"Received: (Postfix, from userid 1000); Mon, 4 Dec 2006 14:51:39 +0100 (CET)\n\
                     From: Bob <bob@example.com>\n\
                     To: alice@example.org\n\
@@ -90,7 +91,7 @@ async fn test_adhoc_group_is_shown() {
     let chats = Chatlist::try_load(&t, 0, None, None).await.unwrap();
     assert_eq!(chats.len(), 1);
 
-    receive_imf(&t, ONETOONE_NOREPLY_MAIL, false).await.unwrap();
+    receive_imf(&t, SINGLE_NOREPLY_MAIL, false).await.unwrap();
     let chats = Chatlist::try_load(&t, 0, None, None).await.unwrap();
     assert_eq!(chats.len(), 1);
 
@@ -120,7 +121,7 @@ async fn test_adhoc_group_show_accepted_contact_accepted() {
     assert_eq!(chat::get_chat_msgs(&t, chat_id).await.unwrap().len(), 1);
 
     // receive a non-delta-message from Bob, shows up because of the show_emails setting
-    receive_imf(&t, ONETOONE_NOREPLY_MAIL, false).await.unwrap();
+    receive_imf(&t, SINGLE_NOREPLY_MAIL, false).await.unwrap();
 
     assert_eq!(chat::get_chat_msgs(&t, chat_id).await.unwrap().len(), 2);
 
@@ -2157,7 +2158,7 @@ Original signature",
     )
     .await?;
     let msg = t.get_last_msg().await;
-    let one2one_chat_id = msg.chat_id;
+    let single_chat_id = msg.chat_id;
     let bob = Contact::get_by_id(&t, bob_id).await?;
     assert_eq!(bob.get_status(), "Original signature");
     assert!(!msg.has_html());
@@ -2200,7 +2201,7 @@ Original signature updated",
     .await?;
     let bob = Contact::get_by_id(&t, bob_id).await?;
     assert_eq!(bob.get_status(), "Original signature updated");
-    assert_eq!(get_chat_msgs(&t, one2one_chat_id).await?.len(), 2);
+    assert_eq!(get_chat_msgs(&t, single_chat_id).await?.len(), 2);
     assert_eq!(get_chat_msgs(&t, ml_chat_id).await?.len(), 1);
     assert_eq!(Chatlist::try_load(&t, 0, None, None).await?.len(), 2);
     Ok(())
@@ -3275,7 +3276,7 @@ async fn test_no_private_reply_to_blocked_account() -> Result<()> {
 
 /// Regression test for two bugs:
 ///
-/// 1. If you blocked some spammer using DC, the 1:1 messages with that contact
+/// 1. If you blocked some spammer using DC, the single chat messages with that contact
 ///    are not received, but they could easily bypass this restriction creating
 ///    a new group with only you two as member.
 /// 2. A blocked group was sometimes not unblocked when when an unblocked
@@ -3706,7 +3707,7 @@ async fn test_mua_user_adds_recipient_to_single_chat() -> Result<()> {
     let alice = TestContext::new_alice().await;
     alice.allow_unencrypted().await?;
 
-    // Alice sends a 1:1 message to Bob, creating a 1:1 chat.
+    // Alice sends a message to Bob, creating a single chat.
     let msg = receive_imf(
         &alice,
         b"Subject: =?utf-8?q?Message_from_alice=40example=2Eorg?=\r\n\
@@ -3724,7 +3725,7 @@ async fn test_mua_user_adds_recipient_to_single_chat() -> Result<()> {
     let single_chat = Chat::load_from_db(&alice, msg.chat_id).await?;
     assert_eq!(single_chat.typ, Chattype::Single);
 
-    // Bob uses a classical MUA to answer in the 1:1 chat.
+    // Bob uses a classical MUA to answer in the single chat.
     let msg2 = receive_imf(
         &alice,
         b"Subject: Re: Message from alice\r\n\
@@ -3760,10 +3761,7 @@ async fn test_mua_user_adds_recipient_to_single_chat() -> Result<()> {
     assert_ne!(msg3.chat_id, single_chat.id);
     let group_chat = Chat::load_from_db(&alice, msg3.chat_id).await?;
     assert_eq!(group_chat.typ, Chattype::Group);
-    assert_eq!(
-        chat::get_chat_contacts(&alice, group_chat.id).await?.len(),
-        3
-    );
+    assert_eq!(get_chat_contacts(&alice, group_chat.id).await?.len(), 3);
 
     // Bob uses a classical MUA to answer once more, adding another recipient.
     // This new recipient should also be added to the group.
@@ -3782,15 +3780,12 @@ async fn test_mua_user_adds_recipient_to_single_chat() -> Result<()> {
     .await?
     .unwrap();
     assert_eq!(msg4.chat_id, group_chat.id);
-    assert_eq!(
-        chat::get_chat_contacts(&alice, group_chat.id).await?.len(),
-        4
-    );
+    assert_eq!(get_chat_contacts(&alice, group_chat.id).await?.len(), 4);
     let fiona_contact_id =
         Contact::lookup_id_by_addr(&alice, "fiona@example.net", Origin::IncomingTo)
             .await?
             .unwrap();
-    assert!(chat::is_contact_in_chat(&alice, group_chat.id, fiona_contact_id).await?);
+    assert!(is_contact_in_chat(&alice, group_chat.id, fiona_contact_id).await?);
     let fiona_contact = Contact::get_by_id(&alice, fiona_contact_id).await?;
     assert_eq!(fiona_contact.is_key_contact(), false);
 
@@ -5168,7 +5163,7 @@ async fn test_dont_verify_by_verified_by_unknown() -> Result<()> {
 }
 
 /// Tests that second device assigns outgoing encrypted messages
-/// to 1:1 chat with key-contact even if the key of the contact is unknown.
+/// to a single chat with key-contact even if the key of the contact is unknown.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_recv_outgoing_msg_before_securejoin() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -5181,7 +5176,7 @@ async fn test_recv_outgoing_msg_before_securejoin() -> Result<()> {
     let sent_msg = a0.send_text(chat_id_a0_bob, "Hi").await;
 
     // Device a1 does not have Bob's key.
-    // Message is still received in an encrypted 1:1 chat with Bob.
+    // Message is still received in an encrypted single chat with Bob.
     // a1 learns the fingerprint of Bob from the Intended Recipient Fingerprint packet,
     // but not the key.
     let msg_a1 = a1.recv_msg(&sent_msg).await;
@@ -5208,7 +5203,7 @@ async fn test_recv_outgoing_msg_before_securejoin() -> Result<()> {
     Ok(())
 }
 
-/// Tests that outgoing message cannot be assigned to 1:1 chat
+/// Tests that outgoing message cannot be assigned to a single chat
 /// without the intended recipient fingerprint.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_recv_outgoing_msg_no_intended_recipient_fingerprint() -> Result<()> {
@@ -5508,6 +5503,35 @@ async fn test_group_introduction_no_gossip() -> Result<()> {
     Ok(())
 }
 
+/// Tests that the sender's own Autocrypt header counts like received gossip:
+/// members do not re-gossip a key that its owner just distributed themselves.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_autocrypt_header_suppresses_gossip() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let fiona = &tcm.fiona().await;
+
+    let alice_chat_id = alice
+        .create_group_with_members("Group", &[bob, fiona])
+        .await;
+    let sent = alice.send_text(alice_chat_id, "Hello group").await;
+
+    // Alice's first message gossips the other members' keys.
+    let msg = bob.recv_msg(&sent).await;
+    assert!(!bob.parse_msg(&sent).await.gossiped_keys.is_empty());
+
+    // Bob got Alice's key from her Autocrypt header
+    // and the other members' keys from her gossip,
+    // so Bob has nothing left to gossip.
+    let bob_chat_id = msg.chat_id;
+    bob_chat_id.accept(bob).await?;
+    let sent = bob.send_text(bob_chat_id, "Hello back").await;
+    assert!(fiona.parse_msg(&sent).await.gossiped_keys.is_empty());
+
+    Ok(())
+}
+
 /// Tests reception of an encrypted group message
 /// without Chat-Group-ID.
 ///
@@ -5562,7 +5586,7 @@ async fn test_encrypted_adhoc_group_message() -> Result<()> {
 
 /// Tests that messages sent to unencrypted group
 /// with only two members arrive in a group
-/// and not in 1:1 chat.
+/// and not in a single chat.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_small_unencrypted_group() -> Result<()> {
     let mut tcm = TestContextManager::new();

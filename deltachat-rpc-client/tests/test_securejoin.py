@@ -487,7 +487,7 @@ def test_qr_join_chat_with_pending_bobstate_issue4894(acfactory):
 def test_qr_new_group_unblocked(acfactory):
     """Regression test for a bug introduced in core v1.113.0.
     ac2 scans a verified group QR code created by ac1.
-    This results in creation of a blocked 1:1 chat with ac1 on ac2,
+    This results in creation of a blocked single chat with ac1 on ac2,
     but ac1 contact is not blocked on ac2.
     Then ac1 creates a group, adds ac2 there and promotes it by sending a message.
     ac2 should receive a message and create a contact request for the group.

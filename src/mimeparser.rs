@@ -225,11 +225,11 @@ pub enum SystemMessage {
     /// which is sent by chatmail servers.
     InvalidUnencryptedMail = 13,
 
-    /// 1:1 chats info message telling that SecureJoin has started and the user should wait for it
+    /// Single chats info message telling that SecureJoin has started and the user should wait for it
     /// to complete.
     SecurejoinWait = 14,
 
-    /// 1:1 chats info message telling that SecureJoin is still running, but the user may already
+    /// Single chats info message telling that SecureJoin is still running, but the user may already
     /// send messages.
     SecurejoinWaitTimeout = 15,
 
@@ -1025,6 +1025,24 @@ impl MimeMessage {
     /// valid signature.
     pub fn was_encrypted(&self) -> bool {
         self.signature.is_some()
+    }
+
+    /// Returns the fingerprints of all keys distributed by this message:
+    /// - keys from Autocrypt-Gossip headers
+    /// - the key from the sender's Autocrypt header ("self-gossip")
+    ///
+    /// Nothing is returned unless the message was correctly encrypted.
+    pub(crate) fn distributed_key_fingerprints(&self) -> Vec<String> {
+        let sender_fingerprint = if self.was_encrypted() {
+            self.autocrypt_fingerprint.clone()
+        } else {
+            None
+        };
+        self.gossiped_keys
+            .values()
+            .map(|gossiped_key| gossiped_key.public_key.dc_fingerprint().hex())
+            .chain(sender_fingerprint)
+            .collect()
     }
 
     /// Returns whether the email contains a `chat-version` header.

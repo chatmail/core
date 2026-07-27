@@ -1,10 +1,8 @@
-use std::sync::LazyLock;
-
 use anyhow::Context as _;
 use anyhow::Result;
 use chrono::DateTime;
 use chrono::NaiveDateTime;
-use regex::Regex;
+use regex::regex;
 
 use crate::sanitize_name_and_addr;
 
@@ -210,9 +208,7 @@ pub fn parse_vcard(vcard: &str) -> Vec<VcardContact> {
     }
 
     // Remove line folding, see https://datatracker.ietf.org/doc/html/rfc6350#section-3.2
-    static NEWLINE_AND_SPACE_OR_TAB: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new("\r?\n[\t ]").unwrap());
-    let unfolded_lines = NEWLINE_AND_SPACE_OR_TAB.replace_all(vcard, "");
+    let unfolded_lines = regex!("\r?\n[\t ]").replace_all(vcard, "");
 
     let mut lines = unfolded_lines.lines().peekable();
     let mut contacts = Vec::new();

@@ -212,6 +212,10 @@ pub(crate) struct ConfiguredLoginParamJson {
     pub smtp_password: String,
 
     pub certificate_checks: ConfiguredCertificateChecks,
+
+    /// Deprecated 2026-07, always false
+    #[serde(default)]
+    pub oauth2: bool,
 }
 
 impl fmt::Display for ConfiguredLoginParam {
@@ -488,6 +492,7 @@ impl From<ConfiguredLoginParam> for ConfiguredLoginParamJson {
             smtp_password: configured_login_param.smtp_password,
 
             certificate_checks: configured_login_param.certificate_checks,
+            oauth2: false,
         }
     }
 }
@@ -681,7 +686,7 @@ pub(crate) async fn add_pseudo_transport(context: &Context, addr: &str) -> Resul
             (
                 addr,
                 serde_json::to_string(&EnteredLoginParam{addr: addr.to_string(), ..Default::default()})?,
-                format!(r#"{{"addr":"{addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic"}}"#)
+                format!(r#"{{"addr":"{addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#)
             ),
         )
         .await?;

@@ -21,7 +21,7 @@ fn emit_unknown_chatlist_items_changed(context: &Context) {
     context.emit_event(EventType::ChatlistItemChanged { chat_id: None });
 }
 
-/// update event for the 1:1 chat with the contact
+/// update event for the single chat with the contact
 /// used when recently seen changes and when profile image changes
 pub(crate) async fn emit_chatlist_item_changed_for_contact_chat(
     context: &Context,

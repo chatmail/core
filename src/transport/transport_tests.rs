@@ -52,7 +52,7 @@ async fn test_save_load_login_param() -> Result<()> {
         .clone()
         .save_to_transports_table(&t, &EnteredLoginParam::default(), time())
         .await?;
-    let expected_param = r#"{"addr":"alice@example.org","imap":[{"connection":{"host":"imap.example.com","port":123,"security":"Starttls"},"user":"alice"}],"imap_folder":"Folder","imap_user":"","imap_password":"foo","smtp":[{"connection":{"host":"smtp.example.com","port":456,"security":"Tls"},"user":"alice@example.org"}],"smtp_user":"","smtp_password":"bar","certificate_checks":"Strict"}"#;
+    let expected_param = r#"{"addr":"alice@example.org","imap":[{"connection":{"host":"imap.example.com","port":123,"security":"Starttls"},"user":"alice"}],"imap_folder":"Folder","imap_user":"","imap_password":"foo","smtp":[{"connection":{"host":"smtp.example.com","port":456,"security":"Tls"},"user":"alice@example.org"}],"smtp_user":"","smtp_password":"bar","certificate_checks":"Strict","oauth2":false}"#;
     assert_eq!(
         t.sql
             .query_get_value::<String>("SELECT configured_param FROM transports", ())
