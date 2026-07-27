@@ -573,7 +573,7 @@ fn exif_orientation(exif: &exif::Exif, context: &Context) -> Orientation {
         && let Some(val) = orientation.value.get_uint(0)
         && let Ok(val) = TryInto::<u8>::try_into(val)
     {
-        return Orientation::from_exif(val).unwrap_or({
+        return Orientation::from_exif(val).unwrap_or_else(|| {
             warn!(context, "Exif orientation value ignored: {val:?}.");
             Orientation::NoTransforms
         });
