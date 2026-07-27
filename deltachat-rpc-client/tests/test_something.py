@@ -275,7 +275,7 @@ def test_chat(acfactory) -> None:
     bob_chat_alice.unpin()
     bob_chat_alice.archive()
     bob_chat_alice.unarchive()
-    with pytest.raises(JsonRpcError):  # can't set name for 1:1 chats
+    with pytest.raises(JsonRpcError):  # can't set name for single chats
         bob_chat_alice.set_name("test")
     bob_chat_alice.set_ephemeral_timer(300)
     bob_chat_alice.get_encryption_info()

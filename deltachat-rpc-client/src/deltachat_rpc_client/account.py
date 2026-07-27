@@ -186,7 +186,7 @@ class Account:
         return [Contact(self, contact_id) for contact_id in contact_ids]
 
     def create_chat(self, account: "Account") -> Chat:
-        """Create a 1:1 chat with another account."""
+        """Create a single chat with another account."""
         return self.create_contact(account).create_chat()
 
     def get_device_chat(self) -> Chat:
@@ -222,7 +222,7 @@ class Account:
         return [AttrDict(contact=Contact(self, contact["id"]), **contact) for contact in contacts]
 
     def get_chat_by_contact(self, contact: Union[int, Contact]) -> Optional[Chat]:
-        """Return 1:1 chat for a contact if it exists."""
+        """Return single chat for a contact if it exists."""
         if isinstance(contact, Contact):
             assert contact.account == self
             contact_id = contact.id

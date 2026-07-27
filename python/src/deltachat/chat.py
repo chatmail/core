@@ -74,7 +74,7 @@ class Chat:
         return lib.dc_chat_get_type(self._dc_chat) == const.DC_CHAT_TYPE_GROUP
 
     def is_single(self) -> bool:
-        """Return True if this chat is a single/direct chat, False otherwise."""
+        """Return True if this chat is a single chat, False otherwise."""
         return lib.dc_chat_get_type(self._dc_chat) == const.DC_CHAT_TYPE_SINGLE
 
     def is_mailinglist(self) -> bool:
@@ -458,7 +458,7 @@ class Chat:
         """Get group profile image.
 
         For groups, this is the image set by any group member using
-        set_chat_profile_image(). For normal chats, this is the image
+        set_chat_profile_image(). For single chats, this is the image
         set by each remote user on their own using dc_set_config(context,
         "selfavatar", image).
         :returns: path to profile image, None if no profile image exists.

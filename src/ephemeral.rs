@@ -7,7 +7,7 @@
 //! seen, which usually happens when its contents is displayed on
 //! device screen.
 //!
-//! Each chat, including 1:1, group chats and "saved messages" chat,
+//! Each chat, including single, group chats and "saved messages" chat,
 //! has its own ephemeral timer setting, which is applied to all
 //! messages sent to the chat. The setting is synchronized to all the
 //! devices participating in the chat by applying the timer value from

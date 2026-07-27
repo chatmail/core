@@ -1856,7 +1856,7 @@ pub(crate) async fn set_blocked(
 
         // also (un)block all chats with _only_ this contact - we do not delete them to allow a
         // non-destructive blocking->unblocking.
-        // (Maybe, beside normal chats (type=100) we should also block group chats with only this user.
+        // (Maybe, beside single chats (type=100) we should also block group chats with only this user.
         // However, I'm not sure about this point; it may be confusing if the user wants to add other people;
         // this would result in recreating the same group...)
         if context

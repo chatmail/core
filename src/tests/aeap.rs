@@ -44,7 +44,7 @@ async fn test_change_primary_self_addr() -> Result<()> {
 }
 
 enum ChatForTransition {
-    OneToOne,
+    Single,
     GroupChat,
     VerifiedGroup,
 }
@@ -52,7 +52,7 @@ use ChatForTransition::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_aeap_transition_0() {
-    check_aeap_transition(OneToOne, false).await;
+    check_aeap_transition(Single, false).await;
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_aeap_transition_1() {
@@ -60,7 +60,7 @@ async fn test_aeap_transition_1() {
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_aeap_transition_0_verified() {
-    check_aeap_transition(OneToOne, true).await;
+    check_aeap_transition(Single, true).await;
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_aeap_transition_1_verified() {
@@ -123,7 +123,7 @@ async fn check_aeap_transition(chat_for_transition: ChatForTransition, verified:
     tcm.section("Alice sends another message to Bob, this time from her new addr");
     // No matter which chat Alice sends to, the transition should be done in all groups
     let chat_to_send = match chat_for_transition {
-        OneToOne => alice.create_chat(bob).await.id,
+        Single => alice.create_chat(bob).await.id,
         GroupChat => group1_alice,
         VerifiedGroup => group3_alice.expect("No verified group"),
     };
