@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
-use crate::EventType;
+use crate::{EventType, chatlist_events};
 use crate::chat::{Chat, ChatId, send_msg};
 use crate::config::Config;
 use crate::constants::Chattype;
@@ -184,6 +184,7 @@ pub(crate) async fn receive_broadcast_reactions(context: &Context, json: &str) -
             msg_id,
             contact_id: ContactId::UNDEFINED,
         });
+        chatlist_events::emit_chatlist_item_changed(context, msg.chat_id);
     }
 
     Ok(())
