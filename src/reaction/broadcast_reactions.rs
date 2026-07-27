@@ -6,7 +6,6 @@
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use crate::chat::{Chat, ChatId, send_msg};
@@ -17,7 +16,7 @@ use crate::context::Context;
 use crate::log::warn;
 use crate::message::{Message, MsgId, rfc724_mid_exists};
 use crate::param::Param;
-use crate::reaction::{Reaction, ReactionFrequency, get_msg_reactions};
+use crate::reaction::{Reaction, ReactionFrequency, get_msg_reactions, sort_frequencies};
 use crate::tools::time;
 use crate::{EventType, chatlist_events};
 
@@ -232,7 +231,7 @@ pub(crate) fn refine_broadcast_reactions(
     mut broadcasted_reactions: Vec<ReactionFrequency>,
     by_contact: &BTreeMap<ContactId, Reaction>,
 ) -> Vec<ReactionFrequency> {
-    for (_contact_id, reaction) in by_contact {
+    for reaction in by_contact.values() {
         if !broadcasted_reactions
             .iter()
             .any(|entry| entry.reaction == *reaction)
