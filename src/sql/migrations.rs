@@ -2537,17 +2537,17 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
 
     inc_and_check(&mut migration_version, 161)?;
     if dbversion < migration_version {
-        // `reactions_accumulated` stores accumulated reactions for broadcast channel subscribers (Chattype::InBroadcast).
-        // `reactions_accumulated` is unused for broadcast channel owners (Chattype::OutBroadcast),
+        // `broadcasted_reactions` stores accumulated reactions for broadcast channel subscribers (Chattype::InBroadcast).
+        // `broadcasted_reactions` is unused for broadcast channel owners (Chattype::OutBroadcast),
         // there `reactions_need_broadcast` is used to find out new reactions to be sent to subscribers.
         sql.execute_migration(
-            "CREATE TABLE reactions_accumulated (
+            "CREATE TABLE broadcasted_reactions (
                 msg_id INTEGER NOT NULL DEFAULT 0,
                 reaction TEXT NOT NULL DEFAULT '',
                 count INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY(msg_id) REFERENCES msgs(id) ON DELETE CASCADE -- delete reactions when message is deleted
             ) STRICT;
-            CREATE INDEX reactions_accumulated_index1 ON reactions_accumulated (msg_id);
+            CREATE INDEX broadcasted_reactions_index1 ON broadcasted_reactions (msg_id);
             CREATE TABLE reactions_need_broadcast (
                 chat_id INTEGER NOT NULL DEFAULT 0,
                 msg_id INTEGER NOT NULL DEFAULT 0,

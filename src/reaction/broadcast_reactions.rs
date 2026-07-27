@@ -142,7 +142,7 @@ async fn broadcast_reactions_for_one_chat(context: &Context, chat_id: ChatId) ->
 }
 
 /// Applies incoming, accumulated reactions received via the `Broadcast-Reactions:` header
-/// to the `reactions_accumulated` table.
+/// to the `broadcasted_reactions` table.
 pub(crate) async fn receive_broadcast_reactions(context: &Context, json: &str) -> Result<()> {
     let payload: BroadcastReactionsPayload = serde_json::from_str(json)?;
 
@@ -164,12 +164,12 @@ pub(crate) async fn receive_broadcast_reactions(context: &Context, json: &str) -
             .sql
             .transaction(move |transaction| {
                 transaction.execute(
-                    "DELETE FROM reactions_accumulated WHERE msg_id=?",
+                    "DELETE FROM broadcasted_reactions WHERE msg_id=?",
                     (msg_id,),
                 )?;
                 for entry in &message.reactions {
                     transaction.execute(
-                        "INSERT INTO reactions_accumulated (msg_id, reaction, count)
+                        "INSERT INTO broadcasted_reactions (msg_id, reaction, count)
                          VALUES (?1, ?2, ?3)",
                         (msg_id, &entry.emoji, entry.count),
                     )?;
@@ -189,7 +189,7 @@ pub(crate) async fn receive_broadcast_reactions(context: &Context, json: &str) -
     Ok(())
 }
 
-/// Load broadcasted reactios from `reactions_accumulated`.
+/// Load broadcasted reactios from `broadcasted_reactions`.
 /// This table is filled only for the broadcast channel subscribers (`Chattype::InBroadcast`),
 /// in other cases, `None` is returned.
 pub(crate) async fn load_broadcast_reactions(
@@ -199,7 +199,7 @@ pub(crate) async fn load_broadcast_reactions(
     let mut frequencies: Vec<ReactionFrequency> = context
         .sql
         .query_map_collect(
-            "SELECT reaction, count FROM reactions_accumulated WHERE msg_id=?",
+            "SELECT reaction, count FROM broadcasted_reactions WHERE msg_id=?",
             (msg_id,),
             |row| {
                 let reaction: String = row.get(0)?;
@@ -330,11 +330,11 @@ mod tests {
         claire.recv_msg_hidden(&sent_msg).await;
 
         // Claire got the broadcasted reaction, and then reacts herself.
-        // This means, her local view on reactions are a mix `reactions_accumulated`and `reactions`.
+        // This means, her local view on reactions are a mix `broadcasted_reactions`and `reactions`.
         assert_eq!(
             claire
                 .sql
-                .count("SELECT COUNT(*) FROM reactions_accumulated", ())
+                .count("SELECT COUNT(*) FROM broadcasted_reactions", ())
                 .await?,
             1
         );
@@ -356,7 +356,7 @@ mod tests {
         assert_eq!(reactions.frequencies[1].is_from_self, true);
 
         // Claire's reaction is sent to Alice who in turn broadast it again to Bob and Claire.
-        // This must not modify Clair's get_reactions() even tho the reaction is present now in `reactions_accumulated` and `reactions`.
+        // This must not modify Clair's get_reactions() even tho the reaction is present now in `broadcasted_reactions` and `reactions`.
         let sent_msg = claire.pop_sent_msg().await;
         alice.recv_msg_hidden(&sent_msg).await;
         let reactions = get_msg_reactions(alice, alice_msg_id).await?;
@@ -369,7 +369,7 @@ mod tests {
         assert_eq!(
             claire
                 .sql
-                .count("SELECT COUNT(*) FROM reactions_accumulated", ())
+                .count("SELECT COUNT(*) FROM broadcasted_reactions", ())
                 .await?,
             2
         );

@@ -418,6 +418,10 @@ fn calc_frequencies(by_contact: &BTreeMap<ContactId, Reaction>) -> Vec<ReactionF
 }
 
 /// Returns a structure containing all reactions to the message.
+///
+/// For displaying, UI shall use the `frequencies` field, which is already sorted accordingly.
+/// `frequencies` should also be used to check for SELF-reaction.
+/// For detailed reaction information outside broadcast channel subscribers, UI can use the `by_contact` table.
 pub async fn get_msg_reactions(context: &Context, msg_id: MsgId) -> Result<Reactions> {
     let mut by_contact: BTreeMap<ContactId, Reaction> = context
         .sql
