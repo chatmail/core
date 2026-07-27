@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
-use crate::{EventType, chatlist_events};
 use crate::chat::{Chat, ChatId, send_msg};
 use crate::config::Config;
 use crate::constants::Chattype;
@@ -20,6 +19,7 @@ use crate::message::{Message, MsgId, rfc724_mid_exists};
 use crate::param::Param;
 use crate::reaction::{Reaction, ReactionFrequency, get_msg_reactions};
 use crate::tools::time;
+use crate::{EventType, chatlist_events};
 
 /// Wire format for accumulated reactions
 #[derive(Debug, Serialize, Deserialize)]
@@ -236,8 +236,6 @@ pub(crate) fn refine_broadcast_reactions(
     mut broadcasted_reactions: Vec<ReactionFrequency>,
     by_contact: &BTreeMap<ContactId, Reaction>,
 ) -> Vec<ReactionFrequency> {
-    let self_reaction = by_contact.get(&ContactId::SELF).cloned();
-
     for (_contact_id, reaction) in by_contact {
         if !broadcasted_reactions
             .iter()
@@ -251,13 +249,16 @@ pub(crate) fn refine_broadcast_reactions(
         }
     }
 
-    if let Some(self_reaction) = &self_reaction {
+    if let Some(self_reaction) = by_contact.get(&ContactId::SELF) {
         for entry in &mut broadcasted_reactions {
-            if entry.reaction == *self_reaction {
-                entry.is_from_self = true;
-            }
+            entry.is_from_self = entry.reaction == *self_reaction;
         }
     }
+
+    broadcasted_reactions.sort_by(|a, b| match b.count.cmp(&a.count) {
+        Ordering::Equal => a.reaction.as_str().cmp(b.reaction.as_str()),
+        other => other,
+    });
 
     broadcasted_reactions
 }
