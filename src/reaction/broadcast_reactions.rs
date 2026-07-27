@@ -7,6 +7,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
 
 use crate::EventType;
 use crate::chat::{Chat, ChatId, send_msg};
@@ -224,6 +225,42 @@ pub(crate) async fn load_broadcast_reactions(
     Ok(Some(frequencies))
 }
 
+/// Adds dedicated `by_contact` reaction to broadcasted reaction frequencies.
+///
+/// This is needed as broadcast subscribers (Chattype::InBroadcast) want always to see their own reaction immediated,
+/// and have it marked as being a SELF reaction.
+/// Moreover, `by_contact` may contain direct reaction from the broadcast owner.
+pub(crate) fn refine_broadcast_reactions(
+    mut broadcasted_reactions: Vec<ReactionFrequency>,
+    by_contact: BTreeMap<ContactId, Reaction>,
+) -> Result<Vec<ReactionFrequency>> {
+    let self_reaction = by_contact.get(&ContactId::SELF).cloned();
+
+    for (_contact_id, reaction) in &by_contact {
+        if !broadcasted_reactions
+            .iter()
+            .any(|entry| entry.reaction == *reaction)
+        {
+            broadcasted_reactions.push(ReactionFrequency {
+                reaction: reaction.clone(),
+                count: 1,
+                is_from_self: false,
+            });
+        }
+        // no else - do not increase counter, usually, broadcaasted reactions already includes the ones by `by_contact`
+    }
+
+    if let Some(self_reaction) = &self_reaction {
+        for entry in &mut broadcasted_reactions {
+            if entry.reaction == *self_reaction {
+                entry.is_from_self = true;
+            }
+        }
+    }
+
+    Ok(broadcasted_reactions)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -289,7 +326,11 @@ mod tests {
             0
         );
         let sent_msg = alice.pop_sent_msg().await;
+        bob.recv_msg_hidden(&sent_msg).await;
         claire.recv_msg_hidden(&sent_msg).await;
+
+        // Claire got the broadcasted reaction, and then reacts herself.
+        // This means, her local view on reactions are a mix `reactions_accumulated`and `reactions`.
         assert_eq!(
             claire
                 .sql
@@ -299,6 +340,51 @@ mod tests {
         );
         let reactions = get_msg_reactions(claire, claire_msg.id).await?;
         assert_eq!(reactions.to_string(), "🏳️‍🌈1");
+
+        send_reaction(claire, claire_msg.id, "💪").await?;
+        assert_eq!(
+            claire
+                .sql
+                .count("SELECT COUNT(*) FROM reactions", ())
+                .await?,
+            1
+        );
+        let reactions = get_msg_reactions(claire, claire_msg.id).await?;
+        assert_eq!(reactions.to_string(), "🏳️‍🌈1 💪1");
+        assert_eq!(reactions.frequencies.len(), 2);
+        assert_eq!(reactions.frequencies[0].is_from_self, false);
+        assert_eq!(reactions.frequencies[1].is_from_self, true);
+
+        // Claire's reaction is sent to Alice who in turn broadast it again to Bob and Claire.
+        // This must not modify Clair's get_reactions() even tho the reaction is present now in `reactions_accumulated` and `reactions`.
+        let sent_msg = claire.pop_sent_msg().await;
+        alice.recv_msg_hidden(&sent_msg).await;
+        let reactions = get_msg_reactions(alice, alice_msg_id).await?;
+        assert_eq!(reactions.to_string(), "🏳️‍🌈1 💪1");
+
+        broadcast_reactions_for_all_chats(alice).await?; // bypass timer in maybe_broadcast_reactions()
+        let sent_msg = alice.pop_sent_msg().await;
+        bob.recv_msg_hidden(&sent_msg).await;
+        claire.recv_msg_hidden(&sent_msg).await;
+        assert_eq!(
+            claire
+                .sql
+                .count("SELECT COUNT(*) FROM reactions_accumulated", ())
+                .await?,
+            2
+        );
+        assert_eq!(
+            claire
+                .sql
+                .count("SELECT COUNT(*) FROM reactions", ())
+                .await?,
+            1
+        );
+        let reactions = get_msg_reactions(claire, claire_msg.id).await?;
+        assert_eq!(reactions.to_string(), "🏳️‍🌈1 💪1");
+        assert_eq!(reactions.frequencies.len(), 2);
+        assert_eq!(reactions.frequencies[0].is_from_self, false);
+        assert_eq!(reactions.frequencies[1].is_from_self, true);
 
         Ok(())
     }

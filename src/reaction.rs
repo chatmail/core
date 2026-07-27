@@ -31,7 +31,7 @@ use crate::context::Context;
 use crate::events::EventType;
 use crate::message::{Message, MsgId, rfc724_mid_exists};
 use crate::param::Param;
-use crate::reaction::broadcast_reactions::load_broadcast_reactions;
+use crate::reaction::broadcast_reactions::{load_broadcast_reactions, refine_broadcast_reactions};
 
 /// A single reaction.
 #[derive(Debug, Default, Clone, Deserialize, Eq, PartialEq, Serialize)]
@@ -432,17 +432,12 @@ pub async fn get_msg_reactions(context: &Context, msg_id: MsgId) -> Result<React
         )
         .await?;
     by_contact.retain(|_contact, reaction| !reaction.is_empty());
-    let by_contact_frequencies = calc_frequencies(&by_contact);
 
     let frequencies =
         if let Some(broadcast_reactions) = load_broadcast_reactions(context, msg_id).await? {
-            broadcast_reactions
-            // TODO: add missing reactions from by_contact_frequencies to loaded_frequencies as follows:
-            // - if a Reaction-emoji is missing in loaded_frequencies, add it and set count to 1 (may happen because of races)
-            // - if a Reaction-emoji is already present in loaded_frequencies, do nothing (counts include usually every sender)
-            // - mark Reaction-emoji in loaded_frequencies as "is_self_reaction" if there is a corresponding in by_contact_frequencies
+            refine_broadcast_reactions(broadcast_reactions, by_contact.clone())?
         } else {
-            by_contact_frequencies
+            calc_frequencies(&by_contact)
         };
 
     Ok(Reactions {
