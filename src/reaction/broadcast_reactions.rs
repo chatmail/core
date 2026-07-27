@@ -181,7 +181,7 @@ pub(crate) async fn receive_broadcast_reactions(context: &Context, json: &str) -
         context.emit_event(EventType::ReactionsChanged {
             // the event is for the subscriber, ReactionsIncoming is not needed
             chat_id: msg.chat_id,
-            msg_id: msg_id,
+            msg_id,
             contact_id: ContactId::UNDEFINED,
         });
     }
@@ -189,7 +189,7 @@ pub(crate) async fn receive_broadcast_reactions(context: &Context, json: &str) -
     Ok(())
 }
 
-/// Load broadcasted reactios from `broadcasted_reactions`.
+/// Load broadcasted reactions from `broadcasted_reactions`.
 /// This table is filled only for the broadcast channel subscribers (`Chattype::InBroadcast`),
 /// in other cases, `None` is returned.
 pub(crate) async fn load_broadcast_reactions(
@@ -227,9 +227,10 @@ pub(crate) async fn load_broadcast_reactions(
 
 /// Adds dedicated `by_contact` reaction to broadcasted reaction frequencies.
 ///
-/// This is needed as broadcast subscribers (Chattype::InBroadcast) want always to see their own reaction immediated,
+/// This is needed as broadcast subscribers (Chattype::InBroadcast) want always to see their own reaction immediately,
 /// and have it marked as being a SELF reaction.
 /// Moreover, `by_contact` may contain direct reaction from the broadcast owner.
+/// We do not increase `count` in case the reaction is present as the accumulated counts usually include the ones from `by_contact`.
 pub(crate) fn refine_broadcast_reactions(
     mut broadcasted_reactions: Vec<ReactionFrequency>,
     by_contact: &BTreeMap<ContactId, Reaction>,
@@ -247,7 +248,6 @@ pub(crate) fn refine_broadcast_reactions(
                 is_from_self: false,
             });
         }
-        // no else - do not increase counter, usually, broadcaasted reactions already includes the ones by `by_contact`
     }
 
     if let Some(self_reaction) = &self_reaction {
@@ -334,8 +334,8 @@ mod tests {
         assert_eq!(reactions.frequencies[0].is_from_self, false);
         assert_eq!(reactions.frequencies[1].is_from_self, true);
 
-        // Claire's reaction is sent to Alice who in turn broadast it again to Bob and Claire.
-        // This must not modify Clair's get_reactions() even tho the reaction is present now in `broadcasted_reactions` and `reactions`.
+        // Claire's reaction is sent to Alice who in turn broadcast it again to Bob and Claire.
+        // This must not modify Claire's get_reactions() even tho the reaction is present now in `broadcasted_reactions` and `reactions`.
         let sent_msg = claire.pop_sent_msg().await;
         alice.recv_msg_hidden(&sent_msg).await;
         let reactions = get_msg_reactions(alice, alice_msg_id).await?;
