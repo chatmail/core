@@ -215,6 +215,7 @@ pub(crate) async fn load_broadcast_reactions(
     Ok(Some(frequencies))
 }
 
+/// Save an array of frequencies to the `broadcasted_reactions` table.
 async fn save_broadcast_reactions(
     context: &Context,
     msg_id: MsgId,
@@ -240,18 +241,15 @@ async fn save_broadcast_reactions(
     Ok(())
 }
 
-/// Adds dedicated `by_contact` reaction to broadcasted reaction frequencies.
-///
-/// This is needed as broadcast subscribers (Chattype::InBroadcast) want always to see their own reaction immediately,
-/// and have it marked as being a SELF reaction.
-/// Moreover, `by_contact` may contain direct reaction from the broadcast owner.
-/// We do not increase `count` in case the reaction is present as the accumulated counts usually include the ones from `by_contact`.
+/// Merge `by_contact` status to broadcasted reaction frequencies.
 pub(crate) fn refine_broadcast_reactions(
     mut broadcasted_reactions: Vec<ReactionFrequency>,
     by_contact: &BTreeMap<ContactId, Reaction>,
 ) -> Vec<ReactionFrequency> {
-    for (contact_id, reaction) in by_contact {
-        let is_from_self = *contact_id == ContactId::SELF;
+    // Add missing reactions.
+    // This can happen e.g. for SELF-reactions done during offline when state of owner does not have ones yet.
+    // It will repair on the next reaction broadcast, until then, the following is good enough.
+    for reaction in by_contact.values() {
         if !broadcasted_reactions
             .iter()
             .any(|entry| entry.reaction == *reaction)
@@ -259,20 +257,15 @@ pub(crate) fn refine_broadcast_reactions(
             broadcasted_reactions.push(ReactionFrequency {
                 reaction: reaction.clone(),
                 count: 1,
-                is_from_self,
+                is_from_self: false,
             });
-        } else if is_from_self {
-            for entry in &mut broadcasted_reactions {
-                if entry.reaction == *reaction {
-                    // This results in ones own reaction being count twice for yourself.
-                    // We do this, so that you get an immediate feedback on reacting.
-                    //
-                    // Alternative approach is to alter `broadcast_reactions` accordingly on `send_reaction()` (increase/decrease counters, add/remove rows).
-                    // `broadcast_reactions` will become "dirty" by that, but that is recovered implicitly on next update from the channel owner.
-                    entry.count = entry.count + 1;
-                    entry.is_from_self = true;
-                }
-            }
+        }
+    }
+
+    // Mark SELF-reaction as such
+    if let Some(self_reaction) = by_contact.get(&ContactId::SELF) {
+        for entry in &mut broadcasted_reactions {
+            entry.is_from_self = entry.reaction == *self_reaction;
         }
     }
 
@@ -342,10 +335,10 @@ mod tests {
         by_contact.insert(ContactId::SELF, Reaction::new("❤️"));
         let result = refine_broadcast_reactions(broadcasted, &by_contact);
         assert_eq!(result.len(), 2);
-        assert_eq!(result[0].reaction.as_str(), "❤️");
-        assert_eq!(result[0].is_from_self, true);
-        assert_eq!(result[1].reaction.as_str(), "👍");
-        assert_eq!(result[1].is_from_self, false);
+        assert_eq!(result[0].reaction.as_str(), "👍");
+        assert_eq!(result[0].is_from_self, false);
+        assert_eq!(result[1].reaction.as_str(), "❤️");
+        assert_eq!(result[1].is_from_self, true);
 
         // Test `by_contact` contains a reaction already in broadcasted; count must NOT increase
         let broadcasted = vec![ReactionFrequency {
@@ -459,10 +452,10 @@ mod tests {
 
         claire.recv_msg_hidden(&sent_msg).await;
         let reactions = get_msg_reactions(claire, claire_msg.id).await?;
-        assert_eq!(reactions.to_string(), "💪2 🏳️‍🌈1"); // sic! see comment at `count` increase in refine_broadcast_reactions()
+        assert_eq!(reactions.to_string(), "🏳️‍🌈1 💪1");
         assert_eq!(reactions.frequencies.len(), 2);
-        assert_eq!(reactions.frequencies[0].is_from_self, true);
-        assert_eq!(reactions.frequencies[1].is_from_self, false);
+        assert_eq!(reactions.frequencies[0].is_from_self, false);
+        assert_eq!(reactions.frequencies[1].is_from_self, true);
 
         Ok(())
     }
