@@ -185,11 +185,12 @@ pub(crate) async fn receive_broadcast_reactions(context: &Context, json: &str) -
 
 /// Load broadcasted reactions from `broadcasted_reactions`.
 /// This table is filled only for the broadcast channel subscribers (`Chattype::InBroadcast`),
-/// in other cases, `None` is returned.
+/// by received reactions from the owner or by or temporarily add SELF-reactions.
+/// In there are no broadcasted reactions, an empty array is returned.
 pub(crate) async fn load_broadcast_reactions(
     context: &Context,
     msg_id: MsgId,
-) -> Result<Option<Vec<ReactionFrequency>>> {
+) -> Result<Vec<ReactionFrequency>> {
     let mut frequencies: Vec<ReactionFrequency> = context
         .sql
         .query_map_collect(
@@ -207,12 +208,8 @@ pub(crate) async fn load_broadcast_reactions(
         )
         .await?;
 
-    if frequencies.is_empty() {
-        return Ok(None);
-    }
-
     sort_frequencies(&mut frequencies);
-    Ok(Some(frequencies))
+    Ok(frequencies)
 }
 
 /// Save an array of frequencies to the `broadcasted_reactions` table.

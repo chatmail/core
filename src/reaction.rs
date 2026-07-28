@@ -444,12 +444,12 @@ pub async fn get_msg_reactions(context: &Context, msg_id: MsgId) -> Result<React
         .await?;
     by_contact.retain(|_contact, reaction| !reaction.is_empty());
 
-    let frequencies =
-        if let Some(broadcast_reactions) = load_broadcast_reactions(context, msg_id).await? {
-            refine_broadcast_reactions(broadcast_reactions, &by_contact)
-        } else {
-            calc_frequencies(&by_contact)
-        };
+    let broadcasted_reactions = load_broadcast_reactions(context, msg_id).await?;
+    let frequencies = if !broadcasted_reactions.is_empty() {
+        refine_broadcast_reactions(broadcasted_reactions, &by_contact)
+    } else {
+        calc_frequencies(&by_contact)
+    };
 
     Ok(Reactions {
         frequencies,
