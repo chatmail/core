@@ -3711,14 +3711,15 @@ pub(crate) async fn create_out_broadcast_ex(
 
         t.execute(
             "INSERT INTO chats
-            (type, name, name_normalized, grpid, created_timestamp, param)
-            VALUES(?, ?, ?, ?, ?, ?)",
+            (type, name, name_normalized, grpid, created_timestamp, muted_until, param)
+            VALUES(?, ?, ?, ?, ?, ?, ?)",
             (
                 Chattype::OutBroadcast,
                 &chat_name,
                 normalize_text(&chat_name),
                 &grpid,
                 timestamp,
+                MuteDuration::Forever,
                 params.to_string(),
             ),
         )?;

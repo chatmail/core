@@ -509,6 +509,11 @@ mod tests {
         let alice_chat_id = create_broadcast(alice, "Channel".to_string()).await?;
         let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
 
+        // Check that the newly created channel is muted -
+        // notifications for reactions to ones messages are usually not much interesting
+        let alice_chat = Chat::load_from_db(alice, alice_chat_id).await?;
+        assert!(alice_chat.is_muted());
+
         // Bob and claire join the channel via QR code
         let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
         bob_chat_id.accept(bob).await?;
