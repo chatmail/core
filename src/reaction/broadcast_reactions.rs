@@ -166,7 +166,7 @@ pub(crate) async fn receive_broadcast_reactions(context: &Context, json: &str) -
             .map(|entry| ReactionFrequency {
                 reaction: Reaction::new(&entry.emoji),
                 count: entry.count,
-                is_from_self: false, // set in refine_broadcast_reactions()
+                is_from_self: false, // set in refine_frequencies()
             })
             .collect();
         save_broadcast_reactions(context, msg_id, &frequencies).await?;
@@ -213,7 +213,7 @@ pub(crate) async fn load_broadcast_reactions(
 }
 
 /// Save an array of frequencies to the `broadcasted_reactions` table.
-async fn save_broadcast_reactions(
+pub(crate) async fn save_broadcast_reactions(
     context: &Context,
     msg_id: MsgId,
     frequencies: &Vec<ReactionFrequency>,
@@ -238,8 +238,47 @@ async fn save_broadcast_reactions(
     Ok(())
 }
 
+/// Modifies frequencies in-place to reflect a change in the SELF user's reaction.
+///
+/// This is used for immediate local feedback in `Chattype::InBroadcast` before the
+/// next periodic broadcast overwrites this "dirty state".
+pub(crate) fn modify_frequencies(
+    frequencies: &mut Vec<ReactionFrequency>,
+    old_self_reaction: Option<&Reaction>,
+    new_self_reaction: &Reaction,
+) {
+    if let Some(old_reaction) = old_self_reaction {
+        if let Some(idx) = frequencies
+            .iter()
+            .position(|entry| entry.reaction == *old_reaction)
+        {
+            frequencies[idx].count = frequencies[idx].count.saturating_sub(1);
+            if frequencies[idx].count == 0 {
+                frequencies.remove(idx);
+            }
+        }
+    }
+
+    if new_self_reaction.is_empty() {
+        return;
+    }
+
+    if let Some(idx) = frequencies
+        .iter_mut()
+        .position(|entry| entry.reaction == *new_self_reaction)
+    {
+        frequencies[idx].count += 1;
+    } else {
+        frequencies.push(ReactionFrequency {
+            reaction: new_self_reaction.clone(),
+            count: 1,
+            is_from_self: false, // Will be correctly set to `true` by `refine_frequencies`
+        });
+    }
+}
+
 /// Merge `by_contact` status to broadcasted reaction frequencies.
-pub(crate) fn refine_broadcast_reactions(
+pub(crate) fn refine_frequencies(
     mut broadcasted_reactions: Vec<ReactionFrequency>,
     by_contact: &BTreeMap<ContactId, Reaction>,
 ) -> Vec<ReactionFrequency> {
@@ -278,12 +317,100 @@ mod tests {
     use crate::securejoin::get_securejoin_qr;
     use crate::test_utils::TestContextManager;
 
-    #[test]
-    fn test_refine_broadcast_reactions() {
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_modify_frequencies() {
+        // Helper to create a ReactionFrequency entry
+        let freq = |emoji: &str, count: usize, is_from_self: bool| -> ReactionFrequency {
+            ReactionFrequency {
+                reaction: Reaction::new(emoji),
+                count,
+                is_from_self,
+            }
+        };
+
+        // Add entry
+        let mut frequencies = vec![freq("👍", 2, false)];
+        let old: Option<&Reaction> = None;
+        let new = Reaction::new("❤️");
+        modify_frequencies(&mut frequencies, old, &new);
+        assert_eq!(frequencies.len(), 2);
+        assert_eq!(frequencies[0].reaction.as_str(), "👍");
+        assert_eq!(frequencies[0].count, 2);
+        assert_eq!(frequencies[1].reaction.as_str(), "❤️");
+        assert_eq!(frequencies[1].count, 1);
+
+        // Increase existing entry
+        let mut frequencies = vec![freq("👍", 2, false)];
+        let old: Option<&Reaction> = None;
+        let new = Reaction::new("👍");
+        modify_frequencies(&mut frequencies, old, &new);
+        assert_eq!(frequencies.len(), 1);
+        assert_eq!(frequencies[0].reaction.as_str(), "👍");
+        assert_eq!(frequencies[0].count, 3);
+
+        // Decreased existing entry
+        let mut frequencies = vec![freq("👍", 2, false)];
+        let old = Some(Reaction::new("👍"));
+        let new = Reaction::new("");
+        modify_frequencies(&mut frequencies, old.as_ref(), &new);
+        assert_eq!(frequencies.len(), 1);
+        assert_eq!(frequencies[0].reaction.as_str(), "👍");
+        assert_eq!(frequencies[0].count, 1);
+
+        // Remove existing entry
+        let mut frequencies = vec![freq("👍", 1, false)];
+        let old = Some(Reaction::new("👍"));
+        let new = Reaction::new("");
+        modify_frequencies(&mut frequencies, old.as_ref(), &new);
+        assert_eq!(frequencies.len(), 0);
+
+        // Reaction changed: old reaction removed (count was 1), new reaction added
+        let mut frequencies = vec![freq("👍", 1, false), freq("❤️", 3, false)];
+        let old = Some(Reaction::new("👍"));
+        let new = Reaction::new("🎉");
+        modify_frequencies(&mut frequencies, old.as_ref(), &new);
+        assert_eq!(frequencies.len(), 2);
+        assert_eq!(frequencies[0].reaction.as_str(), "❤️");
+        assert_eq!(frequencies[0].count, 3);
+        assert_eq!(frequencies[1].reaction.as_str(), "🎉");
+        assert_eq!(frequencies[1].count, 1);
+
+        // Reaction changed: old reaction decreased (count was 2), new reaction added
+        let mut frequencies = vec![freq("👍", 2, false)];
+        let old = Some(Reaction::new("👍"));
+        let new = Reaction::new("🎉");
+        modify_frequencies(&mut frequencies, old.as_ref(), &new);
+        assert_eq!(frequencies.len(), 2);
+        assert_eq!(frequencies[0].reaction.as_str(), "👍");
+        assert_eq!(frequencies[0].count, 1);
+        assert_eq!(frequencies[1].reaction.as_str(), "🎉");
+        assert_eq!(frequencies[1].count, 1);
+
+        // Old and new reaction are the same
+        let mut frequencies = vec![freq("👍", 2, false)];
+        let old = Some(Reaction::new("👍"));
+        let new = Reaction::new("👍");
+        modify_frequencies(&mut frequencies, old.as_ref(), &new);
+        assert_eq!(frequencies.len(), 1);
+        assert_eq!(frequencies[0].reaction.as_str(), "👍");
+        assert_eq!(frequencies[0].count, 2);
+
+        // Empty frequencies array, adding a new reaction
+        let mut frequencies = vec![];
+        let old: Option<&Reaction> = None;
+        let new = Reaction::new("👍");
+        modify_frequencies(&mut frequencies, old, &new);
+        assert_eq!(frequencies.len(), 1);
+        assert_eq!(frequencies[0].reaction.as_str(), "👍");
+        assert_eq!(frequencies[0].count, 1);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_refine_frequencies() {
         // Test for empty inputs
         let broadcasted = vec![];
         let by_contact: BTreeMap<ContactId, Reaction> = BTreeMap::new();
-        let result = refine_broadcast_reactions(broadcasted, &by_contact);
+        let result = refine_frequencies(broadcasted, &by_contact);
         assert!(result.is_empty());
 
         // Test broadcasted reactions only, no by_contact reactions
@@ -293,7 +420,7 @@ mod tests {
             is_from_self: false,
         }];
         let by_contact: BTreeMap<ContactId, Reaction> = BTreeMap::new();
-        let result = refine_broadcast_reactions(broadcasted, &by_contact);
+        let result = refine_frequencies(broadcasted, &by_contact);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].reaction.as_str(), "👍");
         assert_eq!(result[0].count, 2);
@@ -307,7 +434,7 @@ mod tests {
         }];
         let mut by_contact: BTreeMap<ContactId, Reaction> = BTreeMap::new();
         by_contact.insert(ContactId::new(10), Reaction::new("❤️"));
-        let result = refine_broadcast_reactions(broadcasted, &by_contact);
+        let result = refine_frequencies(broadcasted, &by_contact);
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].reaction.as_str(), "👍");
         assert_eq!(result[0].count, 2);
@@ -330,7 +457,7 @@ mod tests {
         ];
         let mut by_contact: BTreeMap<ContactId, Reaction> = BTreeMap::new();
         by_contact.insert(ContactId::SELF, Reaction::new("❤️"));
-        let result = refine_broadcast_reactions(broadcasted, &by_contact);
+        let result = refine_frequencies(broadcasted, &by_contact);
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].reaction.as_str(), "👍");
         assert_eq!(result[0].is_from_self, false);
@@ -345,7 +472,7 @@ mod tests {
         }];
         let mut by_contact: BTreeMap<ContactId, Reaction> = BTreeMap::new();
         by_contact.insert(ContactId::new(10), Reaction::new("👍"));
-        let result = refine_broadcast_reactions(broadcasted, &by_contact);
+        let result = refine_frequencies(broadcasted, &by_contact);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].reaction.as_str(), "👍");
         assert_eq!(result[0].count, 2);
@@ -359,7 +486,7 @@ mod tests {
         let mut by_contact: BTreeMap<ContactId, Reaction> = BTreeMap::new();
         by_contact.insert(ContactId::new(11), Reaction::new("👍"));
         by_contact.insert(ContactId::SELF, Reaction::new("❤️"));
-        let result = refine_broadcast_reactions(broadcasted, &by_contact);
+        let result = refine_frequencies(broadcasted, &by_contact);
 
         assert_eq!(result.len(), 2);
         assert_eq!(result[0].reaction.as_str(), "👍");
@@ -453,6 +580,27 @@ mod tests {
         assert_eq!(reactions.frequencies.len(), 2);
         assert_eq!(reactions.frequencies[0].is_from_self, false);
         assert_eq!(reactions.frequencies[1].is_from_self, true);
+
+        // Claire removes her 💪 reaction, and also reactios with 🏳️‍🌈;
+        // SELF-changes are immediate even tho not broadcasted yet, the bring broadcasted reactions table to a "dirty state" ...
+        send_reaction(claire, claire_msg.id, "").await?;
+        let sent_msg = claire.pop_sent_msg().await;
+        let reactions = get_msg_reactions(claire, claire_msg.id).await?;
+        assert_eq!(reactions.to_string(), "🏳️‍🌈1");
+
+        send_reaction(claire, claire_msg.id, "🏳️‍🌈").await?;
+        let sent_msg2 = claire.pop_sent_msg().await;
+        let reactions = get_msg_reactions(claire, claire_msg.id).await?;
+        assert_eq!(reactions.to_string(), "🏳️‍🌈2");
+
+        // ... "dirty state" is fixed after next broadcast then, counters should stay the same
+        alice.recv_msg_hidden(&sent_msg).await;
+        alice.recv_msg_hidden(&sent_msg2).await;
+        broadcast_reactions_for_all_chats(alice).await?; // bypass timer in maybe_broadcast_reactions()
+        let sent_msg = alice.pop_sent_msg().await;
+        claire.recv_msg_hidden(&sent_msg).await;
+        let reactions = get_msg_reactions(claire, claire_msg.id).await?;
+        assert_eq!(reactions.to_string(), "🏳️‍🌈2");
 
         Ok(())
     }

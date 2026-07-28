@@ -31,7 +31,9 @@ use crate::context::Context;
 use crate::events::EventType;
 use crate::message::{Message, MsgId, rfc724_mid_exists};
 use crate::param::Param;
-use crate::reaction::broadcast_reactions::{load_broadcast_reactions, refine_broadcast_reactions};
+use crate::reaction::broadcast_reactions::{
+    load_broadcast_reactions, modify_frequencies, refine_frequencies, save_broadcast_reactions,
+};
 
 /// A single reaction.
 #[derive(Debug, Default, Clone, Deserialize, Eq, PartialEq, Serialize)]
@@ -128,6 +130,9 @@ async fn set_msg_id_reaction(
     reaction: &Reaction,
 ) -> Result<()> {
     let mut chat = Chat::load_from_db(context, chat_id).await?;
+    let old_reactions = get_msg_reactions(context, msg_id).await?;
+    let old_self_reaction = old_reactions.by_contact.get(&ContactId::SELF);
+
     if reaction.is_empty() {
         // Simply remove the record instead of setting it to empty string.
         context
@@ -172,6 +177,13 @@ async fn set_msg_id_reaction(
                 (chat_id, msg_id),
             )
             .await?;
+    } else if chat.typ == Chattype::InBroadcast && contact_id == ContactId::SELF {
+        // for immediate feedback, alter `broadcasted_reactions` directly.
+        // this "dirty state" will overwritten on next broadcast,
+        // however, means that `broadcasted_reactions` counts can be assumemd to include SELF-reaction eventually.
+        let mut frequencies = load_broadcast_reactions(context, msg_id).await?;
+        modify_frequencies(&mut frequencies, old_self_reaction, reaction);
+        save_broadcast_reactions(context, msg_id, &frequencies).await?;
     }
 
     context.emit_event(EventType::ReactionsChanged {
@@ -446,7 +458,7 @@ pub async fn get_msg_reactions(context: &Context, msg_id: MsgId) -> Result<React
 
     let broadcasted_reactions = load_broadcast_reactions(context, msg_id).await?;
     let frequencies = if !broadcasted_reactions.is_empty() {
-        refine_broadcast_reactions(broadcasted_reactions, &by_contact)
+        refine_frequencies(broadcasted_reactions, &by_contact)
     } else {
         calc_frequencies(&by_contact)
     };
