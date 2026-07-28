@@ -902,10 +902,10 @@ UPDATE config SET value=? WHERE keyname='configured_addr' AND value!=?1
         }
     }
 
-    if let Some(broadcast_reactions) = &mime_parser.broadcast_reactions {
-        if let Err(err) = receive_broadcast_reactions(context, broadcast_reactions).await {
-            warn!(context, "Cannot apply Broadcast-Reactions: {err:#}.");
-        }
+    if let Some(broadcast_reactions) = &mime_parser.broadcast_reactions
+        && let Err(err) = receive_broadcast_reactions(context, broadcast_reactions).await
+    {
+        warn!(context, "Cannot apply Broadcast-Reactions: {err:#}.");
     }
 
     if let Some(avatar_action) = &mime_parser.user_avatar

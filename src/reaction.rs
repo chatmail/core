@@ -407,7 +407,8 @@ fn calc_frequencies(by_contact: &BTreeMap<ContactId, Reaction>) -> Vec<ReactionF
     let mut self_reaction = Reaction::new("");
     let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
     for (contact_id, reaction) in by_contact {
-        *counts.entry(reaction.as_str()).or_insert(0) += 1;
+        let count = counts.entry(reaction.as_str()).or_insert(0);
+        *count = count.saturating_add(1);
         if *contact_id == ContactId::SELF {
             self_reaction = reaction.clone();
         }

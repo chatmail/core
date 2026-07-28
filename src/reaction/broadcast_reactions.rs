@@ -248,14 +248,18 @@ pub(crate) fn modify_frequencies(
     new_self_reaction: &Reaction,
 ) {
     if let Some(old_reaction) = old_self_reaction {
-        if let Some(idx) = frequencies
-            .iter()
-            .position(|entry| entry.reaction == *old_reaction)
-        {
-            frequencies[idx].count = frequencies[idx].count.saturating_sub(1);
-            if frequencies[idx].count == 0 {
-                frequencies.remove(idx);
+        let mut remove_idx = None;
+        for (idx, entry) in frequencies.iter_mut().enumerate() {
+            if entry.reaction == *old_reaction {
+                entry.count = entry.count.saturating_sub(1);
+                if entry.count == 0 {
+                    remove_idx = Some(idx);
+                }
+                break;
             }
+        }
+        if let Some(idx) = remove_idx {
+            frequencies.remove(idx);
         }
     }
 
@@ -263,11 +267,11 @@ pub(crate) fn modify_frequencies(
         return;
     }
 
-    if let Some(idx) = frequencies
+    if let Some(entry) = frequencies
         .iter_mut()
-        .position(|entry| entry.reaction == *new_self_reaction)
+        .find(|e| e.reaction == *new_self_reaction)
     {
-        frequencies[idx].count += 1;
+        entry.count = entry.count.saturating_add(1);
     } else {
         frequencies.push(ReactionFrequency {
             reaction: new_self_reaction.clone(),
