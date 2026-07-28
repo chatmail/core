@@ -617,7 +617,7 @@ pub async fn call_state(context: &Context, msg_id: MsgId) -> Result<CallState> {
 
 /// ICE server for JSON serialization.
 #[derive(Serialize, Debug, Clone, PartialEq)]
-struct IceServer {
+pub(crate) struct IceServer {
     /// STUN or TURN URLs.
     pub urls: Vec<String>,
 
@@ -655,7 +655,7 @@ pub(crate) async fn create_ice_servers_from_metadata(
 }
 
 /// STUN or TURN server with unresolved DNS name.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum UnresolvedIceServer {
     /// STUN server.
     Stun { hostname: String, port: u16 },
@@ -676,7 +676,7 @@ pub(crate) enum UnresolvedIceServer {
 pub(crate) async fn resolve_ice_servers(
     context: &Context,
     unresolved_ice_servers: Vec<UnresolvedIceServer>,
-) -> Result<String> {
+) -> Result<Vec<IceServer>> {
     let mut result: Vec<IceServer> = Vec::new();
 
     // Do not use cache because there is no TLS.
@@ -733,8 +733,7 @@ pub(crate) async fn resolve_ice_servers(
             },
         }
     }
-    let json = serde_json::to_string(&result)?;
-    Ok(json)
+    Ok(result)
 }
 
 /// Creates JSON with ICE servers when no TURN servers are known.
@@ -770,12 +769,19 @@ pub(crate) fn create_fallback_ice_servers() -> Vec<UnresolvedIceServer> {
 /// because it itself cannot utilize DNS. See
 /// <https://github.com/deltachat/deltachat-desktop/issues/5447>.
 pub async fn ice_servers(context: &Context) -> Result<String> {
-    if let Some(metadata) = context.metadata.read().await.values().next() {
-        let ice_servers = resolve_ice_servers(context, metadata.ice_servers.clone()).await?;
-        Ok(ice_servers)
-    } else {
-        Ok("[]".to_string())
-    }
+    let mut unresolved_ice_servers: Vec<UnresolvedIceServer> = context
+        .metadata
+        .read()
+        .await
+        .values()
+        .flat_map(|metadata| metadata.ice_servers.clone())
+        .collect();
+    unresolved_ice_servers.sort();
+    unresolved_ice_servers.dedup();
+
+    let ice_servers = resolve_ice_servers(context, unresolved_ice_servers).await?;
+    let json = serde_json::to_string(&ice_servers)?;
+    Ok(json)
 }
 
 /// "Who can call me" config options.
