@@ -20,18 +20,19 @@ use crate::reaction::{Reaction, ReactionFrequency, get_msg_reactions, sort_frequ
 use crate::tools::time;
 use crate::{EventType, chatlist_events};
 
-/// Wire format for accumulated reactions
+/// Wire format for accumulated broadcast reactions
+/// (sent from broadcast channel owner to subscriber in `Broadcast-Reactions:` header)
 #[derive(Debug, Serialize, Deserialize)]
-struct BroadcastReactionsPayload {
-    messages: Vec<BroadcastReactionsMessage>,
+struct WirePayload {
+    messages: Vec<WireMessage>,
 }
 #[derive(Debug, Serialize, Deserialize)]
-struct BroadcastReactionsMessage {
+struct WireMessage {
     id: String,
-    reactions: Vec<BroadcastReactionsEntry>,
+    reactions: Vec<WireEntry>,
 }
 #[derive(Debug, Serialize, Deserialize)]
-struct BroadcastReactionsEntry {
+struct WireEntry {
     emoji: String,
     count: usize,
 }
@@ -106,21 +107,21 @@ async fn broadcast_reactions_for_one_chat(context: &Context, chat_id: ChatId) ->
         )
         .await?;
 
-    let mut messages: Vec<BroadcastReactionsMessage> = Vec::new();
+    let mut messages: Vec<WireMessage> = Vec::new();
     for msg_id in &msg_ids {
         let Some(msg) = Message::load_from_db_optional(context, *msg_id).await? else {
             continue;
         };
         let reactions = get_msg_reactions(context, *msg_id).await?;
-        let entries: Vec<BroadcastReactionsEntry> = reactions
+        let entries: Vec<WireEntry> = reactions
             .frequencies
             .into_iter()
-            .map(|entry| BroadcastReactionsEntry {
+            .map(|entry| WireEntry {
                 emoji: entry.reaction.as_str().to_string(),
                 count: entry.count,
             })
             .collect();
-        messages.push(BroadcastReactionsMessage {
+        messages.push(WireMessage {
             id: msg.rfc724_mid,
             reactions: entries, // can be empty if all reactions were removed
         });
@@ -129,7 +130,7 @@ async fn broadcast_reactions_for_one_chat(context: &Context, chat_id: ChatId) ->
         return Ok(());
     }
 
-    let payload = BroadcastReactionsPayload { messages };
+    let payload = WirePayload { messages };
     let json = serde_json::to_string(&payload)?;
     let mut reaction_msg = Message::new_text("".to_string());
     reaction_msg.set_reaction();
@@ -143,7 +144,7 @@ async fn broadcast_reactions_for_one_chat(context: &Context, chat_id: ChatId) ->
 /// Applies incoming, accumulated reactions received via the `Broadcast-Reactions:` header
 /// to the `broadcasted_reactions` table.
 pub(crate) async fn receive_broadcast_reactions(context: &Context, json: &str) -> Result<()> {
-    let payload: BroadcastReactionsPayload = serde_json::from_str(json)?;
+    let payload: WirePayload = serde_json::from_str(json)?;
 
     for message in payload.messages {
         let Some(msg_id) = rfc724_mid_exists(context, &message.id).await? else {
@@ -159,23 +160,16 @@ pub(crate) async fn receive_broadcast_reactions(context: &Context, json: &str) -
             continue;
         }
 
-        context
-            .sql
-            .transaction(move |transaction| {
-                transaction.execute(
-                    "DELETE FROM broadcasted_reactions WHERE msg_id=?",
-                    (msg_id,),
-                )?;
-                for entry in &message.reactions {
-                    transaction.execute(
-                        "INSERT INTO broadcasted_reactions (msg_id, reaction, count)
-                         VALUES (?1, ?2, ?3)",
-                        (msg_id, &entry.emoji, entry.count),
-                    )?;
-                }
-                Ok(())
+        let frequencies: Vec<ReactionFrequency> = message
+            .reactions
+            .into_iter()
+            .map(|entry| ReactionFrequency {
+                reaction: Reaction::new(&entry.emoji),
+                count: entry.count,
+                is_from_self: false, // set in refine_broadcast_reactions()
             })
-            .await?;
+            .collect();
+        save_broadcast_reactions(context, msg_id, &frequencies).await?;
 
         context.emit_event(EventType::ReactionsChanged {
             // the event is for the subscriber, ReactionsIncoming is not needed
@@ -219,6 +213,31 @@ pub(crate) async fn load_broadcast_reactions(
 
     sort_frequencies(&mut frequencies);
     Ok(Some(frequencies))
+}
+
+async fn save_broadcast_reactions(
+    context: &Context,
+    msg_id: MsgId,
+    frequencies: &Vec<ReactionFrequency>,
+) -> Result<()> {
+    context
+        .sql
+        .transaction(move |transaction| {
+            transaction.execute(
+                "DELETE FROM broadcasted_reactions WHERE msg_id=?",
+                (msg_id,),
+            )?;
+            for entry in frequencies {
+                transaction.execute(
+                    "INSERT INTO broadcasted_reactions (msg_id, reaction, count)
+                         VALUES (?1, ?2, ?3)",
+                    (msg_id, &entry.reaction.as_str(), entry.count),
+                )?;
+            }
+            Ok(())
+        })
+        .await?;
+    Ok(())
 }
 
 /// Adds dedicated `by_contact` reaction to broadcasted reaction frequencies.
@@ -327,7 +346,6 @@ mod tests {
         assert_eq!(result[0].is_from_self, true);
         assert_eq!(result[1].reaction.as_str(), "👍");
         assert_eq!(result[1].is_from_self, false);
-
 
         // Test `by_contact` contains a reaction already in broadcasted; count must NOT increase
         let broadcasted = vec![ReactionFrequency {
