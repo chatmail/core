@@ -30,7 +30,7 @@ pub(crate) enum ConnectionSecurity {
     /// Implicit TLS.
     Tls,
 
-    // STARTTLS.
+    /// STARTTLS.
     Starttls,
 
     /// Plaintext.
