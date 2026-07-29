@@ -195,19 +195,15 @@ async fn test_dont_send_sent_draft() -> Result<()> {
     // Try to send the stale draft Message object with the same ID again.
     assert_eq!(msg_clone.id, msg.id);
     assert_eq!(msg_clone.state, MessageState::OutDraft);
+    let msg_from_db_before_send = Message::load_from_db(&t, msg.id).await?;
     let send_res = send_msg(&t, chat_id, &mut msg_clone).await;
     assert!(send_res.is_err());
 
-    // Ensure that it was not changed in the DB.
-    let msg_from_db = Message::load_from_db(&t, msg.id).await?;
-    assert_eq!(msg_from_db.text, "original");
-    // Some fields are not set by `send_msg`.
-    // Set them, to compare the whole object.
-    msg.to_id = t.add_or_lookup_contact_id(&bob).await;
-    msg.is_dc_message = MessengerMessage::Yes;
+    let msg_from_db_after_send = Message::load_from_db(&t, msg.id).await?;
+    assert_eq!(msg_from_db_after_send.text, "original");
     assert_eq!(
-        serde_json::to_string_pretty(&msg_from_db).unwrap(),
-        serde_json::to_string_pretty(&msg).unwrap()
+        serde_json::to_string_pretty(&msg_from_db_before_send).unwrap(),
+        serde_json::to_string_pretty(&msg_from_db_after_send).unwrap()
     );
 
     Ok(())
