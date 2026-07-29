@@ -13,6 +13,7 @@ use chrono::TimeZone;
 use deltachat_contact_tools::{ContactAddress, sanitize_bidi_characters, sanitize_single_line};
 use humansize::{BINARY, format_size};
 use mail_builder::mime::MimePart;
+use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
@@ -1758,13 +1759,16 @@ impl Chat {
     /// Adds missing values to the msg object,
     /// writes the record to the database.
     ///
-    /// If `update_msg_id` is set, that record is reused;
-    /// if `update_msg_id` is None, a new record is created.
+    /// If `update_existing_draft == `[`UseExistingDraftPolicy::Reuse`],
+    /// the existing draft with ID == msg.id is reused.
+    /// If no such draft exists, an error is returned.
+    /// If `update_existing_draft == `[`UseExistingDraftPolicy::DontReuse`],
+    /// a new record is created.
     async fn prepare_msg_raw(
         &mut self,
         context: &Context,
         msg: &mut Message,
-        update_msg_id: Option<MsgId>,
+        update_existing_draft: UseExistingDraftPolicy,
     ) -> Result<()> {
         let mut to_id = 0;
         let mut location_id = 0;
@@ -1933,10 +1937,40 @@ impl Chat {
         msg.from_id = ContactId::SELF;
 
         // add message to the database
-        if let Some(update_msg_id) = update_msg_id {
-            context
-                .sql
-                .execute(
+        let inserted_msg_id = context.sql.transaction(|transaction| {
+            fn get_existing_draft(
+                transaction: &rusqlite::Transaction<'_>,
+                chat_id: ChatId,
+            ) -> Result<Option<MsgId>> {
+                let draft_msg_id = transaction
+                    .query_row(
+                        "SELECT
+                            m.id AS id
+                        FROM msgs m
+                        WHERE chat_id=? AND state=?
+                        LIMIT 1",
+                        (chat_id, MessageState::OutDraft),
+                        |row| {
+                            let draft_msg_id: MsgId = row.get("id")?;
+                            Ok(draft_msg_id)
+                        },
+                    )
+                    .optional()?;
+                Ok(draft_msg_id)
+            }
+
+            if update_existing_draft == UseExistingDraftPolicy::Reuse {
+                // Maybe we could try to somehow gracefully recover from these,
+                // but better safe than sorry.
+                let Some(existing_draft_id) = get_existing_draft(transaction, self.id)? else {
+                    bail!("wanted to prepare existing draft for sending in chat {0}, but no draft is present (it might have been sent or deleted)", self.id);
+                };
+                // This check also covers the `msg.id.is_special()` case.
+                if existing_draft_id != msg.id {
+                    bail!("wanted to prepare existing draft for sending in chat {0}, but its ID {existing_draft_id} is different from the specified message ID {1}", self.id, msg.id);
+                }
+
+                transaction.execute(
                     "UPDATE msgs
                      SET rfc724_mid=?, chat_id=?, from_id=?, to_id=?, timestamp=?, type=?,
                          state=?, txt=?, txt_normalized=?, subject=?, param=?,
@@ -1964,15 +1998,13 @@ impl Chat {
                         location_id as i32,
                         ephemeral_timer,
                         ephemeral_timestamp,
-                        update_msg_id
+                        msg.id
                     ],
-                )
-                .await?;
-            msg.id = update_msg_id;
-        } else {
-            let raw_id = context
-                .sql
-                .insert(
+                )?;
+                let inserted_msg_id = None;
+                Ok(inserted_msg_id)
+            } else {
+                transaction.execute(
                     "INSERT INTO msgs (
                         rfc724_mid,
                         chat_id,
@@ -2016,10 +2048,15 @@ impl Chat {
                         ephemeral_timer,
                         ephemeral_timestamp
                     ],
-                )
-                .await?;
+                )?;
+                let inserted_msg_id = MsgId::new(transaction.last_insert_rowid().try_into()?);
+                Ok(Some(inserted_msg_id))
+            }
+        }).await?;
+
+        if let Some(inserted_msg_id) = inserted_msg_id {
             context.new_msgs_notify.notify_one();
-            msg.id = MsgId::new(u32::try_from(raw_id)?);
+            msg.id = inserted_msg_id;
 
             maybe_set_logging_xdc(context, msg, self.id).await?;
             context
@@ -2716,15 +2753,15 @@ async fn prepare_send_msg(
     }
 
     // check current MessageState for drafts (to keep msg_id) ...
-    let update_msg_id = if msg.state == MessageState::OutDraft {
+    let update_existing_draft = if msg.state == MessageState::OutDraft {
         msg.hidden = false;
         if !msg.id.is_special() && msg.chat_id == chat_id {
-            Some(msg.id)
+            UseExistingDraftPolicy::Reuse
         } else {
-            None
+            UseExistingDraftPolicy::DontReuse
         }
     } else {
-        None
+        UseExistingDraftPolicy::DontReuse
     };
 
     if msg.state == MessageState::Undefined
@@ -2744,7 +2781,8 @@ async fn prepare_send_msg(
     if !msg.hidden {
         chat_id.unarchive_if_not_muted(context, msg.state).await?;
     }
-    chat.prepare_msg_raw(context, msg, update_msg_id).await?;
+    chat.prepare_msg_raw(context, msg, update_existing_draft)
+        .await?;
 
     let row_ids = create_send_msg_jobs(context, msg)
         .await
@@ -2753,6 +2791,28 @@ async fn prepare_send_msg(
         donation_request_maybe(context).await.log_err(context).ok();
     }
     Ok(row_ids)
+}
+
+#[derive(Debug, PartialEq)]
+enum UseExistingDraftPolicy {
+    DontReuse,
+    Reuse,
+}
+impl From<UseExistingDraftPolicy> for bool {
+    fn from(reuse: UseExistingDraftPolicy) -> bool {
+        match reuse {
+            UseExistingDraftPolicy::DontReuse => false,
+            UseExistingDraftPolicy::Reuse => true,
+        }
+    }
+}
+impl From<bool> for UseExistingDraftPolicy {
+    fn from(reuse: bool) -> UseExistingDraftPolicy {
+        match reuse {
+            false => UseExistingDraftPolicy::DontReuse,
+            true => UseExistingDraftPolicy::Reuse,
+        }
+    }
 }
 
 /// Renders the Message or splits it into Pre- and Post-Message.
@@ -4576,7 +4636,8 @@ pub async fn forward_msgs_2ctx(
         msg.rfc724_mid = create_outgoing_rfc724_mid();
         msg.pre_rfc724_mid.clear();
         msg.timestamp_sort = now;
-        chat.prepare_msg_raw(ctx_dst, &mut msg, None).await?;
+        chat.prepare_msg_raw(ctx_dst, &mut msg, UseExistingDraftPolicy::DontReuse)
+            .await?;
 
         if !create_send_msg_jobs(ctx_dst, &mut msg).await?.is_empty() {
             ctx_dst.scheduler.interrupt_smtp().await;
