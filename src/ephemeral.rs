@@ -692,7 +692,7 @@ pub(crate) async fn delete_tombstoned_messages_from_imap(
         // either because there is multi-device or because this is a classical email server.
         // Only delete expired ephemeral messages.
 
-        // This uses `chat_id={DC_CHAT_ID_TRASH}`, so that the index on `chat_id` can be used.
+        // This uses `AND chat_id={DC_CHAT_ID_TRASH}`, so that the index on `chat_id` can be used.
         // Only messages in the trash chat are ever marked as deleted, which makes this optimization possible.
         // This speeds up this SQL query by a factor of ~3.
         context
@@ -703,10 +703,10 @@ pub(crate) async fn delete_tombstoned_messages_from_imap(
                 WHERE transport_id=?1
                 AND rfc724_mid IN (
                     SELECT rfc724_mid FROM msgs
-                    WHERE chat_id=?2 AND deleted=1
+                    WHERE deleted=1 AND chat_id=?2
                     UNION
                     SELECT pre_rfc724_mid FROM msgs
-                    WHERE pre_rfc724_mid!='' AND chat_id=?2 AND deleted=1
+                    WHERE pre_rfc724_mid!='' AND deleted=1 AND chat_id=?2
                 )",
                 (transport_id, DC_CHAT_ID_TRASH),
             )
