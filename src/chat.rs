@@ -748,6 +748,18 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
         Ok(msg_id)
     }
 
+    fn has_draft_with_id(&self, conn: &rusqlite::Connection, draft_id: &MsgId) -> Result<bool> {
+        let count: u32 = conn.query_row(
+            "SELECT
+                COUNT(*)
+            FROM msgs
+            WHERE id=? AND chat_id=? AND state=?",
+            (draft_id, self, MessageState::OutDraft),
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
+    }
+
     /// Returns draft message, if there is one.
     pub async fn get_draft(self, context: &Context) -> Result<Option<Message>> {
         if self.is_special() {
@@ -1758,13 +1770,16 @@ impl Chat {
     /// Adds missing values to the msg object,
     /// writes the record to the database.
     ///
-    /// If `update_msg_id` is set, that record is reused;
-    /// if `update_msg_id` is None, a new record is created.
+    /// If `update_existing_draft == `[`UseExistingDraftPolicy::Reuse`],
+    /// the existing draft with ID == msg.id is reused.
+    /// If no such draft exists, an error is returned.
+    /// If `update_existing_draft == `[`UseExistingDraftPolicy::DontReuse`],
+    /// a new record is created.
     async fn prepare_msg_raw(
         &mut self,
         context: &Context,
         msg: &mut Message,
-        update_msg_id: Option<MsgId>,
+        update_existing_draft: UseExistingDraftPolicy,
     ) -> Result<()> {
         let mut to_id = 0;
         let mut location_id = 0;
@@ -1933,93 +1948,114 @@ impl Chat {
         msg.from_id = ContactId::SELF;
 
         // add message to the database
-        if let Some(update_msg_id) = update_msg_id {
-            context
-                .sql
-                .execute(
-                    "UPDATE msgs
-                     SET rfc724_mid=?, chat_id=?, from_id=?, to_id=?, timestamp=?, type=?,
-                         state=?, txt=?, txt_normalized=?, subject=?, param=?,
-                         hidden=?, mime_in_reply_to=?, mime_references=?, mime_modified=?,
-                         mime_headers=?, mime_compressed=1, location_id=?, ephemeral_timer=?,
-                         ephemeral_timestamp=?
-                     WHERE id=?;",
-                    params_slice![
-                        msg.rfc724_mid,
-                        msg.chat_id,
-                        msg.from_id,
-                        to_id,
-                        msg.timestamp_sort,
-                        msg.viewtype,
-                        msg.state,
-                        msg_text,
-                        normalize_text(&msg_text),
-                        &msg.subject,
-                        msg.param.to_string(),
-                        msg.hidden,
-                        msg.in_reply_to.as_deref().unwrap_or_default(),
-                        new_references,
-                        new_mime_headers.is_some(),
-                        new_mime_headers.unwrap_or_default(),
-                        location_id as i32,
-                        ephemeral_timer,
-                        ephemeral_timestamp,
-                        update_msg_id
-                    ],
-                )
-                .await?;
-            msg.id = update_msg_id;
-        } else {
-            let raw_id = context
-                .sql
-                .insert(
-                    "INSERT INTO msgs (
-                        rfc724_mid,
-                        chat_id,
-                        from_id,
-                        to_id,
-                        timestamp,
-                        type,
-                        state,
-                        txt,
-                        txt_normalized,
-                        subject,
-                        param,
-                        hidden,
-                        mime_in_reply_to,
-                        mime_references,
-                        mime_modified,
-                        mime_headers,
-                        mime_compressed,
-                        location_id,
-                        ephemeral_timer,
-                        ephemeral_timestamp)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?);",
-                    params_slice![
-                        msg.rfc724_mid,
-                        msg.chat_id,
-                        msg.from_id,
-                        to_id,
-                        msg.timestamp_sort,
-                        msg.viewtype,
-                        msg.state,
-                        msg_text,
-                        normalize_text(&msg_text),
-                        &msg.subject,
-                        msg.param.to_string(),
-                        msg.hidden,
-                        msg.in_reply_to.as_deref().unwrap_or_default(),
-                        new_references,
-                        new_mime_headers.is_some(),
-                        new_mime_headers.unwrap_or_default(),
-                        location_id as i32,
-                        ephemeral_timer,
-                        ephemeral_timestamp
-                    ],
-                )
-                .await?;
+        let (msg_id, inserted) = context
+            .sql
+            .transaction(|transaction| {
+                if update_existing_draft == UseExistingDraftPolicy::Reuse {
+                    // This check also covers the `msg.id.is_special()` case.
+                    // Maybe we could try to somehow gracefully recover from this,
+                    // but better safe than sorry.
+                    if !self.id.has_draft_with_id(transaction, &msg.id)? {
+                        bail!(
+                            concat!(
+                                "wanted to prepare existing draft for sending in chat {0}, ",
+                                "but no draft with ID {1} is present ",
+                                "(it might have been sent or deleted)"
+                            ),
+                            self.id,
+                            msg.id
+                        );
+                    }
+
+                    transaction.execute(
+                        "UPDATE msgs
+                         SET rfc724_mid=?, chat_id=?, from_id=?, to_id=?, timestamp=?, type=?,
+                             state=?, txt=?, txt_normalized=?, subject=?, param=?,
+                             hidden=?, mime_in_reply_to=?, mime_references=?, mime_modified=?,
+                             mime_headers=?, mime_compressed=1, location_id=?, ephemeral_timer=?,
+                             ephemeral_timestamp=?
+                         WHERE id=?;",
+                        params_slice![
+                            msg.rfc724_mid,
+                            msg.chat_id,
+                            msg.from_id,
+                            to_id,
+                            msg.timestamp_sort,
+                            msg.viewtype,
+                            msg.state,
+                            msg_text,
+                            normalize_text(&msg_text),
+                            &msg.subject,
+                            msg.param.to_string(),
+                            msg.hidden,
+                            msg.in_reply_to.as_deref().unwrap_or_default(),
+                            new_references,
+                            new_mime_headers.is_some(),
+                            new_mime_headers.unwrap_or_default(),
+                            location_id as i32,
+                            ephemeral_timer,
+                            ephemeral_timestamp,
+                            msg.id
+                        ],
+                    )?;
+                    let inserted = false;
+                    Ok((msg.id, inserted))
+                } else {
+                    transaction.execute(
+                        "INSERT INTO msgs (
+                         rfc724_mid,
+                         chat_id,
+                         from_id,
+                         to_id,
+                         timestamp,
+                         type,
+                         state,
+                         txt,
+                         txt_normalized,
+                         subject,
+                         param,
+                         hidden,
+                         mime_in_reply_to,
+                         mime_references,
+                         mime_modified,
+                         mime_headers,
+                         mime_compressed,
+                         location_id,
+                         ephemeral_timer,
+                         ephemeral_timestamp)
+                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?);",
+                        params_slice![
+                            msg.rfc724_mid,
+                            msg.chat_id,
+                            msg.from_id,
+                            to_id,
+                            msg.timestamp_sort,
+                            msg.viewtype,
+                            msg.state,
+                            msg_text,
+                            normalize_text(&msg_text),
+                            &msg.subject,
+                            msg.param.to_string(),
+                            msg.hidden,
+                            msg.in_reply_to.as_deref().unwrap_or_default(),
+                            new_references,
+                            new_mime_headers.is_some(),
+                            new_mime_headers.unwrap_or_default(),
+                            location_id as i32,
+                            ephemeral_timer,
+                            ephemeral_timestamp
+                        ],
+                    )?;
+                    let msg_id = MsgId::new(transaction.last_insert_rowid().try_into()?);
+                    let inserted = true;
+                    Ok((msg_id, inserted))
+                }
+            })
+            .await?;
+
+        msg.id = msg_id;
+        if inserted {
             context.new_msgs_notify.notify_one();
-            msg.id = MsgId::new(u32::try_from(raw_id)?);
 
             maybe_set_logging_xdc(context, msg, self.id).await?;
             context
@@ -2716,15 +2752,15 @@ async fn prepare_send_msg(
     }
 
     // check current MessageState for drafts (to keep msg_id) ...
-    let update_msg_id = if msg.state == MessageState::OutDraft {
+    let update_existing_draft = if msg.state == MessageState::OutDraft {
         msg.hidden = false;
         if !msg.id.is_special() && msg.chat_id == chat_id {
-            Some(msg.id)
+            UseExistingDraftPolicy::Reuse
         } else {
-            None
+            UseExistingDraftPolicy::DontReuse
         }
     } else {
-        None
+        UseExistingDraftPolicy::DontReuse
     };
 
     if msg.state == MessageState::Undefined
@@ -2744,7 +2780,8 @@ async fn prepare_send_msg(
     if !msg.hidden {
         chat_id.unarchive_if_not_muted(context, msg.state).await?;
     }
-    chat.prepare_msg_raw(context, msg, update_msg_id).await?;
+    chat.prepare_msg_raw(context, msg, update_existing_draft)
+        .await?;
 
     let row_ids = create_send_msg_jobs(context, msg)
         .await
@@ -2753,6 +2790,36 @@ async fn prepare_send_msg(
         donation_request_maybe(context).await.log_err(context).ok();
     }
     Ok(row_ids)
+}
+
+/// When sending a message or setting the draft,
+/// what to do about the potentially existing draft.
+///
+/// This is basically a more explicit bool.
+#[derive(Debug, PartialEq)]
+enum UseExistingDraftPolicy {
+    /// Create a brand new draft or message, don't reuse the existing one's ID.
+    DontReuse,
+    /// Resuse the existing draft, so that the new draft or message
+    /// keeps its original ID.
+    /// Useful for WebXDC attachments.
+    Reuse,
+}
+impl From<UseExistingDraftPolicy> for bool {
+    fn from(reuse: UseExistingDraftPolicy) -> bool {
+        match reuse {
+            UseExistingDraftPolicy::DontReuse => false,
+            UseExistingDraftPolicy::Reuse => true,
+        }
+    }
+}
+impl From<bool> for UseExistingDraftPolicy {
+    fn from(reuse: bool) -> UseExistingDraftPolicy {
+        match reuse {
+            false => UseExistingDraftPolicy::DontReuse,
+            true => UseExistingDraftPolicy::Reuse,
+        }
+    }
 }
 
 /// Renders the Message or splits it into Pre- and Post-Message.
@@ -4576,7 +4643,8 @@ pub async fn forward_msgs_2ctx(
         msg.rfc724_mid = create_outgoing_rfc724_mid();
         msg.pre_rfc724_mid.clear();
         msg.timestamp_sort = now;
-        chat.prepare_msg_raw(ctx_dst, &mut msg, None).await?;
+        chat.prepare_msg_raw(ctx_dst, &mut msg, UseExistingDraftPolicy::DontReuse)
+            .await?;
 
         if !create_send_msg_jobs(ctx_dst, &mut msg).await?.is_empty() {
             ctx_dst.scheduler.interrupt_smtp().await;
