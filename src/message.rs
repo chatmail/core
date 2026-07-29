@@ -2196,7 +2196,6 @@ pub(crate) async fn rfc724_mid_download_tried(context: &Context, rfc724_mid: &st
         .exists(
             "SELECT COUNT(*) FROM msgs
              WHERE rfc724_mid=? AND download_state<>?",
-            // TODO pre_rfc724_mid??
             (rfc724_mid, DownloadState::Available),
         )
         .await?;
