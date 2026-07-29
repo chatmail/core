@@ -727,7 +727,7 @@ pub(crate) async fn delete_tombstoned_messages_from_imap(
                     UNION
                     SELECT pre_rfc724_mid FROM msgs
                     WHERE pre_rfc724_mid!=''
-                      AND param GLOB '*\nc=1*' OR param GLOB 'c=1*' OR deleted=1
+                      AND (param GLOB '*\nc=1*' OR param GLOB 'c=1*' OR deleted=1)
                 )",
                 (transport_id, DownloadState::Done),
             )
