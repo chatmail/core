@@ -671,10 +671,6 @@ pub(crate) async fn delete_tombstoned_messages_from_imap(
         //
         // Pre-messages can be deleted even if the message wasn't fully downloaded yet,
         // because it's only the post-message that hasn't been downloaded.
-        // I didn't change this query, but I noticed that I can get a lot more performance (~70ms rather than ~110ms on my laptop) by removing `AND id>9`
-        // because otherwise, SQLite thinks that it's smart to use the index on `id` for the search
-        // rather than a simple scan. And it needs to do a full scan,
-        // because we need all `rfc724_mid`s
         context
             .sql
             .execute(
@@ -683,7 +679,7 @@ pub(crate) async fn delete_tombstoned_messages_from_imap(
                 WHERE transport_id=?1
                 AND rfc724_mid IN (
                     SELECT rfc724_mid FROM msgs
-                    WHERE (chat_id=?2 AND deleted=1) OR download_state=?2
+                    WHERE deleted=1 OR download_state=?2
                     UNION
                     SELECT pre_rfc724_mid FROM msgs
                     WHERE pre_rfc724_mid!=''
@@ -695,9 +691,10 @@ pub(crate) async fn delete_tombstoned_messages_from_imap(
         // There may be other devices using this relay,
         // either because there is multi-device or because this is a classical email server.
         // Only delete expired ephemeral messages.
-        // I looked at the performance a bit. First thing I did was remove the `AND id>9`,
-        // which is not necessary and brought down the time from ~120ms to ~30ms on my laptop.
-        // Adding `OR (chat_id=?2 AND deleted=1)` worsened it to ~45ms again.
+
+        // This uses `chat_id={DC_CHAT_ID_TRASH}`, so that the index on `chat_id` can be used.
+        // Only messages in the trash chat are ever marked as deleted, which makes this optimization possible.
+        // This speeds up this SQL query by a factor of ~3.
         context
             .sql
             .execute(
@@ -717,7 +714,6 @@ pub(crate) async fn delete_tombstoned_messages_from_imap(
     } else {
         // Single device.
         // Delete all expired and encrypted messages.
-        // This one takes ~130ms no matter what. It needs to do a full SCAN over the database no matter what because it looks at the param.
         context
             .sql
             .execute(
