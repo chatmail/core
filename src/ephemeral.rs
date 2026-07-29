@@ -460,7 +460,7 @@ WHERE
 /// Emits relevant `MsgsChanged` and `WebxdcInstanceDeleted` events
 /// if messages are deleted.
 ///
-/// Also see [`delete_expired_imap_messages`],
+/// Also see [`delete_tombstoned_messages_from_imap`],
 /// which marks the messages for deletion on the IMAP server.
 pub(crate) async fn delete_expired_messages(context: &Context, now: i64) -> Result<()> {
     let rows = select_expired_messages(context, now).await?;
@@ -656,13 +656,11 @@ pub(crate) async fn ephemeral_loop(context: &Context, interrupt_receiver: Receiv
 ///
 /// Also see [`delete_expired_messages`],
 /// which locally deletes expired messages.
-pub(crate) async fn delete_expired_imap_messages(
+pub(crate) async fn delete_tombstoned_messages_from_imap(
     context: &Context,
     transport_id: u32,
     is_chatmail: bool,
 ) -> Result<()> {
-    let now = time();
-
     let bcc_self = context.get_config_bool(Config::BccSelf).await?;
     if should_delete_all_downloaded_messages(bcc_self, is_chatmail) {
         // This is the only device using this relay.
@@ -685,14 +683,12 @@ pub(crate) async fn delete_expired_imap_messages(
                 WHERE transport_id=?1
                 AND rfc724_mid IN (
                     SELECT rfc724_mid FROM msgs
-                    WHERE ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR download_state=?3)
-                        AND id>9
+                    WHERE (chat_id=?2 AND deleted=1) OR download_state=?2
                     UNION
                     SELECT pre_rfc724_mid FROM msgs
                     WHERE pre_rfc724_mid!=''
-                        AND id>9
                 )",
-                (transport_id, now, DownloadState::Done),
+                (transport_id, DownloadState::Done),
             )
             .await?;
     } else if bcc_self {
@@ -701,7 +697,7 @@ pub(crate) async fn delete_expired_imap_messages(
         // Only delete expired ephemeral messages.
         // I looked at the performance a bit. First thing I did was remove the `AND id>9`,
         // which is not necessary and brought down the time from ~120ms to ~30ms on my laptop.
-        // Adding `OR (chat_id=?3 AND deleted=1)` worsened it to ~45ms again.
+        // Adding `OR (chat_id=?2 AND deleted=1)` worsened it to ~45ms again.
         context
             .sql
             .execute(
@@ -710,13 +706,12 @@ pub(crate) async fn delete_expired_imap_messages(
                 WHERE transport_id=?1
                 AND rfc724_mid IN (
                     SELECT rfc724_mid FROM msgs
-                    WHERE (ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9) OR (chat_id=?3 AND deleted=1)
+                    WHERE chat_id=?2 AND deleted=1
                     UNION
                     SELECT pre_rfc724_mid FROM msgs
-                    WHERE (pre_rfc724_mid!=''
-                        AND ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9) OR (chat_id=?3 AND deleted=1)
+                    WHERE pre_rfc724_mid!='' AND chat_id=?2 AND deleted=1
                 )",
-                (transport_id, now, DC_CHAT_ID_TRASH),
+                (transport_id, DC_CHAT_ID_TRASH),
             )
             .await?;
     } else {
@@ -731,19 +726,14 @@ pub(crate) async fn delete_expired_imap_messages(
                  WHERE transport_id=?1
                  AND rfc724_mid IN (
                     SELECT rfc724_mid FROM msgs
-                    WHERE id>9
-                      AND ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR
-                           ((param GLOB '*\nc=1*' OR param GLOB 'c=1*') AND download_state=?3) OR
-                           deleted=1)
+                    WHERE ((param GLOB '*\nc=1*' OR param GLOB 'c=1*') AND download_state=?2) OR
+                           deleted=1
                     UNION
                     SELECT pre_rfc724_mid FROM msgs
                     WHERE pre_rfc724_mid!=''
-                      AND id>9
-                      AND ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR
-                           (param GLOB '*\nc=1*' OR param GLOB 'c=1*') OR
-                           deleted=1)
+                      AND param GLOB '*\nc=1*' OR param GLOB 'c=1*' OR deleted=1
                 )",
-                (transport_id, now, DownloadState::Done),
+                (transport_id, DownloadState::Done),
             )
             .await?;
     }

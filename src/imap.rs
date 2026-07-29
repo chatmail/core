@@ -45,7 +45,7 @@ use crate::transport::{
 };
 use crate::{
     calls::{UnresolvedIceServer, create_fallback_ice_servers, create_ice_servers_from_metadata},
-    ephemeral::delete_expired_imap_messages,
+    ephemeral::delete_tombstoned_messages_from_imap,
 };
 
 pub(crate) mod capabilities;
@@ -486,11 +486,15 @@ impl Imap {
             context.scheduler.interrupt_ephemeral_task().await;
         }
 
-        // Mark expired messages for deletion. Note that `delete_expired_imap_messages` is
+        // Mark expired messages for deletion. Note that `delete_tombstoned_messages_from_imap` is
         // not well optimized and should not be called before fetching.
-        delete_expired_imap_messages(context, session.transport_id(), session.is_chatmail())
-            .await
-            .context("delete_expired_imap_messages")?;
+        delete_tombstoned_messages_from_imap(
+            context,
+            session.transport_id(),
+            session.is_chatmail(),
+        )
+        .await
+        .context("delete_tombstoned_messages_from_imap")?;
 
         session
             .move_delete_messages(context, watch_folder)
