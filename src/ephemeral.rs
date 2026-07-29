@@ -652,10 +652,15 @@ pub(crate) async fn ephemeral_loop(context: &Context, interrupt_receiver: Receiv
     }
 }
 
-/// Schedules expired IMAP messages for deletion on the server.
+/// Schedules messages for deletion on the server:
+///
+/// - messages in the trash chat with the `deleted=1` flag
+/// - In single-device mode, this additionally marks all downloaded messages for deletion
+///   (only encrypted ones for non-chatmail),
+///   because there is no other device that may need these messages.
 ///
 /// Also see [`delete_expired_messages`],
-/// which locally deletes expired messages.
+/// which locally deletes expired messages, and gives them the `deleted=1` flag.
 pub(crate) async fn delete_tombstoned_messages_from_imap(
     context: &Context,
     transport_id: u32,
@@ -690,7 +695,6 @@ pub(crate) async fn delete_tombstoned_messages_from_imap(
     } else if bcc_self {
         // There may be other devices using this relay,
         // either because there is multi-device or because this is a classical email server.
-        // Only delete expired ephemeral messages.
 
         // This uses `AND chat_id={DC_CHAT_ID_TRASH}`, so that the index on `chat_id` can be used.
         // Only messages in the trash chat are ever marked as deleted, which makes this optimization possible.
@@ -713,7 +717,8 @@ pub(crate) async fn delete_tombstoned_messages_from_imap(
             .await?;
     } else {
         // Single device.
-        // Delete all expired and encrypted messages.
+        // Delete all messages that were marked for deletion,
+        // and all encrypted messages.
         context
             .sql
             .execute(
