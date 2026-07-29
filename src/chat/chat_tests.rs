@@ -176,6 +176,41 @@ async fn test_draft_stable_ids() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_dont_send_sent_draft() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let chat_id = t.create_chat(bob).await.id;
+
+    let mut msg = Message::new_text("original".to_string());
+
+    chat_id.set_draft(t, Some(&mut msg)).await?;
+    assert_eq!(msg.state, MessageState::OutDraft);
+
+    let mut msg_clone = msg.clone();
+
+    send_msg(t, chat_id, &mut msg).await?;
+    assert_eq!(msg.state, MessageState::OutPending);
+
+    msg_clone.set_text("modified".to_string());
+    // Try to send the stale draft Message object with the same ID again.
+    assert_eq!(msg_clone.id, msg.id);
+    assert_eq!(msg_clone.state, MessageState::OutDraft);
+    let msg_from_db_before_send = Message::load_from_db(t, msg.id).await?;
+    let send_res = send_msg(t, chat_id, &mut msg_clone).await;
+    assert!(send_res.is_err());
+
+    let msg_from_db_after_send = Message::load_from_db(t, msg.id).await?;
+    assert_eq!(msg_from_db_after_send.text, "original");
+    assert_eq!(
+        serde_json::to_string_pretty(&msg_from_db_before_send).unwrap(),
+        serde_json::to_string_pretty(&msg_from_db_after_send).unwrap()
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_only_one_draft_per_chat() -> Result<()> {
     let t = TestContext::new_alice().await;
     let chat_id = create_group(&t, "abc").await?;
