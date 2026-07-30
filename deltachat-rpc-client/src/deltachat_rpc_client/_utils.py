@@ -53,7 +53,6 @@ def run_client_cli(
     hooks: Optional[Iterable[Tuple[Callable, Union[type, "EventFilter"]]]] = None,
     until: Callable[[AttrDict], bool] = _forever,
     argv: Optional[list] = None,
-    **kwargs,
 ) -> None:
     """Run a simple command line app, using the given hooks.
 
@@ -61,14 +60,13 @@ def run_client_cli(
     """
     from .client import Client
 
-    _run_cli(Client, until, hooks, argv, **kwargs)
+    _run_cli(Client, until, hooks, argv)
 
 
 def run_bot_cli(
     until: Callable[[AttrDict], bool] = _forever,
     hooks: Optional[Iterable[Tuple[Callable, Union[type, "EventFilter"]]]] = None,
     argv: Optional[list] = None,
-    **kwargs,
 ) -> None:
     """Run a simple bot command line using the given hooks.
 
@@ -76,7 +74,7 @@ def run_bot_cli(
     """
     from .client import Bot
 
-    _run_cli(Bot, until, hooks, argv, **kwargs)
+    _run_cli(Bot, until, hooks, argv)
 
 
 def _run_cli(
@@ -84,7 +82,6 @@ def _run_cli(
     until: Callable[[AttrDict], bool] = _forever,
     hooks: Optional[Iterable[Tuple[Callable, Union[type, "EventFilter"]]]] = None,
     argv: Optional[list] = None,
-    **kwargs,
 ) -> None:
     from .deltachat import DeltaChat
     from .rpc import Rpc
@@ -102,7 +99,7 @@ def _run_cli(
     parser.add_argument("--password", action="store", help="password", default=os.getenv("DELTACHAT_PASSWORD"))
     args = parser.parse_args(argv[1:])
 
-    with Rpc(accounts_dir=args.accounts_dir, **kwargs) as rpc:
+    with Rpc(accounts_dir=args.accounts_dir) as rpc:
         deltachat = DeltaChat(rpc)
         core_version = (deltachat.get_system_info()).deltachat_core_version
         accounts = deltachat.get_all_accounts()
