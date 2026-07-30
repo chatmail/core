@@ -41,35 +41,33 @@ pub(crate) fn maybe_add_additional_relays(
 
 async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool) -> Result<bool> {
     let now = time();
-    let mut relay_added = false;
 
     let Ok(_lock) = context.background_task_mutex.try_lock() else {
         // Housekeeping or automatic relay management is already running in another thread, do nothing.
-        return Ok(relay_added);
+        return Ok(false);
     };
     let last_timestamp = context
         .get_config_i64(Config::LastAutomaticRelayManagement)
         .await?;
-    if last_timestamp > now.saturating_sub(AUTOMATIC_ADDITION_DEBOUNCE_SECONDS) {
-        if last_timestamp > now {
-            // The timestamp is in the future. Cap it to the current time.
-            context
-                .set_config_internal(Config::LastAutomaticRelayManagement, Some(&now.to_string()))
-                .await?;
-        }
-        return Ok(relay_added);
+    if last_timestamp > now {
+        warn!(
+            context,
+            "Clock ran backwards, unclear if automatic relay management should run. Will run it anyways."
+        );
+    } else if last_timestamp > now.saturating_sub(AUTOMATIC_ADDITION_DEBOUNCE_SECONDS) {
+        return Ok(false);
     }
     if !context
         .get_config_bool(Config::AutomaticRelayManagement)
         .await?
     {
-        return Ok(relay_added);
+        return Ok(false);
     }
     if context
         .get_config_bool(Config::AutomaticRelayManagementFinished)
         .await?
     {
-        return Ok(relay_added);
+        return Ok(false);
     }
     // Set the config at the beginning to avoid endless loops.
     // Race conditions are not a concern because we locked the mutex.
@@ -77,6 +75,7 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
         .set_config_internal(Config::LastAutomaticRelayManagement, Some(&now.to_string()))
         .await?;
 
+    let mut relay_added = false;
     // Using `for` instead of `while` to prevent infinite loop
     for _ in 0..NUM_TRANSPORTS_TARGET {
         if context.count_transports().await? >= NUM_TRANSPORTS_TARGET {
@@ -90,7 +89,7 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
             return Ok(relay_added);
         }
 
-        // First, query all candidates that were not tried since `BACKOFF_PERIOD_FOR_NOT_WORKING_TRANSPORT` seconds.
+        // First, query all candidates that were not tried since `BACKOFF_PERIOD_FOR_NOT_WORKING_RELAY` seconds.
         // Hosts that are already used are excluded.
         let candidates = load_relay_candidates(context, now).await?;
 
@@ -104,7 +103,7 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
 
         info!(
             context,
-            "Trying to automatically add relay {host} (there were {} candidates)",
+            "Trying to automatically add relay {host} (there were {} candidates).",
             candidates.len(),
         );
 
@@ -113,7 +112,7 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
         if let Err(e) = res {
             warn!(
                 context,
-                "Failed to automatically add a relay {host}: {e:?}."
+                "Failed to automatically add a relay {host}: {e:#}."
             );
             context
                 .sql
@@ -123,7 +122,7 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
                 )
                 .await?;
         } else {
-            info!(context, "Successfully added relay {host}");
+            info!(context, "Successfully automatically added relay {host}.");
             relay_added = true;
         }
     }
@@ -136,13 +135,18 @@ async fn load_relay_candidates(context: &Context, now: i64) -> Result<Vec<String
     let candidates: Vec<String> = context
         .sql
         .query_map_vec(
-            "SELECT host FROM relay_candidates WHERE last_tried<?
+            // This also selects candidates which have last_tried in the future,
+            // essentially treating them as never tried,
+            // so if some timestamp far in the future is accidentally stored,
+            // we are not stuck never trying the candidate.
+            // After trying the candidate, last_tried will be corrected to the current time.
+            "SELECT host FROM relay_candidates WHERE (last_tried<? OR last_tried>?)
                 AND NOT EXISTS (
                     SELECT 1
                     FROM transports
                     WHERE substr(addr, instr(addr, '@') + 1) = host
                 )",
-            (cutoff_timestamp,),
+            (cutoff_timestamp, now),
             |row| Ok(row.get::<_, String>(0)?),
         )
         .await?;
