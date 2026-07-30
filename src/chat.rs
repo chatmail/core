@@ -13,7 +13,6 @@ use chrono::TimeZone;
 use deltachat_contact_tools::{ContactAddress, sanitize_bidi_characters, sanitize_single_line};
 use humansize::{BINARY, format_size};
 use mail_builder::mime::MimePart;
-use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
@@ -747,6 +746,18 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
             )
             .await?;
         Ok(msg_id)
+    }
+
+    fn has_draft_with_id(&self, conn: &rusqlite::Connection, draft_id: &MsgId) -> Result<bool> {
+        let count: u32 = conn.query_row(
+            "SELECT
+                COUNT(*)
+            FROM msgs
+            WHERE id=? AND chat_id=? AND state=?",
+            (draft_id, self, MessageState::OutDraft),
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
     }
 
     /// Returns draft message, if there is one.
@@ -1938,36 +1949,16 @@ impl Chat {
 
         // add message to the database
         let inserted_msg_id = context.sql.transaction(|transaction| {
-            fn get_existing_draft(
-                transaction: &rusqlite::Transaction<'_>,
-                chat_id: ChatId,
-            ) -> Result<Option<MsgId>> {
-                let draft_msg_id = transaction
-                    .query_row(
-                        "SELECT
-                            m.id AS id
-                        FROM msgs m
-                        WHERE chat_id=? AND state=?
-                        LIMIT 1",
-                        (chat_id, MessageState::OutDraft),
-                        |row| {
-                            let draft_msg_id: MsgId = row.get("id")?;
-                            Ok(draft_msg_id)
-                        },
-                    )
-                    .optional()?;
-                Ok(draft_msg_id)
-            }
-
             if update_existing_draft == UseExistingDraftPolicy::Reuse {
-                // Maybe we could try to somehow gracefully recover from these,
-                // but better safe than sorry.
-                let Some(existing_draft_id) = get_existing_draft(transaction, self.id)? else {
-                    bail!("wanted to prepare existing draft for sending in chat {0}, but no draft is present (it might have been sent or deleted)", self.id);
-                };
                 // This check also covers the `msg.id.is_special()` case.
-                if existing_draft_id != msg.id {
-                    bail!("wanted to prepare existing draft for sending in chat {0}, but its ID {existing_draft_id} is different from the specified message ID {1}", self.id, msg.id);
+                // Maybe we could try to somehow gracefully recover from this,
+                // but better safe than sorry.
+                if !self.id.has_draft_with_id(transaction, &msg.id)? {
+                    bail!(
+                        "wanted to prepare existing draft for sending in chat {0}, but no draft with ID {1} is present (it might have been sent or deleted)",
+                        self.id,
+                        msg.id
+                    );
                 }
 
                 transaction.execute(
