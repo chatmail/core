@@ -831,39 +831,35 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
         msg.state = MessageState::OutDraft;
         msg.chat_id = self;
 
-        // if possible, replace existing draft and keep id
-        if !msg.id.is_special()
-            && let Some(old_draft) = self.get_draft(context).await?
-            && old_draft.id == msg.id
-            && old_draft.chat_id == self
-            && old_draft.state == MessageState::OutDraft
-        {
-            let affected_rows = context
-                        .sql.execute(
-                                "UPDATE msgs
-                                SET timestamp=?1,type=?2,txt=?3,txt_normalized=?4,param=?5,mime_in_reply_to=?6
-                                WHERE id=?7
-                                AND (type <> ?2 
-                                    OR txt <> ?3 
-                                    OR txt_normalized <> ?4
-                                    OR param <> ?5
-                                    OR mime_in_reply_to <> ?6);",
-                                (
-                                    time(),
-                                    msg.viewtype,
-                                    &msg.text,
-                                    normalize_text(&msg.text),
-                                    msg.param.to_string(),
-                                    msg.in_reply_to.as_deref().unwrap_or_default(),
-                                    msg.id,
-                                ),
-                            ).await?;
-            return Ok(affected_rows > 0);
-        }
-
-        let row_id = context
+        let (inserted_draft_id, changed) = context
             .sql
             .transaction(|transaction| {
+                // if possible, replace existing draft and keep id
+                if !msg.id.is_special() && self.has_draft_with_id(transaction, &msg.id)? {
+                    let affected_rows = transaction.execute(
+                        "UPDATE msgs
+                        SET timestamp=?1,type=?2,txt=?3,txt_normalized=?4,param=?5,mime_in_reply_to=?6
+                        WHERE id=?7
+                        AND (type <> ?2 
+                            OR txt <> ?3 
+                            OR txt_normalized <> ?4
+                            OR param <> ?5
+                            OR mime_in_reply_to <> ?6);",
+                        (
+                            time(),
+                            msg.viewtype,
+                            &msg.text,
+                            normalize_text(&msg.text),
+                            msg.param.to_string(),
+                            msg.in_reply_to.as_deref().unwrap_or_default(),
+                            msg.id,
+                        ),
+                    )?;
+                    let inserted_draft_id = None;
+                    let changed = affected_rows > 0;
+                    return Ok((inserted_draft_id, changed));
+                }
+
                 // Delete existing draft if it exists.
                 transaction.execute(
                     "DELETE FROM msgs WHERE chat_id=? AND state=?",
@@ -900,11 +896,14 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
                     ),
                 )?;
 
-                Ok(transaction.last_insert_rowid())
+                let changed = true;
+                Ok((Some(transaction.last_insert_rowid()), changed))
             })
             .await?;
-        msg.id = MsgId::new(row_id.try_into()?);
-        Ok(true)
+        if let Some(inserted_draft_id) = inserted_draft_id {
+            msg.id = MsgId::new(inserted_draft_id.try_into()?);
+        }
+        Ok(changed)
     }
 
     /// Returns number of messages in a chat.
