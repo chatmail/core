@@ -726,9 +726,9 @@ impl From<deltachat::ephemeral::Timer> for EphemeralTimer {
     fn from(value: deltachat::ephemeral::Timer) -> Self {
         match value {
             deltachat::ephemeral::Timer::Disabled => EphemeralTimer::Disabled,
-            deltachat::ephemeral::Timer::Enabled { duration } => {
-                EphemeralTimer::Enabled { duration }
-            }
+            deltachat::ephemeral::Timer::Enabled { duration } => EphemeralTimer::Enabled {
+                duration: duration.get(),
+            },
         }
     }
 }

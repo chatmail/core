@@ -63,7 +63,7 @@
 
 use std::collections::BTreeSet;
 use std::fmt;
-use std::num::ParseIntError;
+use std::num::{NonZero, ParseIntError};
 use std::str::FromStr;
 use std::time::{Duration, UNIX_EPOCH};
 
@@ -96,9 +96,7 @@ pub enum Timer {
     /// Timer is enabled.
     Enabled {
         /// Timer duration in seconds.
-        ///
-        /// The value cannot be 0.
-        duration: u32,
+        duration: NonZero<u32>,
     },
 }
 
@@ -109,7 +107,7 @@ impl Timer {
     pub fn to_u32(self) -> u32 {
         match self {
             Self::Disabled => 0,
-            Self::Enabled { duration } => duration,
+            Self::Enabled { duration } => duration.get(),
         }
     }
 
@@ -117,10 +115,10 @@ impl Timer {
     ///
     /// 0 value is treated as disabled timer.
     pub fn from_u32(duration: u32) -> Self {
-        if duration == 0 {
-            Self::Disabled
-        } else {
+        if let Some(duration) = NonZero::<u32>::new(duration) {
             Self::Enabled { duration }
+        } else {
+            Self::Disabled
         }
     }
 }
@@ -143,7 +141,7 @@ impl rusqlite::types::ToSql for Timer {
     fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
         let val = rusqlite::types::Value::Integer(match self {
             Self::Disabled => 0,
-            Self::Enabled { duration } => i64::from(*duration),
+            Self::Enabled { duration } => i64::from(duration.get()),
         });
         let out = rusqlite::types::ToSqlOutput::Owned(val);
         Ok(out)
@@ -152,15 +150,7 @@ impl rusqlite::types::ToSql for Timer {
 
 impl rusqlite::types::FromSql for Timer {
     fn column_result(value: rusqlite::types::ValueRef) -> rusqlite::types::FromSqlResult<Self> {
-        i64::column_result(value).and_then(|value| {
-            if value == 0 {
-                Ok(Self::Disabled)
-            } else if let Ok(duration) = u32::try_from(value) {
-                Ok(Self::Enabled { duration })
-            } else {
-                Err(rusqlite::types::FromSqlError::OutOfRange(value))
-            }
-        })
+        u32::column_result(value).map(Self::from_u32)
     }
 }
 
@@ -239,47 +229,53 @@ pub(crate) async fn stock_ephemeral_timer_changed(
 ) -> String {
     match timer {
         Timer::Disabled => stock_str::msg_ephemeral_timer_disabled(context, from_id).await,
-        Timer::Enabled { duration } => match duration {
-            0..=60 => {
-                stock_str::msg_ephemeral_timer_enabled(context, &timer.to_string(), from_id).await
+        Timer::Enabled { duration } => {
+            let duration = duration.get();
+            match duration {
+                1..=60 => {
+                    stock_str::msg_ephemeral_timer_enabled(context, &timer.to_string(), from_id)
+                        .await
+                }
+                61..=3599 => {
+                    stock_str::msg_ephemeral_timer_minutes(
+                        context,
+                        &format!("{}", (f64::from(duration) / 6.0).round() / 10.0),
+                        from_id,
+                    )
+                    .await
+                }
+                3600 => stock_str::msg_ephemeral_timer_hour(context, from_id).await,
+                3601..=86399 => {
+                    stock_str::msg_ephemeral_timer_hours(
+                        context,
+                        &format!("{}", (f64::from(duration) / 360.0).round() / 10.0),
+                        from_id,
+                    )
+                    .await
+                }
+                86400 => stock_str::msg_ephemeral_timer_day(context, from_id).await,
+                86401..=604_799 => {
+                    stock_str::msg_ephemeral_timer_days(
+                        context,
+                        &format!("{}", (f64::from(duration) / 8640.0).round() / 10.0),
+                        from_id,
+                    )
+                    .await
+                }
+                604_800 => stock_str::msg_ephemeral_timer_week(context, from_id).await,
+                31_536_000..=31_708_800 => {
+                    stock_str::msg_ephemeral_timer_year(context, from_id).await
+                }
+                _ => {
+                    stock_str::msg_ephemeral_timer_weeks(
+                        context,
+                        &format!("{}", (f64::from(duration) / 60480.0).round() / 10.0),
+                        from_id,
+                    )
+                    .await
+                }
             }
-            61..=3599 => {
-                stock_str::msg_ephemeral_timer_minutes(
-                    context,
-                    &format!("{}", (f64::from(duration) / 6.0).round() / 10.0),
-                    from_id,
-                )
-                .await
-            }
-            3600 => stock_str::msg_ephemeral_timer_hour(context, from_id).await,
-            3601..=86399 => {
-                stock_str::msg_ephemeral_timer_hours(
-                    context,
-                    &format!("{}", (f64::from(duration) / 360.0).round() / 10.0),
-                    from_id,
-                )
-                .await
-            }
-            86400 => stock_str::msg_ephemeral_timer_day(context, from_id).await,
-            86401..=604_799 => {
-                stock_str::msg_ephemeral_timer_days(
-                    context,
-                    &format!("{}", (f64::from(duration) / 8640.0).round() / 10.0),
-                    from_id,
-                )
-                .await
-            }
-            604_800 => stock_str::msg_ephemeral_timer_week(context, from_id).await,
-            31_536_000..=31_708_800 => stock_str::msg_ephemeral_timer_year(context, from_id).await,
-            _ => {
-                stock_str::msg_ephemeral_timer_weeks(
-                    context,
-                    &format!("{}", (f64::from(duration) / 60480.0).round() / 10.0),
-                    from_id,
-                )
-                .await
-            }
-        },
+        }
     }
 }
 
@@ -291,8 +287,8 @@ impl MsgId {
             .query_get_value("SELECT ephemeral_timer FROM msgs WHERE id=?", (self,))
             .await?
         {
-            None | Some(0) => Timer::Disabled,
-            Some(duration) => Timer::Enabled { duration },
+            None => Timer::Disabled,
+            Some(duration) => Timer::from_u32(duration),
         };
         Ok(res)
     }
@@ -300,7 +296,7 @@ impl MsgId {
     /// Starts ephemeral message timer for the message if it is not started yet.
     pub(crate) async fn start_ephemeral_timer(self, context: &Context) -> Result<()> {
         if let Timer::Enabled { duration } = self.ephemeral_timer(context).await? {
-            let ephemeral_timestamp = time().saturating_add(duration.into());
+            let ephemeral_timestamp = time().saturating_add(duration.get().into());
 
             context
                 .sql
