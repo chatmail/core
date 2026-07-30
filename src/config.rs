@@ -792,13 +792,12 @@ impl Context {
                                     "Failed to update add_timestamp for the new primary transport",
                                 )?;
 
-                            // Clean up SMTP and IMAP APPEND queue.
+                            // Clean up SMTP queue.
                             //
                             // The messages in the queue have a different
                             // From address so we cannot send them over
                             // the new SMTP transport.
                             transaction.execute("DELETE FROM smtp", ())?;
-                            transaction.execute("DELETE FROM imap_send", ())?;
 
                             Ok(())
                         })
