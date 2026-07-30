@@ -107,6 +107,13 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
             candidates.len(),
         );
 
+        context
+            .sql
+            .execute(
+                "UPDATE relay_candidates SET last_tried=? WHERE host=?",
+                (now, host),
+            )
+            .await?;
         let param = login_param_from_host(host);
         let res = crate::configure::configure(context, &param, skip_network).await;
         if let Err(e) = res {
@@ -114,13 +121,6 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
                 context,
                 "Failed to automatically add a relay {host}: {e:#}."
             );
-            context
-                .sql
-                .execute(
-                    "UPDATE relay_candidates SET last_tried=? WHERE host=?",
-                    (now, host),
-                )
-                .await?;
         } else {
             info!(context, "Successfully automatically added relay {host}.");
             relay_added = true;
