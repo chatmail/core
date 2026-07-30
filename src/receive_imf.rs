@@ -2169,9 +2169,9 @@ async fn add_parts(
         } else {
             match ephemeral_timer {
                 EphemeralTimer::Disabled => 0,
-                EphemeralTimer::Enabled { duration } => {
-                    mime_parser.timestamp_rcvd.saturating_add(duration.into())
-                }
+                EphemeralTimer::Enabled { duration } => mime_parser
+                    .timestamp_rcvd
+                    .saturating_add(duration.get().into()),
             }
         };
 

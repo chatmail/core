@@ -1,4 +1,6 @@
+use std::num::NonZero;
 use std::sync::Arc;
+use std::time::Duration;
 
 use super::*;
 use crate::Event;
@@ -21,7 +23,6 @@ use crate::test_utils::{
 };
 use crate::tools::SystemTime;
 use pretty_assertions::assert_eq;
-use std::time::Duration;
 use strum::IntoEnumIterator;
 use tokio::fs;
 
@@ -5417,7 +5418,12 @@ async fn test_info_contact_id() -> Result<()> {
     .await?;
 
     alice_chat_id
-        .set_ephemeral_timer(alice, Timer::Enabled { duration: 60 })
+        .set_ephemeral_timer(
+            alice,
+            Timer::Enabled {
+                duration: NonZero::new(60).unwrap(),
+            },
+        )
         .await?;
     pop_recv_and_check(
         alice,
