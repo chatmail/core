@@ -586,6 +586,8 @@ pub(crate) async fn configure(
             }
         }
 
+        // Drop the imap connection explicitly
+        // to make sure that it's not forgotten in a future refactoring
         drop(imap_session);
         drop(imap);
     }
