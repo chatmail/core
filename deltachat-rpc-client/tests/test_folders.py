@@ -68,13 +68,17 @@ def test_markseen_message_and_mdn(acfactory, direct_imap):
     msg = ac2.wait_for_incoming_msg()
     msg.mark_seen()
 
-    rex = re.compile("Marked messages [0-9]+ in folder INBOX as seen.")
+    rex = re.compile("Marked messages ([0-9,:]+) in folder INBOX as seen.")
 
+    # Each profile flags two messages but the logged UID set
+    # covers a varying number of them, so just count UIDs mentioned.
+    # We are not processing UID ranges, here we just care for two UIDs.
     for ac in ac1, ac2:
-        while True:
+        uids = set()
+        while len(uids) < 2:
             event = ac.wait_for_event()
-            if event.kind == EventType.INFO and rex.search(event.msg):
-                break
+            if event.kind == EventType.INFO and (match := rex.search(event.msg)):
+                uids.update(re.split("[,:]", match.group(1)))
 
     ac1_direct_imap = direct_imap(ac1)
     ac2_direct_imap = direct_imap(ac2)
