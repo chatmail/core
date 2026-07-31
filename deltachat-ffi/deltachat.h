@@ -3559,16 +3559,6 @@ dc_lot_t*        dc_chatlist_get_summary2    (dc_context_t* context, uint32_t ch
 
 
 /**
- * Helper function to get the associated context object.
- *
- * @memberof dc_chatlist_t
- * @param chatlist The chatlist object to empty.
- * @return The context object associated with the chatlist. NULL if none or on errors.
- */
-dc_context_t*    dc_chatlist_get_context     (dc_chatlist_t* chatlist);
-
-
-/**
  * Get info summary for a chat, in JSON format.
  *
  * The returned JSON string has the following key/values:
