@@ -2177,20 +2177,32 @@ pub(crate) async fn rfc724_mid_exists_ex(
     Ok(res)
 }
 
-/// Returns `true` iff there is a message
-/// with the given `rfc724_mid`
-/// and a download state other than `DownloadState::Available`,
-/// i.e. it was already tried to download the message or it's sent locally.
-pub(crate) async fn rfc724_mid_download_tried(context: &Context, rfc724_mid: &str) -> Result<bool> {
+/// Returns `true` if the given `rfc724_mid` has nothing left to fetch from a server,
+/// i.e. it was already fetched or is an outgoing message.
+///
+/// For post-messages, this returns `true` if an attempt to fetch was made or is ongoing,
+/// even if this was not successful,
+/// because we don't want to automatically try fetching these messages over and over again
+/// (this function is not called when the user manually clicked "Download").
+pub(crate) async fn rfc724_mid_fetch_tried(context: &Context, rfc724_mid: &str) -> Result<bool> {
     let rfc724_mid = rfc724_mid.trim_start_matches('<').trim_end_matches('>');
     if rfc724_mid.is_empty() {
-        warn!(
-            context,
-            "Empty rfc724_mid passed to rfc724_mid_download_tried"
-        );
+        warn!(context, "Empty rfc724_mid passed to rfc724_mid_fetch_tried");
         return Ok(false);
     }
 
+    // Explanation of the SQL statement:
+    // - For messages that were not split into pre- and post-messages,
+    //   the SQL statement is equal to `rfc724_mid=?1`
+    //   because `download_state` is always `Done` and `pre_rfc724_mid is always an empty string.
+    // - For post-messages, we want to select them only if an attempt to fetch was made,
+    //   i.e. if `download_state!=Available`.
+    //   The Message-Id header of the post-message goes into the rfc724_mid column,
+    //   so that this is where we need to check for post-messages.
+    // - For pre-messages, the `pre_rfc724_mid` column is checked.
+    //   The pre-message is always immediately fully downloaded,
+    //   just as messages that were not split into pre- and post-messages,
+    //   so that we do not need to check the download state.
     let res = context
         .sql
         .exists(
