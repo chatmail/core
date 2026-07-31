@@ -194,13 +194,11 @@ pub unsafe extern "C" fn dc_context_is_open(context: *mut dc_context_t) -> libc:
 /// This function releases the memory of the `dc_context_t` structure.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn dc_context_unref(context: *mut dc_context_t) {
-    unsafe {
-        if context.is_null() {
-            eprintln!("ignoring careless call to dc_context_unref()");
-            return;
-        }
-        drop(Box::from_raw(context));
+    if context.is_null() {
+        eprintln!("ignoring careless call to dc_context_unref()");
+        return;
     }
+    drop(unsafe { Box::from_raw(context) });
 }
 
 #[unsafe(no_mangle)]
