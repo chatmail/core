@@ -1,5 +1,8 @@
 use std::cmp;
+use std::future::Future;
 use std::num::NonZeroUsize;
+use std::pin::Pin;
+use std::sync::atomic::Ordering;
 
 use anyhow::{Context as _, Error, Result, bail};
 use async_channel::{self as channel, Receiver, Sender};
@@ -411,6 +414,12 @@ async fn inbox_loop(
         .await;
 }
 
+/// Same as `context.restart_io_if_running()`, but `Box::pin`ed and with a `+ Send` bound
+/// to break the async type cycle with the IMAP loop it restarts.
+fn restart_io_if_running_boxed(context: Context) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    Box::pin(async move { context.restart_io_if_running().await })
+}
+
 async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) -> Result<Session> {
     let transport_id = session.transport_id();
 
@@ -495,6 +504,12 @@ async fn fetch_idle(ctx: &Context, connection: &mut Imap, mut session: Session) 
     download_msgs(ctx, &mut session)
         .await
         .context("download_msgs")?;
+
+    if ctx.restart_io_after_fetch.swap(false, Ordering::Relaxed) {
+        // Restarting IO cancels the IMAP loop.
+        // Therefore, we only restart when we're anyways about to go IDLE.
+        task::spawn(restart_io_if_running_boxed(ctx.clone()));
+    }
 
     connection.connectivity.set_idle(ctx);
 

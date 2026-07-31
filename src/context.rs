@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::ffi::OsString;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, OnceLock, Weak};
 use std::time::Duration;
 
@@ -258,6 +259,14 @@ pub struct InnerContext {
     /// This causes [`Context::wait_next_msgs`] to wake up.
     pub(crate) new_msgs_notify: Notify,
 
+    /// Whether IO should be restarted after the current fetch cycle completed.
+    ///
+    /// Set when a fetched transport sync message modified the transports.
+    /// Restarting from within the inbox loop would cancel it,
+    /// losing the remaining processing of the sync message
+    /// which is already stored and is never fetched again.
+    pub(crate) restart_io_after_fetch: AtomicBool,
+
     /// Server ID response if ID capability is supported
     /// and the server returned non-NIL on the inbox connection.
     /// <https://datatracker.ietf.org/doc/html/rfc2971>
@@ -486,6 +495,7 @@ impl Context {
             ratelimit: RwLock::new(Ratelimit::new(Duration::new(3, 0), 3.0)), // Allow at least 1 message every second + a burst of 3.
             quota: RwLock::new(BTreeMap::new()),
             new_msgs_notify,
+            restart_io_after_fetch: AtomicBool::new(false),
             server_id: RwLock::new(None),
             metadata: RwLock::new(BTreeMap::new()),
             creation_time: tools::Time::now(),
