@@ -150,12 +150,9 @@ def test_transport_synchronization(acfactory, log) -> None:
     log.section("ac1 changes the primary transport")
     ac1.set_config("configured_addr", transport3["addr"])
 
-    # One event for updated `add_timestamp` of the new primary transport,
-    # one event for the `configured_addr` update.
-    ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
     ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
     [transport1, transport3] = ac1_clone.list_transports()
-    assert ac1_clone.get_config("configured_addr") == addr3
+    assert ac1_clone.get_config("configured_addr") == transport1["addr"]
 
     log.section("ac1 removes the first transport")
     ac1.delete_transport(transport1["addr"])
@@ -174,7 +171,7 @@ def test_transport_synchronization(acfactory, log) -> None:
 
 
 def test_transport_sync_new_as_primary(acfactory, log) -> None:
-    """Test synchronization of new transport as primary between devices."""
+    """Test that a transport promoted on one device is usable on other devices."""
     ac1, bob = acfactory.get_online_accounts(2)
     ac1_clone = ac1.clone()
     ac1_clone.bring_online()
@@ -193,10 +190,9 @@ def test_transport_sync_new_as_primary(acfactory, log) -> None:
     ac1.set_config("configured_addr", transport2["addr"])
 
     ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
-    ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
-    assert ac1_clone.get_config("configured_addr") == transport2["addr"]
+    assert ac1_clone.get_config("configured_addr") == transport1["addr"]
 
-    log.section("ac1_clone receives a message via the new primary transport")
+    log.section("ac1_clone receives a message via the new transport")
     ac1_chat = ac1.create_chat(bob)
     ac1_chat.send_text("Hello!")
     bob_chat_id = bob.wait_for_incoming_msg_event().chat_id

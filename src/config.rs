@@ -192,7 +192,9 @@ pub enum Config {
     #[strum(props(default = "0"))]
     DeleteDeviceAfter,
 
-    /// The primary email address.
+    /// The primary email address, used for sending and background fetch.
+    ///
+    /// Device-local, other devices keep their own primary transport.
     ConfiguredAddr,
 
     /// Deprecated(2026-04).
