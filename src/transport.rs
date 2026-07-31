@@ -636,20 +636,16 @@ pub(crate) async fn sync_transports(
         modified |= save_transport(context, entered, configured, *timestamp, *is_published).await?;
     }
 
-    context
+    let reelected = context
         .sql
         .transaction(|transaction| {
-            let configured_addr = transaction.query_row(
-                "SELECT value FROM config WHERE keyname='configured_addr'",
-                (),
-                |row| {
-                    let addr: String = row.get(0)?;
-                    Ok(addr)
-                },
-            )?;
             for RemovedTransportData { addr, timestamp } in removed_transports {
-                if *addr == configured_addr {
-                    continue;
+                let count: i64 =
+                    transaction
+                        .query_row("SELECT COUNT(*) FROM transports", (), |row| row.get(0))?;
+                if count <= 1 {
+                    // Removing the last transport would unconfigure the account.
+                    break;
                 }
                 modified |= transaction.execute(
                     "DELETE FROM transports
@@ -665,9 +661,16 @@ pub(crate) async fn sync_transports(
                     (addr, timestamp),
                 )?;
             }
-            Ok(())
+
+            maybe_reelect_local_primary(transaction)
         })
         .await?;
+
+    if let Some(new_addr) = reelected {
+        info!(context, "Re-elected primary transport {new_addr:?}.");
+        context.sql.uncache_raw_config("configured_addr").await;
+        modified = true;
+    }
 
     if modified {
         context.self_public_key.lock().await.take();
@@ -677,6 +680,48 @@ pub(crate) async fn sync_transports(
         context.emit_event(EventType::TransportsModified);
     }
     Ok(())
+}
+
+/// Elects a new primary transport for the device if the current one
+/// is not published or vanished, and there is a better candidate.
+///
+/// Returns the newly elected address if the primary transport changed.
+fn maybe_reelect_local_primary(transaction: &mut rusqlite::Transaction) -> Result<Option<String>> {
+    let configured_addr: String = transaction.query_row(
+        "SELECT value FROM config WHERE keyname='configured_addr'",
+        (),
+        |row| row.get(0),
+    )?;
+    // Newest transports first, they are the most likely to work.
+    let transports: Vec<(String, bool)> = transaction
+        .prepare(
+            "SELECT addr, is_published FROM transports
+             ORDER BY add_timestamp DESC, id DESC",
+        )?
+        .query_map((), |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<rusqlite::Result<_>>()?;
+
+    // Nothing to do if the current primary is still there and published.
+    if transports
+        .iter()
+        .any(|(addr, is_published)| *is_published && *addr == configured_addr)
+    {
+        return Ok(None);
+    }
+    // Take an unpublished transport only if nothing is published.
+    let published = transports.iter().find(|(_, is_published)| *is_published);
+    let Some((new_addr, _)) = published.or_else(|| transports.first()) else {
+        return Ok(None);
+    };
+    if *new_addr == configured_addr {
+        // The primary transport may be the only remaining one.
+        return Ok(None);
+    }
+    transaction.execute(
+        "UPDATE config SET value=? WHERE keyname='configured_addr'",
+        (new_addr,),
+    )?;
+    Ok(Some(new_addr.clone()))
 }
 
 /// Adds transport entry to the `transports` table with empty configuration.

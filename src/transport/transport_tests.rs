@@ -115,6 +115,18 @@ fn dummy_configured_login_param(addr: &str) -> ConfiguredLoginParam {
     }
 }
 
+fn dummy_transport_data(addr: &str, is_published: bool) -> TransportData {
+    TransportData {
+        configured: dummy_configured_login_param(addr).into(),
+        entered: EnteredLoginParam {
+            addr: addr.to_string(),
+            ..Default::default()
+        },
+        timestamp: time(),
+        is_published,
+    }
+}
+
 async fn add_dummy_transport(t: &TestContext, addr: &str) -> Result<()> {
     dummy_configured_login_param(addr)
         .save_to_transports_table(
@@ -199,7 +211,11 @@ async fn test_is_published_flag() -> Result<()> {
 
     SystemTime::shift(Duration::from_secs(2));
 
-    promote_transport_and_check_success(alice, alice2, "alice@otherprovider.com").await?;
+    promote_transport_and_sync(alice, alice2, "alice@otherprovider.com").await?;
+
+    alice2
+        .set_config(Config::ConfiguredAddr, Some("alice@otherprovider.com"))
+        .await?;
 
     check_addrs(
         alice,
@@ -216,8 +232,8 @@ async fn test_is_published_flag() -> Result<()> {
     Ok(())
 }
 
-/// Tests that changing the primary transport propagates to other devices
-/// even if the promoted transport was added within the same second.
+/// Tests that promoting a transport bumps its `add_timestamp` on other devices
+/// even if it was added within the same second.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_promote_transport_same_second() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -232,7 +248,7 @@ async fn test_promote_transport_same_second() -> Result<()> {
     send_sync_transports(alice).await?;
     sync_and_check_recipients(alice, alice2, "alice@otherprovider.com alice@example.org").await;
 
-    promote_transport_and_check_success(alice, alice2, "alice@otherprovider.com").await
+    promote_transport_and_sync(alice, alice2, "alice@otherprovider.com").await
 }
 
 /// Tests that `sync_transports()` requests an IO restart
@@ -241,15 +257,7 @@ async fn test_promote_transport_same_second() -> Result<()> {
 async fn test_sync_transports_requests_io_restart() -> Result<()> {
     let alice = &TestContext::new_alice().await;
 
-    let data = TransportData {
-        configured: dummy_configured_login_param("alice@otherprovider.com").into(),
-        entered: EnteredLoginParam {
-            addr: "alice@otherprovider.com".to_string(),
-            ..Default::default()
-        },
-        timestamp: time(),
-        is_published: true,
-    };
+    let data = dummy_transport_data("alice@otherprovider.com", true);
     let data = std::slice::from_ref(&data);
     sync_transports(alice, data, &[]).await?;
     assert!(alice.restart_io_after_fetch.swap(false, Ordering::Relaxed));
@@ -261,21 +269,23 @@ async fn test_sync_transports_requests_io_restart() -> Result<()> {
     Ok(())
 }
 
-/// Promotes `addr` to primary on `alice` and checks the change syncs to `alice2`.
-async fn promote_transport_and_check_success(
+/// Promotes `addr` on `alice` and syncs the transport update to `alice2`,
+/// whose own primary transport must stay unchanged.
+async fn promote_transport_and_sync(
     alice: &TestContext,
     alice2: &TestContext,
     addr: &str,
 ) -> Result<()> {
     let old_timestamp = add_timestamp(alice2, addr).await;
+    let alice2_primary = alice2.get_config(Config::ConfiguredAddr).await?;
     alice.set_config(Config::ConfiguredAddr, Some(addr)).await?;
     assert!(add_timestamp(alice, addr).await > old_timestamp);
 
     alice.send_sync_msg().await?.unwrap();
     let sync_msg = alice.pop_sent_msg().await;
     assert_eq!(sync_msg.recipients, format!("alice@example.org {addr}"));
-    // Other devices switch their primary transport
-    // based on the From address of the sync message.
+    // The sync message comes from the new primary,
+    // which must not make `alice2` adopt it as its own primary.
     assert!(sync_msg.payload.contains(&format!("From: <{addr}>")));
     alice2.recv_msg_trash(&sync_msg).await;
 
@@ -283,8 +293,8 @@ async fn promote_transport_and_check_success(
     // other devices ignore the change otherwise.
     assert!(add_timestamp(alice2, addr).await > old_timestamp);
     assert_eq!(
-        alice2.get_config(Config::ConfiguredAddr).await?.as_deref(),
-        Some(addr)
+        alice2.get_config(Config::ConfiguredAddr).await?,
+        alice2_primary
     );
     Ok(())
 }
@@ -295,6 +305,71 @@ async fn add_timestamp(t: &TestContext, addr: &str) -> i64 {
         .await
         .unwrap()
         .unwrap()
+}
+
+/// Tests that the local primary transport is re-elected
+/// if a synced change unpublished or removed it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_reelect_local_primary() -> Result<()> {
+    let alice = &TestContext::new_alice().await;
+    add_dummy_transport(alice, "alice@otherprovider.com").await?;
+
+    // Another device unpublished the primary transport.
+    let unpublished = dummy_transport_data("alice@example.org", false);
+    sync_transports(alice, std::slice::from_ref(&unpublished), &[]).await?;
+    assert_eq!(
+        alice.get_config(Config::ConfiguredAddr).await?.as_deref(),
+        Some("alice@otherprovider.com")
+    );
+
+    // Another device removed the new primary transport.
+    let removed = RemovedTransportData {
+        addr: "alice@otherprovider.com".to_string(),
+        timestamp: time(),
+    };
+    sync_transports(alice, &[], std::slice::from_ref(&removed)).await?;
+    assert_eq!(
+        alice.get_config(Config::ConfiguredAddr).await?.as_deref(),
+        Some("alice@example.org")
+    );
+    Ok(())
+}
+
+/// Tests which transport is elected as the local primary one.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_maybe_reelect_local_primary() -> Result<()> {
+    let t = &TestContext::new_alice().await;
+
+    // The only transport is kept even if it is unpublished.
+    t.sql
+        .execute("UPDATE transports SET is_published=0", ())
+        .await?;
+    assert_eq!(t.sql.transaction(maybe_reelect_local_primary).await?, None);
+
+    // A published primary transport is kept even if newer transports exist.
+    t.sql
+        .execute("UPDATE transports SET is_published=1", ())
+        .await?;
+    add_dummy_transport(t, "alice@one.com").await?;
+    assert_eq!(t.sql.transaction(maybe_reelect_local_primary).await?, None);
+
+    // The most recently added published transport is elected.
+    SystemTime::shift(Duration::from_secs(2));
+    add_dummy_transport(t, "alice@two.com").await?;
+    t.sql
+        .execute(
+            "UPDATE transports SET is_published=0 WHERE addr=?",
+            ("alice@example.org",),
+        )
+        .await?;
+    assert_eq!(
+        t.sql
+            .transaction(maybe_reelect_local_primary)
+            .await?
+            .as_deref(),
+        Some("alice@two.com")
+    );
+    Ok(())
 }
 
 struct Addresses {
