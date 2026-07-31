@@ -226,6 +226,10 @@ class EventThread(threading.Thread):
 
     def __init__(self, account: Account) -> None:
         self.account = account
+        self.event_emitter = ffi.gc(
+            lib.dc_get_event_emitter(self.account._dc_context),
+            lib.dc_event_emitter_unref,
+        )
         super(EventThread, self).__init__(name="events")
         self.daemon = True
         self._marked_for_shutdown = False
@@ -250,13 +254,9 @@ class EventThread(threading.Thread):
     def run(self) -> None:
         """get and run events until shutdown."""
         with self.log_execution("EVENT THREAD"):
-            event_emitter = ffi.gc(
-                lib.dc_get_event_emitter(self.account._dc_context),
-                lib.dc_event_emitter_unref,
-            )
             while not self._marked_for_shutdown:
                 with self.swallow_and_log_exception("Unexpected error in event thread"):
-                    event = lib.dc_get_next_event(event_emitter)
+                    event = lib.dc_get_next_event(self.event_emitter)
                     if event == ffi.NULL or self._marked_for_shutdown:
                         break
                     self._process_event(event)
