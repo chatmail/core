@@ -84,15 +84,19 @@ impl MsgId {
         let result = context
             .sql
             .query_row_optional(
-                "SELECT m.state, mdns.msg_id
-                  FROM msgs m LEFT JOIN msgs_mdns mdns ON mdns.msg_id=m.id
-                  WHERE id=?
-                  LIMIT 1",
+                "
+SELECT m.state, mdns.msg_id, c.type
+FROM msgs m
+LEFT JOIN msgs_mdns mdns ON mdns.msg_id=m.id
+LEFT JOIN chats c ON c.id=m.chat_id
+WHERE m.id=?
+LIMIT 1",
                 (self,),
                 |row| {
                     let state: MessageState = row.get(0)?;
                     let mdn_msg_id: Option<MsgId> = row.get(1)?;
-                    Ok(state.with_mdns(mdn_msg_id.is_some()))
+                    let chat_type: Option<Chattype> = row.get(2)?;
+                    Ok(state.with_mdns(mdn_msg_id.is_some(), chat_type))
                 },
             )
             .await?
@@ -536,6 +540,7 @@ impl Message {
                     m.param AS param,
                     m.hidden AS hidden,
                     m.location_id AS location,
+                    c.type AS chat_type,
                     c.archived AS visibility,
                     c.blocked AS blocked
                  FROM msgs m
@@ -547,6 +552,7 @@ impl Message {
                 |row| {
                     let state: MessageState = row.get("state")?;
                     let mdn_msg_id: Option<MsgId> = row.get("mdn_msg_id")?;
+                    let chat_type: Option<Chattype> = row.get("chat_type")?;
                     let text = match row.get_ref("txt")? {
                         rusqlite::types::ValueRef::Text(buf) => {
                             match String::from_utf8(buf.to_vec()) {
@@ -582,7 +588,7 @@ impl Message {
                         ephemeral_timer: row.get("ephemeral_timer")?,
                         ephemeral_timestamp: row.get("ephemeral_timestamp")?,
                         viewtype: row.get("type").unwrap_or_default(),
-                        state: state.with_mdns(mdn_msg_id.is_some()),
+                        state: state.with_mdns(mdn_msg_id.is_some(), chat_type),
                         download_state: row.get("download_state")?,
                         error: Some(row.get::<_, String>("error")?)
                             .filter(|error| !error.is_empty()),
@@ -1485,11 +1491,17 @@ impl MessageState {
     }
 
     /// Returns adjusted message state if the message has MDNs.
-    pub(crate) fn with_mdns(self, has_mdns: bool) -> Self {
-        if self == MessageState::OutDelivered && has_mdns {
-            return MessageState::OutMdnRcvd;
+    pub(crate) fn with_mdns(self, has_mdns: bool, chat_type: Option<Chattype>) -> Self {
+        if !has_mdns {
+            return self;
         }
-        self
+        match self {
+            MessageState::OutFailed if chat_type == Some(Chattype::Single) => {
+                MessageState::OutMdnRcvd
+            }
+            MessageState::OutDelivered => MessageState::OutMdnRcvd,
+            _ => self,
+        }
     }
 }
 
