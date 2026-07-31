@@ -2874,18 +2874,6 @@ pub unsafe extern "C" fn dc_chatlist_get_summary2(
     Box::into_raw(Box::new(summary.into()))
 }
 
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn dc_chatlist_get_context(
-    chatlist: *mut dc_chatlist_t,
-) -> *const dc_context_t {
-    if chatlist.is_null() {
-        eprintln!("ignoring careless call to dc_chatlist_get_context()");
-        return ptr::null_mut();
-    }
-    let ffi_list = unsafe { &*chatlist };
-    ffi_list.context
-}
-
 // dc_chat_t
 
 /// FFI struct for [dc_chat_t]
