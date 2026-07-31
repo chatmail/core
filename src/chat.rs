@@ -1780,7 +1780,8 @@ impl Chat {
     /// Adds missing values to the msg object,
     /// writes the record to the database.
     ///
-    /// If `update_existing_draft == `[`UseExistingDraftPolicy::Reuse`],
+    /// If `update_existing_draft == `[`UseExistingDraftPolicy::ReuseIfCan`],
+    /// and `msg.state == `[`MessageState::OutDraft`]
     /// the existing draft with ID == msg.id is reused.
     /// If no such draft exists, an error is returned.
     /// If `update_existing_draft == `[`UseExistingDraftPolicy::DontReuse`],
@@ -1954,6 +1955,7 @@ impl Chat {
             None => None,
         };
 
+        let original_msg_chat_id = msg.chat_id;
         msg.chat_id = self.id;
         msg.from_id = ContactId::SELF;
 
@@ -1961,8 +1963,11 @@ impl Chat {
         let (msg_id, inserted) = context
             .sql
             .transaction(|transaction| {
-                if update_existing_draft == UseExistingDraftPolicy::Reuse {
-                    // This check also covers the `msg.id.is_special()` case.
+                let reuse = update_existing_draft == UseExistingDraftPolicy::ReuseIfCan
+                    && msg.state == MessageState::OutDraft
+                    && !msg.id.is_special()
+                    && original_msg_chat_id == self.id;
+                if reuse {
                     // Maybe we could try to somehow gracefully recover from this,
                     // but better safe than sorry.
                     if !self.id.has_draft_with_id(transaction, &msg.id)? {
@@ -2761,16 +2766,8 @@ async fn prepare_send_msg(
         );
     }
 
-    // check current MessageState for drafts (to keep msg_id) ...
-    let update_existing_draft = if msg.state == MessageState::OutDraft {
+    if msg.state == MessageState::OutDraft {
         msg.hidden = false;
-        if !msg.id.is_special() && msg.chat_id == chat_id {
-            UseExistingDraftPolicy::Reuse
-        } else {
-            UseExistingDraftPolicy::DontReuse
-        }
-    } else {
-        UseExistingDraftPolicy::DontReuse
     };
 
     if msg.state == MessageState::Undefined
@@ -2783,6 +2780,9 @@ async fn prepare_send_msg(
             msg.update_param(context).await?;
         }
     }
+    // TODO crap, we set state here, but we moved
+    // a `msg.state == MessageState::OutDraft` comparison
+    // to inside of `prepare_msg_raw`...
     msg.state = MessageState::OutPending;
 
     msg.timestamp_sort = time();
@@ -2790,7 +2790,7 @@ async fn prepare_send_msg(
     if !msg.hidden {
         chat_id.unarchive_if_not_muted(context, msg.state).await?;
     }
-    chat.prepare_msg_raw(context, msg, update_existing_draft)
+    chat.prepare_msg_raw(context, msg, UseExistingDraftPolicy::ReuseIfCan)
         .await?;
 
     let row_ids = create_send_msg_jobs(context, msg)
@@ -2805,13 +2805,13 @@ async fn prepare_send_msg(
 #[derive(Debug, PartialEq)]
 enum UseExistingDraftPolicy {
     DontReuse,
-    Reuse,
+    ReuseIfCan,
 }
 impl From<UseExistingDraftPolicy> for bool {
     fn from(reuse: UseExistingDraftPolicy) -> bool {
         match reuse {
             UseExistingDraftPolicy::DontReuse => false,
-            UseExistingDraftPolicy::Reuse => true,
+            UseExistingDraftPolicy::ReuseIfCan => true,
         }
     }
 }
@@ -2819,7 +2819,7 @@ impl From<bool> for UseExistingDraftPolicy {
     fn from(reuse: bool) -> UseExistingDraftPolicy {
         match reuse {
             false => UseExistingDraftPolicy::DontReuse,
-            true => UseExistingDraftPolicy::Reuse,
+            true => UseExistingDraftPolicy::ReuseIfCan,
         }
     }
 }
