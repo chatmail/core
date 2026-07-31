@@ -1216,7 +1216,7 @@ pub unsafe extern "C" fn dc_set_draft(
     let msg = if msg.is_null() {
         None
     } else {
-        let ffi_msg: &mut MessageWrapper = unsafe { &mut *msg };
+        let ffi_msg = unsafe { &mut *msg };
         Some(&mut ffi_msg.message)
     };
 
@@ -1238,7 +1238,7 @@ pub unsafe extern "C" fn dc_add_device_msg(
     let msg = if msg.is_null() {
         None
     } else {
-        let ffi_msg: &mut MessageWrapper = unsafe { &mut *msg };
+        let ffi_msg = unsafe { &mut *msg };
         Some(&mut ffi_msg.message)
     };
 
@@ -1275,15 +1275,15 @@ pub unsafe extern "C" fn dc_get_draft(context: *mut dc_context_t, chat_id: u32) 
         eprintln!("ignoring careless call to dc_get_draft()");
         return ptr::null_mut(); // NULL explicitly defined as "no draft"
     }
-    let ctx = unsafe { &*context };
+    let context = unsafe { &*context };
 
-    match block_on(ChatId::new(chat_id).get_draft(ctx))
+    match block_on(ChatId::new(chat_id).get_draft(context))
         .with_context(|| format!("Failed to get draft for chat #{chat_id}"))
         .unwrap_or_default()
     {
         Some(draft) => {
             let ffi_msg = MessageWrapper {
-                context,
+                context: context.clone(),
                 message: draft,
             };
             Box::into_raw(Box::new(ffi_msg))
@@ -2027,11 +2027,11 @@ pub unsafe extern "C" fn dc_get_msg(context: *mut dc_context_t, msg_id: u32) -> 
         eprintln!("ignoring careless call to dc_get_msg()");
         return ptr::null_mut();
     }
-    let ctx = unsafe { &*context };
+    let context = unsafe { &*context };
 
-    let message = match block_on(message::Message::load_from_db(ctx, MsgId::new(msg_id)))
+    let message = match block_on(message::Message::load_from_db(context, MsgId::new(msg_id)))
         .with_context(|| format!("dc_get_msg could not rectieve msg_id {msg_id}"))
-        .log_err(ctx)
+        .log_err(context)
     {
         Ok(msg) => msg,
         Err(_) => {
@@ -2043,7 +2043,10 @@ pub unsafe extern "C" fn dc_get_msg(context: *mut dc_context_t, msg_id: u32) -> 
             }
         }
     };
-    let ffi_msg = MessageWrapper { context, message };
+    let ffi_msg = MessageWrapper {
+        context: context.clone(),
+        message,
+    };
     Box::into_raw(Box::new(ffi_msg))
 }
 
@@ -3141,7 +3144,7 @@ pub unsafe extern "C" fn dc_chat_get_info_json(
 /// context, but the Rust API does not, so the FFI layer needs to glue
 /// these together.
 pub struct MessageWrapper {
-    context: *const dc_context_t,
+    context: Context,
     message: message::Message,
 }
 
@@ -3159,7 +3162,7 @@ pub unsafe extern "C" fn dc_msg_new(
     let context = unsafe { &*context };
     let viewtype = from_prim(viewtype).expect(&format!("invalid viewtype = {viewtype}"));
     let msg = MessageWrapper {
-        context,
+        context: context.clone(),
         message: message::Message::new(viewtype),
     };
     Box::into_raw(Box::new(msg))
@@ -3296,10 +3299,9 @@ pub unsafe extern "C" fn dc_msg_get_file(msg: *mut dc_msg_t) -> *mut libc::c_cha
         return "".strdup();
     }
     let ffi_msg = unsafe { &*msg };
-    let ctx = unsafe { &*ffi_msg.context };
     ffi_msg
         .message
-        .get_file(ctx)
+        .get_file(&ffi_msg.context)
         .map(|p| p.to_string_lossy().strdup())
         .unwrap_or_else(|| "".strdup())
 }
@@ -3314,18 +3316,17 @@ pub unsafe extern "C" fn dc_msg_save_file(
         return 0;
     }
     let ffi_msg = unsafe { &*msg };
-    let ctx = unsafe { &*ffi_msg.context };
     let path = to_string_lossy(path);
     let r = block_on(
         ffi_msg
             .message
-            .save_file(ctx, &std::path::PathBuf::from(path)),
+            .save_file(&ffi_msg.context, &std::path::PathBuf::from(path)),
     );
     match r {
         Ok(()) => 1,
         Err(_) => {
             r.context("Failed to save file from message")
-                .log_err(ctx)
+                .log_err(&ffi_msg.context)
                 .unwrap_or_default();
             0
         }
@@ -3353,13 +3354,11 @@ pub unsafe extern "C" fn dc_msg_get_webxdc_blob(
         return ptr::null_mut();
     }
     let ffi_msg = unsafe { &*msg };
-    let ctx = unsafe { &*ffi_msg.context };
-    let blob = block_on(async move {
+    let blob = block_on(
         ffi_msg
             .message
-            .get_webxdc_blob(ctx, &to_string_lossy(filename))
-            .await
-    });
+            .get_webxdc_blob(&ffi_msg.context, &to_string_lossy(filename)),
+    );
     match blob {
         Ok(blob) => unsafe {
             *ret_bytes = blob.len();
@@ -3381,16 +3380,18 @@ pub unsafe extern "C" fn dc_msg_get_webxdc_info(msg: *mut dc_msg_t) -> *mut libc
         return "".strdup();
     }
     let ffi_msg = unsafe { &*msg };
-    let ctx = unsafe { &*ffi_msg.context };
 
-    let Ok(info) = block_on(ffi_msg.message.get_webxdc_info(ctx))
+    let Ok(info) = block_on(ffi_msg.message.get_webxdc_info(&ffi_msg.context))
         .context("dc_msg_get_webxdc_info() failed to get info")
-        .log_err(ctx)
+        .log_err(&ffi_msg.context)
     else {
         return "".strdup();
     };
     serde_json::to_string(&info)
-        .unwrap_or_log_default(ctx, "dc_msg_get_webxdc_info() failed to serialise to json")
+        .unwrap_or_log_default(
+            &ffi_msg.context,
+            "dc_msg_get_webxdc_info() failed to serialise to json",
+        )
         .strdup()
 }
 
@@ -3415,10 +3416,9 @@ pub unsafe extern "C" fn dc_msg_get_filebytes(msg: *mut dc_msg_t) -> u64 {
         return 0;
     }
     let ffi_msg = unsafe { &*msg };
-    let ctx = unsafe { &*ffi_msg.context };
 
-    block_on(ffi_msg.message.get_filebytes(ctx))
-        .unwrap_or_log_default(ctx, "Cannot get file size")
+    block_on(ffi_msg.message.get_filebytes(&ffi_msg.context))
+        .unwrap_or_log_default(&ffi_msg.context, "Cannot get file size")
         .unwrap_or_default()
 }
 
@@ -3508,11 +3508,10 @@ pub unsafe extern "C" fn dc_msg_get_summary(
         Some(&ffi_chat.chat)
     };
     let ffi_msg = unsafe { &mut *msg };
-    let ctx = unsafe { &*ffi_msg.context };
 
-    let summary = block_on(ffi_msg.message.get_summary(ctx, maybe_chat))
+    let summary = block_on(ffi_msg.message.get_summary(&ffi_msg.context, maybe_chat))
         .context("dc_msg_get_summary failed")
-        .log_err(ctx)
+        .log_err(&ffi_msg.context)
         .unwrap_or_default();
     Box::into_raw(Box::new(summary.into()))
 }
@@ -3527,11 +3526,10 @@ pub unsafe extern "C" fn dc_msg_get_summarytext(
         return "".strdup();
     }
     let ffi_msg = unsafe { &mut *msg };
-    let ctx = unsafe { &*ffi_msg.context };
 
-    let summary = block_on(ffi_msg.message.get_summary(ctx, None))
+    let summary = block_on(ffi_msg.message.get_summary(&ffi_msg.context, None))
         .context("dc_msg_get_summarytext failed")
-        .log_err(ctx)
+        .log_err(&ffi_msg.context)
         .unwrap_or_default();
     match usize::try_from(approx_characters) {
         Ok(chars) => summary.truncated_text(chars).strdup(),
@@ -3627,8 +3625,7 @@ pub unsafe extern "C" fn dc_msg_get_info_contact_id(msg: *mut dc_msg_t) -> u32 {
         return 0;
     }
     let ffi_msg = unsafe { &*msg };
-    let context = unsafe { &*ffi_msg.context };
-    block_on(ffi_msg.message.get_info_contact_id(context))
+    block_on(ffi_msg.message.get_info_contact_id(&ffi_msg.context))
         .unwrap_or_default()
         .map(|id| id.to_u32())
         .unwrap_or_default()
@@ -3712,18 +3709,17 @@ pub unsafe extern "C" fn dc_msg_set_file_and_deduplicate(
         return;
     }
     let ffi_msg = unsafe { &mut *msg };
-    let ctx = unsafe { &*ffi_msg.context };
 
     ffi_msg
         .message
         .set_file_and_deduplicate(
-            ctx,
+            &ffi_msg.context,
             unsafe { as_path(file) },
             to_opt_string_lossy(name).as_deref(),
             to_opt_string_lossy(filemime).as_deref(),
         )
         .context("Failed to set file")
-        .log_err(ctx)
+        .log_err(&ffi_msg.context)
         .ok();
 }
 
@@ -3777,15 +3773,14 @@ pub unsafe extern "C" fn dc_msg_latefiling_mediasize(
         return;
     }
     let ffi_msg = unsafe { &mut *msg };
-    let ctx = unsafe { &*ffi_msg.context };
 
     block_on({
         ffi_msg
             .message
-            .latefiling_mediasize(ctx, width, height, duration)
+            .latefiling_mediasize(&ffi_msg.context, width, height, duration)
     })
     .context("Cannot set media size")
-    .log_err(ctx)
+    .log_err(&ffi_msg.context)
     .ok();
 }
 
@@ -3813,17 +3808,16 @@ pub unsafe extern "C" fn dc_msg_set_quote(msg: *mut dc_msg_t, quote: *const dc_m
         None
     } else {
         let ffi_quote = unsafe { &*quote };
-        if ffi_msg.context != ffi_quote.context {
+        if ffi_msg.context.get_id() != ffi_quote.context.get_id() {
             eprintln!("ignoring attempt to quote message from a different context");
             return;
         }
         Some(&ffi_quote.message)
     };
 
-    let context = unsafe { &*ffi_msg.context };
-    block_on(ffi_msg.message.set_quote(context, quote_msg))
+    block_on(ffi_msg.message.set_quote(&ffi_msg.context, quote_msg))
         .context("failed to set quote")
-        .log_err(context)
+        .log_err(&ffi_msg.context)
         .ok();
 }
 
@@ -3833,7 +3827,7 @@ pub unsafe extern "C" fn dc_msg_get_quoted_text(msg: *const dc_msg_t) -> *mut li
         eprintln!("ignoring careless call to dc_msg_get_quoted_text()");
         return ptr::null_mut();
     }
-    let ffi_msg: &MessageWrapper = unsafe { &*msg };
+    let ffi_msg = unsafe { &*msg };
     ffi_msg
         .message
         .quoted_text()
@@ -3846,15 +3840,17 @@ pub unsafe extern "C" fn dc_msg_get_quoted_msg(msg: *const dc_msg_t) -> *mut dc_
         eprintln!("ignoring careless call to dc_get_quoted_msg()");
         return ptr::null_mut();
     }
-    let ffi_msg: &MessageWrapper = unsafe { &*msg };
-    let context = unsafe { &*ffi_msg.context };
-    let res = block_on(ffi_msg.message.quoted_message(context))
+    let ffi_msg = unsafe { &*msg };
+    let res = block_on(ffi_msg.message.quoted_message(&ffi_msg.context))
         .context("failed to get quoted message")
-        .log_err(context)
+        .log_err(&ffi_msg.context)
         .unwrap_or(None);
 
     match res {
-        Some(message) => Box::into_raw(Box::new(MessageWrapper { context, message })),
+        Some(message) => Box::into_raw(Box::new(MessageWrapper {
+            context: ffi_msg.context.clone(),
+            message,
+        })),
         None => ptr::null_mut(),
     }
 }
@@ -3865,15 +3861,17 @@ pub unsafe extern "C" fn dc_msg_get_parent(msg: *const dc_msg_t) -> *mut dc_msg_
         eprintln!("ignoring careless call to dc_msg_get_parent()");
         return ptr::null_mut();
     }
-    let ffi_msg: &MessageWrapper = unsafe { &*msg };
-    let context = unsafe { &*ffi_msg.context };
-    let res = block_on(ffi_msg.message.parent(context))
+    let ffi_msg = unsafe { &*msg };
+    let res = block_on(ffi_msg.message.parent(&ffi_msg.context))
         .context("failed to get parent message")
-        .log_err(context)
+        .log_err(&ffi_msg.context)
         .unwrap_or(None);
 
     match res {
-        Some(message) => Box::into_raw(Box::new(MessageWrapper { context, message })),
+        Some(message) => Box::into_raw(Box::new(MessageWrapper {
+            context: ffi_msg.context.clone(),
+            message,
+        })),
         None => ptr::null_mut(),
     }
 }
@@ -3884,11 +3882,10 @@ pub unsafe extern "C" fn dc_msg_get_original_msg_id(msg: *const dc_msg_t) -> u32
         eprintln!("ignoring careless call to dc_msg_get_original_msg_id()");
         return 0;
     }
-    let ffi_msg: &MessageWrapper = unsafe { &*msg };
-    let context = unsafe { &*ffi_msg.context };
-    block_on(ffi_msg.message.get_original_msg_id(context))
+    let ffi_msg = unsafe { &*msg };
+    block_on(ffi_msg.message.get_original_msg_id(&ffi_msg.context))
         .context("failed to get original message")
-        .log_err(context)
+        .log_err(&ffi_msg.context)
         .unwrap_or_default()
         .map(|id| id.to_u32())
         .unwrap_or(0)
@@ -3900,11 +3897,10 @@ pub unsafe extern "C" fn dc_msg_get_saved_msg_id(msg: *const dc_msg_t) -> u32 {
         eprintln!("ignoring careless call to dc_msg_get_saved_msg_id()");
         return 0;
     }
-    let ffi_msg: &MessageWrapper = unsafe { &*msg };
-    let context = unsafe { &*ffi_msg.context };
-    block_on(ffi_msg.message.get_saved_msg_id(context))
+    let ffi_msg = unsafe { &*msg };
+    block_on(ffi_msg.message.get_saved_msg_id(&ffi_msg.context))
         .context("failed to get original message")
-        .log_err(context)
+        .log_err(&ffi_msg.context)
         .unwrap_or_default()
         .map(|id| id.to_u32())
         .unwrap_or(0)
