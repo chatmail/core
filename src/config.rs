@@ -788,16 +788,19 @@ impl Context {
                                 (addr,),
                             )?;
 
-                            // Update the timestamp for the primary transport
-                            // so it becomes the first in `get_all_self_addrs()` list
-                            // and the list of relays distributed in the public key.
-                            // This ensures that messages will be sent
-                            // to the primary relay by the contacts
-                            // and will be fetched in background_fetch()
-                            // which only fetches from the primary transport.
+                            // `is_published=1`: an unpublished primary would be missing
+                            // from the relay list in the public key, so contacts would
+                            // never send to it.
+                            //
+                            // The timestamp must strictly increase because
+                            // other devices ignore the row update otherwise,
+                            // and contacts only adopt the re-signed key
+                            // if its signature timestamp increases.
                             transaction
                                 .execute(
-                                    "UPDATE transports SET add_timestamp=?, is_published=1 WHERE addr=?",
+                                    "UPDATE transports
+                                     SET add_timestamp=MAX(?, add_timestamp+1), is_published=1
+                                     WHERE addr=?",
                                     (time(), addr),
                                 )
                                 .context(
