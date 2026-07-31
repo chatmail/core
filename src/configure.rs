@@ -45,21 +45,6 @@ use crate::{EventType, stock_str};
 /// See <https://github.com/chatmail/core/issues/7608>.
 pub(crate) const MAX_RELAYS: usize = 5;
 
-/// Hard-coded candidates for default relays.
-/// In the future, we want to use it during onboarding;
-/// note that before onboarding automatically on any of these,
-/// we need to ask the admins whether their relay is able to handle this.
-/// For now, this is just the first 6 relays from chatmail.at/relays.
-#[allow(unused)]
-const DEFAULT_RELAY_CANDIDATES: &[&str] = &[
-    "mehl.cloud",
-    "mailchat.pl",
-    "chatmail.woodpeckersnest.space",
-    "chatmail.culturanerd.it",
-    "tarpit.fun",
-    "d.gaufr.es",
-];
-
 macro_rules! progress {
     ($context:tt, $progress:expr, $comment:expr) => {
         assert!(
@@ -335,9 +320,10 @@ impl Context {
             self.try_make_space_for_new_relay().await?;
         }
 
-        if let Err(error) = configure(self, param).await {
+        let skip_network = false;
+        if let Err(error) = configure(self, param, skip_network).await {
             // Log entered and actual params
-            let configured_param = get_configured_param(self, param).await;
+            let configured_param = get_configured_param(self, param, skip_network).await;
             warn!(
                 self,
                 "configure failed: Entered params: {}. Used params: {}. Error: {error}.",
@@ -401,6 +387,7 @@ impl Context {
 async fn get_configured_param(
     ctx: &Context,
     param: &EnteredLoginParam,
+    skip_network: bool,
 ) -> Result<ConfiguredLoginParam> {
     ensure!(!param.addr.is_empty(), "Missing email address.");
 
@@ -428,6 +415,7 @@ async fn get_configured_param(
         && param.smtp.port == 0
         && param.smtp.security == Socket::Automatic
         && param.smtp.user.is_empty()
+        && !skip_network
     {
         // No advanced parameters entered by the user:
         // do Autoconfig unless the domain has hard-coded legacy servers.
@@ -528,73 +516,81 @@ async fn get_configured_param(
     Ok(configured_login_param)
 }
 
-async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<()> {
+pub(crate) async fn configure(
+    ctx: &Context,
+    param: &EnteredLoginParam,
+    skip_network: bool,
+) -> Result<()> {
     progress!(ctx, 1);
 
-    let configured_param = get_configured_param(ctx, param).await?;
+    let configured_param = get_configured_param(ctx, param, skip_network).await?;
     let proxy_config = ProxyConfig::load(ctx).await?;
     let strict_tls = configured_param.strict_tls(proxy_config.is_some())?;
 
     progress!(ctx, 550);
 
-    // Spawn SMTP configuration task
-    // to try SMTP while connecting to IMAP.
-    let context_smtp = ctx.clone();
-    let smtp_param = configured_param.smtp.clone();
-    let smtp_password = configured_param.smtp_password.clone();
-    let smtp_addr = configured_param.addr.clone();
+    if !skip_network {
+        // Spawn SMTP configuration task
+        // to try SMTP while connecting to IMAP.
+        let context_smtp = ctx.clone();
+        let smtp_param = configured_param.smtp.clone();
+        let smtp_password = configured_param.smtp_password.clone();
+        let smtp_addr = configured_param.addr.clone();
 
-    let proxy_config2 = proxy_config.clone();
-    let smtp_config_task = task::spawn(async move {
-        let mut smtp = Smtp::new();
-        smtp.connect(
-            &context_smtp,
-            &smtp_param,
-            &smtp_password,
-            &proxy_config2,
-            &smtp_addr,
-            strict_tls,
-        )
-        .await?;
+        let proxy_config2 = proxy_config.clone();
+        let smtp_config_task = task::spawn(async move {
+            let mut smtp = Smtp::new();
+            smtp.connect(
+                &context_smtp,
+                &smtp_param,
+                &smtp_password,
+                &proxy_config2,
+                &smtp_addr,
+                strict_tls,
+            )
+            .await?;
 
-        Ok::<(), anyhow::Error>(())
-    });
+            Ok::<(), anyhow::Error>(())
+        });
 
-    progress!(ctx, 600);
+        progress!(ctx, 600);
 
-    // Configure IMAP
+        // Configure IMAP
 
-    let transport_id = 0;
-    let (_s, r) = async_channel::bounded(1);
-    let mut imap = Imap::new(ctx, transport_id, configured_param.clone(), r).await?;
-    let configuring = true;
-    let imap_session = match imap.connect(ctx, configuring).await {
-        Ok(imap_session) => imap_session,
-        Err(err) => {
-            bail!("{}", nicer_configuration_error(ctx, format!("{err:#}")));
+        let transport_id = 0;
+        let (_s, r) = async_channel::bounded(1);
+        let mut imap = Imap::new(ctx, transport_id, configured_param.clone(), r).await?;
+        let configuring = true;
+        let imap_session = match imap.connect(ctx, configuring).await {
+            Ok(imap_session) => imap_session,
+            Err(err) => {
+                bail!("{}", nicer_configuration_error(ctx, format!("{err:#}")));
+            }
+        };
+
+        progress!(ctx, 850);
+
+        // Wait for SMTP configuration
+        smtp_config_task.await??;
+
+        progress!(ctx, 900);
+
+        let is_configured = ctx.is_configured().await?;
+        if !ctx.get_config_bool(Config::FixIsChatmail).await? {
+            if imap_session.is_chatmail() {
+                ctx.sql.set_raw_config("is_chatmail", Some("1")).await?;
+            } else if !is_configured {
+                // Reset the setting that may have been set
+                // during failed configuration.
+                ctx.sql.set_raw_config("is_chatmail", Some("0")).await?;
+            }
         }
-    };
 
-    progress!(ctx, 850);
-
-    // Wait for SMTP configuration
-    smtp_config_task.await??;
-
-    progress!(ctx, 900);
-
-    let is_configured = ctx.is_configured().await?;
-    if !ctx.get_config_bool(Config::FixIsChatmail).await? {
-        if imap_session.is_chatmail() {
-            ctx.sql.set_raw_config("is_chatmail", Some("1")).await?;
-        } else if !is_configured {
-            // Reset the setting that may have been set
-            // during failed configuration.
-            ctx.sql.set_raw_config("is_chatmail", Some("0")).await?;
-        }
+        // Drop the imap connection explicitly
+        // to make sure that it's not forgotten in a future refactoring
+        drop(imap_session);
+        drop(imap);
     }
-
-    drop(imap_session);
-    drop(imap);
 
     progress!(ctx, 910);
 
@@ -779,7 +775,8 @@ mod tests {
 
             ..Default::default()
         };
-        let configured_param = get_configured_param(t, &entered_param).await?;
+        let skip_network = false;
+        let configured_param = get_configured_param(t, &entered_param, skip_network).await?;
         assert_eq!(configured_param.imap_user, "alice@example.net");
         assert_eq!(configured_param.smtp_user, "");
         Ok(())
