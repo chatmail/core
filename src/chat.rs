@@ -1948,7 +1948,7 @@ impl Chat {
         msg.from_id = ContactId::SELF;
 
         // add message to the database
-        let inserted_msg_id = context.sql.transaction(|transaction| {
+        let (msg_id, inserted) = context.sql.transaction(|transaction| {
             if update_existing_draft == UseExistingDraftPolicy::Reuse {
                 // This check also covers the `msg.id.is_special()` case.
                 // Maybe we could try to somehow gracefully recover from this,
@@ -1992,8 +1992,8 @@ impl Chat {
                         msg.id
                     ],
                 )?;
-                let inserted_msg_id = None;
-                Ok(inserted_msg_id)
+                let inserted = false;
+                Ok((msg.id, inserted))
             } else {
                 transaction.execute(
                     "INSERT INTO msgs (
@@ -2040,14 +2040,15 @@ impl Chat {
                         ephemeral_timestamp
                     ],
                 )?;
-                let inserted_msg_id = MsgId::new(transaction.last_insert_rowid().try_into()?);
-                Ok(Some(inserted_msg_id))
+                let msg_id = MsgId::new(transaction.last_insert_rowid().try_into()?);
+                let inserted = true;
+                Ok((msg_id, inserted))
             }
         }).await?;
 
-        if let Some(inserted_msg_id) = inserted_msg_id {
+        msg.id = msg_id;
+        if inserted {
             context.new_msgs_notify.notify_one();
-            msg.id = inserted_msg_id;
 
             maybe_set_logging_xdc(context, msg, self.id).await?;
             context
