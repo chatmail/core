@@ -814,8 +814,9 @@ impl Context {
                             Ok(())
                         })
                         .await?;
-                    send_sync_transports(self).await?;
+                    // Invalidate the cache so the sync message cannot read a stale primary address.
                     self.sql.uncache_raw_config("configured_addr").await;
+                    send_sync_transports(self).await?;
                 }
             }
             _ => {
