@@ -235,6 +235,32 @@ async fn test_promote_transport_same_second() -> Result<()> {
     promote_transport_and_check_success(alice, alice2, "alice@otherprovider.com").await
 }
 
+/// Tests that `sync_transports()` requests an IO restart
+/// if and only if it modified anything.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_sync_transports_requests_io_restart() -> Result<()> {
+    let alice = &TestContext::new_alice().await;
+
+    let data = TransportData {
+        configured: dummy_configured_login_param("alice@otherprovider.com").into(),
+        entered: EnteredLoginParam {
+            addr: "alice@otherprovider.com".to_string(),
+            ..Default::default()
+        },
+        timestamp: time(),
+        is_published: true,
+    };
+    let data = std::slice::from_ref(&data);
+    sync_transports(alice, data, &[]).await?;
+    assert!(alice.restart_io_after_fetch.swap(false, Ordering::Relaxed));
+
+    // Applying the same data again modifies nothing.
+    sync_transports(alice, data, &[]).await?;
+    assert!(!alice.restart_io_after_fetch.load(Ordering::Relaxed));
+
+    Ok(())
+}
+
 /// Promotes `addr` to primary on `alice` and checks the change syncs to `alice2`.
 async fn promote_transport_and_check_success(
     alice: &TestContext,
