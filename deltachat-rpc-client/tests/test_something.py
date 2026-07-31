@@ -1003,6 +1003,11 @@ def test_no_markseen_in_team_profile(team_profile, acfactory):
 
     message.mark_seen()
 
+    # The MDN is queued in `smtp_mdns`, which is drained only after the regular
+    # `smtp` queue, so "Outgoing message" would otherwise overtake it on the wire.
+    # Wait for the read receipt to reach Alice before queueing it.
+    alice.wait_for_event(EventType.MSG_READ)
+
     # Send a message and wait until it arrives
     # in order to wait until Bob2 gets the markseen message.
     # This also tests that outgoing messages
