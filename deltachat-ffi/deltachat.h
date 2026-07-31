@@ -3564,6 +3564,7 @@ dc_lot_t*        dc_chatlist_get_summary2    (dc_context_t* context, uint32_t ch
  * @memberof dc_chatlist_t
  * @param chatlist The chatlist object to empty.
  * @return The context object associated with the chatlist. NULL if none or on errors.
+ *     This pointer MUST NOT be freed with dc_context_unref().
  */
 dc_context_t*    dc_chatlist_get_context     (dc_chatlist_t* chatlist);
 
