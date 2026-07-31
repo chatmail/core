@@ -2288,12 +2288,17 @@ pub unsafe extern "C" fn dc_get_contact(
         eprintln!("ignoring careless call to dc_get_contact()");
         return ptr::null_mut();
     }
-    let ctx = unsafe { &*context };
+    let context = unsafe { &*context };
 
     block_on(async move {
-        Contact::get_by_id(ctx, ContactId::new(contact_id))
+        Contact::get_by_id(context, ContactId::new(contact_id))
             .await
-            .map(|contact| Box::into_raw(Box::new(ContactWrapper { context, contact })))
+            .map(|contact| {
+                Box::into_raw(Box::new(ContactWrapper {
+                    context: context.clone(),
+                    contact,
+                }))
+            })
             .unwrap_or_else(|_| ptr::null_mut())
     })
 }
@@ -3916,7 +3921,7 @@ pub unsafe extern "C" fn dc_msg_get_saved_msg_id(msg: *const dc_msg_t) -> u32 {
 /// context, but the Rust API does not, so the FFI layer needs to glue
 /// these together.
 pub struct ContactWrapper {
-    context: *const dc_context_t,
+    context: Context,
     contact: contact::Contact,
 }
 
@@ -4004,10 +4009,9 @@ pub unsafe extern "C" fn dc_contact_get_profile_image(
         return ptr::null_mut(); // NULL explicitly defined as "no profile image"
     }
     let ffi_contact = unsafe { &*contact };
-    let ctx = unsafe { &*ffi_contact.context };
 
-    block_on(ffi_contact.contact.get_profile_image(ctx))
-        .unwrap_or_log_default(ctx, "failed to get profile image")
+    block_on(ffi_contact.contact.get_profile_image(&ffi_contact.context))
+        .unwrap_or_log_default(&ffi_contact.context, "failed to get profile image")
         .map(|p| p.to_string_lossy().strdup())
         .unwrap_or_else(std::ptr::null_mut)
 }
@@ -4019,15 +4023,14 @@ pub unsafe extern "C" fn dc_contact_get_color(contact: *mut dc_contact_t) -> u32
         return 0;
     }
     let ffi_contact = unsafe { &*contact };
-    let ctx = unsafe { &*ffi_contact.context };
     block_on(
         ffi_contact
             .contact
             // We don't want any UIs displaying gray self-color.
-            .get_or_gen_color(ctx),
+            .get_or_gen_color(&ffi_contact.context),
     )
     .context("Contact::get_color()")
-    .log_err(ctx)
+    .log_err(&ffi_contact.context)
     .unwrap_or(0)
 }
 
@@ -4078,11 +4081,10 @@ pub unsafe extern "C" fn dc_contact_is_verified(contact: *mut dc_contact_t) -> l
         return 0;
     }
     let ffi_contact = unsafe { &*contact };
-    let ctx = unsafe { &*ffi_contact.context };
 
-    if block_on(ffi_contact.contact.is_verified(ctx))
+    if block_on(ffi_contact.contact.is_verified(&ffi_contact.context))
         .context("is_verified failed")
-        .log_err(ctx)
+        .log_err(&ffi_contact.context)
         .unwrap_or_default()
     {
         // Return value is essentially a boolean,
@@ -4118,10 +4120,9 @@ pub unsafe extern "C" fn dc_contact_get_verifier_id(contact: *mut dc_contact_t) 
         return 0;
     }
     let ffi_contact = unsafe { &*contact };
-    let ctx = unsafe { &*ffi_contact.context };
-    let verifier_contact_id = block_on(ffi_contact.contact.get_verifier_id(ctx))
+    let verifier_contact_id = block_on(ffi_contact.contact.get_verifier_id(&ffi_contact.context))
         .context("failed to get verifier")
-        .log_err(ctx)
+        .log_err(&ffi_contact.context)
         .unwrap_or_default()
         .unwrap_or_default()
         .unwrap_or_default();
