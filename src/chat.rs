@@ -831,7 +831,7 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
         msg.state = MessageState::OutDraft;
         msg.chat_id = self;
 
-        let (inserted_draft_id, changed) = context
+        let (msg_id, changed) = context
             .sql
             .transaction(|transaction| {
                 // if possible, replace existing draft and keep id
@@ -855,9 +855,8 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
                             msg.id,
                         ),
                     )?;
-                    let inserted_draft_id = None;
                     let changed = affected_rows > 0;
-                    return Ok((inserted_draft_id, changed));
+                    return Ok((msg.id, changed));
                 }
 
                 // Delete existing draft if it exists.
@@ -896,13 +895,12 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
                     ),
                 )?;
 
+                let msg_id = MsgId::new(transaction.last_insert_rowid().try_into()?);
                 let changed = true;
-                Ok((Some(transaction.last_insert_rowid()), changed))
+                Ok((msg_id, changed))
             })
             .await?;
-        if let Some(inserted_draft_id) = inserted_draft_id {
-            msg.id = MsgId::new(inserted_draft_id.try_into()?);
-        }
+        msg.id = msg_id;
         Ok(changed)
     }
 
