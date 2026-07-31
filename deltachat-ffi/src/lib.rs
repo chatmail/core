@@ -907,7 +907,7 @@ pub unsafe extern "C" fn dc_get_chatlist(
         eprintln!("ignoring careless call to dc_get_chatlist()");
         return ptr::null_mut();
     }
-    let ctx = unsafe { &*context };
+    let context = unsafe { &*context };
     let qs = to_opt_string_lossy(query_str);
 
     let qi = if query_id == 0 {
@@ -917,16 +917,19 @@ pub unsafe extern "C" fn dc_get_chatlist(
     };
 
     match block_on(chatlist::Chatlist::try_load(
-        ctx,
+        context,
         flags as usize,
         qs.as_deref(),
         qi,
     ))
     .context("Failed to get chatlist")
-    .log_err(ctx)
+    .log_err(context)
     {
         Ok(list) => {
-            let ffi_list = ChatlistWrapper { context, list };
+            let ffi_list = ChatlistWrapper {
+                context: context.clone(),
+                list,
+            };
             Box::into_raw(Box::new(ffi_list))
         }
         Err(_) => ptr::null_mut(),
@@ -1351,15 +1354,18 @@ pub unsafe extern "C" fn dc_get_similar_chatlist(
         eprintln!("ignoring careless call to dc_get_similar_chatlist()");
         return ptr::null_mut();
     }
-    let ctx = unsafe { &*context };
+    let context = unsafe { &*context };
 
     let chat_id = ChatId::new(chat_id);
-    match block_on(chat_id.get_similar_chatlist(ctx))
+    match block_on(chat_id.get_similar_chatlist(context))
         .context("failed to get similar chatlist")
-        .log_err(ctx)
+        .log_err(context)
     {
         Ok(list) => {
-            let ffi_list = ChatlistWrapper { context, list };
+            let ffi_list = ChatlistWrapper {
+                context: context.clone(),
+                list,
+            };
             Box::into_raw(Box::new(ffi_list))
         }
         Err(_) => ptr::null_mut(),
@@ -2748,7 +2754,7 @@ pub unsafe extern "C" fn dc_array_is_independent(
 /// context, but the Rust API does not, so the FFI layer needs to glue
 /// these together.
 pub struct ChatlistWrapper {
-    context: *const dc_context_t,
+    context: Context,
     list: chatlist::Chatlist,
 }
 
@@ -2784,12 +2790,11 @@ pub unsafe extern "C" fn dc_chatlist_get_chat_id(
         return 0;
     }
     let ffi_list = unsafe { &*chatlist };
-    let ctx = unsafe { &*ffi_list.context };
     match ffi_list
         .list
         .get_chat_id(index)
         .context("get_chat_id failed")
-        .log_err(ctx)
+        .log_err(&ffi_list.context)
     {
         Ok(chat_id) => chat_id.to_u32(),
         Err(_) => 0,
@@ -2806,12 +2811,11 @@ pub unsafe extern "C" fn dc_chatlist_get_msg_id(
         return 0;
     }
     let ffi_list = unsafe { &*chatlist };
-    let ctx = unsafe { &*ffi_list.context };
     match ffi_list
         .list
         .get_msg_id(index)
         .context("get_msg_id failed")
-        .log_err(ctx)
+        .log_err(&ffi_list.context)
     {
         Ok(msg_id) => msg_id.map_or(0, |msg_id| msg_id.to_u32()),
         Err(_) => 0,
@@ -2835,12 +2839,15 @@ pub unsafe extern "C" fn dc_chatlist_get_summary(
         Some(&ffi_chat.chat)
     };
     let ffi_list = unsafe { &*chatlist };
-    let ctx = unsafe { &*ffi_list.context };
 
-    let summary = block_on(ffi_list.list.get_summary(ctx, index, maybe_chat))
-        .context("get_summary failed")
-        .log_err(ctx)
-        .unwrap_or_default();
+    let summary = block_on(
+        ffi_list
+            .list
+            .get_summary(&ffi_list.context, index, maybe_chat),
+    )
+    .context("get_summary failed")
+    .log_err(&ffi_list.context)
+    .unwrap_or_default();
     Box::into_raw(Box::new(summary.into()))
 }
 
