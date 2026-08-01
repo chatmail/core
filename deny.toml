@@ -90,6 +90,7 @@ skip = [
      { name = "strum_macros", version = "0.26.2" },
      { name = "strum", version = "0.26.2" },
      { name = "syn", version = "1.0.109" },
+     { name = "syn", version = "2.0.118" },
      { name = "thiserror-impl", version = "1.0.69" },
      { name = "thiserror", version = "1.0.69" },
      { name = "toml_datetime", version = "0.6.11" },
