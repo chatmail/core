@@ -2194,7 +2194,7 @@ pub(crate) async fn rfc724_mid_fetch_tried(context: &Context, rfc724_mid: &str) 
     // Explanation of the SQL statement:
     // - For messages that were not split into pre- and post-messages,
     //   the SQL statement is equal to `rfc724_mid=?1`
-    //   because `download_state` is always `Done` and `pre_rfc724_mid is always an empty string.
+    //   because `download_state` is always `Done` and `pre_rfc724_mid` is always an empty string.
     // - For post-messages, we want to select them only if an attempt to fetch was made,
     //   i.e. if `download_state!=Available`.
     //   The Message-Id header of the post-message goes into the rfc724_mid column,
