@@ -406,21 +406,30 @@ impl<'a> BlobObject<'a> {
             // TODO: Fix lost animation and transparency when recoding using the `image` crate. And
             // also `Viewtype::Gif` (maybe renamed to `Animation`) should be used for animated
             // images.
-            let do_scale = exceeds_max_bytes
-                || is_avatar
-                    && (exceeds_wh
-                        || exif.is_some() && {
-                            if mem::take(&mut add_white_bg) {
-                                self::add_white_bg(&mut img);
-                            }
-                            encoded_img_exceeds_bytes(
-                                context,
-                                &img,
-                                ofmt.clone(),
-                                max_bytes,
-                                &mut encoded,
-                            )?
-                        });
+            let do_scale =
+                // For avatars the limits are strict.
+                is_avatar && exceeds_wh
+                // Don't recode huge JPEGs w/o resizing:
+                // - It may be huge because of high JPEG quality, but we don't know that.
+                // - We don't want extra CPU work for most photos.
+                || exceeds_max_bytes && fmt == ImageFormat::Jpeg
+                // Otherwise check if we want to try encoding w/o resizing and perform it.
+                || (exceeds_max_bytes || exif.is_some()) && {
+                    if mem::take(&mut add_white_bg) {
+                        self::add_white_bg(&mut img);
+                    }
+                    encoded_img_exceeds_bytes(
+                        context,
+                        &img,
+                        ofmt.clone(),
+                        max_bytes,
+                        &mut encoded,
+                    )?
+                }; // If the encoded image is unluckily huge, we might want to save CPU for
+            // non-avatar JPEGs: `&& (is_avatar || fmt != ImageFormat::Jpeg)`. However, if the
+            // original JPEG quality was much lower, the image may be too huge now. Should be a rare
+            // case, so keep it simple and downscale the image. Have done one encoding iteration,
+            // can do one more, the CPU won't die.
 
             if do_scale {
                 let longest_side_len = max(img.width(), img.height());
@@ -497,8 +506,7 @@ impl<'a> BlobObject<'a> {
                     }
                 }
             }
-
-            if do_scale || exif.is_some() {
+            if !encoded.is_empty() || exif.is_some() {
                 // The file format is JPEG/PNG now, we may have to change the file extension
                 if !matches!(fmt, ImageFormat::Jpeg)
                     && matches!(ofmt, ImageOutputFormat::Jpeg { .. })
