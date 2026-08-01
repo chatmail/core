@@ -23,6 +23,7 @@ use rand_old::{Rng as _, thread_rng};
 use sha2::Sha256;
 use tokio::runtime::Handle;
 
+use crate::configure::MAX_RELAYS;
 use crate::key::{DcKey, Fingerprint};
 
 /// Preferred symmetric encryption algorithm.
@@ -419,7 +420,13 @@ pub fn merge_openpgp_certificates(
 
 /// Returns relays addresses from the public key signature.
 ///
-/// Not more than 3 relays are returned for each key.
+/// Not more than [`MAX_RELAYS`] relays are returned for each key.
+/// This is the same constant as the maximum number of published relays
+/// the user is allowed to have in the key.
+/// If the constant is changed in the future,
+/// the client with the lower constant value
+/// will ignore some relays advertised in the key,
+/// but still send to the first [`MAX_RELAYS`].
 pub(crate) fn addresses_from_public_key(public_key: &SignedPublicKey) -> Option<Vec<String>> {
     for signature in &public_key.details.direct_signatures {
         // The signature should be verified already when importing the key,
@@ -436,7 +443,7 @@ pub(crate) fn addresses_from_public_key(public_key: &SignedPublicKey) -> Option<
                             .split(",")
                             .map(|s| s.to_string())
                             .filter(|s| may_be_valid_addr(s))
-                            .take(3)
+                            .take(MAX_RELAYS)
                             .collect(),
                     );
                 }

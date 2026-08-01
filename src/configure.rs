@@ -748,7 +748,7 @@ mod tests {
     use crate::config::Config;
     use crate::login_param::EnteredImapLoginParam;
     use crate::sql::update_transport_last_rcvd_timestamp;
-    use crate::test_utils::TestContext;
+    use crate::test_utils::{TestContext, TestContextManager};
     use crate::transport::add_pseudo_transport;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -881,6 +881,41 @@ mod tests {
         assert_eq!(t.count_transports().await?, MAX_RELAYS);
         assert!(t.try_make_space_for_new_relay().await.is_err());
         assert_eq!(t.count_transports().await?, MAX_RELAYS);
+
+        Ok(())
+    }
+
+    /// Tests that if Alice adds maximum number of transports,
+    /// Bob sends messages to all of them.
+    ///
+    /// This way we don't need to care about the order
+    /// of addresses advertised in the public key.
+    /// Previously the number of addresses
+    /// taken from the key was less than the maximum
+    /// number of advertised addresses.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_can_send_to_max_relays() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+
+        // One relay is added already by default.
+        for i in 1..MAX_RELAYS {
+            add_pseudo_transport(alice, &format!("transport{i}@example.org")).await?;
+        }
+        assert_eq!(alice.count_transports().await?, MAX_RELAYS);
+
+        let bob_chat_id = bob.create_chat_id(alice).await;
+
+        bob.set_config_bool(Config::BccSelf, false).await?;
+        let sent = bob.send_text(bob_chat_id, "Hello!").await;
+        assert_eq!(
+            sent.recipients.split(' ').count(),
+            MAX_RELAYS,
+            "List of recipients is {}",
+            sent.recipients
+        );
 
         Ok(())
     }
