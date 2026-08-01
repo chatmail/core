@@ -796,6 +796,23 @@ pub(crate) async fn receive_imf_inner(
                     .execute_sync_items(sync_items, mime_parser.timestamp_sent)
                     .await;
 
+                // DEMO ONLY
+                // widens the window in which the IO restart spawned by `sync_transports()`
+                // cancels this very task, dropping the `configured_addr` update
+                // and the second `TransportsModified` event below.
+                // The sync message is not processed again,
+                // so the device stays on the old primary transport.
+                // 0.1ms is enough to lose the race every time,
+                // set `DC_WILD_CANCEL_SLEEP_MS=0` to restore the original timing.
+                let millis: f64 = std::env::var("DC_WILD_CANCEL_SLEEP_MS")
+                    .ok()
+                    .and_then(|value| value.parse().ok())
+                    .unwrap_or(0.1);
+                if millis > 0.0 {
+                    info!(context, "Wild-cancel demo: sleeping {millis}ms.");
+                    tokio::time::sleep(std::time::Duration::from_secs_f64(millis / 1000.0)).await;
+                }
+
                 // Receiving encrypted message from self updates primary transport.
                 let from_addr = &mime_parser.from.addr;
 
