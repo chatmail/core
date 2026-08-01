@@ -300,7 +300,7 @@ jobs:
           path: target/debug
 
       - name: Install python
-        uses: actions/setup-python@v6.3.0
+        uses: actions/setup-python@v7.0.0
         with:
           python-version: ${{ matrix.python }}
 
@@ -348,7 +348,7 @@ jobs:
           persist-credentials: false
 
       - name: Install python
-        uses: actions/setup-python@v6.3.0
+        uses: actions/setup-python@v7.0.0
         with:
           python-version: ${{ matrix.python }}
 
