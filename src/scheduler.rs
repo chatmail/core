@@ -438,6 +438,11 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
                 last_housekeeping_time.saturating_add(constants::HOUSEKEEPING_PERIOD);
             if next_housekeeping_time <= time() {
                 sql::housekeeping(ctx).await.log_err(ctx).ok();
+            } else {
+                let force_truncate = false;
+                if let Err(err) = ctx.sql.wal_checkpoint(ctx, force_truncate).await {
+                    warn!(ctx, "wal_checkpoint() failed: {err:#}.");
+                }
             }
         }
         Err(err) => {
