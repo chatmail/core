@@ -8,7 +8,7 @@
 -- Raw dump of the database schema does not have comments
 -- for deprecated columns and columns added by migrations.
 --
--- This is based on the version 160 of the database.
+-- This is based on the version 161 of the database.
 -- There may be new migrations added afterwards.
 
 CREATE TABLE config (
@@ -67,11 +67,16 @@ CREATE TABLE chats (
     type INTEGER DEFAULT 0,
     name TEXT DEFAULT '',
 
+    -- Unused columns, drafts are now tracked as separate
+    -- messages with a special msgs.state value.
+    draft_timestamp INTEGER DEFAULT 0,
+    draft_txt TEXT DEFAULT '',
+
     blocked INTEGER DEFAULT 0,
     grpid TEXT DEFAULT '',
     param TEXT DEFAULT '',
     archived INTEGER DEFAULT 0,
-    gossiped_timestamp INTEGER DEFAULT 0, -- deprecated 2025-04-08, replaced with gossiped_timestamp table
+    gossiped_timestamp INTEGER DEFAULT 0, -- deprecated 2025-04-08, replaced with gossip_timestamp table
     locations_send_begin INTEGER DEFAULT 0,
     locations_send_until INTEGER DEFAULT 0,
     locations_last_sent INTEGER DEFAULT 0,
@@ -199,11 +204,6 @@ CREATE TABLE msgs (
     server_folder TEXT DEFAULT '', -- Deprecated column that was used before "imap" table, replaced by imap.folder
     server_uid INTEGER DEFAULT 0, -- Deprecated column that was used before "imap" table, replaced by imap.uid
 
-    -- Drafts are now tracked as separate messages
-    -- with a special msgs.state value.
-    draft_timestamp INTEGER DEFAULT 0,
-    draft_txt TEXT DEFAULT '',
-
     -- Unused column formely used to mark the messages
     -- that should be moved to the dedicated IMAP folder.
     -- It was replaced with imap.target, which is also now
@@ -310,7 +310,7 @@ CREATE TABLE multi_device_sync (
 CREATE TABLE reactions (
     msg_id INTEGER NOT NULL, -- id of the message reacted to
     contact_id INTEGER NOT NULL, -- id of the contact reacting to the message
-    reaction TEXT DEFAULT '' NOT NULL -- a sequence of emojis separated by spaces
+    reaction TEXT DEFAULT '' NOT NULL, -- a sequence of emojis separated by spaces
     PRIMARY KEY(msg_id, contact_id),
     FOREIGN KEY(msg_id) REFERENCES msgs(id) ON DELETE CASCADE -- delete reactions when message is deleted
     FOREIGN KEY(contact_id) REFERENCES contacts(id) ON DELETE CASCADE -- delete reactions when contact is deleted
@@ -447,6 +447,12 @@ CREATE TABLE broadcast_secrets(
     secret TEXT NOT NULL
 ) STRICT;
 
+
+-- Candidate chatmail relays for automatic relay management.
+CREATE TABLE relay_candidates(
+    host TEXT PRIMARY KEY NOT NULL,
+    last_tried INTEGER NOT NULL DEFAULT 0 -- Timestamp of the last connection attempt.
+) STRICT;
 
 CREATE TABLE transports (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
