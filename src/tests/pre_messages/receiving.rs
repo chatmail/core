@@ -8,12 +8,17 @@ use crate::chat::send_msg;
 use crate::config::Config;
 use crate::contact;
 use crate::download::{DownloadState, PRE_MSG_ATTACHMENT_SIZE_THRESHOLD, PostMsgMetadata};
+use crate::headerdef::HeaderDef;
+use crate::headerdef::HeaderDefMap;
+use crate::imap::prefetch_should_download;
 use crate::message::{Message, MessageState, Viewtype, delete_msgs, markseen_msgs};
 use crate::mimeparser::MimeMessage;
 use crate::param::Param;
 use crate::reaction::{get_msg_reactions, send_reaction};
 use crate::receive_imf::receive_imf;
 use crate::summary::assert_summary_texts;
+use crate::test_utils::SentMessage;
+use crate::test_utils::TestContext;
 use crate::test_utils::TestContextManager;
 use crate::tests::pre_messages::util::{
     big_webxdc_app, send_large_file_message, send_large_image_message, send_large_webxdc_message,
@@ -159,6 +164,20 @@ async fn test_receive_webxdc() -> Result<()> {
 /// for file attachment
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_receive_pre_message_and_dl_post_message() -> Result<()> {
+    async fn would_download(t: &TestContext, message: &SentMessage<'_>) -> bool {
+        let headers = mailparse::parse_mail(message.payload().as_bytes())
+            .unwrap()
+            .headers;
+        prefetch_should_download(
+            t,
+            &headers,
+            &headers.get_header_value(HeaderDef::MessageId).unwrap(),
+            std::iter::empty(),
+        )
+        .await
+        .unwrap()
+    }
+
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
@@ -168,12 +187,23 @@ async fn test_receive_pre_message_and_dl_post_message() -> Result<()> {
         send_large_file_message(alice, alice_group_id, Viewtype::File, &vec![0u8; 1_000_000])
             .await?;
 
+    assert!(would_download(bob, &pre_message).await);
+    // `prefetch_should_download` doesn't check the `Chat-Is-Post-Message` header,
+    // so that it will simply return true as long as the message is unknown:
+    assert!(would_download(bob, &post_message).await);
+
     let msg = bob.recv_msg(&pre_message).await;
     assert_eq!(msg.download_state(), DownloadState::Available);
     assert_eq!(msg.viewtype, Viewtype::Text);
     assert!(msg.param.exists(Param::PostMessageViewtype));
     assert!(msg.param.exists(Param::PostMessageFileBytes));
     assert_eq!(msg.text, "test".to_owned());
+
+    // The pre-message is known now, shouldn't be downloaded again:
+    assert_eq!(would_download(bob, &pre_message).await, false);
+    // ...But the post-message should be downloaded once it's available:
+    assert!(would_download(bob, &post_message).await);
+
     let _ = bob.recv_msg_trash(&post_message).await;
     let msg = Message::load_from_db(bob, msg.id).await?;
     assert_eq!(msg.download_state(), DownloadState::Done);
@@ -181,6 +211,11 @@ async fn test_receive_pre_message_and_dl_post_message() -> Result<()> {
     assert_eq!(msg.param.exists(Param::PostMessageViewtype), false);
     assert_eq!(msg.param.exists(Param::PostMessageFileBytes), false);
     assert_eq!(msg.text, "test".to_owned());
+
+    // Everything downloaded, if something is received again it should be ignored:
+    assert_eq!(would_download(bob, &pre_message).await, false);
+    assert_eq!(would_download(bob, &post_message).await, false);
+
     Ok(())
 }
 

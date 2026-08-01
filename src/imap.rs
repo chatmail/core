@@ -1623,7 +1623,7 @@ pub(crate) async fn prefetch_should_download(
     message_id: &str,
     mut flags: impl Iterator<Item = Flag<'_>>,
 ) -> Result<bool> {
-    if message::rfc724_mid_download_tried(context, message_id).await? {
+    if message::rfc724_mid_fetch_tried(context, message_id).await? {
         if let Some(from) = mimeparser::get_from(headers)
             && context.is_self_addr(&from.addr).await?
         {
