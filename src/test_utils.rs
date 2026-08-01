@@ -43,7 +43,7 @@ use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::pgp::SeipdVersion;
 use crate::receive_imf::{ReceivedMsg, receive_imf};
 use crate::securejoin::{get_securejoin_qr, join_securejoin};
-use crate::smtp::msg_has_pending_smtp_job;
+use crate::smtp::{self, msg_has_pending_smtp_job};
 use crate::stock_str::StockStrings;
 use crate::tools::time;
 
@@ -1078,6 +1078,22 @@ ORDER BY id"
             "Apparently the message was not actually sent out"
         );
         res
+    }
+
+    pub async fn get_sent_mdn(&self) -> SentMessage<'_> {
+        let mut sent_mdn = None;
+        smtp::send_mdn(self, async |_rfc724_mid, body, recipients| {
+            sent_mdn = Some(SentMessage {
+                payload: body,
+                sender_msg_id: MsgId::new(u32::MAX),
+                sender_context: &self.ctx,
+                recipients: recipients.join(" "),
+            });
+            Ok(true)
+        })
+        .await
+        .expect("smtp::send_mdn");
+        sent_mdn.unwrap()
     }
 
     pub async fn golden_test_chat(&self, chat_id: ChatId, filename: &str) {
