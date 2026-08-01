@@ -143,7 +143,12 @@ CREATE TABLE msgs (
     -- Message-ID of the pre-message.
     pre_rfc724_mid TEXT DEFAULT '',
 
+    -- Chat ID.
+    --
+    -- Chat ID 3 is the trash chat, messages with this ID are tombstones.
     chat_id INTEGER DEFAULT 0,
+
+    -- Contact ID of the messag author.
     from_id INTEGER DEFAULT 0,
 
     -- For incoming messages, SELF (1).
@@ -154,19 +159,26 @@ CREATE TABLE msgs (
     type INTEGER DEFAULT 0,
     state INTEGER DEFAULT 0,
     msgrmsg INTEGER DEFAULT 1,
+
+    -- Size of the attachment for file parts, otherwise 0.
     bytes INTEGER DEFAULT 0,
 
-    txt TEXT DEFAULT '',
-    txt_normalized TEXT,
+    txt TEXT DEFAULT '', -- Message text for display.
+    txt_normalized TEXT, -- Message text normalized for search.
     txt_raw TEXT DEFAULT '', -- deprecated 2025-03-29
 
     param TEXT DEFAULT '',
 
+    -- For messages bookmarked into the Saved Messages chat,
+    -- ID of the original message, making it possible to jump to it.
     starred INTEGER DEFAULT 0,
 
     timestamp INTEGER DEFAULT 0, -- Timestamp of the message used for sorting.
     timestamp_sent INTEGER DEFAULT 0, -- Timestamp of the message as sent in the Date header.
     timestamp_rcvd INTEGER DEFAULT 0,
+
+    -- TODO: document how hidden field is used
+    -- It is used at least for reactions for incoming messages.
     hidden INTEGER DEFAULT 0,
 
     -- mime_headers column actually contains BLOBs, i.e. it may
@@ -174,27 +186,36 @@ CREATE TABLE msgs (
     -- thanks to SQLite 3 being dynamically typed, there is no need to
     -- change column type.
     mime_headers TEXT,
+
+    -- True if mime_headers column is compressed with Brotli.
+    mime_compressed INTEGER NOT NULL DEFAULT 0,
+
+    mime_modified INTEGER DEFAULT 0,
+
     mime_in_reply_to TEXT,
     mime_references TEXT,
 
     location_id INTEGER DEFAULT 0,
     error TEXT DEFAULT '',
 
--- Timer value in seconds. For incoming messages this
--- timer starts when message is read, so we want to have
--- the value stored here until the timer starts.
+    -- Timer value in seconds. For incoming messages this
+    -- timer starts when message is read, so we want to have
+    -- the value stored here until the timer starts.
     ephemeral_timer INTEGER DEFAULT 0,
 
--- Timestamp indicating when the message should be
--- deleted. It is convenient to store it here because UI
--- needs this value to display how much time is left until
--- the message is deleted.
+    -- Timestamp indicating when the message should be
+    -- deleted. It is convenient to store it here because UI
+    -- needs this value to display how much time is left until
+    -- the message is deleted.
     ephemeral_timestamp INTEGER DEFAULT 0,
-    mime_modified INTEGER DEFAULT 0,
+
     subject TEXT DEFAULT '',
     download_state INTEGER DEFAULT 0,
+
+    -- Information extracted from Received headers
+    -- as a plain text for debugging.
     hop_info TEXT,
-    mime_compressed INTEGER NOT NULL DEFAULT 0,
+
     deleted INTEGER NOT NULL DEFAULT 0,
 
     --
