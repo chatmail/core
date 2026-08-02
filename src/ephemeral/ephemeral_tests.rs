@@ -377,7 +377,7 @@ async fn check_msg_is_deleted(t: &TestContext, chat: &Chat, msg_id: MsgId) {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_delete_expired_imap_messages() -> Result<()> {
+async fn test_delete_tombstoned_messages_from_imap() -> Result<()> {
     let t = TestContext::new_alice().await;
     let now = time();
     let transport_id: u32 = 1;
@@ -470,8 +470,8 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
         t.sql
             .execute(
                 "INSERT INTO msgs \
-                 (rfc724_mid, timestamp, ephemeral_timestamp, download_state, pre_rfc724_mid, param) \
-                 VALUES (?,?,?,?,?,?)",
+                 (rfc724_mid, timestamp, ephemeral_timestamp, download_state, pre_rfc724_mid, param, chat_id) \
+                 VALUES (?,?,?,?,?,?,?)",
                 (
                     rfc724_mid,
                     now,
@@ -482,7 +482,8 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
                         "c=1"
                     } else {
                         ""
-                    }
+                    },
+                    10 // Just some non-special chat id
                 ),
             )
             .await?;
@@ -522,7 +523,11 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
 
         t.set_config_bool(Config::BccSelf, bcc_self).await?;
 
-        delete_expired_imap_messages(
+        // `delete_expired_messages()` is called before `delete_tombstoned_messages_from_imap()`,
+        // because this matches the behavior in production
+        // where the ephemeral loop calls `delete_expired_messages()` as soon as a message timer expired.
+        delete_expired_messages(&t, time()).await?;
+        delete_tombstoned_messages_from_imap(
             &t,
             if other_transport {
                 transport_id + 1
@@ -562,7 +567,7 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
 
     // With BccSelf=true, non-expired messages are kept even if `is_chatmail` is true
     t.set_config_bool(Config::BccSelf, true).await?;
-    delete_expired_imap_messages(&t, transport_id, true).await?;
+    delete_tombstoned_messages_from_imap(&t, transport_id, true).await?;
     assert_eq!(is_deleted(&t, "expired@localhost").await?, true);
     assert_eq!(is_deleted(&t, "no_expire@localhost").await?, false);
     assert_eq!(is_deleted(&t, "done_pre@localhost").await?, false);

@@ -456,7 +456,7 @@ WHERE
 /// Emits relevant `MsgsChanged` and `WebxdcInstanceDeleted` events
 /// if messages are deleted.
 ///
-/// Also see [`delete_expired_imap_messages`],
+/// Also see [`delete_tombstoned_messages_from_imap`],
 /// which marks the messages for deletion on the IMAP server.
 pub(crate) async fn delete_expired_messages(context: &Context, now: i64) -> Result<()> {
     let rows = select_expired_messages(context, now).await?;
@@ -473,8 +473,8 @@ pub(crate) async fn delete_expired_messages(context: &Context, now: i64) -> Resu
                 // and other places it references.
                 let mut del_msg_stmt = transaction.prepare(
                     "
-INSERT OR REPLACE INTO msgs (id, rfc724_mid, pre_rfc724_mid, timestamp, chat_id)
-SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ? FROM msgs WHERE id=?1
+INSERT OR REPLACE INTO msgs (id, rfc724_mid, pre_rfc724_mid, timestamp, chat_id, deleted)
+SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE id=?1
                     ",
                 )?;
                 let mut del_location_stmt =
@@ -648,17 +648,20 @@ pub(crate) async fn ephemeral_loop(context: &Context, interrupt_receiver: Receiv
     }
 }
 
-/// Schedules expired IMAP messages for deletion on the server.
+/// Schedules messages for deletion on the server:
+///
+/// - messages in the trash chat with the `deleted=1` flag
+/// - In single-device mode, this additionally marks all downloaded messages for deletion
+///   (only encrypted ones for non-chatmail),
+///   because there is no other device that may need these messages.
 ///
 /// Also see [`delete_expired_messages`],
-/// which locally deletes expired messages.
-pub(crate) async fn delete_expired_imap_messages(
+/// which locally deletes expired messages, and gives them the `deleted=1` flag.
+pub(crate) async fn delete_tombstoned_messages_from_imap(
     context: &Context,
     transport_id: u32,
     is_chatmail: bool,
 ) -> Result<()> {
-    let now = time();
-
     let bcc_self = context.get_config_bool(Config::BccSelf).await?;
     if should_delete_all_downloaded_messages(bcc_self, is_chatmail) {
         // This is the only device using this relay.
@@ -677,20 +680,21 @@ pub(crate) async fn delete_expired_imap_messages(
                 WHERE transport_id=?1
                 AND rfc724_mid IN (
                     SELECT rfc724_mid FROM msgs
-                    WHERE ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR download_state=?3)
-                        AND id>9
+                    WHERE deleted=1 OR download_state=?2
                     UNION
                     SELECT pre_rfc724_mid FROM msgs
                     WHERE pre_rfc724_mid!=''
-                        AND id>9
                 )",
-                (transport_id, now, DownloadState::Done),
+                (transport_id, DownloadState::Done),
             )
             .await?;
     } else if bcc_self {
         // There may be other devices using this relay,
         // either because there is multi-device or because this is a classical email server.
-        // Only delete expired ephemeral messages.
+
+        // This uses `AND chat_id={DC_CHAT_ID_TRASH}`, so that the index on `chat_id` can be used.
+        // Only messages in the trash chat are ever marked as deleted, which makes this optimization possible.
+        // This speeds up this SQL query by a factor of ~3.
         context
             .sql
             .execute(
@@ -699,18 +703,18 @@ pub(crate) async fn delete_expired_imap_messages(
                 WHERE transport_id=?1
                 AND rfc724_mid IN (
                     SELECT rfc724_mid FROM msgs
-                    WHERE ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9
+                    WHERE deleted=1 AND chat_id=?2
                     UNION
                     SELECT pre_rfc724_mid FROM msgs
-                    WHERE pre_rfc724_mid!=''
-                        AND ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9
+                    WHERE pre_rfc724_mid!='' AND deleted=1 AND chat_id=?2
                 )",
-                (transport_id, now),
+                (transport_id, DC_CHAT_ID_TRASH),
             )
             .await?;
     } else {
         // Single device.
-        // Delete all expired and encrypted messages.
+        // Delete all messages that were marked for deletion,
+        // and all encrypted messages.
         context
             .sql
             .execute(
@@ -719,17 +723,14 @@ pub(crate) async fn delete_expired_imap_messages(
                  WHERE transport_id=?1
                  AND rfc724_mid IN (
                     SELECT rfc724_mid FROM msgs
-                    WHERE id>9
-                      AND ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR
-                           ((param GLOB '*\nc=1*' OR param GLOB 'c=1*') AND download_state=?3))
+                    WHERE ((param GLOB '*\nc=1*' OR param GLOB 'c=1*') AND download_state=?2) OR
+                           deleted=1
                     UNION
                     SELECT pre_rfc724_mid FROM msgs
                     WHERE pre_rfc724_mid!=''
-                      AND id>9
-                      AND ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR
-                           (param GLOB '*\nc=1*' OR param GLOB 'c=1*'))
+                      AND (param GLOB '*\nc=1*' OR param GLOB 'c=1*' OR deleted=1)
                 )",
-                (transport_id, now, DownloadState::Done),
+                (transport_id, DownloadState::Done),
             )
             .await?;
     }
