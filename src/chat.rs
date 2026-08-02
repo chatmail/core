@@ -770,21 +770,27 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
 
     /// Returns draft message, if there is one.
     pub async fn get_draft(self, context: &Context) -> Result<Option<Message>> {
+        context
+            .sql
+            .transaction(|transaction| self.get_draft_trans(context, transaction))
+            .await
+    }
+    /// See [`Self::get_draft`].
+    pub fn get_draft_trans(
+        self,
+        context: &Context,
+        conn: &rusqlite::Connection,
+    ) -> Result<Option<Message>> {
         if self.is_special() {
             return Ok(None);
         }
-        context
-            .sql
-            .transaction(
-                |transaction| match self.get_draft_msg_id_trans(transaction)? {
-                    Some(draft_msg_id) => {
-                        let msg = Message::load_from_db_trans(context, transaction, draft_msg_id)?;
-                        Ok(Some(msg))
-                    }
-                    None => Ok(None),
-                },
-            )
-            .await
+        match self.get_draft_msg_id_trans(conn)? {
+            Some(draft_msg_id) => {
+                let msg = Message::load_from_db_trans(context, conn, draft_msg_id)?;
+                Ok(Some(msg))
+            }
+            None => Ok(None),
+        }
     }
 
     /// Deletes draft message, if there is one.
