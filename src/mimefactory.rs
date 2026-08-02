@@ -1421,12 +1421,7 @@ impl MimeFactory {
                     let email_to_remove = msg.param.get(Param::Arg).unwrap_or_default();
                     let fingerprint_to_remove = msg.param.get(Param::Arg4).unwrap_or_default();
 
-                    if email_to_remove
-                        == context
-                            .get_config(Config::ConfiguredAddr)
-                            .await?
-                            .unwrap_or_default()
-                    {
+                    if context.is_self_addr(email_to_remove).await? {
                         placeholdertext = Some(format!("{email_to_remove} left the group."));
                     } else {
                         placeholdertext = Some(format!("Member {email_to_remove} was removed."));
