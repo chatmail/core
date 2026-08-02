@@ -768,6 +768,30 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
         Ok(count > 0)
     }
 
+    fn should_reuse_draft_id(context: &Context, old: &Message, new: &Message) -> Result<bool> {
+        ensure!(
+            old.chat_id.is_unset() || new.chat_id.is_unset() || new.chat_id == old.chat_id,
+            "messaged belong to different chats"
+        );
+        ensure!(
+            old.get_state() == MessageState::Undefined || old.get_state() == MessageState::OutDraft,
+            "old message is a real message, not a draft"
+        );
+
+        // Reusing the ID is only useful for WebXDC messages,
+        // but for consistency let's reuse it whenever possible.
+
+        if old.get_viewtype() == Viewtype::Webxdc
+            && (new.get_viewtype() != Viewtype::Webxdc
+                || old.get_file(context) != new.get_file(context))
+        {
+            // Old draft's WebXDC attachment got removed or replaced.
+            return Ok(false);
+        }
+
+        Ok(true)
+    }
+
     /// Returns draft message, if there is one.
     pub async fn get_draft(self, context: &Context) -> Result<Option<Message>> {
         context
@@ -852,7 +876,30 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
 
         let trans_fn = |transaction: &mut rusqlite::Transaction| {
             // if possible, replace existing draft and keep id
-            if !msg.id.is_special() && self.has_draft_with_id(transaction, &msg.id)? {
+            let reuse_existing_id: Option<MsgId> = if !msg.id.is_special() {
+                // The ID was specified by the caller, so reuse the draft
+                // even if `!should_reuse_draft_id()`.
+                // We probably should return an error in such case,
+                // or make a new draft message with a different ID,
+                // but we keep this for compatibility with Android and iOS.
+                if self.has_draft_with_id(transaction, &msg.id)? {
+                    Some(msg.id)
+                } else {
+                    None
+                }
+            } else if let Some(existing) = self.get_draft_trans(context, transaction)?
+                && Self::should_reuse_draft_id(context, &existing, msg)?
+            {
+                // TODO ahhh shit. `send_msg` us used in a looooooot of places.
+                // We should only reuse the draft if the "send message" action
+                // was invoked by the user, from the composer,
+                // because reusing the draft _also clears the draft_.
+                Some(existing.id)
+            } else {
+                None
+            };
+
+            if let Some(reuse_existing_id) = reuse_existing_id {
                 let affected_rows = transaction.execute(
                     "UPDATE msgs
                     SET timestamp=?1,type=?2,txt=?3,txt_normalized=?4,param=?5,mime_in_reply_to=?6
@@ -869,11 +916,11 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
                         normalize_text(&msg.text),
                         msg.param.to_string(),
                         msg.in_reply_to.as_deref().unwrap_or_default(),
-                        msg.id,
+                        reuse_existing_id,
                     ),
                 )?;
                 let changed = affected_rows > 0;
-                return Ok((msg.id, changed));
+                return Ok((reuse_existing_id, changed));
             }
 
             // Delete existing draft if it exists.
@@ -1965,14 +2012,26 @@ impl Chat {
 
         // add message to the database
         let trans_fn = |transaction: &mut rusqlite::Transaction| {
-            let reuse = update_existing_draft == UseExistingDraftPolicy::ReuseIfCan
-                && msg.state == MessageState::OutDraft
-                && !msg.id.is_special()
-                && original_msg_chat_id == self.id;
-            if reuse {
+            let try_reuse: bool = update_existing_draft == UseExistingDraftPolicy::ReuseIfCan;
+            let reuse_existing_id: Option<MsgId> = if !try_reuse {
+                None
+            } else if !msg.id.is_special() {
+                if msg.state == MessageState::OutDraft && original_msg_chat_id == self.id {
+                    Some(msg.id)
+                } else {
+                    None
+                }
+            } else if let Some(existing) = self.id.get_draft_trans(context, transaction)?
+                && ChatId::should_reuse_draft_id(context, &existing, msg)?
+            {
+                Some(existing.id)
+            } else {
+                None
+            };
+            if let Some(reuse_existing_id) = reuse_existing_id {
                 // Maybe we could try to somehow gracefully recover from this,
                 // but better safe than sorry.
-                if !self.id.has_draft_with_id(transaction, &msg.id)? {
+                if !self.id.has_draft_with_id(transaction, &reuse_existing_id)? {
                     bail!(
                         concat!(
                             "wanted to prepare existing draft for sending in chat {0}, ",
@@ -2012,11 +2071,11 @@ impl Chat {
                         location_id as i32,
                         ephemeral_timer,
                         ephemeral_timestamp,
-                        msg.id
+                        reuse_existing_id
                     ],
                 )?;
                 let inserted = false;
-                Ok((msg.id, inserted))
+                Ok((reuse_existing_id, inserted))
             } else {
                 transaction.execute(
                     "INSERT INTO msgs (
