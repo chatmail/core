@@ -19,7 +19,7 @@ use crate::log::LogExt;
 use crate::mimefactory::RECOMMENDED_FILE_SIZE;
 use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::{get_abs_path, time};
-use crate::transport::{add_pseudo_transport, send_sync_transports};
+use crate::transport::{add_pseudo_transport, published_transports, send_sync_transports};
 use crate::{constants, stats};
 
 /// The available configuration keys.
@@ -940,16 +940,11 @@ impl Context {
     /// Returns all published self addresses, newest first.
     /// See `[Context::set_transport_unpublished]`
     pub(crate) async fn get_published_self_addrs(&self) -> Result<Vec<String>> {
-        self.sql
-            .query_map_vec(
-                "SELECT addr FROM transports WHERE is_published=1 ORDER BY add_timestamp DESC, id DESC",
-                (),
-                |row| {
-                    let addr: String = row.get(0)?;
-                    Ok(addr)
-                },
-            )
-            .await
+        Ok(published_transports(self)
+            .await?
+            .into_iter()
+            .map(|(addr, _)| addr)
+            .collect())
     }
 
     /// Returns all published secondary self addresses.
