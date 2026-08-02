@@ -10,9 +10,7 @@ use std::time::Duration;
 
 use anyhow::{Context as _, Result, anyhow, bail, ensure};
 use chrono::TimeZone;
-use deltachat_contact_tools::{
-    ContactAddress, addr_cmp, sanitize_bidi_characters, sanitize_single_line,
-};
+use deltachat_contact_tools::{ContactAddress, sanitize_bidi_characters, sanitize_single_line};
 use humansize::{BINARY, format_size};
 use mail_builder::mime::MimePart;
 use serde::{Deserialize, Serialize};
@@ -2852,9 +2850,6 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
     };
     let attach_selfavatar = mimefactory.attach_selfavatar;
     let mut recipients = mimefactory.recipients();
-
-    let self_addrs = context.get_all_self_addrs().await?;
-    recipients.retain(|x| !self_addrs.iter().any(|a| addr_cmp(a, x)));
 
     // Default Webxdc integrations are hidden messages and must not be sent out:
     if (msg.param.get_int(Param::WebxdcIntegration).is_some() && msg.hidden)

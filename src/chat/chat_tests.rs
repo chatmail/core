@@ -3957,7 +3957,7 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
 
     let leave_msg = bob0.pop_sent_msg().await;
     let parsed = MimeMessage::from_bytes(bob1, leave_msg.payload().as_bytes()).await?;
-    assert_eq!(parsed.parts[0].msg, "bob@example.net left the group.");
+    assert_eq!(parsed.parts[0].msg, "Member bob@example.net was removed.");
 
     let rcvd = bob1.recv_msg(&leave_msg).await;
 
