@@ -747,6 +747,22 @@ async fn test_remove_member_bcc() -> Result<()> {
         }
     }
 
+    // A member whose address became a secondary self address is treated
+    // as ourselves on removal and rendered as "left the group".
+    let secondary_self_addr = "alice@second.example";
+    let secondary_self_id = crate::contact::Contact::create(alice, "", secondary_self_addr).await?;
+    add_contact_to_chat(alice, alice_chat_id, secondary_self_id).await?;
+    alice.pop_sent_msg().await;
+    crate::transport::add_pseudo_transport(alice, secondary_self_addr).await?;
+    remove_contact_from_chat(alice, alice_chat_id, secondary_self_id).await?;
+    let remove = alice.pop_sent_msg().await;
+    assert!(
+        remove
+            .payload()
+            .contains("alice@second.example left the group.")
+    );
+    assert!(!remove.payload().contains("was removed"));
+
     Ok(())
 }
 

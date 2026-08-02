@@ -1230,17 +1230,13 @@ ORDER BY c.origin>=? DESC, c.last_seen DESC, c.id DESC
                 .await?;
 
             if let Some(query) = query {
-                let self_addr = context
-                    .get_config(Config::ConfiguredAddr)
-                    .await?
-                    .unwrap_or_default();
                 let self_name = context
                     .get_config(Config::Displayname)
                     .await?
                     .unwrap_or_default();
                 let self_name2 = stock_str::self_msg(context);
 
-                if self_addr.contains(query)
+                if self_addrs.iter().any(|a| a.contains(query))
                     || self_name.contains(query)
                     || self_name2.contains(query)
                 {

@@ -152,6 +152,20 @@ async fn test_get_contacts() -> Result<()> {
     assert_eq!(contacts.len(), 1);
     let contacts = Contact::get_all(&context, 0, Some("δ")).await?;
     assert_eq!(contacts.len(), 1);
+
+    // Searching for a secondary self address finds "Me",
+    // even if the transport is unpublished.
+    crate::transport::add_pseudo_transport(&context, "bob@second.example").await?;
+    context
+        .set_transport_unpublished("bob@second.example", true)
+        .await?;
+    let contacts = Contact::get_all(
+        &context,
+        constants::DC_GCL_ADD_SELF,
+        Some("bob@second.example"),
+    )
+    .await?;
+    assert_eq!(contacts, vec![ContactId::SELF]);
     Ok(())
 }
 

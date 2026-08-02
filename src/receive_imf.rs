@@ -3177,15 +3177,13 @@ async fn apply_group_changes(
             .await?;
         } else {
             let mut new_members: BTreeSet<ContactId>;
-            // True if a Delta Chat client has explicitly and really added our primary address to an
-            // already existing group.
-            let self_added =
-                if let Some(added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
-                    addr_cmp(&context.get_primary_self_addr().await?, added_addr)
-                        && !chat_contacts.contains(&ContactId::SELF)
-                } else {
-                    false
-                };
+            let self_added = if let Some(added_addr) =
+                mime_parser.get_header(HeaderDef::ChatGroupMemberAdded)
+            {
+                context.is_self_addr(added_addr).await? && !chat_contacts.contains(&ContactId::SELF)
+            } else {
+                false
+            };
             if self_added {
                 new_members = BTreeSet::from_iter(to_ids_flat.iter().copied());
                 new_members.insert(ContactId::SELF);
