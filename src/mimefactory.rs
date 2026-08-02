@@ -1421,11 +1421,9 @@ impl MimeFactory {
                     let email_to_remove = msg.param.get(Param::Arg).unwrap_or_default();
                     let fingerprint_to_remove = msg.param.get(Param::Arg4).unwrap_or_default();
 
-                    if context.is_self_addr(email_to_remove).await? {
-                        placeholdertext = Some(format!("{email_to_remove} left the group."));
-                    } else {
-                        placeholdertext = Some(format!("Member {email_to_remove} was removed."));
-                    };
+                    // Only visible in classic email clients,
+                    // Delta Chat renders removals from the headers.
+                    placeholdertext = Some(format!("Member {email_to_remove} was removed."));
 
                     if !email_to_remove.is_empty() {
                         headers.push((
