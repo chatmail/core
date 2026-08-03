@@ -998,7 +998,7 @@ async fn test_render_outer_headers() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
 
-    let chat_id = alice.create_chat_id(&bob).await;
+    let chat_id = alice.create_chat_id(bob).await;
     let sent = alice.send_text(chat_id, "Hello!").await;
 
     let (unencrypted, _encrypted) = sent
