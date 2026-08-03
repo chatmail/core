@@ -106,14 +106,6 @@ async fn broadcast_reactions_for_one_chat(context: &Context, chat_id: ChatId) ->
         )
         .await?;
 
-    context
-        .sql
-        .execute(
-            "DELETE FROM reactions_need_broadcast WHERE chat_id=?",
-            (chat_id,),
-        )
-        .await?;
-
     let mut messages: Vec<WireMessage> = Vec::new();
     for msg_id in &msg_ids {
         let Some(msg) = Message::load_from_db_optional(context, *msg_id).await? else {
@@ -133,17 +125,24 @@ async fn broadcast_reactions_for_one_chat(context: &Context, chat_id: ChatId) ->
             reactions: entries, // can be empty if all reactions were removed
         });
     }
-    if messages.is_empty() {
-        return Ok(());
+
+    if !messages.is_empty() {
+        let payload = WirePayload { messages };
+        let json = serde_json::to_string(&payload)?;
+        let mut reaction_msg = Message::new_text("".to_string());
+        reaction_msg.set_reaction();
+        reaction_msg.param.set(Param::BroadcastReactions, json);
+        reaction_msg.hidden = true;
+        send_msg(context, chat_id, &mut reaction_msg).await?;
     }
 
-    let payload = WirePayload { messages };
-    let json = serde_json::to_string(&payload)?;
-    let mut reaction_msg = Message::new_text("".to_string());
-    reaction_msg.set_reaction();
-    reaction_msg.param.set(Param::BroadcastReactions, json);
-    reaction_msg.hidden = true;
-    send_msg(context, chat_id, &mut reaction_msg).await?;
+    context
+        .sql
+        .execute(
+            "DELETE FROM reactions_need_broadcast WHERE chat_id=?",
+            (chat_id,),
+        )
+        .await?;
 
     Ok(())
 }
