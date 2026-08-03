@@ -73,7 +73,7 @@ pub enum Param {
     /// For Messages: Render message as a RFC 9078 reaction.
     Reaction = b'x',
 
-    /// For Messages: Additional reactions that go to the BroadcastReactions: header
+    /// For Messages: Additional reactions that go to the Broadcast-Reactions: header
     BroadcastReactions = b'X',
 
     /// For Chats: the timestamp of the last reaction.
