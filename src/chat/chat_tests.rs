@@ -3057,6 +3057,29 @@ async fn test_broadcast_change_name() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_broadcast_muted() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    // Alice's new outgoing broadcast channel is muted after creation:
+    // Channel owners can only get reaction notifications; they are usually not of much interest.
+    let alice_chat_id = create_broadcast(alice, "Channel".to_string()).await?;
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
+    let alice_chat = Chat::load_from_db(alice, alice_chat_id).await?;
+    assert!(alice_chat.is_muted());
+
+    // Bob joins the channel, for him, it is not muted:
+    // For channel subscribers, new messages to newly subscribed channels are often interesting.
+    let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
+    bob_chat_id.accept(bob).await?;
+    let bob_chat = Chat::load_from_db(bob, bob_chat_id).await?;
+    assert!(!bob_chat.is_muted());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_broadcast_resend_to_new_member() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
