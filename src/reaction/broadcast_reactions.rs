@@ -28,7 +28,10 @@ struct WirePayload {
 }
 #[derive(Debug, Serialize, Deserialize)]
 struct WireMessage {
+    /// RFC 724 Message-ID.
     id: String,
+
+    /// Array of reaction entries.
     reactions: Vec<WireEntry>,
 }
 #[derive(Debug, Serialize, Deserialize)]
