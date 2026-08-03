@@ -159,15 +159,13 @@ pub(crate) async fn receive_broadcast_reactions(context: &Context, json: &str) -
         let Some(msg) = Message::load_from_db_optional(context, msg_id).await? else {
             continue; // there may have been a deletion race, ignore error
         };
-
-        let chat: Chat;
-        match Chat::load_from_db(context, msg.chat_id).await {
-            Ok(loaded_chat) => chat = loaded_chat,
+        let chat = match Chat::load_from_db(context, msg.chat_id).await {
+            Ok(chat) => chat,
             Err(err) => {
                 warn!(context, "Cannot load chat for broadcast reaction: {err}");
                 continue;
             }
-        }
+        };
         if chat.typ != Chattype::InBroadcast {
             continue;
         }
