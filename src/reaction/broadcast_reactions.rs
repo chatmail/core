@@ -40,7 +40,7 @@ struct WireEntry {
 /// Seconds between sending out accumulated reaction updates for broadcast channels from `reactions_need_broadcast` table
 const REACTION_BROADCAST_PERIOD: i64 = 10 * 60;
 
-/// Starts broadcasting if last broadcasting so more than `REACTION_BROADCAST_PERIOD` seconds in the past.
+/// Starts broadcasting if last broadcasting is more than `REACTION_BROADCAST_PERIOD` seconds in the past.
 pub(crate) async fn maybe_broadcast_reactions(context: &Context) -> Result<()> {
     let last_broadcast_time = context
         .get_config_i64(Config::LastReactionsBroadcast)
