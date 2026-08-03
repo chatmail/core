@@ -897,7 +897,7 @@ async fn test_bcc_self() -> Result<()> {
         alice.set_config_bool(Config::BccSelf, bcc_self).await?;
 
         let group = alice.create_group_with_members("Group", &[bob]).await;
-        let single_chat = alice.create_chat_id(&bob).await;
+        let single_chat = alice.create_chat_id(bob).await;
 
         for chat_id in [group, single_chat] {
             let sent = alice.send_text(chat_id, "Heyho!").await;
