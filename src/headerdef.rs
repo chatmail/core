@@ -124,7 +124,7 @@ pub enum HeaderDef {
 
     /// Broadcasted reactions for this or other chat messages.
     /// See broadcast_reactions.rs for the wire format.
-    BroadcastReactions,
+    ChatBroadcastReactions,
 
     /// [Autocrypt](https://autocrypt.org/) header.
     Autocrypt,
