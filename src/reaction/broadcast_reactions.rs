@@ -332,6 +332,48 @@ mod tests {
     use crate::test_utils::TestContextManager;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_broadcast_reaction_wire_format() {
+        let payload = WirePayload {
+            messages: vec![
+                WireMessage {
+                    id: "12345678@foo".to_string(),
+                    reactions: vec![
+                        WireEntry {
+                            emoji: "😎".to_string(),
+                            count: 4,
+                        },
+                        WireEntry {
+                            emoji: "🕺".to_string(),
+                            count: 2,
+                        },
+                    ],
+                },
+                WireMessage {
+                    id: "23456789@bar".to_string(),
+                    reactions: vec![],
+                },
+            ],
+        };
+
+        let json = serde_json::to_string(&payload).unwrap();
+        assert_eq!(
+            json,
+            r#"{"messages":[{"id":"12345678@foo","reactions":[{"emoji":"😎","count":4},{"emoji":"🕺","count":2}]},{"id":"23456789@bar","reactions":[]}]}"#
+        );
+
+        let payload: WirePayload = serde_json::from_str(&json).unwrap();
+        assert_eq!(payload.messages.len(), 2);
+        assert_eq!(payload.messages[0].id, "12345678@foo");
+        assert_eq!(payload.messages[0].reactions.len(), 2);
+        assert_eq!(payload.messages[0].reactions[0].emoji, "😎");
+        assert_eq!(payload.messages[0].reactions[0].count, 4);
+        assert_eq!(payload.messages[0].reactions[1].emoji, "🕺");
+        assert_eq!(payload.messages[0].reactions[1].count, 2);
+        assert_eq!(payload.messages[1].id, "23456789@bar");
+        assert!(payload.messages[1].reactions.is_empty());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_modify_frequencies() {
         // Helper to create a ReactionFrequency entry
         let freq = |emoji: &str, count: usize, is_from_self: bool| -> ReactionFrequency {
