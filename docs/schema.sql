@@ -2,6 +2,9 @@
 --
 -- This file should only be used for documentation,
 -- do not run this SQL e.g. to create databases.
+-- This is because we want to be 100% sure
+-- that new users and users who run the migrations
+-- get the same database schema.
 --
 -- This is a dump of the database schema using `sqlite3 dc.db .schema`,
 -- formatted and commented afterwards.
@@ -574,9 +577,10 @@ CREATE TABLE stats_msgs(
 CREATE TABLE stats_sending_enabled_events(timestamp INTEGER NOT NULL) STRICT;
 CREATE TABLE stats_sending_disabled_events(timestamp INTEGER NOT NULL) STRICT;
 
+-- Deprecated and unused tables.
 --
--- Deprecated tables.
---
+-- We don't immediately drop unused tables,
+-- because we want users to be able to downgrade.
 
 -- Deprecated table for Autocrypt peer states.
 -- It is replaced by the new "public_keys" table in migration 132
