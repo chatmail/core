@@ -15,12 +15,12 @@ export RUSTFLAGS="-Zprint-type-sizes"
 export RUSTC_BOOTSTRAP=1
 
 # Warm the dependency cache so their output doesn't pollute the report later.
-cargo check --release -p deltachat >/dev/null
+cargo check --locked --release -p deltachat >/dev/null
 
 # Recompile only the core crate (release) capture its type-size report.
-cargo clean --release -p deltachat
+cargo clean --locked --release -p deltachat
 report="$CARGO_TARGET_DIR/type-sizes.txt"
-if ! cargo check --release -p deltachat >"$report"; then
+if ! cargo check --locked --release -p deltachat >"$report"; then
     tail -20 "$report"
     exit 1
 fi
