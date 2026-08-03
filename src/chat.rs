@@ -1846,10 +1846,6 @@ impl Chat {
         let mut to_id = 0;
         let mut location_id = 0;
 
-        if msg.rfc724_mid.is_empty() {
-            msg.rfc724_mid = create_outgoing_rfc724_mid();
-        }
-
         if self.typ == Chattype::Single {
             if let Some(id) = context
                 .sql
@@ -1949,7 +1945,12 @@ impl Chat {
             // MUAs usually keep the first Message-ID in `References:` header unchanged.
             new_references_opt = None;
         }
-        let new_references = new_references_opt.as_ref().unwrap_or(&msg.rfc724_mid);
+        fn get_new_references<'a>(
+            new_references_opt: &'a Option<String>,
+            rfc724_mid: &'a str,
+        ) -> &'a str {
+            new_references_opt.as_deref().unwrap_or(rfc724_mid)
+        }
 
         // add independent location to database
         if msg.param.exists(Param::SetLatitude)
@@ -2015,18 +2016,37 @@ impl Chat {
         // add message to the database
         let trans_fn = |transaction: &mut rusqlite::Transaction| {
             let try_reuse: bool = update_existing_draft == UseExistingDraftPolicy::Reuse;
-            let reuse_existing_id: Option<MsgId> = if !try_reuse {
+            let reuse_existing: Option<(MsgId, String)> = if !try_reuse {
                 None
             } else if !msg.id.is_special() {
-                Some(msg.id)
+                ensure!(
+                    !msg.rfc724_mid.is_empty(),
+                    concat!(
+                        "cannot reuse existing draft: ",
+                        "when `message.id` is set, `message.rfc724_mid` must also be set ",
+                        "(as well as all other necessary properties); "
+                    )
+                );
+
+                Some((msg.id, msg.rfc724_mid.to_owned()))
             } else if let Some(existing) = self.id.get_draft_trans(context, transaction)?
                 && ChatId::can_reuse_draft(context, &existing, msg)?
             {
-                Some(existing.id)
+                ensure!(
+                    !existing.rfc724_mid.is_empty(),
+                    concat!(
+                        "cannot reuse existing draft: ",
+                        "expected its `rfc724_mid` to be already set in the DB, but it's empty"
+                    )
+                );
+
+                Some((existing.id, existing.rfc724_mid.to_owned()))
             } else {
                 None
             };
-            if let Some(reuse_existing_id) = reuse_existing_id {
+            if let Some((reuse_existing_id, rfc724_mid)) = reuse_existing {
+                ensure!(!rfc724_mid.is_empty());
+
                 // Maybe we could try to somehow gracefully recover from this,
                 // but better safe than sorry.
                 if !self.id.has_draft_with_id(transaction, &reuse_existing_id)? {
@@ -2050,7 +2070,7 @@ impl Chat {
                          ephemeral_timestamp=?
                      WHERE id=?;",
                     params_slice![
-                        msg.rfc724_mid,
+                        rfc724_mid,
                         msg.chat_id,
                         msg.from_id,
                         to_id,
@@ -2063,7 +2083,7 @@ impl Chat {
                         msg.param.to_string(),
                         msg.hidden,
                         msg.in_reply_to.as_deref().unwrap_or_default(),
-                        new_references,
+                        get_new_references(&new_references_opt, &rfc724_mid),
                         new_mime_headers.is_some(),
                         new_mime_headers.unwrap_or_default(),
                         location_id as i32,
@@ -2073,8 +2093,14 @@ impl Chat {
                     ],
                 )?;
                 let inserted = false;
-                Ok((reuse_existing_id, inserted))
+                Ok((reuse_existing_id, rfc724_mid, inserted))
             } else {
+                let rfc724_mid = if !msg.rfc724_mid.is_empty() {
+                    &msg.rfc724_mid
+                } else {
+                    &create_outgoing_rfc724_mid()
+                };
+
                 transaction.execute(
                     "INSERT INTO msgs (
                      rfc724_mid,
@@ -2099,7 +2125,7 @@ impl Chat {
                      ephemeral_timestamp)
                      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?);",
                     params_slice![
-                        msg.rfc724_mid,
+                        rfc724_mid,
                         msg.chat_id,
                         msg.from_id,
                         to_id,
@@ -2112,7 +2138,7 @@ impl Chat {
                         msg.param.to_string(),
                         msg.hidden,
                         msg.in_reply_to.as_deref().unwrap_or_default(),
-                        new_references,
+                        get_new_references(&new_references_opt, rfc724_mid),
                         new_mime_headers.is_some(),
                         new_mime_headers.unwrap_or_default(),
                         location_id as i32,
@@ -2122,12 +2148,13 @@ impl Chat {
                 )?;
                 let msg_id = MsgId::new(transaction.last_insert_rowid().try_into()?);
                 let inserted = true;
-                Ok((msg_id, inserted))
+                Ok((msg_id, rfc724_mid.to_string(), inserted))
             }
         };
-        let (msg_id, inserted) = context.sql.transaction(trans_fn).await?;
+        let (msg_id, rfc724_mid, inserted) = context.sql.transaction(trans_fn).await?;
 
         msg.id = msg_id;
+        msg.rfc724_mid = rfc724_mid;
         if inserted {
             context.new_msgs_notify.notify_one();
 
