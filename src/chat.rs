@@ -1883,11 +1883,13 @@ impl Chat {
         // Set "In-Reply-To:" to identify the message to which the composed message is a reply.
         // Set "References:" to identify the "thread" of the conversation.
         // Both according to [RFC 5322 3.6.4, page 25](https://www.rfc-editor.org/rfc/rfc5322#section-3.6.4).
-        let new_references;
+        //
+        // When `None`, we'll use the current message's `rfc724_mid` as the reference.
+        let new_references_opt: Option<String>;
         if self.is_self_talk() {
             // As self-talks are mainly used to transfer data between devices,
             // we do not set In-Reply-To/References in this case.
-            new_references = String::new();
+            new_references_opt = Some(String::new());
         } else if let Some((parent_rfc724_mid, parent_in_reply_to, parent_references)) =
             // We don't filter `OutPending` and `OutFailed` messages because the new message for
             // which `parent_query()` is done may assume that it will be received in a context
@@ -1935,9 +1937,9 @@ impl Chat {
             if references_vec.is_empty() {
                 // As a fallback, use our Message-ID,
                 // same as in the case of top-level message.
-                new_references = msg.rfc724_mid.clone();
+                new_references_opt = None;
             } else {
-                new_references = references_vec.join(" ");
+                new_references_opt = Some(references_vec.join(" "));
             }
         } else {
             // This is a top-level message.
@@ -1945,8 +1947,9 @@ impl Chat {
             // This allows us to identify replies to our message even if
             // email server such as Outlook changes `Message-ID:` header.
             // MUAs usually keep the first Message-ID in `References:` header unchanged.
-            new_references = msg.rfc724_mid.clone();
+            new_references_opt = None;
         }
+        let new_references = new_references_opt.as_ref().unwrap_or(&msg.rfc724_mid);
 
         // add independent location to database
         if msg.param.exists(Param::SetLatitude)
