@@ -902,9 +902,9 @@ async fn test_bcc_self() -> Result<()> {
         for chat_id in [group, single_chat] {
             let sent = alice.send_text(chat_id, "Heyho!").await;
             if bcc_self {
-                assert!(sent.recipients.ends_with("alice@example.org"));
+                assert_eq!(sent.recipients, "bob@example.net alice@example.org");
             } else {
-                assert_eq!(sent.recipients.contains("alice@example.org"), false);
+                assert_eq!(sent.recipients, "bob@example.net");
             }
         }
     }
