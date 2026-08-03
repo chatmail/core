@@ -887,6 +887,30 @@ async fn test_new_member_is_first_recipient() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_bcc_self() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    for bcc_self in [false, true] {
+        alice.set_config_bool(Config::BccSelf, bcc_self).await?;
+
+        let group = alice.create_group_with_members("Group", &[bob]).await;
+        let single_chat = alice.create_chat_id(&bob).await;
+
+        for chat_id in [group, single_chat] {
+            let sent = alice.send_text(chat_id, "Heyho!").await;
+            if bcc_self {
+                assert!(sent.recipients.ends_with("alice@example.org"));
+            } else {
+                assert_eq!(sent.recipients.contains("alice@example.org"), false);
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Regression test: mimefactory should never create an empty to header,
 /// also not if the Selftalk parameter is missing
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
