@@ -253,13 +253,15 @@ impl Context {
             RelayMode::Default
         };
 
-        let endpoint = Endpoint::builder()
-            .tls_x509() // For compatibility with iroh <0.34.0
-            .secret_key(secret_key)
-            .alpns(vec![GOSSIP_ALPN.to_vec()])
-            .relay_mode(relay_mode)
-            .bind()
-            .await?;
+        let endpoint = Box::pin(
+            Endpoint::builder()
+                .tls_x509() // For compatibility with iroh <0.34.0
+                .secret_key(secret_key)
+                .alpns(vec![GOSSIP_ALPN.to_vec()])
+                .relay_mode(relay_mode)
+                .bind(),
+        )
+        .await?;
 
         // create gossip
         // Allow messages up to 128 KB in size.
