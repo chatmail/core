@@ -97,12 +97,14 @@ impl BackupProvider {
     /// [`Accounts::stop_io`]: crate::accounts::Accounts::stop_io
     pub async fn prepare(context: &Context) -> Result<Self> {
         let relay_mode = RelayMode::Disabled;
-        let endpoint = Endpoint::builder()
-            .tls_x509() // For compatibility with iroh <0.34.0
-            .alpns(vec![BACKUP_ALPN.to_vec()])
-            .relay_mode(relay_mode)
-            .bind()
-            .await?;
+        let endpoint = Box::pin(
+            Endpoint::builder()
+                .tls_x509() // For compatibility with iroh <0.34.0
+                .alpns(vec![BACKUP_ALPN.to_vec()])
+                .relay_mode(relay_mode)
+                .bind(),
+        )
+        .await?;
         let node_addr = endpoint.node_addr().await?;
 
         // Acquire global "ongoing" mutex.
@@ -308,12 +310,14 @@ pub async fn get_backup2(
 
     let mut transport_config = iroh::endpoint::TransportConfig::default();
     transport_config.max_idle_timeout(Some(Duration::from_secs(60).try_into()?));
-    let endpoint = Endpoint::builder()
-        .tls_x509() // For compatibility with iroh <0.34.0
-        .relay_mode(relay_mode)
-        .transport_config(transport_config)
-        .bind()
-        .await?;
+    let endpoint = Box::pin(
+        Endpoint::builder()
+            .tls_x509() // For compatibility with iroh <0.34.0
+            .relay_mode(relay_mode)
+            .transport_config(transport_config)
+            .bind(),
+    )
+    .await?;
 
     let conn = endpoint.connect(node_addr, BACKUP_ALPN).await?;
     let (mut send_stream, mut recv_stream) = conn.open_bi().await?;
