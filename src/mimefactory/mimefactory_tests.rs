@@ -3,6 +3,8 @@ use mail_builder::headers::Header;
 use mailparse::{MailHeaderMap, addrparse_header};
 use pgp::armor;
 use pgp::packet::{Packet, PacketParser};
+use pretty_assertions::assert_eq;
+use regex::Regex;
 use std::io::BufReader;
 use std::str;
 use std::time::Duration;
@@ -986,6 +988,72 @@ END:VCARD";
 
     let sent = bob.send_text(group_id, "Hello again with SEIPDv2!").await;
     assert_seipd_version(&sent.payload, 2);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_render_outer_headers() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let chat_id = alice.create_chat_id(&bob).await;
+    let sent = alice.send_text(chat_id, "Hello!").await;
+
+    let (unencrypted, _encrypted) = sent
+        .payload()
+        .split_once("-----BEGIN PGP MESSAGE-----")
+        .unwrap();
+
+    // Normalize the parts of the message that vary between runs
+    // (MIME boundary, Date, Message-ID)
+    let boundary = unencrypted
+        .split_once("boundary=\"")
+        .and_then(|(_, rest)| rest.split_once('"'))
+        .map(|(b, _)| b)
+        .unwrap_or_default();
+    let unencrypted = unencrypted.replace(boundary, "BOUNDARY");
+
+    let rfc724_mid = sent.load_from_db().await.rfc724_mid;
+    let unencrypted = unencrypted.replace(&rfc724_mid, "MESSAGE_ID@localhost");
+
+    let unencrypted = Regex::new(r"Date:[^\r\n]*")
+        .unwrap()
+        .replace(&unencrypted, "Date: DATE")
+        .to_string();
+
+    let expected = r#"From: <alice@example.org>
+Date: DATE
+Message-ID: <MESSAGE_ID@localhost>
+MIME-Version: 1.0
+To: "hidden-recipients": ;
+Subject: [...]
+Chat-Version: 1.0
+Content-Type: multipart/encrypted; protocol="application/pgp-encrypted"; 
+	boundary="BOUNDARY"
+
+
+--BOUNDARY
+Content-Type: application/pgp-encrypted; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Version: 1
+
+--BOUNDARY
+Content-Type: application/octet-stream; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+"#
+    .replace("\n", "\r\n");
+    assert_eq!(
+        unencrypted, expected,
+        "---------------- Actual: ----------------
+{unencrypted}
+-----------------------------------------
+actual (debug print): {unencrypted:?}
+expected (debug print): {expected:?}"
+    );
 
     Ok(())
 }
