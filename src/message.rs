@@ -461,6 +461,7 @@ pub struct Message {
     pub(crate) in_reply_to: Option<String>,
     pub(crate) is_dc_message: MessengerMessage,
     pub(crate) original_msg_id: MsgId,
+    pub(crate) pinned: bool,
     pub(crate) mime_modified: bool,
     pub(crate) chat_visibility: ChatVisibility,
     pub(crate) chat_blocked: Blocked,
@@ -530,6 +531,7 @@ impl Message {
                     m.error AS error,
                     m.msgrmsg AS msgrmsg,
                     m.starred AS original_msg_id,
+                    m.pinned AS pinned,
                     m.mime_modified AS mime_modified,
                     m.txt AS txt,
                     m.subject AS subject,
@@ -588,6 +590,7 @@ impl Message {
                             .filter(|error| !error.is_empty()),
                         is_dc_message: row.get("msgrmsg")?,
                         original_msg_id: row.get("original_msg_id")?,
+                        pinned: row.get("pinned")?,
                         mime_modified: row.get("mime_modified")?,
                         text,
                         additional_text: String::new(),
@@ -1080,6 +1083,8 @@ impl Message {
             | SystemMessage::IrohNodeAddr
             | SystemMessage::CallAccepted
             | SystemMessage::CallEnded
+            | SystemMessage::MessagePinned // UI should scroll to pinned message on tapping
+            | SystemMessage::MessageUnpinned // UI should scroll to unpinned message on tapping
             | SystemMessage::Unknown => Ok(None),
         }
     }
@@ -1344,6 +1349,11 @@ impl Message {
             )
             .await?;
         Ok(res)
+    }
+
+    /// Returns true if the message is pinned.
+    pub fn is_pinned(&self) -> bool {
+        self.pinned
     }
 
     /// Force the message to be sent in plain text.

@@ -41,6 +41,7 @@ use crate::mimeparser::{
 };
 use crate::param::{Param, Params};
 use crate::peer_channels::{add_gossip_peer_from_header, insert_topic_stub, iroh_topic_from_str};
+use crate::pinned_messages::handle_pinned_state_from_wire;
 use crate::reaction::broadcast_reactions::receive_broadcast_reactions;
 use crate::reaction::{Reaction, set_msg_reaction};
 use crate::rusqlite::OptionalExtension;
@@ -1202,6 +1203,9 @@ async fn decide_chat_assignment(
     {
         info!(context, "Call state changed (TRASH).");
         true
+    } else if mime_parser.is_system_message == SystemMessage::MessageUnpinned {
+        info!(context, "Message unpinned (TRASH).");
+        true
     } else if let Some(ref decryption_error) = mime_parser.decryption_error
         && !mime_parser.incoming
     {
@@ -1990,6 +1994,8 @@ async fn add_parts(
         ephemeral_timer = EphemeralTimer::Disabled;
 
         Some(better_msg)
+    } else if mime_parser.is_system_message == SystemMessage::MessagePinned {
+        Some(stock_str::msg_pinned(context, from_id).await) // message unpinned info is trashed in decide_chat_assignment()
     } else {
         None
     };
@@ -2130,6 +2136,15 @@ async fn add_parts(
         } else {
             warn!(context, "Call: Not a reply.")
         }
+    }
+
+    if (mime_parser.is_system_message == SystemMessage::MessagePinned
+        || mime_parser.is_system_message == SystemMessage::MessageUnpinned)
+        && let Some(msg_to_change) =
+            get_parent_message(context, None, mime_parser.get_header(HeaderDef::InReplyTo)).await?
+    {
+        let new_pinned_state = mime_parser.is_system_message == SystemMessage::MessagePinned;
+        handle_pinned_state_from_wire(context, &msg_to_change, new_pinned_state).await?;
     }
 
     let hidden = mime_parser.parts.iter().all(|part| part.is_reaction);

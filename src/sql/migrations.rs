@@ -2592,6 +2592,24 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 163)?;
+    if dbversion < migration_version {
+        // store pinned state as a column rather than in a separate table,
+        // because pinned state must be read together with mostly every message (to show the "pin needle"),
+        // so a LEFT JOIN would add per-row overhead on every message load -
+        // even though pinned messages themselves are rare.
+        // this mirrors how "starred" and "hidden" are handled.
+        //
+        // the partial index `WHERE pinned=1` keeps the index small and useful,
+        // since the vast majority of rows are `pinned=0`.
+        sql.execute_migration(
+            "ALTER TABLE msgs ADD COLUMN pinned INTEGER DEFAULT 0;
+            CREATE INDEX msgs_index10 ON msgs (pinned) WHERE pinned=1;",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?

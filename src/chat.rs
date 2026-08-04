@@ -4612,6 +4612,7 @@ pub async fn forward_msgs_2ctx(
         msg.rfc724_mid = create_outgoing_rfc724_mid();
         msg.pre_rfc724_mid.clear();
         msg.timestamp_sort = now;
+        msg.pinned = false;
         chat.prepare_msg_raw(ctx_dst, &mut msg, None).await?;
 
         if !create_send_msg_jobs(ctx_dst, &mut msg).await?.is_empty() {

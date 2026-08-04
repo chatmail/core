@@ -1812,6 +1812,8 @@ impl MimeFactory {
                 SystemMessage::ChatE2ee => {}
                 SystemMessage::CallAccepted => {}
                 SystemMessage::CallEnded => {}
+                SystemMessage::MessagePinned => {}
+                SystemMessage::MessageUnpinned => {}
             }
 
             if command == SystemMessage::GroupDescriptionChanged
@@ -1935,6 +1937,18 @@ impl MimeFactory {
                 headers.push((
                     "Chat-Content",
                     mail_builder::headers::raw::Raw::new("call-ended").into(),
+                ));
+            }
+            SystemMessage::MessagePinned => {
+                headers.push((
+                    "Chat-Content",
+                    mail_builder::headers::raw::Raw::new("message-pinned").into(),
+                ));
+            }
+            SystemMessage::MessageUnpinned => {
+                headers.push((
+                    "Chat-Content",
+                    mail_builder::headers::raw::Raw::new("message-unpinned").into(),
                 ));
             }
             _ => {}

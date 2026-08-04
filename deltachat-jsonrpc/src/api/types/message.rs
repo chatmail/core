@@ -103,6 +103,8 @@ pub struct MessageObject {
 
     saved_message_id: Option<u32>,
 
+    is_pinned: bool,
+
     reactions: Option<JsonrpcReactions>,
 
     vcard_contact: Option<VcardContact>,
@@ -263,6 +265,7 @@ impl MessageObject {
                 .await?
                 .map(|id| id.to_u32()),
 
+            is_pinned: message.is_pinned(),
             reactions,
 
             vcard_contact: vcard_contacts.first().cloned(),
@@ -425,6 +428,8 @@ pub enum SystemMessageType {
 
     CallAccepted,
     CallEnded,
+    MessagePinned,
+    MessageUnpinned,
 }
 
 impl From<deltachat::mimeparser::SystemMessage> for SystemMessageType {
@@ -454,6 +459,8 @@ impl From<deltachat::mimeparser::SystemMessage> for SystemMessageType {
             SystemMessage::SecurejoinWaitTimeout => SystemMessageType::SecurejoinWaitTimeout,
             SystemMessage::CallAccepted => SystemMessageType::CallAccepted,
             SystemMessage::CallEnded => SystemMessageType::CallEnded,
+            SystemMessage::MessagePinned => SystemMessageType::MessagePinned,
+            SystemMessage::MessageUnpinned => SystemMessageType::MessageUnpinned,
         }
     }
 }
