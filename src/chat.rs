@@ -2659,6 +2659,14 @@ pub async fn is_contact_in_chat(
     Ok(exists)
 }
 
+fn is_initialized_draft_msg_of_chat(msg: &Message, chat_id: ChatId) -> bool {
+    if msg.state == MessageState::OutDraft {
+        !msg.id.is_special() && msg.chat_id == chat_id
+    } else {
+        false
+    }
+}
+
 /// Sends a message object to a chat.
 ///
 /// Sends the event #DC_EVENT_MSGS_CHANGED on success.
@@ -2666,6 +2674,17 @@ pub async fn is_contact_in_chat(
 /// sending may be delayed eg. due to network problems. However, from your
 /// view, you're done with the message. Sooner or later it will find its way.
 pub async fn send_msg(context: &Context, chat_id: ChatId, msg: &mut Message) -> Result<MsgId> {
+    let update_existing_draft = is_initialized_draft_msg_of_chat(msg, chat_id);
+
+    send_msg_ex(context, chat_id, msg, update_existing_draft.into()).await
+}
+/// See [`send_msg`] and [`send_msg_sync`].
+pub async fn send_msg_ex(
+    context: &Context,
+    chat_id: ChatId,
+    msg: &mut Message,
+    update_existing_draft: UseExistingDraftPolicy,
+) -> Result<MsgId> {
     ensure!(
         !chat_id.is_special(),
         "chat_id cannot be a special chat: {chat_id}"
@@ -2682,7 +2701,10 @@ pub async fn send_msg(context: &Context, chat_id: ChatId, msg: &mut Message) -> 
         msg.text = sanitize_bidi_characters(&msg.text);
     }
 
-    if !prepare_send_msg(context, chat_id, msg).await?.is_empty() {
+    if !prepare_send_msg(context, chat_id, msg, update_existing_draft)
+        .await?
+        .is_empty()
+    {
         if !msg.hidden {
             context.emit_msgs_changed(msg.chat_id, msg.id);
         }
@@ -2702,7 +2724,9 @@ pub async fn send_msg(context: &Context, chat_id: ChatId, msg: &mut Message) -> 
 /// Creates jobs in the `smtp` table, then drectly opens an SMTP connection and sends the
 /// message. If this fails, the jobs remain in the database for later sending.
 pub async fn send_msg_sync(context: &Context, chat_id: ChatId, msg: &mut Message) -> Result<MsgId> {
-    let rowids = prepare_send_msg(context, chat_id, msg).await?;
+    let update_existing_draft = is_initialized_draft_msg_of_chat(msg, chat_id);
+
+    let rowids = prepare_send_msg(context, chat_id, msg, update_existing_draft.into()).await?;
     if rowids.is_empty() {
         return Ok(msg.id);
     }
@@ -2723,6 +2747,7 @@ async fn prepare_send_msg(
     context: &Context,
     chat_id: ChatId,
     msg: &mut Message,
+    update_existing_draft: UseExistingDraftPolicy,
 ) -> Result<Vec<i64>> {
     let mut chat = Chat::load_from_db(context, chat_id).await?;
 
@@ -2767,17 +2792,9 @@ async fn prepare_send_msg(
         );
     }
 
-    // check current MessageState for drafts (to keep msg_id) ...
-    let update_existing_draft = if msg.state == MessageState::OutDraft {
+    if msg.state == MessageState::OutDraft {
         msg.hidden = false;
-        if !msg.id.is_special() && msg.chat_id == chat_id {
-            UseExistingDraftPolicy::Reuse
-        } else {
-            UseExistingDraftPolicy::DontReuse
-        }
-    } else {
-        UseExistingDraftPolicy::DontReuse
-    };
+    }
 
     if msg.state == MessageState::Undefined
         // Legacy SecureJoin "v*-request" messages are unencrypted.
