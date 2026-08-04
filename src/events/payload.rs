@@ -92,7 +92,7 @@ pub enum EventType {
         /// ID of the message for which reactions were changed.
         msg_id: MsgId,
 
-        /// ID of the contact whose reaction set is changed.
+        /// ID of the contact whose reaction set is changed. May be 0 eg. in case of broadcasted reactions.
         contact_id: ContactId,
     },
 

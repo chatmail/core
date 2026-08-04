@@ -20,6 +20,7 @@ use crate::events::EventType;
 use crate::imap::{Imap, session::Session};
 use crate::location;
 use crate::log::{LogExt, warn};
+use crate::reaction::broadcast_reactions::maybe_broadcast_reactions;
 use crate::smtp::{Smtp, send_smtp_messages};
 use crate::sql;
 use crate::stats::maybe_send_stats;
@@ -448,6 +449,7 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
         }
     };
 
+    maybe_broadcast_reactions(ctx).await.log_err(ctx).ok();
     maybe_send_stats(ctx).await.log_err(ctx).ok();
 
     session

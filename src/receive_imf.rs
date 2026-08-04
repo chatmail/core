@@ -41,6 +41,7 @@ use crate::mimeparser::{
 };
 use crate::param::{Param, Params};
 use crate::peer_channels::{add_gossip_peer_from_header, insert_topic_stub, iroh_topic_from_str};
+use crate::reaction::broadcast_reactions::receive_broadcast_reactions;
 use crate::reaction::{Reaction, set_msg_reaction};
 use crate::rusqlite::OptionalExtension;
 use crate::securejoin::{
@@ -899,6 +900,12 @@ UPDATE config SET value=? WHERE keyname='configured_addr' AND value!=?1
                 "Received webxdc update, but cannot assign it to message."
             );
         }
+    }
+
+    if let Some(broadcast_reactions) = &mime_parser.broadcast_reactions
+        && let Err(err) = receive_broadcast_reactions(context, broadcast_reactions).await
+    {
+        warn!(context, "Cannot apply broadcast reactions: {err:#}.");
     }
 
     if let Some(avatar_action) = &mime_parser.user_avatar
