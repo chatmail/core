@@ -920,10 +920,10 @@ async fn test_classic_mailing_list() -> Result<()> {
     assert!(mime.contains("Chat-Version: 1.0\r\n"));
     assert!(mime.contains("To: <delta@codespeak.net>\r\n"));
     assert!(mime.contains("From: <alice@example.org>\r\n"));
-    assert!(mime.contains(
+    assert!(mime.ends_with(
         "\r\n\
 \r\n\
-Hello mailinglist!\r\n"
+Hello mailinglist!"
     ));
 
     receive_imf(&t.ctx, DC_MAILINGLIST2, false).await?;
