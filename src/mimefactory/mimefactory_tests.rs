@@ -663,8 +663,11 @@ async fn test_render_reply() {
         .unwrap();
 }
 
+/// Tests that avatar is not sent in unencrypted messages.
+///
+/// Avatars for address-contacts are not displayed anyway.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_selfavatar_unencrypted() -> anyhow::Result<()> {
+async fn test_no_unencrypted_selfavatar() -> anyhow::Result<()> {
     // create chat with bob, set selfavatar
     let t = TestContext::new_alice().await;
     t.allow_unencrypted().await?;
@@ -676,29 +679,22 @@ async fn test_selfavatar_unencrypted() -> anyhow::Result<()> {
     t.set_config(Config::Selfavatar, Some(file.to_str().unwrap()))
         .await?;
 
-    // send message to bob: that should get multipart/mixed because of the avatar moved to inner header;
-    // make sure, `Subject:` stays in the outer header (imf header)
     let mut msg = Message::new_text("this is the text!".to_string());
 
     let sent_msg = t.send_msg(chat.id, &mut msg).await;
-    let mut payload = sent_msg.payload().splitn(3, "\r\n\r\n");
+    let payload = sent_msg.payload();
 
-    let outer = payload.next().unwrap();
-    let inner = payload.next().unwrap();
-    let body = payload.next().unwrap();
+    // The message has a single MIME part.
+    assert_eq!(payload.match_indices("multipart/").count(), 0);
 
-    assert_eq!(outer.match_indices("multipart/mixed").count(), 1);
-    assert_eq!(outer.match_indices("Message-ID:").count(), 1);
-    assert_eq!(outer.match_indices("Subject:").count(), 1);
-    assert_eq!(outer.match_indices("Autocrypt:").count(), 1);
-    assert_eq!(outer.match_indices("Chat-User-Avatar:").count(), 0);
+    assert_eq!(payload.match_indices("Message-ID:").count(), 1);
+    assert_eq!(payload.match_indices("Subject:").count(), 1);
+    assert_eq!(payload.match_indices("Autocrypt:").count(), 1);
+    assert_eq!(payload.match_indices("Chat-User-Avatar:").count(), 0);
+    assert_eq!(payload.match_indices("text/plain").count(), 1);
+    assert_eq!(payload.match_indices("Message-ID:").count(), 1);
 
-    assert_eq!(inner.match_indices("text/plain").count(), 1);
-    assert_eq!(inner.match_indices("Message-ID:").count(), 1);
-    assert_eq!(inner.match_indices("Chat-User-Avatar:").count(), 0);
-    assert_eq!(inner.match_indices("Subject:").count(), 0);
-
-    assert_eq!(body.match_indices("this is the text!").count(), 1);
+    assert_eq!(payload.match_indices("this is the text!").count(), 1);
 
     Ok(())
 }
