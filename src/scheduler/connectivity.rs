@@ -421,7 +421,7 @@ impl Context {
                     // If not supported by the provider,
                     // just skip the "quota" section.
                     if !matches!(e, crate::quota::Error::NotSupportedByProvider) {
-                        ret += &escaper::encode_minimal(&e.to_string());
+                        ret += &format!("Quota: {}", &*escaper::encode_minimal(&e.to_string()));
                     }
                 }
                 Ok(quota) => {
