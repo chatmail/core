@@ -21,7 +21,7 @@ use crate::tools::time;
 use crate::{EventType, chatlist_events};
 
 /// Wire format for accumulated broadcast reactions
-/// (sent from broadcast channel owner to subscriber in `Chat-Broadcast-Reactions:` header)
+/// (sent as JSON from broadcast channel owner to subscriber in `Chat-Broadcast-Reactions:` header)
 #[derive(Debug, Serialize, Deserialize)]
 struct WirePayload {
     messages: Vec<WireMessage>,
@@ -38,6 +38,39 @@ struct WireMessage {
 struct WireEntry {
     emoji: String,
     count: usize,
+}
+
+/// Renders one or more message's reactions as a JSON string, ready to be sent in `Broadcast-Reactions:` header.
+///
+/// The returned reaction array for a message may be empty,
+/// allowing to broadcast reaction removal.
+pub(crate) async fn render_json(context: &Context, msg_ids: &[MsgId]) -> Result<Option<String>> {
+    let mut messages: Vec<WireMessage> = Vec::new();
+    for msg_id in msg_ids {
+        let Some(msg) = Message::load_from_db_optional(context, *msg_id).await? else {
+            continue;
+        };
+        let reactions = get_msg_reactions(context, *msg_id).await?;
+        let entries: Vec<WireEntry> = reactions
+            .frequencies
+            .into_iter()
+            .map(|entry| WireEntry {
+                emoji: entry.reaction.as_str().to_string(),
+                count: entry.count,
+            })
+            .collect();
+        messages.push(WireMessage {
+            id: msg.rfc724_mid,
+            reactions: entries, // can be empty if all reactions were removed
+        });
+    }
+    if messages.is_empty() {
+        return Ok(None);
+    }
+
+    let payload = WirePayload { messages };
+    let json = serde_json::to_string(&payload)?;
+    Ok(Some(json))
 }
 
 /// Seconds between sending out accumulated reaction updates for broadcast channels from `reactions_need_broadcast` table
@@ -106,29 +139,7 @@ async fn broadcast_reactions_for_one_chat(context: &Context, chat_id: ChatId) ->
         )
         .await?;
 
-    let mut messages: Vec<WireMessage> = Vec::new();
-    for msg_id in &msg_ids {
-        let Some(msg) = Message::load_from_db_optional(context, *msg_id).await? else {
-            continue;
-        };
-        let reactions = get_msg_reactions(context, *msg_id).await?;
-        let entries: Vec<WireEntry> = reactions
-            .frequencies
-            .into_iter()
-            .map(|entry| WireEntry {
-                emoji: entry.reaction.as_str().to_string(),
-                count: entry.count,
-            })
-            .collect();
-        messages.push(WireMessage {
-            id: msg.rfc724_mid,
-            reactions: entries, // can be empty if all reactions were removed
-        });
-    }
-
-    if !messages.is_empty() {
-        let payload = WirePayload { messages };
-        let json = serde_json::to_string(&payload)?;
+    if let Some(json) = render_json(context, &msg_ids).await? {
         let mut reaction_msg = Message::new_text("".to_string());
         reaction_msg.set_reaction();
         reaction_msg.param.set(Param::BroadcastReactions, json);
@@ -657,6 +668,37 @@ mod tests {
         claire.recv_msg_hidden(&sent_msg).await;
         let reactions = get_msg_reactions(claire, claire_msg.id).await?;
         assert_eq!(reactions.to_string(), "🏳️‍🌈2");
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_broadcast_reaction_resent_to_new_member() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+
+        // Alice creates a broadcast channel, sends a message and reacts to her own message
+        let alice_chat_id = create_broadcast(alice, "Channel".to_string()).await?;
+        let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await.unwrap();
+        let alice_msg_id = alice
+            .send_text(alice_chat_id, "hi channel!")
+            .await
+            .sender_msg_id;
+        send_reaction(alice, alice_msg_id, "👍").await?;
+        alice.pop_sent_msg().await;
+        let reactions = get_msg_reactions(alice, alice_msg_id).await?;
+        assert_eq!(reactions.to_string(), "👍1");
+
+        // Bob joins the channel via QR code, receives the resent message, together with the reaction.
+        let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
+        let sent_msg = alice.pop_sent_msg().await;
+        let bob_msg = bob.recv_msg(&sent_msg).await;
+        let reactions = get_msg_reactions(bob, bob_msg.id).await?;
+        assert_eq!(bob_msg.chat_id, bob_chat_id);
+        assert_eq!(bob_msg.get_text(), "hi channel!");
+        assert_eq!(reactions.to_string(), "👍1");
+        assert_eq!(reactions.frequencies.len(), 1);
 
         Ok(())
     }
