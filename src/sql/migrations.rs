@@ -2529,7 +2529,6 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
                 fingerprint TEXT PRIMARY KEY NOT NULL, -- Upper-case fingerprint of the recipient key.
                 attached_timestamp INTEGER NOT NULL
             ) STRICT",
-
             migration_version,
         )
         .await?;
