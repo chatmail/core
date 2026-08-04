@@ -73,6 +73,14 @@ pub(crate) async fn render_json(context: &Context, msg_ids: &[MsgId]) -> Result<
     Ok(Some(json))
 }
 
+/// Emojis allowed as reactions in broadcast channels.
+const ALLOWED_REACTIONS: [&str; 5] = ["👍", "👎", "❤️", "😂", "🙁"];
+
+/// Check if a reaction is an allowed reaction in a broadcast channel.
+pub(crate) fn is_allowed_reaction(reaction: &Reaction) -> bool {
+    reaction.is_empty() || ALLOWED_REACTIONS.contains(&reaction.as_str())
+}
+
 /// Seconds between sending out accumulated reaction updates for broadcast channels from `reactions_need_broadcast` table
 const REACTION_BROADCAST_PERIOD: i64 = 10 * 60;
 
@@ -593,19 +601,19 @@ mod tests {
         assert_eq!(claire_msg.get_text(), "hi channel!");
 
         // Bob reacts to the message
-        send_reaction(bob, bob_msg.id, "🏳️‍🌈").await?;
+        send_reaction(bob, bob_msg.id, "❤️").await?;
         let sent_msg = bob.pop_sent_msg().await;
         let reactions = get_msg_reactions(bob, bob_msg.id).await?;
-        assert_eq!(reactions.to_string(), "🏳️‍🌈1");
+        assert_eq!(reactions.to_string(), "❤️1");
 
         // Alice receives Bob's reaction
         alice.recv_msg_hidden(&sent_msg).await;
         let reactions = get_msg_reactions(alice, alice_msg_id).await?;
-        assert_eq!(reactions.to_string(), "🏳️‍🌈1");
+        assert_eq!(reactions.to_string(), "❤️1");
 
         // Alice broadcasts recent reaction changes to Bob and Claire.
         // On the wire, the hidden message has a header like
-        // `Chat-Broadcast-Reactions: {"messages":[{"id":"123@adc","reactions":[{"emoji":"🏳️‍🌈","count":1}]}]}`
+        // `Chat-Broadcast-Reactions: {"messages":[{"id":"123@adc","reactions":[{"emoji":"❤️","count":1}]}]}`
         maybe_broadcast_reactions(alice).await?;
         let sent_msg = alice.pop_sent_msg().await;
         bob.recv_msg_hidden(&sent_msg).await;
@@ -619,13 +627,13 @@ mod tests {
         // Claire got the broadcasted reaction, and then reacts herself.
         // This means, her local view on reactions are a mix `broadcasted_reactions`and `reactions`.
         let reactions = get_msg_reactions(claire, claire_msg.id).await?;
-        assert_eq!(reactions.to_string(), "🏳️‍🌈1");
+        assert_eq!(reactions.to_string(), "❤️1");
         assert_eq!(reactions.frequencies.len(), 1);
         assert_eq!(reactions.by_contact.len(), 0);
 
-        send_reaction(claire, claire_msg.id, "💪").await?;
+        send_reaction(claire, claire_msg.id, "👍").await?;
         let reactions = get_msg_reactions(claire, claire_msg.id).await?;
-        assert_eq!(reactions.to_string(), "🏳️‍🌈1 💪1");
+        assert_eq!(reactions.to_string(), "❤️1 👍1");
         assert_eq!(reactions.frequencies.len(), 2);
         assert_eq!(reactions.frequencies[0].is_from_self, false);
         assert_eq!(reactions.frequencies[1].is_from_self, true);
@@ -635,7 +643,7 @@ mod tests {
         let sent_msg = claire.pop_sent_msg().await;
         alice.recv_msg_hidden(&sent_msg).await;
         let reactions = get_msg_reactions(alice, alice_msg_id).await?;
-        assert_eq!(reactions.to_string(), "🏳️‍🌈1 💪1");
+        assert_eq!(reactions.to_string(), "❤️1 👍1");
 
         broadcast_reactions_for_all_chats(alice).await?; // bypass timer in maybe_broadcast_reactions()
         let sent_msg = alice.pop_sent_msg().await;
@@ -643,22 +651,22 @@ mod tests {
 
         claire.recv_msg_hidden(&sent_msg).await;
         let reactions = get_msg_reactions(claire, claire_msg.id).await?;
-        assert_eq!(reactions.to_string(), "🏳️‍🌈1 💪1");
+        assert_eq!(reactions.to_string(), "❤️1 👍1");
         assert_eq!(reactions.frequencies.len(), 2);
         assert_eq!(reactions.frequencies[0].is_from_self, false);
         assert_eq!(reactions.frequencies[1].is_from_self, true);
 
-        // Claire removes her 💪 reaction, and also reactios with 🏳️‍🌈;
+        // Claire removes her 👍 reaction, and also reactios with ❤️;
         // SELF-changes are immediate even tho not broadcasted yet, the bring broadcasted reactions table to a "dirty state" ...
         send_reaction(claire, claire_msg.id, "").await?;
         let sent_msg = claire.pop_sent_msg().await;
         let reactions = get_msg_reactions(claire, claire_msg.id).await?;
-        assert_eq!(reactions.to_string(), "🏳️‍🌈1");
+        assert_eq!(reactions.to_string(), "❤️1");
 
-        send_reaction(claire, claire_msg.id, "🏳️‍🌈").await?;
+        send_reaction(claire, claire_msg.id, "❤️").await?;
         let sent_msg2 = claire.pop_sent_msg().await;
         let reactions = get_msg_reactions(claire, claire_msg.id).await?;
-        assert_eq!(reactions.to_string(), "🏳️‍🌈2");
+        assert_eq!(reactions.to_string(), "❤️2");
 
         // ... "dirty state" is fixed after next broadcast then, counters should stay the same
         alice.recv_msg_hidden(&sent_msg).await;
@@ -667,7 +675,7 @@ mod tests {
         let sent_msg = alice.pop_sent_msg().await;
         claire.recv_msg_hidden(&sent_msg).await;
         let reactions = get_msg_reactions(claire, claire_msg.id).await?;
-        assert_eq!(reactions.to_string(), "🏳️‍🌈2");
+        assert_eq!(reactions.to_string(), "❤️2");
 
         Ok(())
     }
@@ -699,6 +707,34 @@ mod tests {
         assert_eq!(bob_msg.get_text(), "hi channel!");
         assert_eq!(reactions.to_string(), "👍1");
         assert_eq!(reactions.frequencies.len(), 1);
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_broadcast_subscriber_sends_unallowed_reaction() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+
+        // Alice creates a channel, Bob joins
+        let alice_chat_id = create_broadcast(alice, "Channel".to_string()).await?;
+        let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
+        let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
+        bob_chat_id.accept(bob).await?;
+
+        // Alice sends a message to the channel, Alice cannot react to her own message with unallowed emoji
+        let sent_msg = alice.send_text(alice_chat_id, "hi channel!").await;
+        let alice_msg_id = sent_msg.load_from_db().await.id;
+        let res = send_reaction(alice, alice_msg_id, "💩").await;
+        assert!(res.is_err());
+        assert!(alice.pop_sent_msg_opt().await.is_none());
+
+        // Bob receives the message and reacts unallowed
+        let bob_msg = bob.recv_msg(&sent_msg).await;
+        let res = send_reaction(bob, bob_msg.id, "🤮").await;
+        assert!(res.is_err());
+        assert!(bob.pop_sent_msg_opt().await.is_none());
 
         Ok(())
     }
