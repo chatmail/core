@@ -13,6 +13,7 @@ use chrono::TimeZone;
 use deltachat_contact_tools::{ContactAddress, sanitize_bidi_characters, sanitize_single_line};
 use humansize::{BINARY, format_size};
 use mail_builder::mime::MimePart;
+use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
@@ -738,13 +739,21 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
 
     /// Returns ID of the draft message, if there is one.
     async fn get_draft_msg_id(self, context: &Context) -> Result<Option<MsgId>> {
-        let msg_id: Option<MsgId> = context
+        let query_only = true;
+        context
             .sql
-            .query_get_value(
+            // `call` instead of `transaction_ex` because it's a single query.
+            .call(query_only, |conn| self.get_draft_msg_id_trans(conn))
+            .await
+    }
+    fn get_draft_msg_id_trans(self, conn: &rusqlite::Connection) -> Result<Option<MsgId>> {
+        let msg_id: Option<MsgId> = conn
+            .query_row(
                 "SELECT id FROM msgs WHERE chat_id=? AND state=?;",
                 (self, MessageState::OutDraft),
+                |row| row.get(0),
             )
-            .await?;
+            .optional()?;
         Ok(msg_id)
     }
 
@@ -765,13 +774,19 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
         if self.is_special() {
             return Ok(None);
         }
-        match self.get_draft_msg_id(context).await? {
-            Some(draft_msg_id) => {
-                let msg = Message::load_from_db(context, draft_msg_id).await?;
-                Ok(Some(msg))
-            }
-            None => Ok(None),
-        }
+        let query_only = true;
+        context
+            .sql
+            .transaction_ex(query_only, |transaction| {
+                match self.get_draft_msg_id_trans(transaction)? {
+                    Some(draft_msg_id) => {
+                        let msg = Message::load_from_db_trans(context, transaction, draft_msg_id)?;
+                        Ok(Some(msg))
+                    }
+                    None => Ok(None),
+                }
+            })
+            .await
     }
 
     /// Deletes draft message, if there is one.
