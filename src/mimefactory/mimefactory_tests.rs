@@ -4,7 +4,7 @@ use mailparse::{MailHeaderMap, addrparse_header};
 use pgp::armor;
 use pgp::packet::{Packet, PacketParser};
 use pretty_assertions::assert_eq;
-use regex::Regex;
+use regex::regex;
 use std::io::BufReader;
 use std::str;
 use std::time::Duration;
@@ -1018,8 +1018,7 @@ async fn test_render_outer_headers() -> Result<()> {
     let rfc724_mid = sent.load_from_db().await.rfc724_mid;
     let unencrypted = unencrypted.replace(&rfc724_mid, "MESSAGE_ID@localhost");
 
-    let unencrypted = Regex::new(r"Date:[^\r\n]*")
-        .unwrap()
+    let unencrypted = regex!(r"Date:[^\r\n]*")
         .replace(&unencrypted, "Date: DATE")
         .to_string();
 
