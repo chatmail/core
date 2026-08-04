@@ -1508,6 +1508,26 @@ impl CommandApi {
         MessageNotificationInfo::from_msg_id(&ctx, MsgId::new(message_id)).await
     }
 
+    /// Sets the "pinned" state for a message.
+    async fn set_pinned_message_state(
+        &self,
+        account_id: u32,
+        message_id: u32,
+        pinned_state: bool,
+    ) -> Result<()> {
+        let ctx = self.get_context(account_id).await?;
+        deltachat::pinned_messages::set_pinned_state(&ctx, MsgId::new(message_id), pinned_state)
+            .await
+    }
+
+    /// Returns all pinned messages of a chat.
+    async fn get_pinned_messages(&self, account_id: u32, chat_id: u32) -> Result<Vec<u32>> {
+        let ctx = self.get_context(account_id).await?;
+        let msg_ids =
+            deltachat::pinned_messages::get_pinned_messages(&ctx, ChatId::new(chat_id)).await?;
+        Ok(msg_ids.into_iter().map(|id| id.to_u32()).collect())
+    }
+
     /// Delete messages. The messages are deleted on the current device and
     /// on the IMAP server.
     async fn delete_messages(&self, account_id: u32, message_ids: Vec<u32>) -> Result<()> {

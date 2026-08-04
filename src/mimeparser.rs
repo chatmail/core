@@ -263,6 +263,12 @@ pub enum SystemMessage {
 
     /// Group or broadcast channel description changed.
     GroupDescriptionChanged = 70,
+
+    /// Message pinned. The pinned message is referred in `In-Reply-To:` header.
+    MessagePinned = 71,
+
+    /// Message unpinned. The unpinned message is referred in `In-Reply-To:` header.
+    MessageUnpinned = 72,
 }
 
 impl MimeMessage {
@@ -741,6 +747,10 @@ impl MimeMessage {
                 self.is_system_message = SystemMessage::CallAccepted;
             } else if value == "call-ended" {
                 self.is_system_message = SystemMessage::CallEnded;
+            } else if value == "message-pinned" {
+                self.is_system_message = SystemMessage::MessagePinned;
+            } else if value == "message-unpinned" {
+                self.is_system_message = SystemMessage::MessageUnpinned;
             }
         } else if self.get_header(HeaderDef::ChatGroupMemberRemoved).is_some() {
             self.is_system_message = SystemMessage::MemberRemovedFromGroup;

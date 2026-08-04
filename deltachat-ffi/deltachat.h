@@ -4473,6 +4473,7 @@ int             dc_msg_is_info                (const dc_msg_t* msg);
  * - DC_INFO_WEBXDC_INFO_MESSAGE (32) - Info-message created by webxdc app sending `update.info`
  * - DC_INFO_CHAT_E2EE (50) - Info-message for "Chat is end-to-end-encrypted"
  * - DC_INFO_GROUP_DESCRIPTION_CHANGED (70) - Info-message "Description changed", UI should open the profile with the description
+ * - DC_INFO_MESSAGE_PINNED (71) - Message pinned, UI should scroll to the pinned message returned by dc_msg_get_parent()
  *
  * For the messages that refer to a CONTACT,
  * dc_msg_get_info_contact_id() returns the contact ID.
@@ -4532,6 +4533,7 @@ uint32_t        dc_msg_get_info_contact_id    (const dc_msg_t* msg);
 #define         DC_INFO_WEBXDC_INFO_MESSAGE       32
 #define         DC_INFO_CHAT_E2EE                 50
 #define         DC_INFO_GROUP_DESCRIPTION_CHANGED 70
+#define         DC_INFO_MESSAGE_PINNED            71
 
 
 /**
@@ -4849,6 +4851,8 @@ dc_msg_t*       dc_msg_get_quoted_msg         (const dc_msg_t* msg);
  * Used for Webxdc-info-messages
  * to jump to the corresponding instance that created the info message.
  *
+ * For Pinned-info-messages, this refers to the pinned message.
+ *
  * For quotes, please use the more specialized
  * dc_msg_get_quoted_text() and dc_msg_get_quoted_msg().
  *
@@ -4887,6 +4891,20 @@ uint32_t        dc_msg_get_original_msg_id    (const dc_msg_t* msg);
  *     0 if the given message object is not saved.
  */
 uint32_t        dc_msg_get_saved_msg_id     (const dc_msg_t* msg);
+
+
+/**
+ * Check if the message is pinned.
+ *
+ * Pinned messages should be marked by a pin needle in the UI.
+ * To pin messages or get all pinned messages, use jsonrpc's "setPinnedMessageState" and "getPinnedMessages".
+ *
+ * @memberof dc_msg_t
+ * @param msg The message object.
+ * @return 1=message is pinned, 0=message not pinned.
+ */
+ int             dc_msg_is_pinned           (const dc_msg_t* msg);
+
 
 /**
  * @class dc_contact_t
@@ -5672,6 +5690,7 @@ void dc_jsonrpc_unref(dc_jsonrpc_instance_t* jsonrpc_instance);
  * - getAccountFileSize()
  * - importVcard(), parseVcard(), makeVcard()
  * - sendWebxdcRealtimeData, sendWebxdcRealtimeAdvertisement(), leaveWebxdcRealtime()
+ * - setPinnedMessageState(), getPinnedMessages()
  *
  * @memberof dc_jsonrpc_instance_t
  * @param jsonrpc_instance jsonrpc instance as returned from dc_jsonrpc_init().
@@ -7248,6 +7267,12 @@ void dc_event_unref(dc_event_t* event);
 ///
 /// Used when creating text for the "Encryption Info" dialogs.
 #define DC_STR_MESSAGES_ARE_E2EE 242
+
+/// "You pinned a message."
+#define DC_STR_MESSAGE_PINNED_BY_YOU 243
+
+/// "Message pinned by %1$s."
+#define DC_STR_MESSAGE_PINNED_BY_OTHER 244
 
 /**
  * @}

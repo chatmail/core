@@ -81,6 +81,7 @@ mod param;
 mod pgp;
 #[cfg(feature = "internals")]
 pub mod pgp;
+pub mod pinned_messages;
 pub mod provider;
 pub mod qr;
 pub mod qr_code_generator;
