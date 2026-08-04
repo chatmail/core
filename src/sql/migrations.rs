@@ -2567,6 +2567,22 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 162)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "CREATE TABLE transport_usage(
+                contact_id INTEGER NOT NULL,
+                transport_id INTEGER NOT NULL,
+                last_seen INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY(contact_id, transport_id),
+                FOREIGN KEY(contact_id) REFERENCES contacts(id) ON DELETE CASCADE,
+                FOREIGN KEY(transport_id) REFERENCES transports(id) ON DELETE CASCADE
+            ) STRICT",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
