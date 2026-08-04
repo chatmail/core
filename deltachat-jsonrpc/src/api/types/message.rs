@@ -616,6 +616,27 @@ pub struct MessageData {
     /// Quoted message id. Takes preference over `quoted_text` (see below).
     pub quoted_message_id: Option<u32>,
     pub quoted_text: Option<String>,
+    /// Useful for WebXDC app attachments, which can also be opened
+    /// for draft messages.
+    /// Setting this to `true` will ensure that the WebXDC status updates
+    /// of the current draft are preserved when sending the message
+    /// or updating the draft.
+    ///
+    /// `false` by default, for backwards compatibility.
+    /// However, you probably want to set it to `true`
+    /// when sending or updating the draft
+    /// from the main message composer section,
+    /// and to `false` when sending a message from secondary places,
+    /// such as a notification "Reply" input.
+    ///
+    /// Reusing the draft will also automatically remove the draft
+    /// when it's sent.
+    ///
+    /// Note that sometimes the draft cannot be reused,
+    /// for example when the WebXDC attachment [`Self::file`] changes.
+    /// If the draft cannot be reused, it will not get auto-removed.
+    #[serde(default)]
+    pub reuse_existing_draft: bool,
 }
 
 impl MessageData {

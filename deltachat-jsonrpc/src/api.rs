@@ -2457,14 +2457,20 @@ impl CommandApi {
 
     async fn send_msg(&self, account_id: u32, chat_id: u32, data: MessageData) -> Result<u32> {
         let ctx = self.get_context(account_id).await?;
+        let reuse_existing_draft = data.reuse_existing_draft;
         let mut message = data
             .create_message(&ctx)
             .await
             .context("Failed to create message")?;
-        let msg_id = chat::send_msg(&ctx, ChatId::new(chat_id), &mut message)
-            .await
-            .context("Failed to send created message")?
-            .to_u32();
+        let msg_id = chat::send_msg_ex(
+            &ctx,
+            ChatId::new(chat_id),
+            &mut message,
+            reuse_existing_draft.into(),
+        )
+        .await
+        .context("Failed to send created message")?
+        .to_u32();
         Ok(msg_id)
     }
 
