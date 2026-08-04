@@ -46,6 +46,7 @@ use crate::mimefactory::{MimeFactory, RenderedEmail};
 use crate::mimeparser::SystemMessage;
 use crate::param::{Param, Params};
 use crate::pgp::addresses_from_public_key;
+use crate::reaction::broadcast_reactions;
 use crate::receive_imf::ReceivedMsg;
 use crate::smtp::{self, send_msg_to_smtp};
 use crate::stock_str;
@@ -4770,6 +4771,11 @@ pub(crate) async fn resend_msgs_ex(
         }
         if let Some(to_fingerprint) = &to_fingerprint {
             msg.param.set(Param::Arg4, to_fingerprint.clone());
+            if let Some(json) = broadcast_reactions::render_json(context, &[msg.id]).await? {
+                // The returned reaction array for the message may be empty,
+                // so rejoining members get reactions cleared as neccessary.
+                msg.param.set(Param::BroadcastReactions, json);
+            }
         }
         if create_send_msg_jobs(context, &mut msg).await?.is_empty() {
             continue;
