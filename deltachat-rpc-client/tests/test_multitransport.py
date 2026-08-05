@@ -193,6 +193,7 @@ def test_transport_sync_new_as_primary(acfactory, log) -> None:
     ac1.set_config("configured_addr", transport2["addr"])
 
     ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
+    ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
     assert ac1_clone.get_config("configured_addr") == transport2["addr"]
 
     log.section("ac1_clone receives a message via the new primary transport")

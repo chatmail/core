@@ -115,6 +115,19 @@ fn dummy_configured_login_param(addr: &str) -> ConfiguredLoginParam {
     }
 }
 
+async fn add_dummy_transport(t: &TestContext, addr: &str) -> Result<()> {
+    dummy_configured_login_param(addr)
+        .save_to_transports_table(
+            t,
+            &EnteredLoginParam {
+                addr: addr.to_string(),
+                ..Default::default()
+            },
+            time(),
+        )
+        .await
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_is_published_flag() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -138,16 +151,7 @@ async fn test_is_published_flag() -> Result<()> {
     )
     .await;
 
-    dummy_configured_login_param("alice@otherprovider.com")
-        .save_to_transports_table(
-            alice,
-            &EnteredLoginParam {
-                addr: "alice@otherprovider.com".to_string(),
-                ..Default::default()
-            },
-            time(),
-        )
-        .await?;
+    add_dummy_transport(alice, "alice@otherprovider.com").await?;
     send_sync_transports(alice).await?;
     sync_and_check_recipients(alice, alice2, "alice@otherprovider.com alice@example.org").await;
 
@@ -195,10 +199,7 @@ async fn test_is_published_flag() -> Result<()> {
 
     SystemTime::shift(Duration::from_secs(2));
 
-    alice
-        .set_config(Config::ConfiguredAddr, Some("alice@otherprovider.com"))
-        .await?;
-    sync_and_check_recipients(alice, alice2, "alice@example.org alice@otherprovider.com").await;
+    promote_transport_and_check_success(alice, alice2, "alice@otherprovider.com").await?;
 
     check_addrs(
         alice,
@@ -213,6 +214,87 @@ async fn test_is_published_flag() -> Result<()> {
     .await;
 
     Ok(())
+}
+
+/// Tests that changing the primary transport propagates to other devices
+/// even if the promoted transport was added within the same second.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_promote_transport_same_second() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
+    for a in [alice, alice2] {
+        a.set_config_bool(Config::SyncMsgs, true).await?;
+        a.set_config_bool(Config::BccSelf, true).await?;
+    }
+
+    add_dummy_transport(alice, "alice@otherprovider.com").await?;
+    send_sync_transports(alice).await?;
+    sync_and_check_recipients(alice, alice2, "alice@otherprovider.com alice@example.org").await;
+
+    promote_transport_and_check_success(alice, alice2, "alice@otherprovider.com").await
+}
+
+/// Tests that `sync_transports()` requests an IO restart
+/// if and only if it modified anything.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_sync_transports_requests_io_restart() -> Result<()> {
+    let alice = &TestContext::new_alice().await;
+
+    let data = TransportData {
+        configured: dummy_configured_login_param("alice@otherprovider.com").into(),
+        entered: EnteredLoginParam {
+            addr: "alice@otherprovider.com".to_string(),
+            ..Default::default()
+        },
+        timestamp: time(),
+        is_published: true,
+    };
+    let data = std::slice::from_ref(&data);
+    sync_transports(alice, data, &[]).await?;
+    assert!(alice.restart_io_after_fetch.swap(false, Ordering::Relaxed));
+
+    // Applying the same data again modifies nothing.
+    sync_transports(alice, data, &[]).await?;
+    assert!(!alice.restart_io_after_fetch.load(Ordering::Relaxed));
+
+    Ok(())
+}
+
+/// Promotes `addr` to primary on `alice` and checks the change syncs to `alice2`.
+async fn promote_transport_and_check_success(
+    alice: &TestContext,
+    alice2: &TestContext,
+    addr: &str,
+) -> Result<()> {
+    let old_timestamp = add_timestamp(alice2, addr).await;
+    alice.set_config(Config::ConfiguredAddr, Some(addr)).await?;
+    assert!(add_timestamp(alice, addr).await > old_timestamp);
+
+    alice.send_sync_msg().await?.unwrap();
+    let sync_msg = alice.pop_sent_msg().await;
+    assert_eq!(sync_msg.recipients, format!("alice@example.org {addr}"));
+    // Other devices switch their primary transport
+    // based on the From address of the sync message.
+    assert!(sync_msg.payload.contains(&format!("From: <{addr}>")));
+    alice2.recv_msg_trash(&sync_msg).await;
+
+    // add_timestamp must monotonically increase because
+    // other devices ignore the change otherwise.
+    assert!(add_timestamp(alice2, addr).await > old_timestamp);
+    assert_eq!(
+        alice2.get_config(Config::ConfiguredAddr).await?.as_deref(),
+        Some(addr)
+    );
+    Ok(())
+}
+
+async fn add_timestamp(t: &TestContext, addr: &str) -> i64 {
+    t.sql
+        .query_get_value("SELECT add_timestamp FROM transports WHERE addr=?", (addr,))
+        .await
+        .unwrap()
+        .unwrap()
 }
 
 struct Addresses {
