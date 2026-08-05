@@ -32,7 +32,8 @@ use crate::events::EventType;
 use crate::message::{Message, MsgId, rfc724_mid_exists};
 use crate::param::Param;
 use crate::reaction::broadcast_reactions::{
-    load_broadcast_reactions, modify_frequencies, refine_frequencies, save_broadcast_reactions,
+    is_allowed_reaction, load_broadcast_reactions, modify_frequencies, refine_frequencies,
+    save_broadcast_reactions,
 };
 
 /// A single reaction.
@@ -132,6 +133,12 @@ async fn set_msg_id_reaction(
     let mut chat = Chat::load_from_db(context, chat_id).await?;
     let old_reactions = get_msg_reactions(context, msg_id).await?;
     let old_self_reaction = old_reactions.by_contact.get(&ContactId::SELF);
+
+    if matches!(chat.typ, Chattype::OutBroadcast | Chattype::InBroadcast)
+        && !is_allowed_reaction(reaction)
+    {
+        bail!("Reaction not allowed: {}", reaction.as_str());
+    }
 
     if reaction.is_empty() {
         // Simply remove the record instead of setting it to empty string.
@@ -233,10 +240,17 @@ async fn set_pending_reaction(
 /// `reaction` is a string consisting of a single emoji. Use
 /// empty string to retract a reaction.
 pub async fn send_reaction(context: &Context, msg_id: MsgId, reaction: &str) -> Result<MsgId> {
+    let reaction = Reaction::new(reaction);
     let msg = Message::load_from_db(context, msg_id).await?;
     let chat_id = msg.chat_id;
+    let chat = Chat::load_from_db(context, chat_id).await?;
 
-    let reaction = Reaction::new(reaction);
+    if matches!(chat.typ, Chattype::OutBroadcast | Chattype::InBroadcast)
+        && !is_allowed_reaction(&reaction)
+    {
+        bail!("Reaction not allowed: {}", reaction.as_str());
+    }
+
     let mut reaction_msg = Message::new_text(reaction.as_str().to_string());
     reaction_msg.set_reaction();
     reaction_msg.in_reply_to = Some(msg.rfc724_mid);
