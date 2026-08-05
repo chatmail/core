@@ -134,7 +134,7 @@ async fn set_msg_id_reaction(
     let old_reactions = get_msg_reactions(context, msg_id).await?;
     let old_self_reaction = old_reactions.by_contact.get(&ContactId::SELF);
 
-    if (chat.typ == Chattype::OutBroadcast || chat.typ == Chattype::InBroadcast)
+    if matches!(chat.typ, Chattype::OutBroadcast | Chattype::InBroadcast)
         && !is_allowed_reaction(reaction)
     {
         bail!("Reaction not allowed: {}", reaction.as_str());
