@@ -245,7 +245,7 @@ pub async fn send_reaction(context: &Context, msg_id: MsgId, reaction: &str) -> 
     let chat_id = msg.chat_id;
     let chat = Chat::load_from_db(context, chat_id).await?;
 
-    if (chat.typ == Chattype::OutBroadcast || chat.typ == Chattype::InBroadcast)
+    if matches!(chat.typ, Chattype::OutBroadcast | Chattype::InBroadcast)
         && !is_allowed_reaction(&reaction)
     {
         bail!("Reaction not allowed: {}", reaction.as_str());
