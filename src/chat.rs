@@ -4042,7 +4042,7 @@ WHERE chat_id=?
         OR to_id=?
     )
     AND type!=?
-ORDER BY timestamp DESC, id DESC LIMIT ?",
+ORDER BY pinned DESC, timestamp DESC, id DESC LIMIT ?",
             (
                 chat_id,
                 ContactId::INFO,
