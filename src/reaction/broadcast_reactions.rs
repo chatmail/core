@@ -21,7 +21,7 @@ use crate::tools::time;
 use crate::{EventType, chatlist_events};
 
 /// Wire format for accumulated broadcast reactions
-/// (sent as JSON from broadcast channel owner to subscriber in `Chat-Broadcast-Reactions:` header)
+/// (sent as JSON from broadcast channel owner to subscriber in `Chat-Broadcast-States:` header)
 #[derive(Debug, Serialize, Deserialize)]
 struct WirePayload {
     messages: Vec<WireMessage>,
@@ -40,7 +40,7 @@ struct WireEntry {
     count: usize,
 }
 
-/// Renders one or more message's reactions as a JSON string, ready to be sent in `Broadcast-Reactions:` header.
+/// Renders one or more message's reactions as a JSON string, ready to be sent in `Chat-Broadcast-States:` header.
 ///
 /// The returned reaction array for a message may be empty,
 /// allowing to broadcast reaction removal.
@@ -166,7 +166,7 @@ async fn broadcast_reactions_for_one_chat(context: &Context, chat_id: ChatId) ->
     Ok(())
 }
 
-/// Applies incoming, accumulated reactions received via the `Chat-Broadcast-Reactions:` header
+/// Applies incoming, accumulated reactions received via the `Chat-Broadcast-States:` header
 /// to the `broadcasted_reactions` table.
 pub(crate) async fn receive_broadcast_reactions(context: &Context, json: &str) -> Result<()> {
     let payload: WirePayload = serde_json::from_str(json)?;
@@ -613,7 +613,7 @@ mod tests {
 
         // Alice broadcasts recent reaction changes to Bob and Claire.
         // On the wire, the hidden message has a header like
-        // `Chat-Broadcast-Reactions: {"messages":[{"id":"123@adc","reactions":[{"emoji":"❤️","count":1}]}]}`
+        // `Chat-Broadcast-States: {"messages":[{"id":"123@adc","reactions":[{"emoji":"❤️","count":1}]}]}`
         maybe_broadcast_reactions(alice).await?;
         let sent_msg = alice.pop_sent_msg().await;
         bob.recv_msg_hidden(&sent_msg).await;

@@ -116,7 +116,7 @@ pub(crate) struct MimeMessage {
     pub(crate) mdn_reports: Vec<Report>,
     pub(crate) delivery_report: Option<DeliveryReport>,
 
-    /// Parsed `Chat-Broadcast-Reactions` header, if any:
+    /// Parsed `Chat-Broadcast-States` header, if any:
     /// accumulated reaction updates sent by a broadcast channel owner.
     pub(crate) broadcast_reactions: Option<String>,
 
@@ -800,7 +800,7 @@ impl MimeMessage {
 
     fn parse_broadcast_reactions_header(&mut self) {
         self.broadcast_reactions = self
-            .get_header(HeaderDef::ChatBroadcastReactions)
+            .get_header(HeaderDef::ChatBroadcastStates)
             .map(|s| s.to_string());
     }
 
