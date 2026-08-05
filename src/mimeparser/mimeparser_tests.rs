@@ -287,7 +287,9 @@ async fn test_get_attachment_filename_apostrophed_invalid() {
         include_bytes!("../../test-data/message/attach_filename_apostrophed_invalid.eml"),
     );
     let filename = get_attachment_filename(&t, &mail.subparts[1]).unwrap();
-    assert_eq!(filename, Some("somedäüta.html.zip".to_string()))
+    assert_eq!(filename, Some("somedäüta.html.zip".to_string()));
+    t.assert_warn("apostrophed encoding invalid: somedäüta.html.zip")
+        .await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -343,6 +345,9 @@ async fn test_parse_first_addr() {
     let mimeparser = MimeMessage::from_bytes(&context.ctx, &raw[..]).await;
 
     assert!(mimeparser.is_err());
+    context
+        .assert_warn("Invalid address found: must contain a '@' symbol")
+        .await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1425,7 +1430,7 @@ async fn test_intended_recipient_fingerprint() -> Result<()> {
     let t_fp = key::load_self_public_key(t).await?.dc_fingerprint();
     t.set_config_bool(Config::BccSelf, false).await.unwrap();
     let members = [tcm.bob().await, tcm.fiona().await];
-    let chat_id = chat::create_group(t, "").await?;
+    let chat_id = chat::create_group(t, "group").await?;
 
     chat::send_text_msg(t, chat_id, "hi!".to_string()).await?;
     assert!(t.pop_sent_msg_opt().await.is_none());
@@ -2030,6 +2035,7 @@ async fn test_multiple_autocrypt_hdrs() -> Result<()> {
     .msg_ids[0];
     let msg = Message::load_from_db(bob, msg_id).await?;
     assert!(msg.get_showpadlock());
+    bob.assert_warn("Unknown Autocrypt attribute found").await;
     Ok(())
 }
 

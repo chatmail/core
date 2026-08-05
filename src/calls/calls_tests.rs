@@ -679,6 +679,7 @@ async fn test_end_text_call() -> Result<()> {
         .unwrap();
     assert_eq!(received2.msg_ids.len(), 1);
     assert_eq!(received2.chat_id, DC_CHAT_ID_TRASH);
+    alice.assert_warn("does not refer to a call message").await;
 
     Ok(())
 }

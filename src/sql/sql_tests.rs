@@ -99,6 +99,8 @@ async fn test_housekeeping_db_closed() {
             _ => {}
         }
     }
+
+    t.assert_many(vec![(false, "no SQL connection", 17)]).await;
 }
 
 /// Regression test for a bug where housekeeping deleted drafts since their

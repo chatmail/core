@@ -821,6 +821,7 @@ mod tests {
                     .node_id
             ]
         );
+        bob.assert_warn("Cannot add iroh peer").await;
         Ok(())
     }
 
@@ -1091,7 +1092,7 @@ mod tests {
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             }
         };
-
+        fiona.assert_warn("Missing key for bob@example.net").await;
         let realtime_receive_loop = async {
             loop {
                 let event = fiona.evtracker.recv().await.unwrap();

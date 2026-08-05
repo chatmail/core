@@ -584,6 +584,10 @@ async fn test_withdraw_joinbroadcast() -> Result<()> {
     assert_eq!(bob_chat.is_self_in_chat(bob).await?, true);
     assert_eq!(get_chat_contacts(alice, chat_id).await?.len(), 1);
 
+    alice
+        .assert_warn("Could not find symmetric secret for session key")
+        .await;
+    alice.assert_warn("unencrypted message").await;
     Ok(())
 }
 

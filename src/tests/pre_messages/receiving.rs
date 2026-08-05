@@ -138,7 +138,7 @@ async fn test_receive_webxdc() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
-    let alice_group_id = alice.create_group_with_members("", &[bob]).await;
+    let alice_group_id = alice.create_group_with_members("group", &[bob]).await;
 
     let (pre_msg, post_msg, _) = send_large_file_message(
         alice,
@@ -310,7 +310,7 @@ async fn pre_msg_mdn_before_sending_full(text: &str) -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
-    let alice_chat_id = alice.create_group_with_members("", &[bob]).await;
+    let alice_chat_id = alice.create_group_with_members("group", &[bob]).await;
 
     let file_bytes = include_bytes!("../../../test-data/image/screenshot.gif");
     let mut msg = Message::new(Viewtype::Image);
@@ -357,7 +357,9 @@ async fn test_post_msg_bad_sender() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
     let fiona = &tcm.fiona().await;
-    let chat_id_alice = alice.create_group_with_members("", &[bob, fiona]).await;
+    let chat_id_alice = alice
+        .create_group_with_members("group", &[bob, fiona])
+        .await;
     let file_bytes = include_bytes!("../../../test-data/image/screenshot.gif");
 
     let mut msg_alice = Message::new(Viewtype::Image);
@@ -383,6 +385,8 @@ async fn test_post_msg_bad_sender() -> Result<()> {
     bob.recv_msg_trash(&post_msg_alice).await;
     let msg_bob = Message::load_from_db(bob, msg_bob.id).await?;
     assert_eq!(msg_bob.download_state, DownloadState::Done);
+
+    bob.assert_warn("Bad sender").await;
     Ok(())
 }
 
@@ -392,7 +396,9 @@ async fn test_lost_pre_msg_vs_new_member() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
     let fiona = &tcm.fiona().await;
-    let chat_id_alice = alice.create_group_with_members("", &[bob, fiona]).await;
+    let chat_id_alice = alice
+        .create_group_with_members("group", &[bob, fiona])
+        .await;
     let file_bytes = include_bytes!("../../../test-data/image/screenshot.gif");
 
     let mut msg_alice = Message::new(Viewtype::Image);
@@ -406,8 +412,11 @@ async fn test_lost_pre_msg_vs_new_member() -> Result<()> {
 
     chat_id_bob.accept(bob).await?;
     let sent = bob.send_text(chat_id_bob, "Hi all").await;
+    bob.assert_warn("Missing key for fiona@example.net").await;
     alice.recv_msg(&sent).await;
     fiona.recv_msg_trash(&sent).await; // Undecryptable message
+    fiona.assert_warn("decryption failed").await;
+    fiona.assert_warn("unencrypted message").await;
     Ok(())
 }
 
@@ -565,6 +574,9 @@ async fn test_full_download_after_trashed() -> Result<()> {
     let msg = Message::load_from_db_optional(bob, alice_msg.id).await?;
     assert!(msg.is_none());
 
+    alice
+        .assert_warn("Pre-message was not downloaded yet so treat as normal message")
+        .await;
     Ok(())
 }
 
@@ -754,6 +766,11 @@ async fn test_webxdc_updates_in_post_message_after_deleted_pre_message() -> Resu
             .await?
             .is_none()
     );
+
+    bob.assert_warn("Pre-message was not downloaded yet so treat as normal message")
+        .await;
+    bob.assert_warn("Received webxdc update, but cannot assign it to message")
+        .await;
 
     Ok(())
 }

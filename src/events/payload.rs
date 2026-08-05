@@ -448,3 +448,21 @@ pub enum EventType {
         n: u64,
     },
 }
+
+impl EventType {
+    /// Returns whether this event is a warning.
+    pub fn get_warn(&self) -> Option<&String> {
+        match self {
+            Self::Warning(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// Returns whether this event is an error.
+    pub fn get_error(&self) -> Option<&String> {
+        match self {
+            Self::Error(s) | Self::ErrorSelfNotInGroup(s) => Some(s),
+            _ => None,
+        }
+    }
+}
