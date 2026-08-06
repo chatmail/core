@@ -1123,7 +1123,7 @@ Content-Disposition: attachment; filename="location.kml"
         bob.evtracker.clear_events();
         bob.recv_msg_opt(&alice.pop_sent_msg().await).await;
         bob.evtracker
-            .get_matching_ex(
+            .get_matching_ext(
                 bob,
                 ExpectedEvents {
                     expected: |e| matches!(e, EventType::MsgsChanged { .. }),

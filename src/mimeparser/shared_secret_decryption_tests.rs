@@ -23,7 +23,7 @@ use anyhow::Result;
 ///
 /// To defeat this, a message that was unexpectedly
 /// encrypted with a symmetric secret must be dropped.
-async fn test_shared_secret_decryption_ex(
+async fn test_shared_secret_decryption_ext(
     recipient_ctx: &TestContext,
     from_addr: &str,
     secret_for_encryption: &str,
@@ -134,7 +134,7 @@ async fn test_broadcast_security_attacker_signature() -> Result<()> {
 
     let charlie_addr = charlie.get_config(Config::Addr).await?.unwrap();
 
-    test_shared_secret_decryption_ex(
+    test_shared_secret_decryption_ext(
         bob,
         &charlie_addr,
         &secret,
@@ -159,7 +159,7 @@ async fn test_broadcast_security_no_signature() -> Result<()> {
 
     let secret = load_broadcast_secret(alice, alice_chat_id).await?.unwrap();
 
-    test_shared_secret_decryption_ex(
+    test_shared_secret_decryption_ext(
         bob,
         "attacker@example.org",
         &secret,
@@ -189,7 +189,7 @@ async fn test_broadcast_security_happy_path() -> Result<()> {
         .await?
         .unwrap();
 
-    test_shared_secret_decryption_ex(bob, &alice_addr, &secret, Some(alice), None).await
+    test_shared_secret_decryption_ext(bob, &alice_addr, &secret, Some(alice), None).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -210,7 +210,7 @@ async fn test_qr_code_security() -> Result<()> {
 
     let alice_fp = self_fingerprint(alice).await?;
     let secret_for_encryption = format!("securejoin/{alice_fp}/{authcode}");
-    test_shared_secret_decryption_ex(
+    test_shared_secret_decryption_ext(
         bob,
         &charlie_addr,
         &secret_for_encryption,
@@ -238,7 +238,7 @@ async fn test_qr_code_happy_path() -> Result<()> {
 
     let alice_fp = self_fingerprint(alice).await?;
     let secret_for_encryption = format!("securejoin/{alice_fp}/{authcode}");
-    test_shared_secret_decryption_ex(
+    test_shared_secret_decryption_ext(
         bob,
         "alice@example.net",
         &secret_for_encryption,
@@ -255,7 +255,7 @@ async fn test_unknown_secret() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
 
-    test_shared_secret_decryption_ex(
+    test_shared_secret_decryption_ext(
         bob,
         "alice@example.net",
         "Some secret unknown to Bob",

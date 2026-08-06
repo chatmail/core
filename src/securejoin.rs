@@ -481,7 +481,7 @@ pub(crate) async fn handle_securejoin_handshake(
 
             let from_addr = ContactAddress::new(&mime_message.from.addr)?;
             let autocrypt_fingerprint = mime_message.autocrypt_fingerprint.as_deref().unwrap_or("");
-            let (autocrypt_contact_id, _) = Contact::add_or_lookup_ex(
+            let (autocrypt_contact_id, _) = Contact::add_or_lookup_ext(
                 context,
                 "",
                 &from_addr,
@@ -533,7 +533,7 @@ pub(crate) async fn handle_securejoin_handshake(
                 warn!(context, "Secure-join denied (bad auth).");
                 return Ok(HandshakeMessage::Ignore);
             }
-            if Contact::lookup_id_by_addr_ex(
+            if Contact::lookup_id_by_addr_ext(
                 context,
                 &mime_message.from.addr,
                 Origin::Unknown,
@@ -663,7 +663,7 @@ pub(crate) async fn handle_securejoin_handshake(
                 ChatId::create_for_contact(context, contact_id).await?;
             }
             if let Some(joining_chat_id) = joining_chat_id {
-                chat::add_contact_to_chat_ex(context, Nosync, joining_chat_id, contact_id, true)
+                chat::add_contact_to_chat_ext(context, Nosync, joining_chat_id, contact_id, true)
                     .await?;
 
                 let chat = Chat::load_from_db(context, joining_chat_id).await?;

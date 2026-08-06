@@ -361,10 +361,10 @@ impl ChatId {
 
     /// Blocks the chat as a result of explicit user action.
     pub async fn block(self, context: &Context) -> Result<()> {
-        self.block_ex(context, Sync).await
+        self.block_ext(context, Sync).await
     }
 
-    pub(crate) async fn block_ex(self, context: &Context, sync: sync::Sync) -> Result<()> {
+    pub(crate) async fn block_ext(self, context: &Context, sync: sync::Sync) -> Result<()> {
         let chat = Chat::load_from_db(context, self).await?;
         let mut delete = false;
 
@@ -403,17 +403,17 @@ impl ChatId {
                 .ok();
         }
         if delete {
-            self.delete_ex(context, Nosync).await?;
+            self.delete_ext(context, Nosync).await?;
         }
         Ok(())
     }
 
     /// Unblocks the chat.
     pub async fn unblock(self, context: &Context) -> Result<()> {
-        self.unblock_ex(context, Sync).await
+        self.unblock_ext(context, Sync).await
     }
 
-    pub(crate) async fn unblock_ex(self, context: &Context, sync: sync::Sync) -> Result<()> {
+    pub(crate) async fn unblock_ext(self, context: &Context, sync: sync::Sync) -> Result<()> {
         self.set_blocked(context, Blocked::Not).await?;
 
         chatlist_events::emit_chatlist_changed(context);
@@ -436,10 +436,10 @@ impl ChatId {
     ///
     /// Unblocks the chat and scales up origin of contacts.
     pub async fn accept(self, context: &Context) -> Result<()> {
-        self.accept_ex(context, Sync).await
+        self.accept_ext(context, Sync).await
     }
 
-    pub(crate) async fn accept_ex(self, context: &Context, sync: sync::Sync) -> Result<()> {
+    pub(crate) async fn accept_ext(self, context: &Context, sync: sync::Sync) -> Result<()> {
         let chat = Chat::load_from_db(context, self).await?;
 
         match chat.typ {
@@ -524,10 +524,10 @@ impl ChatId {
 
     /// Archives or unarchives a chat.
     pub async fn set_visibility(self, context: &Context, visibility: ChatVisibility) -> Result<()> {
-        self.set_visibility_ex(context, Sync, visibility).await
+        self.set_visibility_ext(context, Sync, visibility).await
     }
 
-    pub(crate) async fn set_visibility_ex(
+    pub(crate) async fn set_visibility_ext(
         self,
         context: &Context,
         sync: sync::Sync,
@@ -643,10 +643,10 @@ impl ChatId {
     /// After that, a `MsgsChanged` event is emitted.
     /// Messages are deleted from the server in background.
     pub async fn delete(self, context: &Context) -> Result<()> {
-        self.delete_ex(context, Sync).await
+        self.delete_ext(context, Sync).await
     }
 
-    pub(crate) async fn delete_ex(self, context: &Context, sync: sync::Sync) -> Result<()> {
+    pub(crate) async fn delete_ext(self, context: &Context, sync: sync::Sync) -> Result<()> {
         ensure!(
             !self.is_special(),
             "bad chat_id, can not be a special chat: {self}"
@@ -1465,10 +1465,10 @@ impl Chat {
     ///
     /// Otherwise returns a reason useful for logging.
     pub(crate) async fn why_cant_send(&self, context: &Context) -> Result<Option<CantSendReason>> {
-        self.why_cant_send_ex(context, &|_| false).await
+        self.why_cant_send_ext(context, &|_| false).await
     }
 
-    pub(crate) async fn why_cant_send_ex(
+    pub(crate) async fn why_cant_send_ext(
         &self,
         context: &Context,
         skip_fn: &(dyn Send + Sync + Fn(&CantSendReason) -> bool),
@@ -2700,7 +2700,7 @@ async fn prepare_send_msg(
             .unwrap_or_default(),
         _ => false,
     };
-    if let Some(reason) = chat.why_cant_send_ex(context, &skip_fn).await? {
+    if let Some(reason) = chat.why_cant_send_ext(context, &skip_fn).await? {
         bail!("Cannot send to {chat_id}: {reason}");
     }
 
@@ -3163,7 +3163,7 @@ pub struct MessageListOptions {
 
 /// Returns all messages belonging to the chat.
 pub async fn get_chat_msgs(context: &Context, chat_id: ChatId) -> Result<Vec<ChatItem>> {
-    get_chat_msgs_ex(
+    get_chat_msgs_ext(
         context,
         chat_id,
         MessageListOptions {
@@ -3176,7 +3176,7 @@ pub async fn get_chat_msgs(context: &Context, chat_id: ChatId) -> Result<Vec<Cha
 /// Returns messages belonging to the chat according to the given options,
 /// sorted by oldest message first.
 #[expect(clippy::arithmetic_side_effects)]
-pub async fn get_chat_msgs_ex(
+pub async fn get_chat_msgs_ext(
     context: &Context,
     chat_id: ChatId,
     options: MessageListOptions,
@@ -3584,12 +3584,12 @@ pub async fn get_past_chat_contacts(context: &Context, chat_id: ChatId) -> Resul
 
 /// Creates an encrypted group chat.
 pub async fn create_group(context: &Context, name: &str) -> Result<ChatId> {
-    create_group_ex(context, Sync, create_id(), name).await
+    create_group_ext(context, Sync, create_id(), name).await
 }
 
 /// Creates an unencrypted group chat.
 pub async fn create_group_unencrypted(context: &Context, name: &str) -> Result<ChatId> {
-    create_group_ex(context, Sync, String::new(), name).await
+    create_group_ext(context, Sync, String::new(), name).await
 }
 
 /// Creates a group chat.
@@ -3602,7 +3602,7 @@ pub async fn create_group_unencrypted(context: &Context, name: &str) -> Result<C
 /// NB: Unencrypted chats with similar names and the same members are merged on other devices, but
 /// usually users don't create such chats and look up the existing one instead, so chat split on the
 /// first device is acceptable.
-pub(crate) async fn create_group_ex(
+pub(crate) async fn create_group_ext(
     context: &Context,
     sync: sync::Sync,
     grpid: String,
@@ -3680,14 +3680,14 @@ pub(crate) async fn create_group_ex(
 pub async fn create_broadcast(context: &Context, chat_name: String) -> Result<ChatId> {
     let grpid = create_id();
     let secret = create_broadcast_secret();
-    create_out_broadcast_ex(context, Sync, grpid, chat_name, secret).await
+    create_out_broadcast_ext(context, Sync, grpid, chat_name, secret).await
 }
 
 const SQL_INSERT_BROADCAST_SECRET: &str =
     "INSERT INTO broadcast_secrets (chat_id, secret) VALUES (?, ?)
     ON CONFLICT(chat_id) DO UPDATE SET secret=excluded.secret";
 
-pub(crate) async fn create_out_broadcast_ex(
+pub(crate) async fn create_out_broadcast_ext(
     context: &Context,
     sync: sync::Sync,
     grpid: String,
@@ -3905,11 +3905,11 @@ pub async fn add_contact_to_chat(
     chat_id: ChatId,
     contact_id: ContactId,
 ) -> Result<()> {
-    add_contact_to_chat_ex(context, Sync, chat_id, contact_id, false).await?;
+    add_contact_to_chat_ext(context, Sync, chat_id, contact_id, false).await?;
     Ok(())
 }
 
-pub(crate) async fn add_contact_to_chat_ex(
+pub(crate) async fn add_contact_to_chat_ext(
     context: &Context,
     mut sync: sync::Sync,
     chat_id: ChatId,
@@ -4020,7 +4020,7 @@ pub(crate) async fn add_contact_to_chat_ex(
     }
     if chat.typ == Chattype::OutBroadcast {
         let msgs = get_broadcast_msgs_to_resend(context, chat_id).await?;
-        resend_msgs_ex(context, &msgs, contact.fingerprint())
+        resend_msgs_ext(context, &msgs, contact.fingerprint())
             .await
             .log_err(context)
             .ok();
@@ -4154,10 +4154,10 @@ impl rusqlite::types::FromSql for MuteDuration {
 
 /// Mutes the chat for a given duration or unmutes it.
 pub async fn set_muted(context: &Context, chat_id: ChatId, duration: MuteDuration) -> Result<()> {
-    set_muted_ex(context, Sync, chat_id, duration).await
+    set_muted_ext(context, Sync, chat_id, duration).await
 }
 
-pub(crate) async fn set_muted_ex(
+pub(crate) async fn set_muted_ext(
     context: &Context,
     sync: sync::Sync,
     chat_id: ChatId,
@@ -4304,10 +4304,10 @@ pub async fn set_chat_description(
     chat_id: ChatId,
     new_description: &str,
 ) -> Result<()> {
-    set_chat_description_ex(context, Sync, chat_id, new_description).await
+    set_chat_description_ext(context, Sync, chat_id, new_description).await
 }
 
-async fn set_chat_description_ex(
+async fn set_chat_description_ext(
     context: &Context,
     mut sync: sync::Sync,
     chat_id: ChatId,
@@ -4391,10 +4391,10 @@ pub async fn get_chat_description(context: &Context, chat_id: ChatId) -> Result<
 ///
 /// Sends out #DC_EVENT_CHAT_MODIFIED and #DC_EVENT_MSGS_CHANGED if a status message was sent.
 pub async fn set_chat_name(context: &Context, chat_id: ChatId, new_name: &str) -> Result<()> {
-    rename_ex(context, Sync, chat_id, new_name).await
+    rename_ext(context, Sync, chat_id, new_name).await
 }
 
-async fn rename_ex(
+async fn rename_ext(
     context: &Context,
     mut sync: sync::Sync,
     chat_id: ChatId,
@@ -4734,14 +4734,14 @@ pub(crate) async fn save_copy_in_self_talk(
 ///
 /// This is primarily intended to make existing webxdcs available to new chat members.
 pub async fn resend_msgs(context: &Context, msg_ids: &[MsgId]) -> Result<()> {
-    resend_msgs_ex(context, msg_ids, None).await
+    resend_msgs_ext(context, msg_ids, None).await
 }
 
 /// Resends given messages to a contact with fingerprint `to_fingerprint` or, if it's `None`, to
 /// members of the corresponding chats.
 ///
 /// `to_fingerprint` is only passed for `OutBroadcast` chats when a new member is added.
-pub(crate) async fn resend_msgs_ex(
+pub(crate) async fn resend_msgs_ext(
     context: &Context,
     msg_ids: &[MsgId],
     to_fingerprint: Option<Fingerprint>,
@@ -5167,7 +5167,7 @@ async fn set_contacts_by_fingerprints(
     );
     let mut contacts = BTreeSet::new();
     for (fingerprint, addr) in fingerprint_addrs {
-        let contact = Contact::add_or_lookup_ex(context, "", addr, fingerprint, Origin::Hidden)
+        let contact = Contact::add_or_lookup_ext(context, "", addr, fingerprint, Origin::Hidden)
             .await?
             .0;
         contacts.insert(contact);
@@ -5271,7 +5271,7 @@ impl Context {
         let chat_id = match id {
             SyncId::ContactAddr(addr) => {
                 if let SyncAction::Rename(to) = action {
-                    Contact::create_ex(self, Nosync, to, addr).await?;
+                    Contact::create_ext(self, Nosync, to, addr).await?;
                     return Ok(());
                 }
                 let addr = ContactAddress::new(addr).context("Invalid address")?;
@@ -5298,11 +5298,11 @@ impl Context {
                 let name = "";
                 let addr = "";
                 let (contact_id, _) =
-                    Contact::add_or_lookup_ex(self, name, addr, fingerprint, Origin::Hidden)
+                    Contact::add_or_lookup_ext(self, name, addr, fingerprint, Origin::Hidden)
                         .await?;
                 match action {
                     SyncAction::Rename(to) => {
-                        contact_id.set_name_ex(self, Nosync, to).await?;
+                        contact_id.set_name_ext(self, Nosync, to).await?;
                         self.emit_event(EventType::ContactsChanged(Some(contact_id)));
                         return Ok(());
                     }
@@ -5327,7 +5327,7 @@ impl Context {
             SyncId::Grpid(grpid) => {
                 match action {
                     SyncAction::CreateOutBroadcast { chat_name, secret } => {
-                        create_out_broadcast_ex(
+                        create_out_broadcast_ext(
                             self,
                             Nosync,
                             grpid.to_string(),
@@ -5338,7 +5338,7 @@ impl Context {
                         return Ok(());
                     }
                     SyncAction::CreateGroupEncrypted(name) => {
-                        create_group_ex(self, Nosync, grpid.clone(), name).await?;
+                        create_group_ext(self, Nosync, grpid.clone(), name).await?;
                         return Ok(());
                     }
                     _ => {}
@@ -5358,24 +5358,24 @@ impl Context {
             SyncId::Device => ChatId::get_for_contact(self, ContactId::DEVICE).await?,
         };
         match action {
-            SyncAction::Block => chat_id.block_ex(self, Nosync).await,
-            SyncAction::Unblock => chat_id.unblock_ex(self, Nosync).await,
-            SyncAction::Accept => chat_id.accept_ex(self, Nosync).await,
-            SyncAction::SetVisibility(v) => chat_id.set_visibility_ex(self, Nosync, *v).await,
-            SyncAction::SetMuted(duration) => set_muted_ex(self, Nosync, chat_id, *duration).await,
+            SyncAction::Block => chat_id.block_ext(self, Nosync).await,
+            SyncAction::Unblock => chat_id.unblock_ext(self, Nosync).await,
+            SyncAction::Accept => chat_id.accept_ext(self, Nosync).await,
+            SyncAction::SetVisibility(v) => chat_id.set_visibility_ext(self, Nosync, *v).await,
+            SyncAction::SetMuted(duration) => set_muted_ext(self, Nosync, chat_id, *duration).await,
             SyncAction::CreateOutBroadcast { .. } | SyncAction::CreateGroupEncrypted(..) => {
                 // Create action should have been handled above already.
                 Err(anyhow!("sync_alter_chat({id:?}, {action:?}): Bad request."))
             }
-            SyncAction::Rename(to) => rename_ex(self, Nosync, chat_id, to).await,
+            SyncAction::Rename(to) => rename_ext(self, Nosync, chat_id, to).await,
             SyncAction::SetDescription(to) => {
-                set_chat_description_ex(self, Nosync, chat_id, to).await
+                set_chat_description_ext(self, Nosync, chat_id, to).await
             }
             SyncAction::SetContacts(addrs) => set_contacts_by_addrs(self, chat_id, addrs).await,
             SyncAction::SetPgpContacts(fingerprint_addrs) => {
                 set_contacts_by_fingerprints(self, chat_id, fingerprint_addrs).await
             }
-            SyncAction::Delete => chat_id.delete_ex(self, Nosync).await,
+            SyncAction::Delete => chat_id.delete_ext(self, Nosync).await,
         }
     }
 

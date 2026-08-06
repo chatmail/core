@@ -104,10 +104,10 @@ impl ContactId {
     /// for this contact will switch to the
     /// contact's authorized name.
     pub async fn set_name(self, context: &Context, name: &str) -> Result<()> {
-        self.set_name_ex(context, Sync, name).await
+        self.set_name_ext(context, Sync, name).await
     }
 
-    pub(crate) async fn set_name_ex(
+    pub(crate) async fn set_name_ext(
         self,
         context: &Context,
         sync: sync::Sync,
@@ -285,7 +285,7 @@ pub async fn make_vcard(context: &Context, contacts: &[ContactId]) -> Result<Str
     for id in contacts {
         let c = Contact::get_by_id(context, *id).await?;
         let key = c.public_key(context).await?.map(|k| k.to_base64());
-        let profile_image = match c.get_profile_image_ex(context, false).await? {
+        let profile_image = match c.get_profile_image_ext(context, false).await? {
             None => None,
             Some(path) => tokio::fs::read(path)
                 .await
@@ -424,7 +424,7 @@ async fn import_vcard_contact(context: &Context, contact: &VcardContact) -> Resu
     };
 
     let (id, modified) =
-        match Contact::add_or_lookup_ex(context, &contact.authname, &addr, &fingerprint, origin)
+        match Contact::add_or_lookup_ext(context, &contact.authname, &addr, &fingerprint, origin)
             .await
         {
             Err(e) => return Err(e).context("Contact::add_or_lookup() failed"),
@@ -763,10 +763,10 @@ impl Contact {
     ///
     /// May result in a `#DC_EVENT_CONTACTS_CHANGED` event.
     pub async fn create(context: &Context, name: &str, addr: &str) -> Result<ContactId> {
-        Self::create_ex(context, Sync, name, addr).await
+        Self::create_ext(context, Sync, name, addr).await
     }
 
-    pub(crate) async fn create_ex(
+    pub(crate) async fn create_ext(
         context: &Context,
         sync: sync::Sync,
         name: &str,
@@ -846,12 +846,12 @@ impl Contact {
         addr: &str,
         min_origin: Origin,
     ) -> Result<Option<ContactId>> {
-        Self::lookup_id_by_addr_ex(context, addr, min_origin, Some(Blocked::Not)).await
+        Self::lookup_id_by_addr_ext(context, addr, min_origin, Some(Blocked::Not)).await
     }
 
     /// The same as `lookup_id_by_addr()`, but internal function. Currently also allows looking up
     /// not unblocked contacts.
-    pub(crate) async fn lookup_id_by_addr_ex(
+    pub(crate) async fn lookup_id_by_addr_ext(
         context: &Context,
         addr: &str,
         min_origin: Origin,
@@ -906,7 +906,7 @@ impl Contact {
         addr: &ContactAddress,
         origin: Origin,
     ) -> Result<(ContactId, Modifier)> {
-        Self::add_or_lookup_ex(context, name, addr, "", origin).await
+        Self::add_or_lookup_ext(context, name, addr, "", origin).await
     }
 
     /// Lookup a contact and create it if it does not exist yet.
@@ -936,7 +936,7 @@ impl Contact {
     ///   Depending on the origin, both, "row_name" and "row_authname" are updated from "name".
     ///
     /// Returns the contact_id and a `Modifier` value indicating if a modification occurred.
-    pub(crate) async fn add_or_lookup_ex(
+    pub(crate) async fn add_or_lookup_ext(
         context: &Context,
         name: &str,
         addr: &str,
@@ -1620,13 +1620,13 @@ WHERE addr=?
     /// This is the image set by each remote user on their own
     /// using set_config(context, "selfavatar", image).
     pub async fn get_profile_image(&self, context: &Context) -> Result<Option<PathBuf>> {
-        self.get_profile_image_ex(context, true).await
+        self.get_profile_image_ext(context, true).await
     }
 
     /// Get the contact's profile image.
     /// This is the image set by each remote user on their own
     /// using set_config(context, "selfavatar", image).
-    async fn get_profile_image_ex(
+    async fn get_profile_image_ext(
         &self,
         context: &Context,
         show_fallback_icon: bool,
@@ -1878,7 +1878,7 @@ WHERE type=? AND id IN (
             && contact.origin == Origin::MailinglistAddress
             && let Some((chat_id, ..)) = chat::get_chat_id_by_grpid(context, &contact.addr).await?
         {
-            chat_id.unblock_ex(context, Nosync).await?;
+            chat_id.unblock_ext(context, Nosync).await?;
         }
 
         if sync.into() {
@@ -1919,7 +1919,7 @@ pub(crate) async fn set_profile_image(
         AvatarAction::Change(profile_image) => {
             if contact_id == ContactId::SELF {
                 context
-                    .set_config_ex(Nosync, Config::Selfavatar, Some(profile_image))
+                    .set_config_ext(Nosync, Config::Selfavatar, Some(profile_image))
                     .await?;
             } else {
                 contact.param.set(Param::ProfileImage, profile_image);
@@ -1929,7 +1929,7 @@ pub(crate) async fn set_profile_image(
         AvatarAction::Delete => {
             if contact_id == ContactId::SELF {
                 context
-                    .set_config_ex(Nosync, Config::Selfavatar, None)
+                    .set_config_ext(Nosync, Config::Selfavatar, None)
                     .await?;
             } else {
                 contact.param.remove(Param::ProfileImage);
@@ -1955,7 +1955,7 @@ pub(crate) async fn set_status(
 ) -> Result<()> {
     if contact_id == ContactId::SELF {
         context
-            .set_config_ex(Nosync, Config::Selfstatus, Some(&status))
+            .set_config_ext(Nosync, Config::Selfstatus, Some(&status))
             .await?;
     } else {
         let mut contact = Contact::get_by_id(context, contact_id).await?;

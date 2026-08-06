@@ -318,7 +318,7 @@ async fn pre_msg_mdn_before_sending_full(text: &str) -> Result<()> {
     msg.set_text(text.to_string());
     chat::send_msg(alice, alice_chat_id, &mut msg).await?;
     let rev_order = false;
-    let pre_msg = alice.pop_sent_msg_ex(rev_order).await.unwrap();
+    let pre_msg = alice.pop_sent_msg_ext(rev_order).await.unwrap();
     let alice_msg_id = msg.id;
 
     let msg = bob.recv_msg(&pre_msg).await;

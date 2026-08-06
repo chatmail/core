@@ -650,7 +650,7 @@ impl Context {
             _ => Some(value),
         };
         match key.is_synced() {
-            true => self.set_config_ex(Nosync, *key, value).await,
+            true => self.set_config_ext(Nosync, *key, value).await,
             false => Ok(()),
         }
     }
@@ -700,10 +700,10 @@ impl Context {
     }
 
     pub(crate) async fn set_config_internal(&self, key: Config, value: Option<&str>) -> Result<()> {
-        self.set_config_ex(Sync, key, value).await
+        self.set_config_ext(Sync, key, value).await
     }
 
-    pub(crate) async fn set_config_ex(
+    pub(crate) async fn set_config_ext(
         &self,
         sync: sync::Sync,
         key: Config,

@@ -274,14 +274,14 @@ impl TestContextManager {
         for _ in 0..2 {
             let mut something_sent = false;
             let rev_order = false;
-            if let Some(sent) = joiner.pop_sent_msg_ex(rev_order).await {
+            if let Some(sent) = joiner.pop_sent_msg_ext(rev_order).await {
                 for inviter in inviters {
                     inviter.recv_msg_opt(&sent).await;
                 }
                 something_sent = true;
             }
             for inviter in inviters {
-                if let Some(sent) = inviter.pop_sent_msg_ex(rev_order).await {
+                if let Some(sent) = inviter.pop_sent_msg_ext(rev_order).await {
                     if sent.recipients.split(' ').any(|addr| addr == inviter_addr) {
                         for observer in inviters {
                             // `imap::prefetch_should_download()` returns false on the sender side.
@@ -592,10 +592,10 @@ impl TestContext {
 
     pub async fn pop_sent_msg_opt(&self) -> Option<SentMessage<'_>> {
         let rev_order = true;
-        self.pop_sent_msg_ex(rev_order).await
+        self.pop_sent_msg_ext(rev_order).await
     }
 
-    pub async fn pop_sent_msg_ex(&self, rev_order: bool) -> Option<SentMessage<'_>> {
+    pub async fn pop_sent_msg_ext(&self, rev_order: bool) -> Option<SentMessage<'_>> {
         let mut query = "
 SELECT id, msg_id, mime, recipients
 FROM smtp
@@ -883,7 +883,7 @@ ORDER BY id"
         let fingerprint = self_fingerprint(other).await.unwrap();
 
         let (contact_id, _modified) =
-            Contact::add_or_lookup_ex(self, "", &addr, fingerprint, Origin::MailinglistAddress)
+            Contact::add_or_lookup_ext(self, "", &addr, fingerprint, Origin::MailinglistAddress)
                 .await
                 .expect("add_or_lookup");
         contact_id
@@ -1053,7 +1053,7 @@ ORDER BY id"
     async fn display_chat(&self, chat_id: ChatId) -> String {
         let mut res = String::new();
 
-        let msglist = chat::get_chat_msgs_ex(
+        let msglist = chat::get_chat_msgs_ext(
             self,
             chat_id,
             MessageListOptions {
@@ -1577,7 +1577,7 @@ pub fn pqc_keypair() -> SignedSecretKey {
 #[derive(Debug)]
 pub struct EventTracker(EventEmitter);
 
-/// See [`super::EventTracker::get_matching_ex`].
+/// See [`super::EventTracker::get_matching_ext`].
 pub struct ExpectedEvents<E: Fn(&EventType) -> bool, U: Fn(&EventType) -> bool> {
     pub expected: E,
     pub unexpected: U,
@@ -1625,7 +1625,7 @@ impl EventTracker {
         ctx: &Context,
         event_matcher: F,
     ) -> Option<EventType> {
-        self.get_matching_ex(
+        self.get_matching_ext(
             ctx,
             ExpectedEvents {
                 expected: event_matcher,
@@ -1637,7 +1637,7 @@ impl EventTracker {
 
     /// Consumes all emitted events returning the first matching one if any. Panics on unexpected
     /// events.
-    pub async fn get_matching_ex<E: Fn(&EventType) -> bool, U: Fn(&EventType) -> bool>(
+    pub async fn get_matching_ext<E: Fn(&EventType) -> bool, U: Fn(&EventType) -> bool>(
         &self,
         ctx: &Context,
         args: ExpectedEvents<E, U>,

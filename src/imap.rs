@@ -612,7 +612,7 @@ impl Imap {
             // so the messages will be detected as new
             // in the `INBOX.DeltaChat` folder again.
             let delete = if let Some(message_id) = &message_id {
-                message::rfc724_mid_exists_ex(context, message_id, "deleted=1")
+                message::rfc724_mid_exists_ext(context, message_id, "deleted=1")
                     .await?
                     .is_some_and(|(_msg_id, deleted)| deleted)
             } else {

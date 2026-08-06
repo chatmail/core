@@ -350,16 +350,16 @@ async fn test_msg_seen_on_imap_when_downloaded() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_pre_and_post_msgs_deleted() -> Result<()> {
     let reorder = false;
-    test_pre_and_post_msgs_deleted_ex(reorder).await
+    test_pre_and_post_msgs_deleted_ext(reorder).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_reordered_pre_and_post_msgs_deleted() -> Result<()> {
     let reorder = true;
-    test_pre_and_post_msgs_deleted_ex(reorder).await
+    test_pre_and_post_msgs_deleted_ext(reorder).await
 }
 
-async fn test_pre_and_post_msgs_deleted_ex(reorder: bool) -> Result<()> {
+async fn test_pre_and_post_msgs_deleted_ext(reorder: bool) -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
