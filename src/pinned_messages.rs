@@ -32,7 +32,7 @@ fn is_pinnable(msg: &Message) -> bool {
 /// Pin or unpin a message.
 ///
 /// If the message is not pinnable, an error is returned.
-/// If pinning changes, `EventType::MsgsChanged`` event is fired to show/hide the pinning needle.
+/// If pinning changes, `EventType::MsgsChanged` event is fired to show/hide the pinning needle.
 pub async fn set_pinned_state(
     context: &Context,
     msg_id: MsgId,
