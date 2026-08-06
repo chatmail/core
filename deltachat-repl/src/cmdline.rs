@@ -616,7 +616,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             let sel_chat = sel_chat.as_ref().unwrap();
 
             let time_start = std::time::SystemTime::now();
-            let msglist = chat::get_chat_msgs_ex(
+            let msglist = chat::get_chat_msgs_ext(
                 &context,
                 sel_chat.get_id(),
                 chat::MessageListOptions {

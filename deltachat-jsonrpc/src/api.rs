@@ -12,7 +12,7 @@ use deltachat::blob::BlobObject;
 use deltachat::calls::ice_servers;
 use deltachat::chat::{
     self, Chat, ChatId, ChatItem, MessageListOptions, add_contact_to_chat, forward_msgs,
-    forward_msgs_2ctx, get_chat_media, get_chat_msgs, get_chat_msgs_ex, markfresh_chat,
+    forward_msgs_2ctx, get_chat_media, get_chat_msgs, get_chat_msgs_ext, markfresh_chat,
     marknoticed_all_chats, marknoticed_chat, remove_contact_from_chat,
 };
 use deltachat::chatlist::Chatlist;
@@ -24,7 +24,7 @@ use deltachat::ephemeral::Timer;
 use deltachat::imex;
 use deltachat::location;
 use deltachat::message::{
-    self, Message, MessageState, MsgId, Viewtype, delete_msgs_ex, get_existing_msg_ids,
+    self, Message, MessageState, MsgId, Viewtype, delete_msgs_ext, get_existing_msg_ids,
     get_msg_read_receipt_count, get_msg_read_receipts, markseen_msgs,
 };
 use deltachat::peer_channels::{
@@ -1393,7 +1393,7 @@ impl CommandApi {
         add_daymarker: bool,
     ) -> Result<Vec<u32>> {
         let ctx = self.get_context(account_id).await?;
-        let msg = get_chat_msgs_ex(
+        let msg = get_chat_msgs_ext(
             &ctx,
             ChatId::new(chat_id),
             MessageListOptions { add_daymarker },
@@ -1442,7 +1442,7 @@ impl CommandApi {
         add_daymarker: bool,
     ) -> Result<Vec<JsonrpcMessageListItem>> {
         let ctx = self.get_context(account_id).await?;
-        let msg = get_chat_msgs_ex(
+        let msg = get_chat_msgs_ext(
             &ctx,
             ChatId::new(chat_id),
             MessageListOptions { add_daymarker },
@@ -1513,7 +1513,7 @@ impl CommandApi {
     async fn delete_messages(&self, account_id: u32, message_ids: Vec<u32>) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
         let msgs: Vec<MsgId> = message_ids.into_iter().map(MsgId::new).collect();
-        delete_msgs_ex(&ctx, &msgs, false).await
+        delete_msgs_ext(&ctx, &msgs, false).await
     }
 
     /// Delete messages. The messages are deleted on the current device,
@@ -1521,7 +1521,7 @@ impl CommandApi {
     async fn delete_messages_for_all(&self, account_id: u32, message_ids: Vec<u32>) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
         let msgs: Vec<MsgId> = message_ids.into_iter().map(MsgId::new).collect();
-        delete_msgs_ex(&ctx, &msgs, true).await
+        delete_msgs_ext(&ctx, &msgs, true).await
     }
 
     /// Get an informational text for a single message. The text is multiline and may

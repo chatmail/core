@@ -305,7 +305,7 @@ async fn test_add_contact_to_chat_ex_add_self() {
     // Adding self to a contact should succeed, even though it's pointless.
     let t = TestContext::new_alice().await;
     let chat_id = create_group(&t, "foo").await.unwrap();
-    let added = add_contact_to_chat_ex(&t, Nosync, chat_id, ContactId::SELF, false)
+    let added = add_contact_to_chat_ext(&t, Nosync, chat_id, ContactId::SELF, false)
         .await
         .unwrap();
     assert_eq!(added, false);
@@ -788,7 +788,7 @@ async fn test_add_remove_contact_for_single() {
 
     // adding or removing contacts from single chats result in an error
     let claire = Contact::create(&ctx, "", "claire@foo.de").await.unwrap();
-    let added = add_contact_to_chat_ex(&ctx, Nosync, chat.id, claire, false).await;
+    let added = add_contact_to_chat_ext(&ctx, Nosync, chat.id, claire, false).await;
     assert!(added.is_err());
     assert_eq!(get_chat_contacts(&ctx, chat.id).await.unwrap().len(), 1);
 
@@ -3105,7 +3105,7 @@ async fn test_broadcast_resend_to_new_member() -> Result<()> {
     }
     for i in 0..N_MSGS_TO_NEW_BROADCAST_MEMBER {
         let rev_order = false;
-        let resent_msg = alice.pop_sent_msg_ex(rev_order).await.unwrap();
+        let resent_msg = alice.pop_sent_msg_ext(rev_order).await.unwrap();
         let fiona_msg = fiona.recv_msg(&resent_msg).await;
         assert_eq!(fiona_msg.chat_id, fiona_bc_id);
         assert_eq!(fiona_msg.text, (i + 1).to_string());
@@ -4193,7 +4193,7 @@ async fn test_encrypt_decrypt_broadcast() -> Result<()> {
     let bob_alice_contact_id = bob.add_or_lookup_contact_id(alice).await;
 
     tcm.section("Create a broadcast channel with Bob, and send a message");
-    let alice_chat_id = create_out_broadcast_ex(
+    let alice_chat_id = create_out_broadcast_ext(
         alice,
         Sync,
         "My Channel".to_string(),
@@ -6068,7 +6068,7 @@ async fn test_send_delete_request() -> Result<()> {
     let alice_msg = sent1.load_from_db().await;
     assert_eq!(alice_chat.id.get_msg_cnt(alice).await?, E2EE_INFO_MSGS + 2);
 
-    message::delete_msgs_ex(alice, &[alice_msg.id], true).await?;
+    message::delete_msgs_ext(alice, &[alice_msg.id], true).await?;
     let sent2 = alice.pop_sent_msg().await;
     assert_eq!(alice_chat.id.get_msg_cnt(alice).await?, E2EE_INFO_MSGS + 1);
 
@@ -6114,7 +6114,7 @@ async fn test_send_delete_request_no_encryption() -> Result<()> {
     // Alice sends a message, then tries to send a deletion request which fails.
     let sent1 = alice.send_text(alice_chat.id, "wtf").await;
     assert!(
-        message::delete_msgs_ex(alice, &[sent1.sender_msg_id], true)
+        message::delete_msgs_ext(alice, &[sent1.sender_msg_id], true)
             .await
             .is_err()
     );

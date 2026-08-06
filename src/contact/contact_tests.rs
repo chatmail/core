@@ -1098,7 +1098,7 @@ async fn test_was_seen_recently_event() -> Result<()> {
     Ok(())
 }
 
-async fn test_lookup_id_by_addr_recent_ex(accept_unencrypted_chat: bool) -> Result<()> {
+async fn test_lookup_id_by_addr_recent_ext(accept_unencrypted_chat: bool) -> Result<()> {
     let mut tcm = TestContextManager::new();
     let bob = &tcm.bob().await;
     bob.allow_unencrypted().await?;
@@ -1134,13 +1134,13 @@ Hi"#
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_lookup_id_by_addr_recent() -> Result<()> {
     let accept_unencrypted_chat = true;
-    test_lookup_id_by_addr_recent_ex(accept_unencrypted_chat).await
+    test_lookup_id_by_addr_recent_ext(accept_unencrypted_chat).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_lookup_id_by_addr_recent_accepted() -> Result<()> {
     let accept_unencrypted_chat = false;
-    test_lookup_id_by_addr_recent_ex(accept_unencrypted_chat).await
+    test_lookup_id_by_addr_recent_ext(accept_unencrypted_chat).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
