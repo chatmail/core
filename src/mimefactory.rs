@@ -29,7 +29,7 @@ use crate::key::{DcKey, SignedPublicKey, SignedSecretKey, load_self_public_key, 
 use crate::location;
 use crate::log::warn;
 use crate::message::{Message, MsgId, Viewtype};
-use crate::mimeparser::{SystemMessage, is_hidden};
+use crate::mimeparser::SystemMessage;
 use crate::param::Param;
 use crate::peer_channels::{create_iroh_header, get_iroh_topic_for_msg};
 use crate::pgp::{SeipdVersion, addresses_from_public_key, pubkey_supports_seipdv2};
@@ -1535,14 +1535,8 @@ impl MimeFactory {
         let is_mdn = matches!(self.loaded, Loaded::Mdn { .. });
         let should_sign = true;
 
-        let HeadersByConfidentiality {
-            mut unprotected_headers,
-            hidden_headers,
-            protected_headers,
-        } = group_headers_by_confidentiality(headers);
-
         let message = if self.encryption_pubkeys.is_some() {
-            add_headers_to_encrypted_part(message, hidden_headers, protected_headers)
+            add_headers_to_encrypted_part(message, headers)
         } else if is_mdn {
             // Never add outer multipart/mixed wrapper to MDN
             // as multipart/report Content-Type is used to recognize MDNs
@@ -1550,37 +1544,11 @@ impl MimeFactory {
             // allowing them to be unencrypted and not contain Autocrypt header
             // without resetting Autocrypt encryption or triggering Chatmail filter
             // that normally only allows encrypted mails.
-
-            // Hidden headers are dropped.
             message
         } else {
-            let message = hidden_headers
-                .into_iter()
-                .fold(message, |message, (header, value)| {
-                    message.header(header, value)
-                });
-            let message = message.header(
-                "Message-ID",
-                mail_builder::headers::message_id::MessageId::new(rfc724_mid.clone()),
-            );
-            let message = MimePart::new("multipart/mixed", vec![message]);
-            let message = protected_headers
-                .iter()
-                .fold(message, |message, (header, value)| {
-                    message.header(*header, value.clone())
-                });
-
-            // Deduplicate unprotected headers that also are in the protected headers:
-            let protected: HashSet<&str> =
-                HashSet::from_iter(protected_headers.iter().map(|(header, _value)| *header));
-            unprotected_headers.retain(|(header, _value)| !protected.contains(header));
-
-            unprotected_headers
-                .iter()
-                .cloned()
-                .fold(message, |message, (header, value)| {
-                    message.header(header, value)
-                })
+            headers.iter().fold(message, |message, (header, value)| {
+                message.header(*header, value.clone())
+            })
         };
         let raw_message = part_to_bytes(message);
 
@@ -2285,14 +2253,11 @@ pub(crate) fn wrap_encrypted_part(encrypted: String) -> MimePart<'static> {
 
 fn add_headers_to_encrypted_part(
     message: MimePart<'static>,
-    hidden_headers: Vec<(&'static str, HeaderType<'static>)>,
     protected_headers: Vec<(&'static str, HeaderType<'static>)>,
 ) -> MimePart<'static> {
     // Store protected headers in the inner message.
-    // Add hidden headers to encrypted payload.
     let mut message: MimePart<'static> = protected_headers
         .into_iter()
-        .chain(hidden_headers)
         .fold(message, |message, (header, value)| {
             message.header(header, value)
         });
@@ -2311,88 +2276,6 @@ fn add_headers_to_encrypted_part(
     }
 
     message
-}
-
-struct HeadersByConfidentiality {
-    /// Headers that must go into IMF header section.
-    ///
-    /// These are standard headers such as Date, In-Reply-To, References, which cannot be placed
-    /// anywhere else according to the standard. Placing headers here also allows them to be fetched
-    /// individually over IMAP without downloading the message body. This is why Chat-Version is
-    /// placed here.
-    unprotected_headers: Vec<(&'static str, HeaderType<'static>)>,
-
-    /// Headers that MUST NOT (only) go into IMF header section:
-    /// - Large headers which may hit the header section size limit on the server, such as
-    ///   Chat-User-Avatar with a base64-encoded image inside.
-    /// - Headers duplicated here that servers mess up with in the IMF header section, like
-    ///   Message-ID.
-    /// - Nonstandard headers that should be DKIM-protected because e.g. OpenDKIM only signs
-    ///   known headers.
-    ///
-    /// The header should be hidden from MTA
-    /// by moving it either into protected part
-    /// in case of encrypted mails
-    /// or unprotected MIME preamble in case of unencrypted mails.
-    hidden_headers: Vec<(&'static str, HeaderType<'static>)>,
-
-    /// Opportunistically protected headers.
-    ///
-    /// These headers are placed into encrypted part *if* the message is encrypted. Place headers
-    /// which are not needed before decryption (e.g. Chat-Group-Name) or are not interesting if the
-    /// message cannot be decrypted (e.g. Chat-Disposition-Notification-To) here.
-    ///
-    /// If the message is not encrypted, these headers are placed into IMF header section, so make
-    /// sure that the message will be encrypted if you place any sensitive information here.
-    protected_headers: Vec<(&'static str, HeaderType<'static>)>,
-}
-
-/// Split headers based on header confidentiality policy.
-/// See [`HeadersByConfidentiality`] for more info.
-fn group_headers_by_confidentiality(
-    headers: Vec<(&'static str, HeaderType<'static>)>,
-) -> HeadersByConfidentiality {
-    let mut unprotected_headers: Vec<(&'static str, HeaderType<'static>)> = Vec::new();
-    let mut hidden_headers: Vec<(&'static str, HeaderType<'static>)> = Vec::new();
-    let mut protected_headers: Vec<(&'static str, HeaderType<'static>)> = Vec::new();
-
-    for header @ (original_header_name, _header_value) in &headers {
-        let header_name = original_header_name.to_lowercase();
-        debug_assert_ne!(header_name, "from");
-        debug_assert_ne!(header_name, "message-id");
-        debug_assert_ne!(header_name, "autocrypt");
-
-        if is_hidden(&header_name) {
-            hidden_headers.push(header.clone());
-        } else if header_name == "to" {
-            protected_headers.push(header.clone());
-            unprotected_headers.push(("To", hidden_recipients().into()));
-        } else if header_name == "chat-broadcast-secret" {
-            protected_headers.push(header.clone());
-        } else {
-            protected_headers.push(header.clone());
-
-            match header_name.as_str() {
-                "subject" => {
-                    unprotected_headers.push((
-                        "Subject",
-                        mail_builder::headers::raw::Raw::new("[...]").into(),
-                    ));
-                }
-                "chat-version" | "autocrypt-setup-message" | "chat-is-post-message" => {
-                    unprotected_headers.push(header.clone());
-                }
-                _ => {
-                    // Other headers are removed from unprotected part.
-                }
-            }
-        }
-    }
-    HeadersByConfidentiality {
-        unprotected_headers,
-        hidden_headers,
-        protected_headers,
-    }
 }
 
 fn hidden_recipients() -> Address<'static> {
@@ -2551,13 +2434,7 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
         mail_builder::headers::text::Text::new(auth.to_string()).into(),
     ));
 
-    let HeadersByConfidentiality {
-        hidden_headers,
-        protected_headers,
-        ..
-    } = group_headers_by_confidentiality(headers);
-
-    let message = add_headers_to_encrypted_part(message, hidden_headers, protected_headers);
+    let message = add_headers_to_encrypted_part(message, headers);
 
     // Disable compression for SecureJoin to ensure
     // there are no compression side channels
