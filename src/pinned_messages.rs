@@ -103,7 +103,7 @@ pub async fn get_pinned_messages(context: &Context, chat_id: ChatId) -> Result<V
         .query_map_vec(
             "SELECT id
                FROM msgs
-              WHERE pinned=1 AND hidden=0 AND chat_id=?
+              WHERE pinned=1 AND chat_id=?
               ORDER BY timestamp, id;",
             (chat_id,),
             |row| {
