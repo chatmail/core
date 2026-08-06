@@ -13,6 +13,7 @@ use anyhow::{Result, ensure};
 use crate::chat::{ChatId, send_msg};
 use crate::contact::ContactId;
 use crate::context::Context;
+use crate::log::warn;
 use crate::message::{Message, MessageState, MsgId, Viewtype};
 use crate::mimeparser::SystemMessage;
 use crate::stock_str;
@@ -119,13 +120,18 @@ pub async fn get_pinned_messages(context: &Context, chat_id: ChatId) -> Result<V
 ///
 /// This function checks and updates the state and sends events,
 /// but does not add a info message or sync otherwise.
-/// If the message is not pinnable, an error is returned.
+///
+/// If the message is not pinnable, a warning is logged and the message is ignored.
 pub(crate) async fn handle_pinned_state_from_wire(
     context: &Context,
     msg: &Message,
     new_pinned_state: bool,
 ) -> Result<()> {
-    ensure!(is_pinnable(msg), "Message is not pinnable.");
+    if !is_pinnable(msg) {
+        warn!(context, "Message is not pinnable.");
+        return Ok(());
+    }
+
     if msg.is_pinned() == new_pinned_state {
         return Ok(());
     }
@@ -136,7 +142,7 @@ pub(crate) async fn handle_pinned_state_from_wire(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::chat::{ChatItem, create_broadcast, get_chat_msgs};
+    use crate::chat::{ChatItem, add_info_msg, create_broadcast, get_chat_msgs};
     use crate::config::Config;
     use crate::securejoin::get_securejoin_qr;
     use crate::test_utils::{TestContextManager, sync};
@@ -322,6 +328,36 @@ mod tests {
         assert_eq!(pinned[0], sent1.sender_msg_id);
         assert_eq!(pinned[1], sent2.sender_msg_id);
         assert_eq!(pinned[2], sent3.sender_msg_id);
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_handle_pinned_state_from_wire() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let chat_id = alice.get_self_chat().await.id;
+
+        let sent1 = alice.send_text(chat_id, "pinnable").await;
+        let msg1 = sent1.load_from_db().await;
+        assert!(is_pinnable(&msg1));
+        assert!(
+            handle_pinned_state_from_wire(alice, &msg1, true)
+                .await
+                .is_ok()
+        );
+
+        // For not-pinnable messages, handle_pinned_state_from_wire() logs a warning and returns "ok".
+        // otherwise if there is an incompatibility in which messages are treated as "pinnable",
+        // this error will bubble up and user will get a device message saying "please report a bug".
+        let msg2_id = add_info_msg(alice, chat_id, "not pinnable").await?;
+        let msg2 = Message::load_from_db(alice, msg2_id).await?;
+        assert!(!is_pinnable(&msg2));
+        assert!(
+            handle_pinned_state_from_wire(alice, &msg2, true)
+                .await
+                .is_ok()
+        );
 
         Ok(())
     }
