@@ -763,7 +763,7 @@ impl MimeFactory {
             {
                 let origin = match recipient_ids.len() {
                     1 => Origin::OutgoingTo,
-                    // Use the same origin as ChatId::accept_ex() does for groups.
+                    // Use the same origin as ChatId::accept_ext() does for groups.
                     _ => Origin::IncomingTo,
                 };
                 info!(

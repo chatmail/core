@@ -1065,7 +1065,7 @@ pub unsafe extern "C" fn dc_send_delete_request(
     let ctx = unsafe { &*context };
     let msg_ids = convert_and_prune_message_ids(msg_ids, msg_cnt);
 
-    block_on(message::delete_msgs_ex(ctx, &msg_ids, true))
+    block_on(message::delete_msgs_ext(ctx, &msg_ids, true))
         .context("failed dc_send_delete_request() call")
         .log_err(ctx)
         .ok();
@@ -1308,7 +1308,7 @@ pub unsafe extern "C" fn dc_get_chat_msgs(
 
     let add_daymarker = (flags & DC_GCM_ADDDAYMARKER) != 0;
     Box::into_raw(Box::new(
-        block_on(chat::get_chat_msgs_ex(
+        block_on(chat::get_chat_msgs_ext(
             ctx,
             ChatId::new(chat_id),
             MessageListOptions { add_daymarker },

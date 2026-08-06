@@ -451,7 +451,7 @@ impl Sql {
         G: Send + FnOnce(&mut rusqlite::Transaction<'_>) -> Result<H>,
     {
         let query_only = false;
-        self.transaction_ex(query_only, callback).await
+        self.transaction_ext(query_only, callback).await
     }
 
     /// Execute the function inside a transaction.
@@ -468,7 +468,7 @@ impl Sql {
     ///
     /// If the function returns an error, the transaction will be rolled back. If it does not return
     /// an error, the transaction will be committed.
-    pub async fn transaction_ex<G, H>(&self, query_only: bool, callback: G) -> Result<H>
+    pub async fn transaction_ext<G, H>(&self, query_only: bool, callback: G) -> Result<H>
     where
         H: Send + 'static,
         G: Send + FnOnce(&mut rusqlite::Transaction<'_>) -> Result<H>,
