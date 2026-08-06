@@ -2603,7 +2603,7 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
         // the partial index `WHERE pinned=1` keeps the index small and useful,
         // since the vast majority of rows are `pinned=0`.
         sql.execute_migration(
-            "ALTER TABLE msgs ADD COLUMN pinned INTEGER DEFAULT 0;
+            "ALTER TABLE msgs ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
             CREATE INDEX msgs_index10 ON msgs (pinned) WHERE pinned=1;",
             migration_version,
         )
