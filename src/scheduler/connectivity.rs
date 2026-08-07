@@ -436,6 +436,10 @@ impl Context {
                 ret += "<br />";
             }
 
+            if !is_published {
+                ret += "</li>"; // quota is of no big interest for unpublished relays
+                continue;
+            };
             let Some(quota) = quota.get(&transport_id) else {
                 ret += "</li>";
                 continue;
