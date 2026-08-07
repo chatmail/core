@@ -230,11 +230,11 @@ impl fmt::Debug for ConnectivityStore {
 /// - If any relay is `Working`, this is the state we want the UIs to show.
 /// - Otherwise, show the max, `Connected` takes precedence over `Connecting` and over `NotConnected`.
 fn combine_connectivities(connectivities: &[Connectivity]) -> Connectivity {
-    if connectivities.iter().any(|c| *c == Connectivity::Working) {
+    if connectivities.contains(&Connectivity::Working) {
         return Connectivity::Working;
     }
     *connectivities
-        .into_iter()
+        .iter()
         .max()
         .unwrap_or(&Connectivity::NotConnected)
 }
