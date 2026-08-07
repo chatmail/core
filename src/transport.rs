@@ -289,7 +289,7 @@ impl ConfiguredLoginParam {
     /// Loads configured login parameters for all transports.
     ///
     /// Returns a vector of all transport IDs
-    /// paired with the configured parameters for the transports.
+    /// paired with the configured parameters for the transports and the published state.
     pub(crate) async fn load_all(context: &Context) -> Result<Vec<(u32, Self, bool)>> {
         context
             .sql
