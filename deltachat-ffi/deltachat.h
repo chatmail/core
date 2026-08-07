@@ -600,13 +600,10 @@ char*           dc_get_info                  (const dc_context_t* context);
 /**
  * Get the current connectivity, i.e. whether the device is connected to the IMAP server.
  * One of:
- * - DC_CONNECTIVITY_NOT_CONNECTED (1000-1999): Show e.g. the string "Not connected" or a red dot
- * - DC_CONNECTIVITY_CONNECTING (2000-2999): Show e.g. the string "Connecting…" or a yellow dot
- * - DC_CONNECTIVITY_WORKING (3000-3999): Show e.g. the string "Getting new messages" or a spinning wheel
- * - DC_CONNECTIVITY_CONNECTED (>=4000): Show e.g. the string "Connected" or a green dot
- *
- * We don't use exact values but ranges here so that we can split up
- * states into multiple states in the future.
+ * - DC_CONNECTIVITY_NOT_CONNECTED (1000): Show e.g. the string "Not connected" or a red dot
+ * - DC_CONNECTIVITY_CONNECTING (2000): Show e.g. the string "Connecting…" or a yellow dot
+ * - DC_CONNECTIVITY_WORKING (3000): Show e.g. the string "Getting new messages" or a spinning wheel
+ * - DC_CONNECTIVITY_CONNECTED (4000): Show e.g. the string "Connected" or a green dot
  *
  * Meant as a rough overview that can be shown 
  * e.g. in the title of the main screen.
