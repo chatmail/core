@@ -321,6 +321,9 @@ struct SchedBox {
 
     /// IMAP loop task handle.
     handle: task::JoinHandle<()>,
+
+    /// Relay published status.
+    is_published: bool,
 }
 
 /// Job and connection scheduler.
@@ -637,7 +640,9 @@ impl Scheduler {
         let mut inboxes = Vec::new();
         let mut start_recvs = Vec::new();
 
-        for (transport_id, configured_login_param) in ConfiguredLoginParam::load_all(ctx).await? {
+        for (transport_id, configured_login_param, is_published) in
+            ConfiguredLoginParam::load_all(ctx).await?
+        {
             let (conn_state, inbox_handlers) =
                 ImapConnectionState::new(ctx, transport_id, configured_login_param.clone()).await?;
             let (inbox_start_send, inbox_start_recv) = oneshot::channel();
@@ -654,6 +659,7 @@ impl Scheduler {
                 folder,
                 conn_state,
                 handle,
+                is_published,
             };
             inboxes.push(inbox);
             start_recvs.push(inbox_start_recv);

@@ -225,13 +225,27 @@ impl fmt::Debug for ConnectivityStore {
     }
 }
 
+/// Combines per-relay connectivities into a single, overall connectivity as shown in the UI.
+///
+/// - If any relay is `Working`, this is the state we want the UIs to show.
+/// - Otherwise, show the max, `Connected` takes precedence over `Connecting` and over `NotConnected`.
+fn combine_connectivities(connectivities: &[Connectivity]) -> Connectivity {
+    if connectivities.contains(&Connectivity::Working) {
+        return Connectivity::Working;
+    }
+    *connectivities
+        .iter()
+        .max()
+        .unwrap_or(&Connectivity::NotConnected)
+}
+
 impl Context {
     /// Get the current connectivity, i.e. whether the device is connected to the IMAP server.
     /// One of:
-    /// - DC_CONNECTIVITY_NOT_CONNECTED (1000-1999): Show e.g. the string "Not connected" or a red dot
-    /// - DC_CONNECTIVITY_CONNECTING (2000-2999): Show e.g. the string "Connecting…" or a yellow dot
-    /// - DC_CONNECTIVITY_WORKING (3000-3999): Show e.g. the string "Updating…" or a spinning wheel
-    /// - DC_CONNECTIVITY_CONNECTED (>=4000): Show e.g. the string "Connected" or a green dot
+    /// - `Connectivity::NotConnected` (1000): Show e.g. the string "Not connected" or a red dot
+    /// - `Connectivity::Connecting` (2000): Show e.g. the string "Connecting…" or a yellow dot
+    /// - `Connectivity::Working` (3000): Show e.g. the string "Updating…" or a spinning wheel
+    /// - `Connectivity::Connected` (4000): Show e.g. the string "Connected" or a green dot
     ///
     /// We don't use exact values but ranges here so that we can split up
     /// states into multiple states in the future.
@@ -241,27 +255,21 @@ impl Context {
     ///
     /// If the connectivity changes, a DC_EVENT_CONNECTIVITY_CHANGED will be emitted.
     pub fn get_connectivity(&self) -> Connectivity {
-        let stores = self.connectivities.lock().clone();
-        let mut connectivities = Vec::new();
-        for s in stores {
-            let connectivity = s.get_basic();
-            connectivities.push(connectivity);
-        }
-        connectivities
-            .into_iter()
-            .min()
-            .unwrap_or(Connectivity::NotConnected)
+        let stores: Vec<_> = self.published_connectivities.lock().clone();
+        let connectivities: Vec<_> = stores.into_iter().map(|s| s.get_basic()).collect();
+        combine_connectivities(&connectivities)
     }
 
     pub(crate) fn update_connectivities(&self, sched: &InnerSchedulerState) {
         let stores: Vec<_> = match sched {
             InnerSchedulerState::Started(sched) => sched
                 .boxes()
+                .filter(|b| b.is_published)
                 .map(|b| b.conn_state.state.connectivity.clone())
                 .collect(),
             _ => Vec::new(),
         };
-        *self.connectivities.lock() = stores;
+        *self.published_connectivities.lock() = stores;
     }
 
     /// Get an overview of the current connectivity, and possibly more statistics.
@@ -322,6 +330,9 @@ impl Context {
                     }
                     .transport {
                         margin-bottom: 1em;
+                    }
+                    .unpublished {
+                        opacity: 0.5;
                     }
                     .quota-list {
                         padding-left: 0;
@@ -386,19 +397,28 @@ impl Context {
 
         let transports = self
             .sql
-            .query_map_vec("SELECT id, addr FROM transports", (), |row| {
-                let transport_id: u32 = row.get(0)?;
-                let addr: String = row.get(1)?;
-                Ok((transport_id, addr))
-            })
+            .query_map_vec(
+                "SELECT id, addr, is_published FROM transports ORDER BY is_published DESC, id",
+                (),
+                |row| {
+                    let transport_id: u32 = row.get(0)?;
+                    let addr: String = row.get(1)?;
+                    let is_published: bool = row.get(2)?;
+                    Ok((transport_id, addr, is_published))
+                },
+            )
             .await?;
         let quota = self.quota.read().await;
-        for (transport_id, transport_addr) in transports {
+        for (transport_id, transport_addr, is_published) in transports {
             let domain = &deltachat_contact_tools::EmailAddress::new(&transport_addr)
                 .map_or(transport_addr.clone(), |email| email.domain);
             let domain_escaped = escaper::encode_minimal(domain);
 
-            ret += "<li class=\"transport\">";
+            ret += if is_published {
+                "<li class=\"transport\">"
+            } else {
+                "<li class=\"transport unpublished\">"
+            };
             let folders = folders_states
                 .iter()
                 .filter(|(folder_addr, ..)| *folder_addr == transport_addr);
@@ -408,10 +428,18 @@ impl Context {
                 ret += " <b>";
                 ret += &*domain_escaped;
                 ret += ":</b> ";
-                ret += &*escaper::encode_minimal(&detailed.to_string_imap(self));
+                if is_published {
+                    ret += &*escaper::encode_minimal(&detailed.to_string_imap(self));
+                } else {
+                    ret += &*escaper::encode_minimal(&stock_str::phasing_out(self));
+                }
                 ret += "<br />";
             }
 
+            if !is_published {
+                ret += "</li>"; // quota is of no big interest for unpublished relays
+                continue;
+            };
             let Some(quota) = quota.get(&transport_id) else {
                 ret += "</li>";
                 continue;
@@ -563,5 +591,52 @@ impl Context {
         while !self.all_work_done().await {
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_combine_connectivities() {
+        assert_eq!(combine_connectivities(&[]), Connectivity::NotConnected);
+        assert_eq!(
+            combine_connectivities(&[Connectivity::NotConnected]),
+            Connectivity::NotConnected
+        );
+        assert_eq!(
+            combine_connectivities(&[Connectivity::Connecting]),
+            Connectivity::Connecting
+        );
+        assert_eq!(
+            combine_connectivities(&[Connectivity::Working]),
+            Connectivity::Working
+        );
+        assert_eq!(
+            combine_connectivities(&[Connectivity::Connected]),
+            Connectivity::Connected
+        );
+        assert_eq!(
+            combine_connectivities(&[
+                Connectivity::Working,
+                Connectivity::Connected,
+                Connectivity::NotConnected,
+                Connectivity::Connecting
+            ]),
+            Connectivity::Working
+        );
+        assert_eq!(
+            combine_connectivities(&[
+                Connectivity::Connected,
+                Connectivity::NotConnected,
+                Connectivity::Connecting
+            ]),
+            Connectivity::Connected
+        );
+        assert_eq!(
+            combine_connectivities(&[Connectivity::NotConnected, Connectivity::Connecting]),
+            Connectivity::Connecting
+        );
     }
 }
