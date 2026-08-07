@@ -2143,8 +2143,14 @@ async fn add_parts(
         && let Some(msg_to_change) =
             get_parent_message(context, None, mime_parser.get_header(HeaderDef::InReplyTo)).await?
     {
-        let new_pinned_state = mime_parser.is_system_message == SystemMessage::MessagePinned;
-        handle_pinned_state_from_wire(context, &msg_to_change, new_pinned_state).await?;
+        let chat_contacts =
+            BTreeSet::<ContactId>::from_iter(chat::get_chat_contacts(context, chat_id).await?);
+        let is_from_in_chat =
+            !chat_contacts.contains(&ContactId::SELF) || chat_contacts.contains(&from_id);
+        if is_from_in_chat {
+            let new_pinned_state = mime_parser.is_system_message == SystemMessage::MessagePinned;
+            handle_pinned_state_from_wire(context, &msg_to_change, new_pinned_state).await?;
+        }
     }
 
     let hidden = mime_parser.parts.iter().all(|part| part.is_reaction);
