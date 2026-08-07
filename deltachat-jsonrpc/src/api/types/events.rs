@@ -30,37 +30,55 @@ pub enum EventType {
     ///
     /// This event should *not* be reported to the end-user using a popup or something like
     /// that.
-    Info { msg: String },
+    Info {
+        msg: String,
+    },
 
     /// Emitted when SMTP connection is established and login was successful.
-    SmtpConnected { msg: String },
+    SmtpConnected {
+        msg: String,
+    },
 
     /// Emitted when IMAP connection is established and login was successful.
-    ImapConnected { msg: String },
+    ImapConnected {
+        msg: String,
+    },
 
     /// Emitted when a message was successfully sent to the SMTP server.
-    SmtpMessageSent { msg: String },
+    SmtpMessageSent {
+        msg: String,
+    },
 
     /// Emitted when an IMAP message has been marked as deleted
-    ImapMessageDeleted { msg: String },
+    ImapMessageDeleted {
+        msg: String,
+    },
 
     /// Emitted when an IMAP message has been moved
-    ImapMessageMoved { msg: String },
+    ImapMessageMoved {
+        msg: String,
+    },
 
     /// Emitted before going into IDLE on the Inbox folder.
     ImapInboxIdle,
 
     /// Emitted when an new file in the $BLOBDIR was created
-    NewBlobFile { file: String },
+    NewBlobFile {
+        file: String,
+    },
 
     /// Emitted when an file in the $BLOBDIR was deleted
-    DeletedBlobFile { file: String },
+    DeletedBlobFile {
+        file: String,
+    },
 
     /// The library-user should write a warning string to the log.
     ///
     /// This event should *not* be reported to the end-user using a popup or something like
     /// that.
-    Warning { msg: String },
+    Warning {
+        msg: String,
+    },
 
     /// The library-user should report an error to the end-user.
     ///
@@ -72,14 +90,18 @@ pub enum EventType {
     /// it might be better to delay showing these events until the function has really
     /// failed (returned false). It should be sufficient to report only the *last* error
     /// in a message box then.
-    Error { msg: String },
+    Error {
+        msg: String,
+    },
 
     /// An action cannot be performed because the user is not in the group.
     /// Reported eg. after a call to
     /// setChatName(), setChatProfileImage(),
     /// addContactToChat(), removeContactFromChat(),
     /// and messages sending functions.
-    ErrorSelfNotInGroup { msg: String },
+    ErrorSelfNotInGroup {
+        msg: String,
+    },
 
     /// Messages or chats changed.  One or more messages or chats changed for various
     /// reasons in the database:
@@ -168,7 +190,9 @@ pub enum EventType {
     /// Messages were seen or noticed.
     /// chat id is always set.
     #[serde(rename_all = "camelCase")]
-    MsgsNoticed { chat_id: u32 },
+    MsgsNoticed {
+        chat_id: u32,
+    },
 
     /// A single message is sent successfully. State changed from  DC_STATE_OUT_PENDING to
     /// DC_STATE_OUT_DELIVERED, see `Message.state`.
@@ -243,7 +267,9 @@ pub enum EventType {
     /// This event does not include ephemeral timer modification, which
     /// is a separate event.
     #[serde(rename_all = "camelCase")]
-    ChatModified { chat_id: u32 },
+    ChatModified {
+        chat_id: u32,
+    },
 
     /// Chat ephemeral timer changed.
     #[serde(rename_all = "camelCase")]
@@ -304,7 +330,9 @@ pub enum EventType {
     ///
     /// @param data2 0
     #[serde(rename_all = "camelCase")]
-    ImexFileWritten { path: String },
+    ImexFileWritten {
+        path: String,
+    },
 
     /// Progress event sent when SecureJoin protocol has finished
     /// from the view of the inviter (Alice, the person who shows the QR code).
@@ -482,6 +510,9 @@ pub enum EventType {
     /// synchronization messages arrives,
     /// but not when the UI modifies the transport list by itself.
     TransportsModified,
+
+    // TODO documentation
+    AccountsBackgroundFetchTimedOut,
 }
 
 impl From<CoreEventType> for EventType {
@@ -674,6 +705,8 @@ impl From<CoreEventType> for EventType {
                 chat_id: chat_id.to_u32(),
             },
             CoreEventType::TransportsModified => TransportsModified,
+
+            CoreEventType::AccountsBackgroundFetchTimedOut => AccountsBackgroundFetchTimedOut,
 
             #[allow(unreachable_patterns)]
             #[cfg(test)]

@@ -454,6 +454,10 @@ impl Accounts {
         {
             events.emit(Event {
                 id: 0,
+                typ: EventType::AccountsBackgroundFetchTimedOut,
+            });
+            events.emit(Event {
+                id: 0,
                 typ: EventType::Warning("Background fetch timed out.".to_string()),
             });
             ::tracing::event!(
@@ -461,14 +465,16 @@ impl Accounts {
                 account_id = 0,
                 "Background fetch timed out."
             );
+        } else {
+            events.emit(Event {
+                id: 0,
+                typ: EventType::AccountsBackgroundFetchDone,
+            });
         }
-        events.emit(Event {
-            id: 0,
-            typ: EventType::AccountsBackgroundFetchDone,
-        });
         (*interrupt_sender.lock()) = None;
     }
 
+    // TODO adapt all the documentation
     /// Performs a background fetch for all accounts in parallel with a timeout.
     ///
     /// Ongoing background fetch can also be cancelled manually
@@ -482,10 +488,7 @@ impl Accounts {
     ///
     /// Returns a future that resolves when background fetch is done,
     /// but does not capture `&self`.
-    pub fn background_fetch(
-        &self,
-        timeout: std::time::Duration,
-    ) -> impl Future<Output = ()> + use<> {
+    pub fn background_fetch(&self, timeout: std::time::Duration) {
         let accounts: Vec<Context> = self.accounts.values().cloned().collect();
         let events = self.events.clone();
         let (sender, receiver) = async_channel::bounded(1);
@@ -500,13 +503,17 @@ impl Accounts {
                 Some(receiver)
             }
         };
-        Self::background_fetch_with_timeout(
-            accounts,
-            events,
-            timeout,
-            self.background_fetch_interrupt_sender.clone(),
-            receiver,
-        )
+        let background_fetch_interrupt_sender = self.background_fetch_interrupt_sender.clone();
+        tokio::task::spawn(async move {
+            Self::background_fetch_with_timeout(
+                accounts,
+                events,
+                timeout,
+                background_fetch_interrupt_sender,
+                receiver,
+            )
+            .await
+        });
     }
 
     /// Interrupts ongoing background_fetch() call,

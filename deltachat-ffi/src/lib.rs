@@ -515,6 +515,7 @@ pub unsafe extern "C" fn dc_event_get_id(event: *mut dc_event_t) -> libc::c_int 
         EventType::WebxdcRealtimeData { .. } => 2150,
         EventType::WebxdcRealtimeAdvertisementReceived { .. } => 2151,
         EventType::AccountsBackgroundFetchDone => 2200,
+        EventType::AccountsBackgroundFetchTimedOut => 2201,
         EventType::ChatlistChanged => 2300,
         EventType::ChatlistItemChanged { .. } => 2301,
         EventType::AccountsChanged => 2302,
@@ -557,6 +558,7 @@ pub unsafe extern "C" fn dc_event_get_data1_int(event: *mut dc_event_t) -> libc:
         | EventType::IncomingMsgBunch
         | EventType::ErrorSelfNotInGroup(_)
         | EventType::AccountsBackgroundFetchDone
+        | EventType::AccountsBackgroundFetchTimedOut
         | EventType::ChatlistChanged
         | EventType::AccountsChanged
         | EventType::AccountsItemChanged
@@ -638,6 +640,7 @@ pub unsafe extern "C" fn dc_event_get_data2_int(event: *mut dc_event_t) -> libc:
         | EventType::IncomingMsgBunch
         | EventType::SelfavatarChanged
         | EventType::AccountsBackgroundFetchDone
+        | EventType::AccountsBackgroundFetchTimedOut
         | EventType::ChatlistChanged
         | EventType::ChatlistItemChanged { .. }
         | EventType::AccountsChanged
@@ -745,6 +748,7 @@ pub unsafe extern "C" fn dc_event_get_data2_str(event: *mut dc_event_t) -> *mut 
         | EventType::WebxdcStatusUpdate { .. }
         | EventType::WebxdcInstanceDeleted { .. }
         | EventType::AccountsBackgroundFetchDone
+        | EventType::AccountsBackgroundFetchTimedOut
         | EventType::ChatEphemeralTimerModified { .. }
         | EventType::ChatDeleted { .. }
         | EventType::IncomingMsgBunch
@@ -4774,12 +4778,8 @@ pub unsafe extern "C" fn dc_accounts_background_fetch(
     }
 
     let accounts = unsafe { &*accounts };
-    let background_fetch_future = {
-        let lock = block_on(accounts.read());
-        lock.background_fetch(Duration::from_secs(timeout_in_seconds))
-    };
-    // At this point account manager is not locked anymore.
-    block_on(background_fetch_future);
+    let lock = block_on(accounts.read());
+    lock.background_fetch(Duration::from_secs(timeout_in_seconds));
     1
 }
 

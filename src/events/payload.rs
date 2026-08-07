@@ -447,4 +447,7 @@ pub enum EventType {
         /// Number of events skipped.
         n: u64,
     },
+
+    // TODO documentation
+    AccountsBackgroundFetchTimedOut,
 }
