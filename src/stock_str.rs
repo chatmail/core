@@ -428,7 +428,7 @@ https://delta.chat/donate"))]
     #[strum(props(fallback = "Message pinned by %1$s."))]
     MsgMessagePinnedBy = 244,
 
-    #[strum(props(fallback = "Phasing out…"))]
+    #[strum(props(fallback = "Phasing out"))]
     PhasingOut = 245,
 }
 
@@ -1148,7 +1148,7 @@ pub(crate) fn last_msg_sent_successfully(context: &Context) -> String {
     translated(context, StockMessage::LastMsgSentSuccessfully)
 }
 
-/// Stock string: `Phasing out…`.
+/// Stock string: `Phasing out`.
 pub(crate) fn phasing_out(context: &Context) -> String {
     translated(context, StockMessage::PhasingOut)
 }

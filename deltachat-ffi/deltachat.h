@@ -7271,7 +7271,7 @@ void dc_event_unref(dc_event_t* event);
 /// "Message pinned by %1$s."
 #define DC_STR_MESSAGE_PINNED_BY_OTHER 244
 
-/// "Phasing out…"
+/// "Phasing out"
 ///
 /// Used in connectivity view to flag unpublished relays.
 /// This should match the wording used for relay deletion confirmation,
