@@ -225,6 +225,20 @@ impl fmt::Debug for ConnectivityStore {
     }
 }
 
+/// Combines per-relay connectivities into a single, overall connectivity as shown in the UI.
+///
+/// - If any relay is `Working`, this is the state we want the UIs to show.
+/// - Otherwise, show the max, `Connected` takes precedence over `Connecting` and over `NotConnected`.
+fn combine_connectivities(connectivities: &[Connectivity]) -> Connectivity {
+    if connectivities.iter().any(|c| *c == Connectivity::Working) {
+        return Connectivity::Working;
+    }
+    *connectivities
+        .into_iter()
+        .max()
+        .unwrap_or(&Connectivity::NotConnected)
+}
+
 impl Context {
     /// Get the current connectivity, i.e. whether the device is connected to the IMAP server.
     /// One of:
@@ -242,15 +256,8 @@ impl Context {
     /// If the connectivity changes, a DC_EVENT_CONNECTIVITY_CHANGED will be emitted.
     pub fn get_connectivity(&self) -> Connectivity {
         let stores = self.connectivities.lock().clone();
-        let mut connectivities = Vec::new();
-        for s in stores {
-            let connectivity = s.get_basic();
-            connectivities.push(connectivity);
-        }
-        connectivities
-            .into_iter()
-            .min()
-            .unwrap_or(Connectivity::NotConnected)
+        let connectivities: Vec<_> = stores.into_iter().map(|s| s.get_basic()).collect();
+        combine_connectivities(&connectivities)
     }
 
     pub(crate) fn update_connectivities(&self, sched: &InnerSchedulerState) {
@@ -563,5 +570,52 @@ impl Context {
         while !self.all_work_done().await {
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_combine_connectivities() {
+        assert_eq!(combine_connectivities(&[]), Connectivity::NotConnected);
+        assert_eq!(
+            combine_connectivities(&[Connectivity::NotConnected]),
+            Connectivity::NotConnected
+        );
+        assert_eq!(
+            combine_connectivities(&[Connectivity::Connecting]),
+            Connectivity::Connecting
+        );
+        assert_eq!(
+            combine_connectivities(&[Connectivity::Working]),
+            Connectivity::Working
+        );
+        assert_eq!(
+            combine_connectivities(&[Connectivity::Connected]),
+            Connectivity::Connected
+        );
+        assert_eq!(
+            combine_connectivities(&[
+                Connectivity::Working,
+                Connectivity::Connected,
+                Connectivity::NotConnected,
+                Connectivity::Connecting
+            ]),
+            Connectivity::Working
+        );
+        assert_eq!(
+            combine_connectivities(&[
+                Connectivity::Connected,
+                Connectivity::NotConnected,
+                Connectivity::Connecting
+            ]),
+            Connectivity::Connected
+        );
+        assert_eq!(
+            combine_connectivities(&[Connectivity::NotConnected, Connectivity::Connecting]),
+            Connectivity::Connecting
+        );
     }
 }
