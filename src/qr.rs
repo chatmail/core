@@ -530,7 +530,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
 
     if let (Some(addr), Some(invitenumber), Some(authcode)) = (&addr, invitenumber, authcode) {
         let addr = ContactAddress::new(addr)?;
-        let (contact_id, _) = Contact::add_or_lookup_ex(
+        let (contact_id, _) = Contact::add_or_lookup_ext(
             context,
             &name,
             &addr,
@@ -643,7 +643,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
     } else if let Some(addr) = addr {
         let fingerprint = fingerprint.hex();
         let (contact_id, _) =
-            Contact::add_or_lookup_ex(context, "", &addr, &fingerprint, Origin::UnhandledQrScan)
+            Contact::add_or_lookup_ext(context, "", &addr, &fingerprint, Origin::UnhandledQrScan)
                 .await?;
         let contact = Contact::get_by_id(context, contact_id).await?;
 

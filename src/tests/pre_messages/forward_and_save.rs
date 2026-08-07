@@ -107,7 +107,7 @@ async fn test_receive_both() -> Result<()> {
     forward_msgs(alice, &[alice_msg_id], alice_chat_id).await?;
     let rev_order = false;
     let msg = bob
-        .recv_msg(&alice.pop_sent_msg_ex(rev_order).await.unwrap())
+        .recv_msg(&alice.pop_sent_msg_ext(rev_order).await.unwrap())
         .await;
     assert_eq!(msg.download_state(), DownloadState::Available);
     assert_eq!(msg.is_forwarded(), true);

@@ -469,7 +469,7 @@ async fn joining_chat_id(
 
             let chat_id = match chat::get_chat_id_by_grpid(context, grpid).await? {
                 Some((chat_id, _blocked)) => {
-                    chat_id.unblock_ex(context, Nosync).await?;
+                    chat_id.unblock_ext(context, Nosync).await?;
                     chat_id
                 }
                 None => {

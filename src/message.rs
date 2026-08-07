@@ -126,7 +126,7 @@ impl MsgId {
             .sql
             .execute(
                 // If you change which information is preserved here, also change
-                // `ChatId::delete_ex()`, `delete_expired_messages()` and which information
+                // `ChatId::delete_ext()`, `delete_expired_messages()` and which information
                 // `receive_imf::add_parts()` still adds to the db if chat_id is TRASH.
                 "
 INSERT OR REPLACE INTO msgs (id, rfc724_mid, pre_rfc724_mid, timestamp, chat_id, deleted)
@@ -1693,13 +1693,13 @@ pub(crate) async fn delete_msgs_locally_done(
 
 /// Delete messages on all devices and on IMAP.
 pub async fn delete_msgs(context: &Context, msg_ids: &[MsgId]) -> Result<()> {
-    delete_msgs_ex(context, msg_ids, false).await
+    delete_msgs_ext(context, msg_ids, false).await
 }
 
 /// Delete messages on all devices, on IMAP and optionally for all chat members.
 /// Deleted messages are moved to the trash chat and scheduling for deletion on IMAP.
 /// When deleting messages for others, all messages must be self-sent and in the same chat.
-pub async fn delete_msgs_ex(
+pub async fn delete_msgs_ext(
     context: &Context,
     msg_ids: &[MsgId],
     delete_for_all: bool,
@@ -1957,7 +1957,7 @@ pub async fn get_existing_msg_ids(context: &Context, ids: &[MsgId]) -> Result<Ve
     let query_only = true;
     let res = context
         .sql
-        .transaction_ex(query_only, |transaction| {
+        .transaction_ext(query_only, |transaction| {
             let mut res: Vec<MsgId> = Vec::new();
             for id in ids {
                 if transaction.query_one(
@@ -2141,12 +2141,12 @@ pub async fn estimate_deletion_cnt(
     Ok(cnt)
 }
 
-/// See [`rfc724_mid_exists_ex()`].
+/// See [`rfc724_mid_exists_ext()`].
 pub(crate) async fn rfc724_mid_exists(
     context: &Context,
     rfc724_mid: &str,
 ) -> Result<Option<MsgId>> {
-    Ok(rfc724_mid_exists_ex(context, rfc724_mid, "1")
+    Ok(rfc724_mid_exists_ext(context, rfc724_mid, "1")
         .await?
         .map(|(id, _)| id))
 }
@@ -2156,7 +2156,7 @@ pub(crate) async fn rfc724_mid_exists(
 ///
 /// * `expr`: SQL expression additionally passed into `SELECT`. Evaluated to `true` iff it is true
 ///   for all messages with the given `rfc724_mid`.
-pub(crate) async fn rfc724_mid_exists_ex(
+pub(crate) async fn rfc724_mid_exists_ext(
     context: &Context,
     rfc724_mid: &str,
     expr: &str,

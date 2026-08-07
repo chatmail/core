@@ -339,7 +339,7 @@ impl Context {
         if provider::legacy_settings_for_addr(&param.addr)?.worse_media_quality
             && !self.config_exists(Config::MediaQuality).await?
         {
-            self.set_config_ex(Nosync, Config::MediaQuality, Some("1"))
+            self.set_config_ext(Nosync, Config::MediaQuality, Some("1"))
                 .await?;
         }
         Ok(())

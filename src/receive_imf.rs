@@ -1148,7 +1148,7 @@ pub async fn from_field_to_contact_id(
         }
     }
 
-    let (from_id, _) = Contact::add_or_lookup_ex(
+    let (from_id, _) = Contact::add_or_lookup_ext(
         context,
         display_name.unwrap_or_default(),
         &from_addr,
@@ -1282,7 +1282,8 @@ async fn decide_chat_assignment(
     } = &mime_parser.pre_message
     {
         let post_msg_exists = if let Some((msg_id, not_downloaded)) =
-            message::rfc724_mid_exists_ex(context, post_msg_rfc724_mid, "download_state<>0").await?
+            message::rfc724_mid_exists_ext(context, post_msg_rfc724_mid, "download_state<>0")
+                .await?
         {
             context
                 .sql
@@ -1670,7 +1671,7 @@ async fn do_chat_assignment(
                         {
                             chat_created = true;
                             chat_id = Some(
-                                chat::create_out_broadcast_ex(
+                                chat::create_out_broadcast_ext(
                                     context,
                                     Nosync,
                                     listid,
@@ -1744,7 +1745,7 @@ async fn do_chat_assignment(
             chat_id_blocked = chat.blocked;
 
             if Blocked::Not != chat.blocked {
-                chat.id.unblock_ex(context, Nosync).await?;
+                chat.id.unblock_ext(context, Nosync).await?;
             }
         }
 
@@ -1752,7 +1753,7 @@ async fn do_chat_assignment(
         if chat_id_blocked != Blocked::Not
             && let Some(chat_id) = chat_id
         {
-            chat_id.unblock_ex(context, Nosync).await?;
+            chat_id.unblock_ext(context, Nosync).await?;
             chat_id_blocked = Blocked::Not;
         }
     }
@@ -2440,7 +2441,7 @@ async fn handle_edit_delete(
     } else if let Some(rfc724_mid_list) = mime_parser.get_header(HeaderDef::ChatDelete)
         && let Some(part) = mime_parser.parts.first()
     {
-        // See `message::delete_msgs_ex()`, unlike edit requests, DC doesn't send unencrypted
+        // See `message::delete_msgs_ext()`, unlike edit requests, DC doesn't send unencrypted
         // deletion requests, so there's no need to support them.
         if part.param.get_bool(Param::GuaranteeE2ee) != Some(true) {
             warn!(context, "Delete message: Not encrypted.");
@@ -2802,7 +2803,7 @@ async fn lookup_or_create_adhoc_group(
         Ok(val)
     };
     let query_only = true;
-    if let Some((chat_id, blocked)) = context.sql.transaction_ex(query_only, trans_fn).await? {
+    if let Some((chat_id, blocked)) = context.sql.transaction_ext(query_only, trans_fn).await? {
         info!(
             context,
             "Assigning message to ad-hoc group {chat_id} with matching name and members."
@@ -4211,7 +4212,7 @@ async fn add_or_lookup_key_contacts(
         };
         let display_name = info.display_name.as_deref();
         if let Ok(addr) = ContactAddress::new(addr) {
-            let (contact_id, _) = Contact::add_or_lookup_ex(
+            let (contact_id, _) = Contact::add_or_lookup_ext(
                 context,
                 display_name.unwrap_or_default(),
                 &addr,
@@ -4385,7 +4386,7 @@ async fn lookup_key_contacts_fallback_to_chat(
             let fingerprint: String = fp.hex();
 
             if let Ok(addr) = ContactAddress::new(addr) {
-                let (contact_id, _) = Contact::add_or_lookup_ex(
+                let (contact_id, _) = Contact::add_or_lookup_ext(
                     context,
                     display_name.unwrap_or_default(),
                     &addr,
