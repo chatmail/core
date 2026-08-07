@@ -247,10 +247,18 @@ impl Context {
             let connectivity = s.get_basic();
             connectivities.push(connectivity);
         }
-        connectivities
-            .into_iter()
-            .min()
-            .unwrap_or(Connectivity::NotConnected)
+        if connectivities.iter().any(|c| *c == Connectivity::Working) {
+            Connectivity::Working
+        } else if connectivities.iter().any(|c| *c == Connectivity::Connected) {
+            Connectivity::Connected
+        } else if connectivities
+            .iter()
+            .any(|c| *c == Connectivity::Connecting)
+        {
+            Connectivity::Connecting
+        } else {
+            Connectivity::NotConnected
+        }
     }
 
     pub(crate) fn update_connectivities(&self, sched: &InnerSchedulerState) {
