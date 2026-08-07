@@ -428,7 +428,11 @@ impl Context {
                 ret += " <b>";
                 ret += &*domain_escaped;
                 ret += ":</b> ";
-                ret += &*escaper::encode_minimal(&detailed.to_string_imap(self));
+                if is_published {
+                    ret += &*escaper::encode_minimal(&detailed.to_string_imap(self));
+                } else {
+                    ret += &*escaper::encode_minimal(&stock_str::phasing_out(self));
+                }
                 ret += "<br />";
             }
 
