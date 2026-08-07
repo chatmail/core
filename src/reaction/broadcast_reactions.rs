@@ -16,6 +16,7 @@ use crate::context::Context;
 use crate::log::warn;
 use crate::message::{Message, MsgId, rfc724_mid_exists};
 use crate::param::Param;
+use crate::pinned_messages::handle_pinned_state_from_wire;
 use crate::reaction::{Reaction, ReactionFrequency, get_msg_reactions, sort_frequencies};
 use crate::tools::time;
 use crate::{EventType, chatlist_events};
@@ -33,6 +34,13 @@ struct WireMessage {
 
     /// Array of reaction entries.
     reactions: Vec<WireEntry>,
+
+    /// Message additionally pinned?
+    /// For simplicity, we piggyback that bit here -
+    /// it is needed when resending a message,
+    /// but also adds resilience when reactions are broadcasted otherwise.
+    #[serde(default)]
+    pinned: bool,
 }
 #[derive(Debug, Serialize, Deserialize)]
 struct WireEntry {
@@ -62,6 +70,7 @@ pub(crate) async fn render_json(context: &Context, msg_ids: &[MsgId]) -> Result<
         messages.push(WireMessage {
             id: msg.rfc724_mid,
             reactions: entries, // can be empty if all reactions were removed
+            pinned: msg.pinned,
         });
     }
     if messages.is_empty() {
@@ -199,6 +208,7 @@ pub(crate) async fn receive_broadcast_reactions(context: &Context, json: &str) -
             })
             .collect();
         save_broadcast_reactions(context, msg_id, &frequencies).await?;
+        handle_pinned_state_from_wire(context, &msg, message.pinned).await?;
 
         context.emit_event(EventType::ReactionsChanged {
             // the event is for the subscriber, ReactionsIncoming is not needed
@@ -366,10 +376,12 @@ mod tests {
                             count: 2,
                         },
                     ],
+                    pinned: false,
                 },
                 WireMessage {
                     id: "23456789@bar".to_string(),
                     reactions: vec![],
+                    pinned: true,
                 },
             ],
         };
@@ -377,7 +389,7 @@ mod tests {
         let json = serde_json::to_string(&payload).unwrap();
         assert_eq!(
             json,
-            r#"{"messages":[{"id":"12345678@foo","reactions":[{"emoji":"😎","count":4},{"emoji":"🕺","count":2}]},{"id":"23456789@bar","reactions":[]}]}"#
+            r#"{"messages":[{"id":"12345678@foo","reactions":[{"emoji":"😎","count":4},{"emoji":"🕺","count":2}],"pinned":false},{"id":"23456789@bar","reactions":[],"pinned":true}]}"#
         );
 
         let payload: WirePayload = serde_json::from_str(&json).unwrap();
