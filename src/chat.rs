@@ -13,6 +13,7 @@ use chrono::TimeZone;
 use deltachat_contact_tools::{ContactAddress, sanitize_bidi_characters, sanitize_single_line};
 use humansize::{BINARY, format_size};
 use mail_builder::mime::MimePart;
+use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
@@ -741,24 +742,78 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
 
     /// Returns ID of the draft message, if there is one.
     async fn get_draft_msg_id(self, context: &Context) -> Result<Option<MsgId>> {
-        let msg_id: Option<MsgId> = context
+        let query_only = true;
+        context
             .sql
-            .query_get_value(
+            .call(query_only, |conn| self.get_draft_msg_id_trans(conn))
+            .await
+    }
+    fn get_draft_msg_id_trans(self, conn: &rusqlite::Connection) -> Result<Option<MsgId>> {
+        let msg_id: Option<MsgId> = conn
+            .query_row(
                 "SELECT id FROM msgs WHERE chat_id=? AND state=?;",
                 (self, MessageState::OutDraft),
+                |row| row.get(0),
             )
-            .await?;
+            .optional()?;
         Ok(msg_id)
+    }
+
+    fn has_draft_with_id(&self, conn: &rusqlite::Connection, draft_id: &MsgId) -> Result<bool> {
+        let count: u32 = conn.query_row(
+            "SELECT
+                COUNT(*)
+            FROM msgs
+            WHERE id=? AND chat_id=? AND state=?",
+            (draft_id, self, MessageState::OutDraft),
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
+    }
+
+    fn should_reuse_draft_id(context: &Context, old: &Message, new: &Message) -> Result<bool> {
+        ensure!(
+            old.chat_id.is_unset() || new.chat_id.is_unset() || new.chat_id == old.chat_id,
+            "messaged belong to different chats"
+        );
+        ensure!(
+            old.get_state() == MessageState::Undefined || old.get_state() == MessageState::OutDraft,
+            "old message is a real message, not a draft"
+        );
+
+        // Reusing the ID is only useful for WebXDC messages,
+        // but for consistency let's reuse it whenever possible.
+
+        if old.get_viewtype() == Viewtype::Webxdc
+            && (new.get_viewtype() != Viewtype::Webxdc
+                || old.get_file(context) != new.get_file(context))
+        {
+            // Old draft's WebXDC attachment got removed or replaced.
+            return Ok(false);
+        }
+
+        Ok(true)
     }
 
     /// Returns draft message, if there is one.
     pub async fn get_draft(self, context: &Context) -> Result<Option<Message>> {
+        context
+            .sql
+            .transaction(|transaction| self.get_draft_trans(context, transaction))
+            .await
+    }
+    /// See [`Self::get_draft`].
+    pub fn get_draft_trans(
+        self,
+        context: &Context,
+        conn: &rusqlite::Connection,
+    ) -> Result<Option<Message>> {
         if self.is_special() {
             return Ok(None);
         }
-        match self.get_draft_msg_id(context).await? {
+        match self.get_draft_msg_id_trans(conn)? {
             Some(draft_msg_id) => {
-                let msg = Message::load_from_db(context, draft_msg_id).await?;
+                let msg = Message::load_from_db_trans(context, conn, draft_msg_id)?;
                 Ok(Some(msg))
             }
             None => Ok(None),
@@ -822,48 +877,64 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
         msg.state = MessageState::OutDraft;
         msg.chat_id = self;
 
-        // if possible, replace existing draft and keep id
-        if !msg.id.is_special()
-            && let Some(old_draft) = self.get_draft(context).await?
-            && old_draft.id == msg.id
-            && old_draft.chat_id == self
-            && old_draft.state == MessageState::OutDraft
-        {
-            let affected_rows = context
-                        .sql.execute(
-                                "UPDATE msgs
-                                SET timestamp=?1,type=?2,txt=?3,txt_normalized=?4,param=?5,mime_in_reply_to=?6
-                                WHERE id=?7
-                                AND (type <> ?2 
-                                    OR txt <> ?3 
-                                    OR txt_normalized <> ?4
-                                    OR param <> ?5
-                                    OR mime_in_reply_to <> ?6);",
-                                (
-                                    time(),
-                                    msg.viewtype,
-                                    &msg.text,
-                                    normalize_text(&msg.text),
-                                    msg.param.to_string(),
-                                    msg.in_reply_to.as_deref().unwrap_or_default(),
-                                    msg.id,
-                                ),
-                            ).await?;
-            return Ok(affected_rows > 0);
-        }
+        let trans_fn = |transaction: &mut rusqlite::Transaction| {
+            // if possible, replace existing draft and keep id
+            let reuse_existing_id: Option<MsgId> = if !msg.id.is_special() {
+                // The ID was specified by the caller, so reuse the draft
+                // even if `!should_reuse_draft_id()`.
+                // We probably should return an error in such case,
+                // or make a new draft message with a different ID,
+                // but we keep this for compatibility with Android and iOS.
+                if self.has_draft_with_id(transaction, &msg.id)? {
+                    Some(msg.id)
+                } else {
+                    None
+                }
+            } else if let Some(existing) = self.get_draft_trans(context, transaction)?
+                && Self::should_reuse_draft_id(context, &existing, msg)?
+            {
+                // TODO ahhh shit. `send_msg` us used in a looooooot of places.
+                // We should only reuse the draft if the "send message" action
+                // was invoked by the user, from the composer,
+                // because reusing the draft _also clears the draft_.
+                Some(existing.id)
+            } else {
+                None
+            };
 
-        let row_id = context
-            .sql
-            .transaction(|transaction| {
-                // Delete existing draft if it exists.
-                transaction.execute(
-                    "DELETE FROM msgs WHERE chat_id=? AND state=?",
-                    (self, MessageState::OutDraft),
+            if let Some(reuse_existing_id) = reuse_existing_id {
+                let affected_rows = transaction.execute(
+                    "UPDATE msgs
+                    SET timestamp=?1,type=?2,txt=?3,txt_normalized=?4,param=?5,mime_in_reply_to=?6
+                    WHERE id=?7
+                    AND (type <> ?2 
+                        OR txt <> ?3 
+                        OR txt_normalized <> ?4
+                        OR param <> ?5
+                        OR mime_in_reply_to <> ?6);",
+                    (
+                        time(),
+                        msg.viewtype,
+                        &msg.text,
+                        normalize_text(&msg.text),
+                        msg.param.to_string(),
+                        msg.in_reply_to.as_deref().unwrap_or_default(),
+                        reuse_existing_id,
+                    ),
                 )?;
+                let changed = affected_rows > 0;
+                return Ok((reuse_existing_id, changed));
+            }
 
-                // Insert new draft.
-                transaction.execute(
-                    "INSERT INTO msgs (
+            // Delete existing draft if it exists.
+            transaction.execute(
+                "DELETE FROM msgs WHERE chat_id=? AND state=?",
+                (self, MessageState::OutDraft),
+            )?;
+
+            // Insert new draft.
+            transaction.execute(
+                "INSERT INTO msgs (
                  chat_id,
                  rfc724_mid,
                  from_id,
@@ -876,26 +947,28 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
                  hidden,
                  mime_in_reply_to)
          VALUES (?,?,?,?,?,?,?,?,?,?,?);",
-                    (
-                        self,
-                        &msg.rfc724_mid,
-                        ContactId::SELF,
-                        time(),
-                        msg.viewtype,
-                        MessageState::OutDraft,
-                        &msg.text,
-                        normalize_text(&msg.text),
-                        msg.param.to_string(),
-                        1,
-                        msg.in_reply_to.as_deref().unwrap_or_default(),
-                    ),
-                )?;
+                (
+                    self,
+                    &msg.rfc724_mid,
+                    ContactId::SELF,
+                    time(),
+                    msg.viewtype,
+                    MessageState::OutDraft,
+                    &msg.text,
+                    normalize_text(&msg.text),
+                    msg.param.to_string(),
+                    1,
+                    msg.in_reply_to.as_deref().unwrap_or_default(),
+                ),
+            )?;
 
-                Ok(transaction.last_insert_rowid())
-            })
-            .await?;
-        msg.id = MsgId::new(row_id.try_into()?);
-        Ok(true)
+            let msg_id = MsgId::new(transaction.last_insert_rowid().try_into()?);
+            let changed = true;
+            Ok((msg_id, changed))
+        };
+        let (msg_id, changed) = context.sql.transaction(trans_fn).await?;
+        msg.id = msg_id;
+        Ok(changed)
     }
 
     /// Returns number of messages in a chat.
@@ -1761,13 +1834,17 @@ impl Chat {
     /// Adds missing values to the msg object,
     /// writes the record to the database.
     ///
-    /// If `update_msg_id` is set, that record is reused;
-    /// if `update_msg_id` is None, a new record is created.
+    /// If `update_existing_draft == `[`UseExistingDraftPolicy::ReuseIfCan`],
+    /// and `msg.state == `[`MessageState::OutDraft`]
+    /// the existing draft with ID == msg.id is reused.
+    /// If no such draft exists, an error is returned.
+    /// If `update_existing_draft == `[`UseExistingDraftPolicy::DontReuse`],
+    /// a new record is created.
     async fn prepare_msg_raw(
         &mut self,
         context: &Context,
         msg: &mut Message,
-        update_msg_id: Option<MsgId>,
+        update_existing_draft: UseExistingDraftPolicy,
     ) -> Result<()> {
         let mut to_id = 0;
         let mut location_id = 0;
@@ -1932,14 +2009,44 @@ impl Chat {
             None => None,
         };
 
+        let original_msg_chat_id = msg.chat_id;
         msg.chat_id = self.id;
         msg.from_id = ContactId::SELF;
 
         // add message to the database
-        if let Some(update_msg_id) = update_msg_id {
-            context
-                .sql
-                .execute(
+        let trans_fn = |transaction: &mut rusqlite::Transaction| {
+            let try_reuse: bool = update_existing_draft == UseExistingDraftPolicy::ReuseIfCan;
+            let reuse_existing_id: Option<MsgId> = if !try_reuse {
+                None
+            } else if !msg.id.is_special() {
+                if msg.state == MessageState::OutDraft && original_msg_chat_id == self.id {
+                    Some(msg.id)
+                } else {
+                    None
+                }
+            } else if let Some(existing) = self.id.get_draft_trans(context, transaction)?
+                && ChatId::should_reuse_draft_id(context, &existing, msg)?
+            {
+                Some(existing.id)
+            } else {
+                None
+            };
+            if let Some(reuse_existing_id) = reuse_existing_id {
+                // Maybe we could try to somehow gracefully recover from this,
+                // but better safe than sorry.
+                if !self.id.has_draft_with_id(transaction, &reuse_existing_id)? {
+                    bail!(
+                        concat!(
+                            "wanted to prepare existing draft for sending in chat {0}, ",
+                            "but no draft with ID {1} is present ",
+                            "(it might have been sent or deleted)"
+                        ),
+                        self.id,
+                        msg.id
+                    );
+                }
+
+                transaction.execute(
                     "UPDATE msgs
                      SET rfc724_mid=?, chat_id=?, from_id=?, to_id=?, timestamp=?, type=?,
                          state=?, txt=?, txt_normalized=?, subject=?, param=?,
@@ -1967,37 +2074,35 @@ impl Chat {
                         location_id as i32,
                         ephemeral_timer,
                         ephemeral_timestamp,
-                        update_msg_id
+                        reuse_existing_id
                     ],
-                )
-                .await?;
-            msg.id = update_msg_id;
-        } else {
-            let raw_id = context
-                .sql
-                .insert(
+                )?;
+                let inserted = false;
+                Ok((reuse_existing_id, inserted))
+            } else {
+                transaction.execute(
                     "INSERT INTO msgs (
-                        rfc724_mid,
-                        chat_id,
-                        from_id,
-                        to_id,
-                        timestamp,
-                        type,
-                        state,
-                        txt,
-                        txt_normalized,
-                        subject,
-                        param,
-                        hidden,
-                        mime_in_reply_to,
-                        mime_references,
-                        mime_modified,
-                        mime_headers,
-                        mime_compressed,
-                        location_id,
-                        ephemeral_timer,
-                        ephemeral_timestamp)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?);",
+                     rfc724_mid,
+                     chat_id,
+                     from_id,
+                     to_id,
+                     timestamp,
+                     type,
+                     state,
+                     txt,
+                     txt_normalized,
+                     subject,
+                     param,
+                     hidden,
+                     mime_in_reply_to,
+                     mime_references,
+                     mime_modified,
+                     mime_headers,
+                     mime_compressed,
+                     location_id,
+                     ephemeral_timer,
+                     ephemeral_timestamp)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?);",
                     params_slice![
                         msg.rfc724_mid,
                         msg.chat_id,
@@ -2019,10 +2124,17 @@ impl Chat {
                         ephemeral_timer,
                         ephemeral_timestamp
                     ],
-                )
-                .await?;
+                )?;
+                let msg_id = MsgId::new(transaction.last_insert_rowid().try_into()?);
+                let inserted = true;
+                Ok((msg_id, inserted))
+            }
+        };
+        let (msg_id, inserted) = context.sql.transaction(trans_fn).await?;
+
+        msg.id = msg_id;
+        if inserted {
             context.new_msgs_notify.notify_one();
-            msg.id = MsgId::new(u32::try_from(raw_id)?);
 
             maybe_set_logging_xdc(context, msg, self.id).await?;
             context
@@ -2719,16 +2831,8 @@ async fn prepare_send_msg(
         );
     }
 
-    // check current MessageState for drafts (to keep msg_id) ...
-    let update_msg_id = if msg.state == MessageState::OutDraft {
+    if msg.state == MessageState::OutDraft {
         msg.hidden = false;
-        if !msg.id.is_special() && msg.chat_id == chat_id {
-            Some(msg.id)
-        } else {
-            None
-        }
-    } else {
-        None
     };
 
     if msg.state == MessageState::Undefined
@@ -2741,6 +2845,9 @@ async fn prepare_send_msg(
             msg.update_param(context).await?;
         }
     }
+    // TODO crap, we set state here, but we moved
+    // a `msg.state == MessageState::OutDraft` comparison
+    // to inside of `prepare_msg_raw`...
     msg.state = MessageState::OutPending;
 
     msg.timestamp_sort = time();
@@ -2748,7 +2855,8 @@ async fn prepare_send_msg(
     if !msg.hidden {
         chat_id.unarchive_if_not_muted(context, msg.state).await?;
     }
-    chat.prepare_msg_raw(context, msg, update_msg_id).await?;
+    chat.prepare_msg_raw(context, msg, UseExistingDraftPolicy::ReuseIfCan)
+        .await?;
 
     let row_ids = create_send_msg_jobs(context, msg)
         .await
@@ -2757,6 +2865,28 @@ async fn prepare_send_msg(
         donation_request_maybe(context).await.log_err(context).ok();
     }
     Ok(row_ids)
+}
+
+#[derive(Debug, PartialEq)]
+enum UseExistingDraftPolicy {
+    DontReuse,
+    ReuseIfCan,
+}
+impl From<UseExistingDraftPolicy> for bool {
+    fn from(reuse: UseExistingDraftPolicy) -> bool {
+        match reuse {
+            UseExistingDraftPolicy::DontReuse => false,
+            UseExistingDraftPolicy::ReuseIfCan => true,
+        }
+    }
+}
+impl From<bool> for UseExistingDraftPolicy {
+    fn from(reuse: bool) -> UseExistingDraftPolicy {
+        match reuse {
+            false => UseExistingDraftPolicy::DontReuse,
+            true => UseExistingDraftPolicy::ReuseIfCan,
+        }
+    }
 }
 
 /// Renders the Message or splits it into Pre- and Post-Message.
@@ -4612,7 +4742,8 @@ pub async fn forward_msgs_2ctx(
         msg.rfc724_mid = create_outgoing_rfc724_mid();
         msg.pre_rfc724_mid.clear();
         msg.timestamp_sort = now;
-        chat.prepare_msg_raw(ctx_dst, &mut msg, None).await?;
+        chat.prepare_msg_raw(ctx_dst, &mut msg, UseExistingDraftPolicy::DontReuse)
+            .await?;
 
         if !create_send_msg_jobs(ctx_dst, &mut msg).await?.is_empty() {
             ctx_dst.scheduler.interrupt_smtp().await;
