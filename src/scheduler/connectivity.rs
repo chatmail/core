@@ -255,7 +255,7 @@ impl Context {
     ///
     /// If the connectivity changes, a DC_EVENT_CONNECTIVITY_CHANGED will be emitted.
     pub fn get_connectivity(&self) -> Connectivity {
-        let stores = self.connectivities.lock().clone();
+        let stores: Vec<_> = self.published_connectivities.lock().clone();
         let connectivities: Vec<_> = stores.into_iter().map(|s| s.get_basic()).collect();
         combine_connectivities(&connectivities)
     }
@@ -264,11 +264,12 @@ impl Context {
         let stores: Vec<_> = match sched {
             InnerSchedulerState::Started(sched) => sched
                 .boxes()
+                .filter(|b| b.is_published)
                 .map(|b| b.conn_state.state.connectivity.clone())
                 .collect(),
             _ => Vec::new(),
         };
-        *self.connectivities.lock() = stores;
+        *self.published_connectivities.lock() = stores;
     }
 
     /// Get an overview of the current connectivity, and possibly more statistics.

@@ -320,9 +320,9 @@ pub struct InnerContext {
     /// Mutex is also held while generating the key to avoid generating the key twice.
     pub(crate) self_public_key: Mutex<Option<SignedPublicKey>>,
 
-    /// `Connectivity` values for mailboxes, unordered. Used to compute the aggregate connectivity,
+    /// `Connectivity` values for published relays, unordered. Used to compute the aggregate connectivity,
     /// see [`Context::get_connectivity()`].
-    pub(crate) connectivities: parking_lot::Mutex<Vec<ConnectivityStore>>,
+    pub(crate) published_connectivities: parking_lot::Mutex<Vec<ConnectivityStore>>,
 }
 
 /// The state of ongoing process.
@@ -498,7 +498,7 @@ impl Context {
             iroh: Arc::new(RwLock::new(None)),
             self_fingerprint: OnceLock::new(),
             self_public_key: Mutex::new(None),
-            connectivities: parking_lot::Mutex::new(Vec::new()),
+            published_connectivities: parking_lot::Mutex::new(Vec::new()),
         };
 
         let ctx = Context {
@@ -830,7 +830,7 @@ impl Context {
         let all_transports: Vec<String> = ConfiguredLoginParam::load_all(self)
             .await?
             .into_iter()
-            .map(|(transport_id, param)| format!("{transport_id}: {param}"))
+            .map(|(transport_id, param, _)| format!("{transport_id}: {param}"))
             .collect();
         let all_transports = if all_transports.is_empty() {
             "Not configured".to_string()
