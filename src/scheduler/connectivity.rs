@@ -247,14 +247,11 @@ impl Context {
             let connectivity = s.get_basic();
             connectivities.push(connectivity);
         }
-        if connectivities.iter().any(|c| *c == Connectivity::Working) {
+        if connectivities.contains(&Connectivity::Working) {
             Connectivity::Working
-        } else if connectivities.iter().any(|c| *c == Connectivity::Connected) {
+        } else if connectivities.contains(&Connectivity::Connected) {
             Connectivity::Connected
-        } else if connectivities
-            .iter()
-            .any(|c| *c == Connectivity::Connecting)
-        {
+        } else if connectivities.contains(&Connectivity::Connecting) {
             Connectivity::Connecting
         } else {
             Connectivity::NotConnected
