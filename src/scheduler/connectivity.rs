@@ -331,6 +331,9 @@ impl Context {
                     .transport {
                         margin-bottom: 1em;
                     }
+                    .unpublished {
+                        opacity: 0.5;
+                    }
                     .quota-list {
                         padding-left: 0;
                     }
@@ -394,19 +397,28 @@ impl Context {
 
         let transports = self
             .sql
-            .query_map_vec("SELECT id, addr FROM transports", (), |row| {
-                let transport_id: u32 = row.get(0)?;
-                let addr: String = row.get(1)?;
-                Ok((transport_id, addr))
-            })
+            .query_map_vec(
+                "SELECT id, addr, is_published FROM transports ORDER BY is_published DESC, id",
+                (),
+                |row| {
+                    let transport_id: u32 = row.get(0)?;
+                    let addr: String = row.get(1)?;
+                    let is_published: bool = row.get(2)?;
+                    Ok((transport_id, addr, is_published))
+                },
+            )
             .await?;
         let quota = self.quota.read().await;
-        for (transport_id, transport_addr) in transports {
+        for (transport_id, transport_addr, is_published) in transports {
             let domain = &deltachat_contact_tools::EmailAddress::new(&transport_addr)
                 .map_or(transport_addr.clone(), |email| email.domain);
             let domain_escaped = escaper::encode_minimal(domain);
 
-            ret += "<li class=\"transport\">";
+            ret += if is_published {
+                "<li class=\"transport\">"
+            } else {
+                "<li class=\"transport unpublished\">"
+            };
             let folders = folders_states
                 .iter()
                 .filter(|(folder_addr, ..)| *folder_addr == transport_addr);
