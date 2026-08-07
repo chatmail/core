@@ -6366,6 +6366,12 @@ void dc_event_unref(dc_event_t* event);
 
 #define DC_EVENT_ACCOUNTS_BACKGROUND_FETCH_DONE   2200
 
+
+/**
+ * TODO docs
+ */
+#define DC_EVENT_ACCOUNTS_BACKGROUND_FETCH_TIMED_OUT   2201
+
 /**
  * Inform that set of chats or the order of the chats in the chatlist has changed.
  *
