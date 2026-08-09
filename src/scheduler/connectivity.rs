@@ -255,8 +255,8 @@ impl Context {
     ///
     /// If the connectivity changes, a DC_EVENT_CONNECTIVITY_CHANGED will be emitted.
     pub fn get_connectivity(&self) -> Connectivity {
-        let stores: Vec<_> = self.published_connectivities.lock().clone();
-        let connectivities: Vec<_> = stores.into_iter().map(|s| s.get_basic()).collect();
+        let stores: Vec<ConnectivityStore> = self.published_connectivities.lock().clone();
+        let connectivities: Vec<Connectivity> = stores.into_iter().map(|s| s.get_basic()).collect();
         combine_connectivities(&connectivities)
     }
 
