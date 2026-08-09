@@ -4019,7 +4019,8 @@ pub(crate) async fn add_contact_to_chat_ex(
         chat.sync_contacts(context).await.log_err(context).ok();
     }
     if chat.typ == Chattype::OutBroadcast {
-        resend_last_msgs(context, chat.id, &contact)
+        let msgs = get_broadcast_msgs_to_resend(context, chat_id).await?;
+        resend_msgs_ex(context, &msgs, contact.fingerprint())
             .await
             .log_err(context)
             .ok();
@@ -4027,28 +4028,37 @@ pub(crate) async fn add_contact_to_chat_ex(
     Ok(true)
 }
 
-async fn resend_last_msgs(context: &Context, chat_id: ChatId, to_contact: &Contact) -> Result<()> {
-    let msgs: Vec<MsgId> = context
+/// Get the messages to resend to a newly joined broadcast member.
+///
+/// These are the most recent messages plus some of the latest pinned messages.
+///
+/// Regarding webxdcs: It is not trivial to resend only the own status updates,
+/// and it is not trivial to resend them only to the newly-joined member,
+/// so that for now, webxdcs are not resend at all.
+async fn get_broadcast_msgs_to_resend(context: &Context, chat_id: ChatId) -> Result<Vec<MsgId>> {
+    let msgs = context
         .sql
         .query_map_vec(
             "
-SELECT id
-FROM msgs
-WHERE chat_id=?
-    AND hidden=0
-    AND NOT ( -- Exclude info and system messages
-        param GLOB '*\nS=*' OR param GLOB 'S=*'
-        OR from_id=?
-        OR to_id=?
+SELECT id, timestamp FROM msgs WHERE id IN
+    (
+        SELECT id FROM msgs WHERE chat_id=?1 -- UNION requires simple SELECT statements without LIMIT; therefore the sub-SELECT
+            AND pinned=1 AND hidden=0 AND type!=?2
+            ORDER BY timestamp DESC, id DESC LIMIT ?3
     )
-    AND type!=?
-ORDER BY pinned DESC, timestamp DESC, id DESC LIMIT ?",
+UNION SELECT id, timestamp FROM msgs WHERE id IN
+    (
+        SELECT id FROM msgs WHERE chat_id=?1
+            AND hidden=0 AND type!=?2
+            AND NOT (param GLOB '*\nS=*' OR param GLOB 'S=*' OR from_id=?4 OR to_id=?4) -- Exclude info and system messages
+            ORDER BY timestamp DESC, id DESC LIMIT ?3
+    )
+ORDER BY timestamp DESC, id DESC -- final ORDER BY is needed as UNION does not guarantee ordering",
             (
                 chat_id,
-                ContactId::INFO,
-                ContactId::INFO,
                 Viewtype::Webxdc,
                 constants::N_MSGS_TO_NEW_BROADCAST_MEMBER,
+                ContactId::INFO,
             ),
             |row: &rusqlite::Row| Ok(row.get::<_, MsgId>(0)?),
         )
@@ -4056,7 +4066,7 @@ ORDER BY pinned DESC, timestamp DESC, id DESC LIMIT ?",
         .into_iter()
         .rev()
         .collect();
-    resend_msgs_ex(context, &msgs, to_contact.fingerprint()).await
+    Ok(msgs)
 }
 
 /// Returns true if an avatar should be attached in the given chat.
@@ -4734,10 +4744,7 @@ pub async fn resend_msgs(context: &Context, msg_ids: &[MsgId]) -> Result<()> {
 /// Resends given messages to a contact with fingerprint `to_fingerprint` or, if it's `None`, to
 /// members of the corresponding chats.
 ///
-/// NB: Actually `to_fingerprint` is only passed for `OutBroadcast` chats when a new member is
-/// added. Regarding webxdcs: It is not trivial to resend only the own status updates,
-/// and it is not trivial to resend them only to the newly-joined member,
-/// so that for now, [`resend_last_msgs`] does not automatically resend webxdcs at all.
+/// `to_fingerprint` is only passed for `OutBroadcast` chats when a new member is added.
 pub(crate) async fn resend_msgs_ex(
     context: &Context,
     msg_ids: &[MsgId],

@@ -13,6 +13,7 @@ use crate::headerdef::HeaderDef;
 use crate::imex::{ImexMode, has_backup, imex};
 use crate::message::{Message, MessengerMessage, delete_msgs};
 use crate::mimeparser::{self, MimeMessage};
+use crate::pinned_messages::{get_pinned_messages, set_pinned_state};
 use crate::qr::{Qr, check_qr};
 use crate::receive_imf::receive_imf;
 use crate::securejoin::{get_securejoin_qr, join_securejoin};
@@ -3084,6 +3085,84 @@ async fn test_broadcast_muted() -> Result<()> {
     bob_chat_id.accept(bob).await?;
     let bob_chat = Chat::load_from_db(bob, bob_chat_id).await?;
     assert!(!bob_chat.is_muted());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_get_broadcast_msgs_to_resend() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+
+    // Alice creates a channel
+    let alice = &tcm.alice().await;
+    let chat_id = create_broadcast(alice, "test channel".to_string()).await?;
+    assert_eq!(get_pinned_messages(alice, chat_id).await?.len(), 0);
+    let to_resend = get_broadcast_msgs_to_resend(alice, chat_id).await?;
+    assert_eq!(to_resend.len(), 0);
+
+    // Alice sends 5 messsage to the channel, all of them will be resent
+    let mut msg_ids = Vec::new(); // oldest is first
+    for i in 0..5 {
+        let msg_id = send_text_msg(alice, chat_id, format!("message {i}")).await?;
+        msg_ids.push(msg_id);
+    }
+    let to_resend = get_broadcast_msgs_to_resend(alice, chat_id).await?;
+    assert_eq!(to_resend.len(), 5);
+    for msg_id in &msg_ids[0..5] {
+        assert!(to_resend.contains(msg_id));
+    }
+
+    // If Alice has 50 messags in the channel, only the 10 newest will be resent
+    for i in 5..50 {
+        let msg_id = send_text_msg(alice, chat_id, format!("message {i}")).await?;
+        msg_ids.push(msg_id);
+    }
+    let to_resend = get_broadcast_msgs_to_resend(alice, chat_id).await?;
+    assert_eq!(to_resend.len(), N_MSGS_TO_NEW_BROADCAST_MEMBER);
+    for msg_id in &msg_ids[50 - N_MSGS_TO_NEW_BROADCAST_MEMBER..50] {
+        assert!(to_resend.contains(msg_id));
+    }
+
+    // Alice pins the 2 newest messages, they are included in the most recent ones
+    set_pinned_state(alice, msg_ids[50 - 1], true).await?;
+    set_pinned_state(alice, msg_ids[50 - 2], true).await?;
+    assert_eq!(get_pinned_messages(alice, chat_id).await?.len(), 2);
+    let to_resend = get_broadcast_msgs_to_resend(alice, chat_id).await?;
+    assert_eq!(to_resend.len(), N_MSGS_TO_NEW_BROADCAST_MEMBER);
+    assert!(to_resend.contains(&msg_ids[50 - 1]));
+    assert!(to_resend.contains(&msg_ids[50 - 2]));
+    for msg_id in &msg_ids[50 - N_MSGS_TO_NEW_BROADCAST_MEMBER..50] {
+        assert!(to_resend.contains(msg_id));
+    }
+
+    // Alice pins the 2 oldest messages, they will be resent additionally to the recent messages
+    set_pinned_state(alice, msg_ids[50 - 1], false).await?;
+    set_pinned_state(alice, msg_ids[50 - 2], false).await?;
+    set_pinned_state(alice, msg_ids[0], true).await?;
+    set_pinned_state(alice, msg_ids[1], true).await?;
+    assert_eq!(get_pinned_messages(alice, chat_id).await?.len(), 2);
+    let to_resend = get_broadcast_msgs_to_resend(alice, chat_id).await?;
+    assert_eq!(to_resend.len(), N_MSGS_TO_NEW_BROADCAST_MEMBER + 2);
+    assert!(to_resend.contains(&msg_ids[0]));
+    assert!(to_resend.contains(&msg_ids[1]));
+    for msg_id in &msg_ids[50 - N_MSGS_TO_NEW_BROADCAST_MEMBER..50] {
+        assert!(to_resend.contains(msg_id));
+    }
+
+    // If alice pins 23 old messages, only 10 recently pinned gets resend.
+    // plus 10 normal ones.
+    for msg_id in &msg_ids[0..23] {
+        set_pinned_state(alice, *msg_id, true).await?;
+    }
+    assert_eq!(get_pinned_messages(alice, chat_id).await?.len(), 23);
+    let to_resend = get_broadcast_msgs_to_resend(alice, chat_id).await?;
+    assert_eq!(to_resend.len(), N_MSGS_TO_NEW_BROADCAST_MEMBER * 2);
+    for msg_id in &msg_ids[23 - N_MSGS_TO_NEW_BROADCAST_MEMBER..23] {
+        assert!(to_resend.contains(msg_id));
+    }
+    for msg_id in &msg_ids[50 - N_MSGS_TO_NEW_BROADCAST_MEMBER..50] {
+        assert!(to_resend.contains(msg_id));
+    }
 
     Ok(())
 }
