@@ -83,6 +83,29 @@ async fn test_select_working_iroh_relay() -> Result<()> {
     Ok(())
 }
 
+/// An io stop racing an iroh initialization wins,
+/// so no iroh survives it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_stop_io_while_initializing_iroh() -> Result<()> {
+    let alice = &TestContext::new_alice().await;
+
+    // Hold the mutex so that both tasks below wait for it,
+    // the initialization first and the io stop behind it.
+    let guard = alice.iroh_init_mutex.lock().await;
+    let init_ctx = alice.ctx.clone();
+    let init = tokio::spawn(async move { init_ctx.get_active_or_init_iroh().await });
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let stop_ctx = alice.ctx.clone();
+    let stop = tokio::spawn(async move { stop_ctx.stop_io().await });
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    drop(guard);
+
+    assert!(init.await?.is_err());
+    stop.await?;
+    assert!(alice.iroh.read().await.is_none());
+    Ok(())
+}
+
 /// Iroh without a working relay joins channels
 /// but sends no advertisement.
 /// It is kept while in use and replaced afterwards.

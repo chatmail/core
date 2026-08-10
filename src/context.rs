@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::ffi::OsString;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock, Weak};
 use std::time::Duration;
 
@@ -315,8 +315,11 @@ pub struct InnerContext {
     /// Iroh for realtime peer channels.
     pub(crate) iroh: RwLock<Option<Arc<Iroh>>>,
 
-    /// Mutex to serialize initializations of [`Self::iroh`].
+    /// Mutex to serialize initialization and closing of [`Self::iroh`].
     pub(crate) iroh_init_mutex: Mutex<()>,
+
+    /// Incremented on every [`Context::stop_io`] call to detect racing iroh initialization.
+    pub(crate) io_stop_count: AtomicUsize,
 
     /// The own fingerprint, if it was computed already.
     /// tokio::sync::OnceCell would be possible to use, but overkill for our usecase;
@@ -507,6 +510,7 @@ impl Context {
             spki_hash_store: SpkiHashStore::new(),
             iroh: RwLock::new(None),
             iroh_init_mutex: Mutex::new(()),
+            io_stop_count: AtomicUsize::new(0),
             self_fingerprint: OnceLock::new(),
             self_public_key: Mutex::new(None),
             published_connectivities: parking_lot::Mutex::new(Vec::new()),
@@ -538,7 +542,9 @@ impl Context {
 
     /// Stops the IO scheduler.
     pub async fn stop_io(&self) {
+        self.io_stop_count.fetch_add(1, Ordering::Relaxed);
         self.scheduler.stop(self).await;
+        let _guard = self.iroh_init_mutex.lock().await;
         if let Some(iroh) = self.iroh.write().await.take() {
             // Close all QUIC connections.
 

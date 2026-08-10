@@ -33,6 +33,7 @@ use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::env;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokio::sync::{RwLock, oneshot};
 use tokio::task::JoinHandle;
@@ -372,17 +373,24 @@ impl Context {
 
     /// Returns active iroh, initializing it if necessary.
     ///
+    /// Concurrent calls are serialized, and a call racing [`Context::stop_io`] fails
+    /// rather than leaving iroh running after the stop.
     /// Inactive iroh is replaced, probing the relay candidates again.
     pub async fn get_active_or_init_iroh(&self) -> Result<Arc<Iroh>> {
         if let Some(iroh) = self.get_active_iroh().await {
             return Ok(iroh);
         }
 
+        let io_stop_count = self.io_stop_count.load(Ordering::Relaxed);
         let _guard = self.iroh_init_mutex.lock().await;
 
         if let Some(iroh) = self.get_active_iroh().await {
             return Ok(iroh);
         }
+        if self.io_stop_count.load(Ordering::Relaxed) != io_stop_count {
+            bail!("Io was stopped");
+        }
+
         if let Some(stale) = self.iroh.write().await.take() {
             stale.close().await.log_err(self).ok();
         }
