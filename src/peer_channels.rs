@@ -247,12 +247,26 @@ impl ChannelState {
     }
 }
 
+/// Returns the URL to probe for the given iroh relay.
+///
+/// The probe path is appended to any path of the relay URL
+/// so that relays served under a path prefix can be probed too.
+fn relay_probe_url(relay_url: &Url) -> Result<Url> {
+    let mut probe_url = relay_url.clone();
+    probe_url
+        .path_segments_mut()
+        .map_err(|()| anyhow!("Relay URL {relay_url} cannot be a base"))?
+        .pop_if_empty()
+        .push("generate_204");
+    Ok(probe_url)
+}
+
 /// Selects a working iroh relay among the candidates.
 async fn select_iroh_relay(context: &Context, candidates: &[Url]) -> Result<Url> {
     let probes = candidates.iter().cloned().map(|candidate| {
         let context = context.clone();
         async move {
-            let probe_target = candidate.join("/generate_204")?;
+            let probe_target = relay_probe_url(&candidate)?;
             timeout(
                 RELAY_PROBE_TIMEOUT,
                 probe_iroh_url(&context, probe_target.as_str()),

@@ -28,6 +28,19 @@ async fn announce_relay(ctx: &TestContext, addr: &str, url: &str) -> Result<()> 
     Ok(())
 }
 
+#[test]
+fn test_relay_probe_url() {
+    let probe = |url| relay_probe_url(&Url::parse(url).unwrap()).unwrap();
+    assert_eq!(
+        probe("https://relay.example.org").as_str(),
+        "https://relay.example.org/generate_204"
+    );
+    assert_eq!(
+        probe("https://relay.example.org/some/path").as_str(),
+        "https://relay.example.org/some/path/generate_204"
+    );
+}
+
 /// Returns the relay of the node address to advertise, if any.
 async fn selected_iroh_relay(ctx: &TestContext) -> Result<Option<RelayUrl>> {
     let iroh = ctx.get_or_try_init_peer_channel().await?;
