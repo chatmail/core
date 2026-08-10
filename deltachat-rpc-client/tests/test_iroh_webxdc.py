@@ -7,10 +7,11 @@ If you want to debug iroh at rust-trace/log level set
     RUST_LOG=iroh_net=trace,iroh_gossip=trace
 """
 
+import itertools
 import logging
 import os
 import threading
-import time
+from contextlib import contextmanager
 
 import pytest
 
@@ -35,7 +36,11 @@ def log(msg):
     logging.info(msg)
 
 
-def setup_realtime_webxdc(ac1, ac2, path_to_webxdc):
+# payload used to probe/establish realtime connectivity, filtered out by tests
+SETUP_DATA = b"realtime-setup"
+
+
+def setup_realtime_webxdc(ac1, ac2, path_to_webxdc, wait=True):
     assert ac1.get_config("webxdc_realtime_enabled") == "1"
     assert ac2.get_config("webxdc_realtime_enabled") == "1"
     ac1_ac2_chat = ac1.create_chat(ac2)
@@ -52,40 +57,39 @@ def setup_realtime_webxdc(ac1, ac2, path_to_webxdc):
 
     log("sending ac2 -> ac1 realtime advertisement and additional message")
     ac2_webxdc_msg.send_webxdc_realtime_advertisement()
-
+    if wait:
+        wait_realtime_connected([(ac1_webxdc_msg, ac2_webxdc_msg)])
     return ac1_webxdc_msg, ac2_webxdc_msg
 
 
-def setup_thread_send_realtime_data(msg, data):
-    def thread_run():
-        for _i in range(10):
-            msg.send_webxdc_realtime_data(data)
-            time.sleep(1)
+@contextmanager
+def send_realtime_data_forever(msgs, data=None):
+    stop = threading.Event()
+    data = data or [SETUP_DATA] * len(msgs)
 
-    threading.Thread(target=thread_run, daemon=True).start()
+    def thread_run(msg, payload):
+        for i in itertools.count():
+            msg.send_webxdc_realtime_data(payload(i) if callable(payload) else payload)
+            if stop.wait(1):
+                return
+
+    for msg_payload in zip(msgs, data, strict=True):
+        threading.Thread(target=thread_run, args=msg_payload, daemon=True).start()
+    try:
+        yield data
+    finally:
+        stop.set()
 
 
-def wait_receive_realtime_data(msg_data_list):
-    account = msg_data_list[0][0].account
-    msg_data_list = msg_data_list[:]
-
-    log(f"account {account.id}: waiting for realtime data {msg_data_list}")
-    while msg_data_list:
-        event = account.wait_for_event()
-        if event.kind == EventType.WEBXDC_REALTIME_DATA:
-            for i, (msg, data) in enumerate(msg_data_list):
-                if msg.id == event.msg_id:
-                    assert list(data) == event.data
-                    log(f"msg {msg.id}: got correct realtime data {data}")
-                    del msg_data_list[i]
-                    break
+def wait_realtime_connected(msg_pairs):
+    with send_realtime_data_forever([sender for sender, _ in msg_pairs]):
+        for _, receiver in msg_pairs:
+            receiver.account.wait_for_realtime_data(receiver.id)
 
 
 def test_realtime_sequentially(acfactory, path_to_webxdc):
     """Test two peers trying to establish connection sequentially."""
     ac1, ac2 = acfactory.get_online_accounts(2)
-    ac1.set_config("webxdc_realtime_enabled", "1")
-    ac2.set_config("webxdc_realtime_enabled", "1")
     ac1.create_chat(ac2)
     ac2.create_chat(ac1)
 
@@ -117,50 +121,27 @@ def test_realtime_sequentially(acfactory, path_to_webxdc):
     data = os.urandom(128000)
     ac1_webxdc_msg.send_webxdc_realtime_data(data)
 
-    log("ac2: waiting for realtime data")
-    while 1:
-        event = ac2.wait_for_event()
-        if event.kind == EventType.WEBXDC_REALTIME_DATA:
-            assert event.data == list(data)
-            break
+    assert ac2.wait_for_realtime_data(ac2_webxdc_msg.id) == data
 
 
 def test_realtime_simultaneously(acfactory, path_to_webxdc):
     """Test two peers trying to establish connection simultaneously."""
     ac1, ac2 = acfactory.get_online_accounts(2)
-    ac1.set_config("webxdc_realtime_enabled", "1")
-    ac2.set_config("webxdc_realtime_enabled", "1")
-
-    ac1_webxdc_msg, ac2_webxdc_msg = setup_realtime_webxdc(ac1, ac2, path_to_webxdc)
-
-    setup_thread_send_realtime_data(ac1_webxdc_msg, [10])
-    wait_receive_realtime_data([(ac2_webxdc_msg, [10])])
+    setup_realtime_webxdc(ac1, ac2, path_to_webxdc)
 
 
 def test_two_parallel_realtime_simultaneously(acfactory, path_to_webxdc):
     """Test two peers trying to establish connection simultaneously."""
     ac1, ac2 = acfactory.get_online_accounts(2)
-    ac1.set_config("webxdc_realtime_enabled", "1")
-    ac2.set_config("webxdc_realtime_enabled", "1")
-
-    ac1_webxdc_msg, ac2_webxdc_msg = setup_realtime_webxdc(ac1, ac2, path_to_webxdc)
-    ac1_webxdc_msg2, ac2_webxdc_msg2 = setup_realtime_webxdc(ac1, ac2, path_to_webxdc)
-
-    setup_thread_send_realtime_data(ac1_webxdc_msg, [10])
-    setup_thread_send_realtime_data(ac1_webxdc_msg2, [20])
-    setup_thread_send_realtime_data(ac2_webxdc_msg, [30])
-    setup_thread_send_realtime_data(ac2_webxdc_msg2, [40])
-
-    wait_receive_realtime_data([(ac1_webxdc_msg, [30]), (ac1_webxdc_msg2, [40])])
-    wait_receive_realtime_data([(ac2_webxdc_msg, [10]), (ac2_webxdc_msg2, [20])])
+    ac1_webxdc_msg, ac2_webxdc_msg = setup_realtime_webxdc(ac1, ac2, path_to_webxdc, wait=False)
+    ac1_webxdc_msg2, ac2_webxdc_msg2 = setup_realtime_webxdc(ac1, ac2, path_to_webxdc, wait=False)
+    wait_realtime_connected([(ac1_webxdc_msg, ac2_webxdc_msg), (ac2_webxdc_msg, ac1_webxdc_msg)])
+    wait_realtime_connected([(ac1_webxdc_msg2, ac2_webxdc_msg2), (ac2_webxdc_msg2, ac1_webxdc_msg2)])
 
 
 def test_no_duplicate_messages(acfactory, path_to_webxdc):
     """Test that messages are received only once."""
     ac1, ac2 = acfactory.get_online_accounts(2)
-    ac1.set_config("webxdc_realtime_enabled", "1")
-    ac2.set_config("webxdc_realtime_enabled", "1")
-
     ac1_ac2_chat = ac1.create_chat(ac2)
 
     ac1_webxdc_msg = ac1_ac2_chat.send_message(text="webxdc", file=path_to_webxdc)
@@ -174,50 +155,29 @@ def test_no_duplicate_messages(acfactory, path_to_webxdc):
     ac2_webxdc_msg.send_webxdc_realtime_data.future(b"foobar")
     ac2_webxdc_msg.send_webxdc_realtime_advertisement()
 
-    def thread_run():
-        for i in range(10):
-            data = str(i).encode()
-            ac1_webxdc_msg.send_webxdc_realtime_data(data)
-            time.sleep(1)
-
-    threading.Thread(target=thread_run, daemon=True).start()
-
-    event = ac2.wait_for_event(EventType.WEBXDC_REALTIME_DATA)
-    n = int(bytes(event.data).decode())
-
-    event = ac2.wait_for_event(EventType.WEBXDC_REALTIME_DATA)
-    assert int(bytes(event.data).decode()) > n
+    with send_realtime_data_forever([ac1_webxdc_msg], data=[lambda i: str(i).encode()]):
+        n = int(ac2.wait_for_realtime_data(ac2_webxdc_msg.id).decode())
+        assert int(ac2.wait_for_realtime_data(ac2_webxdc_msg.id).decode()) > n
 
 
 def test_no_reordering(acfactory, path_to_webxdc):
     """Test that sending a lot of realtime messages does not result in reordering."""
     ac1, ac2 = acfactory.get_online_accounts(2)
-    ac1.set_config("webxdc_realtime_enabled", "1")
-    ac2.set_config("webxdc_realtime_enabled", "1")
-
-    ac1_webxdc_msg, ac2_webxdc_msg = setup_realtime_webxdc(ac1, ac2, path_to_webxdc)
-
-    setup_thread_send_realtime_data(ac1_webxdc_msg, b"hello")
-    wait_receive_realtime_data([(ac2_webxdc_msg, b"hello")])
+    ac1_webxdc_msg, ac2_webxdc_msg = setup_realtime_webxdc(ac1, ac2, path_to_webxdc, wait=True)
 
     for i in range(200):
         ac1_webxdc_msg.send_webxdc_realtime_data([i])
 
     for i in range(200):
-        while 1:
-            event = ac2.wait_for_event()
-            if event.kind == EventType.WEBXDC_REALTIME_DATA and bytes(event.data) != b"hello":
-                if event.data[0] == i:
-                    break
-                pytest.fail("Reordering detected")
+        # lingering SETUP_DATA payloads from the wait_realtime_connected() barrier may still arrive
+        while (data := ac2.wait_for_realtime_data(ac2_webxdc_msg.id)) == SETUP_DATA:
+            pass
+        assert data == bytes([i]), "Reordering detected"
 
 
 def test_advertisement_after_chatting(acfactory, path_to_webxdc):
     """Test that realtime advertisement is assigned to the correct message after chatting."""
     ac1, ac2 = acfactory.get_online_accounts(2)
-    ac1.set_config("webxdc_realtime_enabled", "1")
-    ac2.set_config("webxdc_realtime_enabled", "1")
-
     ac1_ac2_chat = ac1.create_chat(ac2)
     ac1_webxdc_msg = ac1_ac2_chat.send_message(text="WebXDC", file=path_to_webxdc)
     ac2_webxdc_msg = ac2.wait_for_incoming_msg()
@@ -244,9 +204,6 @@ def test_realtime_large_webxdc(acfactory, path_to_large_webxdc):
     and this previously resulted in failure to initialize realtime.
     """
     ac1, ac2 = acfactory.get_online_accounts(2)
-    ac1.set_config("webxdc_realtime_enabled", "1")
-    ac2.set_config("webxdc_realtime_enabled", "1")
-
     ac2.create_chat(ac1)
     ac1_ac2_chat = ac1.create_chat(ac2)
     ac1_webxdc_msg = ac1_ac2_chat.send_message(text="realtime check", file=path_to_large_webxdc)
