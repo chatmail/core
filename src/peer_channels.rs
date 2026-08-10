@@ -204,7 +204,7 @@ impl Iroh {
 
     /// Returns the iroh [NodeAddr] with the working relay URL
     /// and without direct IP addresses.
-    pub(crate) fn get_working_node_addr(&self) -> Result<NodeAddr> {
+    pub(crate) fn get_relay_node_addr(&self) -> Result<NodeAddr> {
         let relay_url = self
             .working_relay_url
             .clone()
@@ -292,7 +292,7 @@ fn downgrade_iroh_write_lock(
 
 impl Context {
     /// Create iroh endpoint and gossip.
-    async fn init_peer_channels(&self) -> Result<Iroh> {
+    async fn init_iroh(&self) -> Result<Iroh> {
         info!(self, "Initializing peer channels.");
         // Iroh relays from unpublished transports are not advertised.
         let published = published_transports(self).await?;
@@ -372,9 +372,7 @@ impl Context {
     }
 
     /// Get or initialize the iroh peer channel.
-    pub async fn get_or_try_init_peer_channel(
-        &self,
-    ) -> Result<tokio::sync::RwLockReadGuard<'_, Iroh>> {
+    pub async fn get_active_or_init_iroh(&self) -> Result<tokio::sync::RwLockReadGuard<'_, Iroh>> {
         if !self.get_config_bool(Config::WebxdcRealtimeEnabled).await? {
             bail!("Attempt to initialize Iroh when realtime is disabled");
         }
@@ -404,7 +402,7 @@ impl Context {
             stale.close().await.log_err(self).ok();
         }
 
-        let iroh = self.init_peer_channels().await?;
+        let iroh = self.init_iroh().await?;
         let mut lock = self.iroh.write().await;
         *lock = Some(iroh);
         downgrade_iroh_write_lock(lock)
@@ -559,7 +557,7 @@ pub async fn send_webxdc_realtime_advertisement(
     // Rendering the message in send_msg() locks `iroh` again,
     // so the guard must not be held across it.
     let conn = {
-        let iroh = ctx.get_or_try_init_peer_channel().await?;
+        let iroh = ctx.get_active_or_init_iroh().await?;
         let conn = iroh.join_and_subscribe_gossip(ctx, msg_id).await?;
         if iroh.working_relay_url.is_none() {
             warn!(ctx, "Not sending realtime advertisement without a relay.");
@@ -584,7 +582,7 @@ pub async fn send_webxdc_realtime_data(ctx: &Context, msg_id: MsgId, data: Vec<u
         return Ok(());
     }
 
-    let iroh = ctx.get_or_try_init_peer_channel().await?;
+    let iroh = ctx.get_active_or_init_iroh().await?;
     iroh.send_webxdc_realtime_data(ctx, msg_id, data).await?;
     Ok(())
 }

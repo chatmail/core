@@ -1914,9 +1914,9 @@ impl MimeFactory {
             }
             SystemMessage::IrohNodeAddr => {
                 let node_addr = context
-                    .get_or_try_init_peer_channel()
+                    .get_active_or_init_iroh()
                     .await?
-                    .get_working_node_addr()?;
+                    .get_relay_node_addr()?;
 
                 // We should not send `null` as relay URL
                 // as this is the only way to reach the node.

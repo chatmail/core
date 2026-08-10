@@ -43,9 +43,9 @@ fn test_relay_probe_url() {
 
 /// Returns the relay of the node address to advertise, if any.
 async fn selected_iroh_relay(ctx: &TestContext) -> Result<Option<RelayUrl>> {
-    let iroh = ctx.get_or_try_init_peer_channel().await?;
+    let iroh = ctx.get_active_or_init_iroh().await?;
     Ok(iroh
-        .get_working_node_addr()
+        .get_relay_node_addr()
         .ok()
         .and_then(|addr| addr.relay_url().cloned()))
 }
@@ -137,16 +137,16 @@ async fn test_can_communicate() {
         members,
         vec![
             alice
-                .get_or_try_init_peer_channel()
+                .get_active_or_init_iroh()
                 .await
                 .unwrap()
-                .get_working_node_addr()
+                .get_relay_node_addr()
                 .unwrap()
                 .node_id
         ]
     );
 
-    bob.get_or_try_init_peer_channel()
+    bob.get_active_or_init_iroh()
         .await
         .unwrap()
         .join_and_subscribe_gossip(bob, bob_webxdc.id)
@@ -158,7 +158,7 @@ async fn test_can_communicate() {
 
     // Alice sends ephemeral message
     alice
-        .get_or_try_init_peer_channel()
+        .get_active_or_init_iroh()
         .await
         .unwrap()
         .send_webxdc_realtime_data(alice, alice_webxdc.id, "alice -> bob".as_bytes().to_vec())
@@ -179,7 +179,7 @@ async fn test_can_communicate() {
         }
     }
     // Bob sends ephemeral message
-    bob.get_or_try_init_peer_channel()
+    bob.get_active_or_init_iroh()
         .await
         .unwrap()
         .send_webxdc_realtime_data(bob, bob_webxdc.id, "bob -> alice".as_bytes().to_vec())
@@ -211,16 +211,16 @@ async fn test_can_communicate() {
     assert_eq!(
         members,
         vec![
-            bob.get_or_try_init_peer_channel()
+            bob.get_active_or_init_iroh()
                 .await
                 .unwrap()
-                .get_working_node_addr()
+                .get_relay_node_addr()
                 .unwrap()
                 .node_id
         ]
     );
 
-    bob.get_or_try_init_peer_channel()
+    bob.get_active_or_init_iroh()
         .await
         .unwrap()
         .send_webxdc_realtime_data(bob, bob_webxdc.id, "bob -> alice 2".as_bytes().to_vec())
@@ -297,10 +297,10 @@ async fn test_duplicated_out_of_order_advertisement() -> Result<()> {
         members,
         vec![
             alice
-                .get_or_try_init_peer_channel()
+                .get_active_or_init_iroh()
                 .await
                 .unwrap()
-                .get_working_node_addr()
+                .get_relay_node_addr()
                 .unwrap()
                 .node_id
         ]
@@ -362,16 +362,16 @@ async fn test_can_reconnect() {
         members,
         vec![
             alice
-                .get_or_try_init_peer_channel()
+                .get_active_or_init_iroh()
                 .await
                 .unwrap()
-                .get_working_node_addr()
+                .get_relay_node_addr()
                 .unwrap()
                 .node_id
         ]
     );
 
-    bob.get_or_try_init_peer_channel()
+    bob.get_active_or_init_iroh()
         .await
         .unwrap()
         .join_and_subscribe_gossip(bob, bob_webxdc.id)
@@ -383,7 +383,7 @@ async fn test_can_reconnect() {
 
     // Alice sends ephemeral message
     alice
-        .get_or_try_init_peer_channel()
+        .get_active_or_init_iroh()
         .await
         .unwrap()
         .send_webxdc_realtime_data(alice, alice_webxdc.id, "alice -> bob".as_bytes().to_vec())
@@ -432,7 +432,7 @@ async fn test_can_reconnect() {
     // Check that sequence number is persisted when leaving the channel.
     assert_eq!(bob_sequence_number, bob_sequence_number_after);
 
-    bob.get_or_try_init_peer_channel()
+    bob.get_active_or_init_iroh()
         .await
         .unwrap()
         .join_and_subscribe_gossip(bob, bob_webxdc.id)
@@ -442,7 +442,7 @@ async fn test_can_reconnect() {
         .await
         .unwrap();
 
-    bob.get_or_try_init_peer_channel()
+    bob.get_active_or_init_iroh()
         .await
         .unwrap()
         .send_webxdc_realtime_data(bob, bob_webxdc.id, "bob -> alice".as_bytes().to_vec())
@@ -690,7 +690,7 @@ async fn test_peer_channels_disabled() {
 
     // This internal function should return error
     // if accidentally called with the setting disabled.
-    assert!(alice.ctx.get_or_try_init_peer_channel().await.is_err());
+    assert!(alice.ctx.get_active_or_init_iroh().await.is_err());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
