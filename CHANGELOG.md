@@ -1,5 +1,99 @@
 # Changelog
 
+## [2.58.0] - 2026-08-10
+
+### API-Changes
+
+- [**breaking**] remove getPushState() and core's internal tracking of it
+- [**breaking**] remove `dc_chatlist_get_context()`, because it was easy to misuse and likely led to crashes ([#8503](https://github.com/chatmail/core/pull/8503))
+  - instead, store reference-counted Context in `dc_msg_t`, `dc_contact_t` and `dc_chatlist_t`
+- add "pinned messages" API.
+
+### Build system
+
+- update all crates to Rust 2024 edition.
+
+### CI
+
+- update github actions monthly instead of weekly.
+
+### Documentation
+
+- clarify `ChatId::do_set_draft()` docs.
+- add missing slash to ConnectionSecurity::Starttls doc comment.
+
+### Features / Changes
+
+- send Autocrypt pgp key in MDNs occassionally and when relaylist changes.
+- reduce unncessary gossipping of keys in group chats.
+- stop requiring XDELTAPUSH capability for push notifications.
+- prepare basic multi-relay onboarding ([#8444](https://github.com/chatmail/core/pull/8444))
+- collect ICE servers from all relays.
+- send messages to 5 relays instead of the newest 3 ones.
+- allow to send reactions in broadcast channels ([#8450](https://github.com/chatmail/core/pull/8450)).
+- allow only default reactions in channels broadcast ([#8545](https://github.com/chatmail/core/pull/8545)).
+- resend pinned state in broadcast channels ([#8549](https://github.com/chatmail/core/pull/8549)).
+
+### Fixes
+
+- **The primary transport is not synchronized between devices anymore.**
+- Don't warn about correct EXIF orientation values. ([#8483](https://github.com/chatmail/core/pull/8483)).
+- deltachat-rpc-client: don't depend on execnet for importing pytest plugin, remove deprecated "py" usage.
+- send MDNs to all authentic relays of a contact, not just whatever `get_addr()` returns..
+- mark `as_path()` function unsafe.
+- python: create event emitter when EventThread is initialized.
+- Don't download pre-message again if it is known already ([#8488](https://github.com/chatmail/core/pull/8488)).
+- recognize self addresses in various places (instead of just the "primary").
+- fix multi relay connectivity view ([#8550](https://github.com/chatmail/core/pull/8550)).
+- ensure same-second primary transport change propagates correctly.
+- invalidate `configured_addr` cache before sending transport sync message.
+- prevent transport de-synchronization because of early fetch cancellation.
+- improve connectivity HTML if quota info has an error.
+
+### Miscellaneous Tasks
+
+- bump version to 2.58.0-dev.
+- deps: bump actions/setup-python from 6 to 6.3.0.
+- deps: bump zizmorcore/zizmor-action from 0.5.7 to 0.6.0.
+- cargo: bump futures from 0.3.32 to 0.3.33.
+- cargo: bump tokio from 1.52.3 to 1.53.0.
+- cargo: bump regex from 1.12.4 to 1.13.1.
+- disable "large futures" lint again.
+- cargo: bump tokio-util from 0.7.18 to 0.7.19.
+- deps: bump zizmorcore/zizmor-action from 0.6.0 to 0.6.1.
+- deps: bump taiki-e/install-action from 2.83.4 to 2.85.1.
+- cargo: bump `serde_json` from 1.0.150 to 1.0.151.
+- deps: bump pypa/gh-action-pypi-publish from 1.14.0 to 1.14.1.
+- deps: bump actions/setup-python from 6.3.0 to 7.0.0.
+- cargo: introduce syn 3 dependency.
+- cargo: bump anyhow from 1.0.103 to 1.0.104.
+- cargo: bump serde from 1.0.228 to 1.0.229.
+- cargo: bump thiserror from 2.0.18 to 2.0.19.
+- cargo: bump libc from 0.2.186 to 0.2.189.
+
+### Performance
+
+- Box::pin iroh::endpoint::Builder::bind in order to reduce memory usage.
+
+### Refactor
+
+- use the new regex! macro.
+- Remove FolderMeaning and `target_folder` ([#8456](https://github.com/chatmail/core/pull/8456)).
+- Unify naming of direct/single/1:1/normal chats ([#8442](https://github.com/chatmail/core/pull/8442)).
+- un-nest `prepare_msg_blob`.
+- do not clean `imap_send` table on transport change.
+- mark enabled ephemeral timer duration as NonZero.
+- reduce the scope of unsafe in `dc_context_unref()`.
+- mimefactory: separate rendering of message payload and sendable message.
+
+### Tests
+
+- fix flaky `test_markseen_message_and_mdn` test.
+- fix flaky `test_no_markseen_in_team_profile` ([#8500](https://github.com/chatmail/core/pull/8500)).
+- Add `test_bcc_self`.
+- Add test for unencrypted headers ([#8538](https://github.com/chatmail/core/pull/8538)).
+- Assert log warnings and errors ([#8457](https://github.com/chatmail/core/pull/8457)).
+
 ## [2.57.0] - 2026-07-25
 
 ### API-Changes
@@ -8542,3 +8636,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.55.0]: https://github.com/chatmail/core/compare/v2.54.0..v2.55.0
 [2.56.0]: https://github.com/chatmail/core/compare/v2.55.0..v2.56.0
 [2.57.0]: https://github.com/chatmail/core/compare/v2.56.0..v2.57.0
+[2.58.0]: https://github.com/chatmail/core/compare/v2.57.0..v2.58.0
