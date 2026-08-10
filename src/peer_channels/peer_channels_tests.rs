@@ -83,6 +83,64 @@ async fn test_select_working_iroh_relay() -> Result<()> {
     Ok(())
 }
 
+/// Iroh without a working relay joins channels
+/// but sends no advertisement.
+/// It is kept while in use and replaced afterwards.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_relayless_endpoint() -> Result<()> {
+    const WORKING_RELAY: &str = "https://ci-chatmail.testrun.org";
+
+    let mut tcm = TestContextManager::new();
+    let alice = &mut tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_chat = alice.create_chat(bob).await;
+    let mut instance = Message::new(Viewtype::File);
+    instance.set_file_from_bytes(
+        alice,
+        "minimal.xdc",
+        include_bytes!("../../test-data/webxdc/minimal.xdc"),
+        None,
+    )?;
+    send_msg(alice, alice_chat.id, &mut instance).await?;
+    let alice_webxdc = alice.get_last_msg().await;
+    alice.pop_sent_msg().await;
+
+    // Without a working relay the channel is joined
+    // but no advertisement is sent.
+    announce_relay(alice, "broken@example.net", "https://127.0.0.1:9").await?;
+    assert!(
+        send_webxdc_realtime_advertisement(alice, alice_webxdc.id)
+            .await?
+            .is_some()
+    );
+    assert_eq!(selected_iroh_relay(alice).await?, None);
+
+    // Iroh is kept while its channel is in use,
+    // so a relay announced later is not picked up yet.
+    let working_relay = Some(RelayUrl::from(Url::parse(WORKING_RELAY)?));
+    announce_relay(alice, "working@example.net", WORKING_RELAY).await?;
+    assert_eq!(selected_iroh_relay(alice).await?, None);
+
+    // The unused iroh is replaced on the next use.
+    leave_webxdc_realtime(alice, alice_webxdc.id).await?;
+    assert_eq!(selected_iroh_relay(alice).await?, working_relay);
+
+    // Disabling realtime does not tear down iroh,
+    // but sending and advertising become no-ops.
+    alice
+        .set_config_bool(Config::WebxdcRealtimeEnabled, false)
+        .await?;
+    send_webxdc_realtime_data(alice, alice_webxdc.id, b"ignored".to_vec()).await?;
+    assert!(
+        send_webxdc_realtime_advertisement(alice, alice_webxdc.id)
+            .await?
+            .is_none()
+    );
+    assert!(alice.iroh.read().await.is_some());
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_can_communicate() {
     let mut tcm = TestContextManager::new();

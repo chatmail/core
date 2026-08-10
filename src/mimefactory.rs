@@ -1917,10 +1917,6 @@ impl MimeFactory {
                     .get_active_or_init_iroh()
                     .await?
                     .get_relay_node_addr()?;
-
-                // We should not send `null` as relay URL
-                // as this is the only way to reach the node.
-                debug_assert!(node_addr.relay_url().is_some());
                 headers.push((
                     HeaderDef::IrohNodeAddr.into(),
                     mail_builder::headers::text::Text::new(serde_json::to_string(&node_addr)?)

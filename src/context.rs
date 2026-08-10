@@ -313,7 +313,7 @@ pub struct InnerContext {
     pub(crate) spki_hash_store: SpkiHashStore,
 
     /// Iroh for realtime peer channels.
-    pub(crate) iroh: Arc<RwLock<Option<Iroh>>>,
+    pub(crate) iroh: RwLock<Option<Arc<Iroh>>>,
 
     /// Mutex to serialize initializations of [`Self::iroh`].
     pub(crate) iroh_init_mutex: Mutex<()>,
@@ -505,7 +505,7 @@ impl Context {
             push_subscriber,
             tls_session_store: TlsSessionStore::new(),
             spki_hash_store: SpkiHashStore::new(),
-            iroh: Arc::new(RwLock::new(None)),
+            iroh: RwLock::new(None),
             iroh_init_mutex: Mutex::new(()),
             self_fingerprint: OnceLock::new(),
             self_public_key: Mutex::new(None),
@@ -562,7 +562,7 @@ impl Context {
 
     /// Indicate that the network likely has come back.
     pub async fn maybe_network(&self) {
-        if let Some(ref iroh) = *self.iroh.read().await {
+        if let Some(iroh) = self.iroh.read().await.clone() {
             iroh.network_change().await;
         }
         self.scheduler.maybe_network().await;
