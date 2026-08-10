@@ -64,6 +64,7 @@ use self::types::{
         JsonrpcMessageListItem, MessageNotificationInfo, MessageSearchResult, MessageViewtype,
     },
 };
+use crate::api::types::appversions::JsonrpcAppVersionInfo;
 use crate::api::types::chat_list::{ChatListItemFetchResult, get_chat_list_item_by_id};
 use crate::api::types::login_param::TransportListEntry;
 use crate::api::types::qr::{QrObject, SecurejoinSource, SecurejoinUiPath};
@@ -2788,6 +2789,13 @@ impl CommandApi {
         } else {
             Err(anyhow!("chat with id {chat_id} doesn't have draft message"))
         }
+    }
+
+    /// Get version information of clients.
+    async fn get_app_versions(&self, account_id: u32) -> Result<JsonrpcAppVersionInfo> {
+        let ctx = self.get_context(account_id).await?;
+        let info = deltachat::appversions::get_app_versions(&ctx).await?;
+        JsonrpcAppVersionInfo::from_core_type(info)
     }
 }
 

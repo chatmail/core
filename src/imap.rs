@@ -140,6 +140,10 @@ pub(crate) struct ServerMetadata {
     /// should be fetched from the server
     /// to be ready for WebRTC calls.
     pub ice_servers_expiration_timestamp: i64,
+
+    /// App versions, as raw JSON string.
+    /// Consumed by get_app_versions().
+    pub app_versions: Option<String>,
 }
 
 struct UidGrouper<T: Iterator<Item = (i64, u32, String)>> {
@@ -1342,6 +1346,7 @@ impl Session {
         let mut max_smtp_rcpt_to = None;
         let mut ice_servers = None;
         let mut ice_servers_expiration_timestamp = 0;
+        let mut app_versions = None;
 
         let mailbox = "";
         let options = "";
@@ -1397,6 +1402,9 @@ impl Session {
                         }
                     }
                 }
+                "/shared/vendor/deltachat/appversions" => {
+                    app_versions = m.value;
+                }
                 _ => {}
             }
         }
@@ -1418,6 +1426,7 @@ impl Session {
                 supports_push: max_smtp_rcpt_to.is_some() || self.capabilities.has_xdeltapush,
                 ice_servers,
                 ice_servers_expiration_timestamp,
+                app_versions,
             },
         );
         Ok(())
