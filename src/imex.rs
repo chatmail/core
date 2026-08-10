@@ -867,6 +867,7 @@ mod tests {
         {
             panic!("got error on import: {err:#}");
         }
+        context2.assert_warn("Failed to import secret key").await;
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -874,7 +875,7 @@ mod tests {
         let alice = &TestContext::new_alice().await;
         let chat = alice.create_chat(alice).await;
         let sent = alice.send_text(chat.id, "Encrypted with old key").await;
-        let export_dir = tempfile::tempdir().unwrap();
+        let export_dir = tempfile::tempdir()?;
 
         let alice = &TestContext::new().await;
         alice.configure_addr("alice@example.org").await;
@@ -892,13 +893,21 @@ mod tests {
         // Importing a second key is not allowed anymore,
         // even as a non-default key.
         assert_eq!(key::load_self_secret_key(alice).await?, old_key);
-
         assert_eq!(key::load_self_secret_keyring(alice).await?, vec![old_key]);
 
         let msg = alice.recv_msg(&sent).await;
         assert!(msg.get_showpadlock());
         assert_eq!(msg.chat_id, alice.get_self_chat().await.id);
         assert_eq!(msg.get_text(), "Encrypted with old key");
+
+        alice
+            .assert_warns_or_errors(&[
+                "rPGP error: unexpected block type: PGP PUBLIC KEY BLOCK",
+                "UNIQUE constraint failed",
+                "IMEX failed to complete",
+                "No private keys found in",
+            ])
+            .await;
 
         Ok(())
     }
@@ -939,6 +948,8 @@ mod tests {
             .await
             .is_err()
         );
+        context2.assert_error("file is not a database").await;
+        context2.assert_warn("IMEX failed to complete").await;
 
         assert!(
             imex(&context2, ImexMode::ImportBackup, backup.as_ref(), None)
@@ -1056,14 +1067,9 @@ mod tests {
 
         // Some UIs show the error from the event to the user.
         // Therefore, it must also be a user-facing string, rather than some technical info:
-        let err_event = context2
-            .evtracker
-            .get_matching(|evt| matches!(evt, EventType::Error(_)))
-            .await;
-        let EventType::Error(err_msg) = err_event else {
-            unreachable!()
-        };
-        assert!(err_msg.starts_with("This profile is from a newer version of Delta Chat. Please update Delta Chat and try again"));
+        context2.assert_error("This profile is from a newer version of Delta Chat. Please update Delta Chat and try again").await;
+
+        context2.assert_warn("IMEX failed to complete").await;
 
         context2
             .evtracker
