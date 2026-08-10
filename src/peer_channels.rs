@@ -306,13 +306,12 @@ impl Context {
             bail!("Attempt to initialize Iroh when realtime is disabled");
         }
         info!(self, "Initializing Iroh for realtime channels.");
-        let mut relay_candidates = published_iroh_relays(self).await?;
+        let relay_candidates = published_iroh_relays(self).await?;
         if relay_candidates.is_empty() {
-            // FIXME: this should fail to setup Iroh
-            // once multi-relay usage makes missing iroh relays rare
-            // and tests can deal with it (maybe better after Iroh 1.0 upgrade).
-            warn!(self, "No iroh relay found, using fallback one.");
-            relay_candidates.push(Url::parse("https://nine.testrun.org")?);
+            warn!(
+                self,
+                "No transport announces an iroh relay, peers cannot reach us."
+            );
         }
         let working_relay_url = select_iroh_relay(self, &relay_candidates)
             .await

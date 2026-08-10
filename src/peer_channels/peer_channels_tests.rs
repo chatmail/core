@@ -9,6 +9,24 @@ use crate::{
     transport::add_pseudo_transport,
 };
 
+/// CI chatmail relay is used as a known-working candidate because
+/// mocking out the serving of https requests is not worth it, and,
+/// besides, it's also useful to exercise production code paths
+/// which the core Python tests do a lot already.
+const WORKING_RELAY: &str = "https://ci-chatmail.testrun.org";
+
+/// Sets the iroh relay a transport announces via IMAP METADATA.
+async fn set_iroh_relay(ctx: &TestContext, transport_id: u32, url: &str) -> Result<()> {
+    ctx.metadata.write().await.insert(
+        transport_id,
+        ServerMetadata {
+            iroh_relay: Some(Url::parse(url)?),
+            ..Default::default()
+        },
+    );
+    Ok(())
+}
+
 /// Adds a transport announcing an iroh relay,
 /// like a chatmail server does via IMAP METADATA.
 async fn announce_relay(ctx: &TestContext, addr: &str, url: &str) -> Result<()> {
@@ -18,14 +36,23 @@ async fn announce_relay(ctx: &TestContext, addr: &str, url: &str) -> Result<()> 
         .into_iter()
         .find(|(a, _)| a == addr)
         .context("Transport not found")?;
-    ctx.metadata.write().await.insert(
-        transport_id,
-        ServerMetadata {
-            iroh_relay: Some(Url::parse(url)?),
-            ..Default::default()
-        },
-    );
-    Ok(())
+    set_iroh_relay(ctx, transport_id, url).await
+}
+
+impl TestContext {
+    /// Announces the working relay for the transport this context has.
+    async fn with_working_iroh_relay(self) -> Self {
+        let (_, transport_id) = published_transports(&self)
+            .await
+            .expect("Transports should be readable")
+            .into_iter()
+            .next()
+            .expect("Context should have a published transport");
+        set_iroh_relay(&self, transport_id, WORKING_RELAY)
+            .await
+            .expect("Relay should be announced");
+        self
+    }
 }
 
 #[test]
@@ -52,12 +79,6 @@ async fn selected_iroh_relay(ctx: &TestContext) -> Result<Option<RelayUrl>> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_select_working_iroh_relay() -> Result<()> {
-    // CI chatmail relay is used as a known-working candidate because
-    // mocking out the serving of https requests is not worth it, and,
-    // besides, it's also useful to exercise production code paths
-    // which the core Python tests do a lot already.
-    const WORKING_RELAY: &str = "https://ci-chatmail.testrun.org";
-
     let mut tcm = TestContextManager::new();
     let alice = &mut tcm.alice().await;
 
@@ -111,8 +132,6 @@ async fn test_stop_io_while_initializing_iroh() -> Result<()> {
 /// It is kept while in use and replaced afterwards.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_relayless_endpoint() -> Result<()> {
-    const WORKING_RELAY: &str = "https://ci-chatmail.testrun.org";
-
     let mut tcm = TestContextManager::new();
     let alice = &mut tcm.alice().await;
     let bob = &tcm.bob().await;
@@ -167,8 +186,8 @@ async fn test_relayless_endpoint() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_can_communicate() {
     let mut tcm = TestContextManager::new();
-    let alice = &mut tcm.alice().await;
-    let bob = &mut tcm.bob().await;
+    let alice = &mut tcm.alice().await.with_working_iroh_relay().await;
+    let bob = &mut tcm.bob().await.with_working_iroh_relay().await;
 
     // Alice sends webxdc to bob
     let alice_chat = alice.create_chat(bob).await;
@@ -332,8 +351,8 @@ async fn test_can_communicate() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_duplicated_out_of_order_advertisement() -> Result<()> {
     let mut tcm = TestContextManager::new();
-    let alice = &mut tcm.alice().await;
-    let bob = &mut tcm.bob().await;
+    let alice = &mut tcm.alice().await.with_working_iroh_relay().await;
+    let bob = &mut tcm.bob().await.with_working_iroh_relay().await;
 
     let alice_chat = alice.create_chat(bob).await;
     let mut instance = Message::new(Viewtype::File);
@@ -393,8 +412,8 @@ async fn test_duplicated_out_of_order_advertisement() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_can_reconnect() {
     let mut tcm = TestContextManager::new();
-    let alice = &mut tcm.alice().await;
-    let bob = &mut tcm.bob().await;
+    let alice = &mut tcm.alice().await.with_working_iroh_relay().await;
+    let bob = &mut tcm.bob().await.with_working_iroh_relay().await;
 
     assert!(
         alice
@@ -583,8 +602,8 @@ async fn test_can_reconnect() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_parallel_connect() {
     let mut tcm = TestContextManager::new();
-    let alice = &mut tcm.alice().await;
-    let bob = &mut tcm.bob().await;
+    let alice = &mut tcm.alice().await.with_working_iroh_relay().await;
+    let bob = &mut tcm.bob().await.with_working_iroh_relay().await;
 
     let chat = alice.create_chat(bob).await.id;
 
@@ -603,8 +622,8 @@ async fn test_parallel_connect() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_webxdc_resend() {
     let mut tcm = TestContextManager::new();
-    let alice = &mut tcm.alice().await;
-    let bob = &mut tcm.bob().await;
+    let alice = &mut tcm.alice().await.with_working_iroh_relay().await;
+    let bob = &mut tcm.bob().await.with_working_iroh_relay().await;
     let group = chat::create_group(alice, "group chat").await.unwrap();
 
     // Alice sends webxdc to bob
@@ -625,7 +644,7 @@ async fn test_webxdc_resend() {
     connect_alice_bob(alice, group, &mut instance, bob).await;
 
     // fiona joins late
-    let fiona = &mut tcm.fiona().await;
+    let fiona = &mut tcm.fiona().await.with_working_iroh_relay().await;
 
     add_contact_to_chat(alice, group, alice.add_or_lookup_contact_id(fiona).await)
         .await
