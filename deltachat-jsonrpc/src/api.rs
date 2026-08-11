@@ -935,7 +935,6 @@ impl CommandApi {
     ///     to `check_qr()`.
     ///
     /// **returns**: The chat ID of the joined chat, the UI may redirect to the this chat.
-    ///         A returned chat ID does not guarantee that the chat is protected or the belonging contact is verified.
     ///
     async fn secure_join(&self, account_id: u32, qr: String) -> Result<u32> {
         let ctx = self.get_context(account_id).await?;
