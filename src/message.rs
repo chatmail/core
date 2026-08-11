@@ -245,7 +245,7 @@ SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ?, ? FROM msgs WHERE id=?1
             ret += &format!("Expires: {}\n", timestamp_to_str(msg.ephemeral_timestamp));
         }
 
-        if msg.from_id == ContactId::INFO || msg.to_id == ContactId::INFO {
+        if msg.from_id == ContactId::INFO {
             // device-internal message, no further details needed
             return Ok(ret);
         }
@@ -398,9 +398,6 @@ pub struct Message {
     /// `From:` contact ID.
     pub(crate) from_id: ContactId,
 
-    /// ID of the first contact in the `To:` header.
-    pub(crate) to_id: ContactId,
-
     /// ID of the chat message belongs to.
     pub(crate) chat_id: ChatId,
 
@@ -494,7 +491,6 @@ impl Message {
                     m.mime_in_reply_to AS mime_in_reply_to,
                     m.chat_id AS chat_id,
                     m.from_id AS from_id,
-                    m.to_id AS to_id,
                     m.timestamp AS timestamp,
                     m.timestamp_sent AS timestamp_sent,
                     m.timestamp_rcvd AS timestamp_rcvd,
@@ -552,7 +548,6 @@ impl Message {
                             .and_then(|in_reply_to| parse_message_id(&in_reply_to).ok()),
                         chat_id: row.get("chat_id")?,
                         from_id: row.get("from_id")?,
-                        to_id: row.get("to_id")?,
                         timestamp_sort: row.get("timestamp")?,
                         timestamp_sent: row.get("timestamp_sent")?,
                         timestamp_rcvd: row.get("timestamp_rcvd")?,
@@ -1003,7 +998,6 @@ impl Message {
     pub fn is_info(&self) -> bool {
         let cmd = self.param.get_cmd();
         self.from_id == ContactId::INFO
-            || self.to_id == ContactId::INFO
             || cmd != SystemMessage::Unknown && cmd != SystemMessage::AutocryptSetupMessage
     }
 

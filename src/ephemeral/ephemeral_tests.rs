@@ -367,7 +367,6 @@ async fn check_msg_is_deleted(t: &TestContext, chat: &Chat, msg_id: MsgId) {
     // Check that if there is a message left, the text and metadata are gone
     if let Ok(msg) = Message::load_from_db(t, msg_id).await {
         assert_eq!(msg.from_id, ContactId::UNDEFINED);
-        assert_eq!(msg.to_id, ContactId::UNDEFINED);
         assert_eq!(msg.text, "");
         let rawtxt: Option<String> = t
             .sql

@@ -1728,12 +1728,6 @@ async fn add_parts(
     mut chat_id_blocked: Blocked,
     is_chat_created: bool,
 ) -> Result<ReceivedMsg> {
-    let to_id = if mime_parser.incoming {
-        ContactId::SELF
-    } else {
-        to_ids.first().copied().flatten().unwrap_or(ContactId::SELF)
-    };
-
     // if contact renaming is prevented (for mailinglists and bots),
     // we use name from From:-header as override name
     if prevent_rename && let Some(name) = &mime_parser.from.display_name {
@@ -2168,7 +2162,7 @@ async fn add_parts(
 INSERT INTO msgs
   (
     rfc724_mid, pre_rfc724_mid, chat_id,
-    from_id, to_id, timestamp, timestamp_sent, 
+    from_id, timestamp, timestamp_sent, 
     timestamp_rcvd, type, state,
     txt, txt_normalized, subject, param, hidden,
     bytes, mime_headers, mime_compressed, mime_in_reply_to,
@@ -2177,7 +2171,7 @@ INSERT INTO msgs
   )
   VALUES (
     ?, ?, ?, ?, ?,
-    ?, ?, ?, ?,
+    ?, ?, ?,
     ?, ?, ?,
     ?, ?, ?, ?, ?, 1,
     ?, ?, ?, ?,
@@ -2201,7 +2195,6 @@ INSERT INTO msgs
                     },
                     if trash { DC_CHAT_ID_TRASH } else { chat_id },
                     if trash { ContactId::UNDEFINED } else { from_id },
-                    if trash { ContactId::UNDEFINED } else { to_id },
                     sort_timestamp,
                     if trash { 0 } else { mime_parser.timestamp_sent },
                     if trash { 0 } else { mime_parser.timestamp_rcvd },

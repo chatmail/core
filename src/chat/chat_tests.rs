@@ -820,7 +820,6 @@ async fn test_self_talk() -> Result<()> {
     let msg_id = send_text_msg(&t, chat.id, "foo self".to_string()).await?;
     let msg = Message::load_from_db(&t, msg_id).await?;
     assert_eq!(msg.from_id, ContactId::SELF);
-    assert_eq!(msg.to_id, ContactId::SELF);
     assert!(msg.get_showpadlock());
 
     let sent_msg = t.pop_sent_msg().await;
@@ -831,7 +830,6 @@ async fn test_self_talk() -> Result<()> {
     let msg = t2.get_last_msg_in(chat.id).await;
     assert_eq!(msg.text, "foo self".to_string());
     assert_eq!(msg.from_id, ContactId::SELF);
-    assert_eq!(msg.to_id, ContactId::SELF);
     assert!(msg.get_showpadlock());
 
     Ok(())
@@ -872,7 +870,6 @@ async fn test_add_device_msg_unlabelled() {
     let msg1 = msg1.unwrap();
     assert_eq!(msg1.text, "first message");
     assert_eq!(msg1.from_id, ContactId::DEVICE);
-    assert_eq!(msg1.to_id, ContactId::SELF);
     assert!(!msg1.is_info());
 
     let msg2 = message::Message::load_from_db(&t, msg2_id.unwrap()).await;
@@ -904,7 +901,6 @@ async fn test_add_device_msg_labelled() -> Result<()> {
     assert_eq!(msg1_id.as_ref().unwrap(), &msg1.id);
     assert_eq!(msg1.text, "first message");
     assert_eq!(msg1.from_id, ContactId::DEVICE);
-    assert_eq!(msg1.to_id, ContactId::SELF);
     assert!(!msg1.is_info());
 
     // check device chat
@@ -2290,7 +2286,6 @@ async fn test_forward_info_msg() -> Result<()> {
     assert!(!msg2.is_info()); // forwarded info-messages lose their info-state
     assert_eq!(msg2.get_info_type(), SystemMessage::Unknown);
     assert_ne!(msg2.from_id, ContactId::INFO);
-    assert_ne!(msg2.to_id, ContactId::INFO);
     assert_eq!(msg2.get_text(), msg1.get_text());
     assert!(msg2.is_forwarded());
 
@@ -5148,7 +5143,6 @@ async fn test_sync_name() -> Result<()> {
     let sent = alice0.pop_sent_msg().await;
     let rcvd = alice1.recv_msg(&sent).await;
     assert_eq!(rcvd.from_id, ContactId::SELF);
-    assert_eq!(rcvd.to_id, ContactId::SELF);
     assert_eq!(
         rcvd.text,
         "Channel name changed from \"Channel\" to \"Broadcast channel 42\"."

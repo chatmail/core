@@ -2028,7 +2028,6 @@ Your server is hacked. Have a nice day!"
         let msg = t.get_last_msg().await;
         assert_ne!(msg.chat_id, t.get_self_chat().await.id);
         assert_eq!(msg.from_id, ContactId::SELF);
-        assert_eq!(msg.to_id, ContactId::SELF);
         if let Some(chat_id) = chat_id {
             assert_eq!(msg.chat_id, chat_id);
         } else {
@@ -3068,7 +3067,6 @@ async fn test_outgoing_private_reply_multidevice() -> Result<()> {
     let received = alice1.get_last_msg().await;
     let alice1_bob_contact = alice1.add_or_lookup_contact(&bob).await;
     assert_eq!(received.from_id, alice1_bob_contact.id);
-    assert_eq!(received.to_id, ContactId::SELF);
     assert!(!received.hidden);
     assert_eq!(received.text, "Hello all!");
     assert_eq!(received.in_reply_to, None);
@@ -3093,9 +3091,7 @@ async fn test_outgoing_private_reply_multidevice() -> Result<()> {
     // That's a regression test for https://github.com/chatmail/core/issues/2949:
     assert_eq!(received.chat_id, alice2.get_chat(&bob).await.id);
 
-    let alice2_bob_contact = alice2.add_or_lookup_contact(&bob).await;
     assert_eq!(received.from_id, ContactId::SELF);
-    assert_eq!(received.to_id, alice2_bob_contact.id);
     assert!(!received.hidden);
     assert_eq!(received.text, "Private reply");
     assert_eq!(
@@ -5008,7 +5004,6 @@ Hello!"
     let received = receive_imf(t, raw, false).await?.unwrap();
     let msg = Message::load_from_db(t, *received.msg_ids.last().unwrap()).await?;
     assert_eq!(msg.from_id, ContactId::SELF);
-    assert_eq!(msg.to_id, ContactId::SELF);
     let chat = Chat::load_from_db(t, msg.chat_id).await?;
     assert_eq!(chat.typ, Chattype::Group);
     assert!(!chat.is_encrypted(t).await?);
