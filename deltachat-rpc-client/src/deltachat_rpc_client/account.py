@@ -38,11 +38,11 @@ class Account:
 
     def wait_for_realtime_data(self, msg_id: int) -> bytes:
         """Wait for the next realtime data received for the given webxdc message and return it."""
-        logging.info("account %s: waiting for realtime data for msg %s", self.id, msg_id)
+        logging.info(f"account {self.id}: waiting for realtime data for msg {msg_id}")
         while True:
             event = self.wait_for_event(EventType.WEBXDC_REALTIME_DATA)
             if event.msg_id == msg_id:
-                logging.info("account %s: got realtime data for msg %s: %s", self.id, msg_id, event.data[:20])
+                logging.info(f"account {self.id}: got realtime data for msg {msg_id}: {event.data[:20]}")
                 return bytes(event.data)
 
     def clear_all_events(self):

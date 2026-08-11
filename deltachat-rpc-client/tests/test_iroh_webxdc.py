@@ -76,7 +76,7 @@ def send_realtime_data_forever(msgs, data=None):
     for msg_payload in zip(msgs, data, strict=True):
         threading.Thread(target=thread_run, args=msg_payload, daemon=True).start()
     try:
-        yield data
+        yield
     finally:
         stop.set()
 
