@@ -26,7 +26,7 @@
 use anyhow::{Context as _, Result, anyhow, bail};
 use data_encoding::BASE32_NOPAD;
 use futures_lite::StreamExt;
-use iroh::{Endpoint, NodeAddr, NodeId, PublicKey, RelayMap, RelayMode, RelayUrl, SecretKey};
+use iroh::{Endpoint, NodeAddr, NodeId, PublicKey, RelayMode, RelayUrl, SecretKey};
 use iroh_gossip::net::{Event, GOSSIP_ALPN, Gossip, GossipEvent, JoinOptions};
 use iroh_gossip::proto::TopicId;
 use parking_lot::Mutex;
@@ -307,20 +307,19 @@ impl Context {
         }
         info!(self, "Initializing Iroh for realtime channels.");
         let relay_candidates = published_iroh_relays(self).await?;
-        if relay_candidates.is_empty() {
-            warn!(
-                self,
-                "No transport announces an iroh relay, peers cannot reach us."
-            );
-        }
-        let working_relay_url = select_iroh_relay(self, &relay_candidates)
-            .await
-            .context("No working iroh relay")
-            .log_err(self)
-            .ok()
-            .map(RelayUrl::from);
+        let working_relay_url = if relay_candidates.is_empty() {
+            warn!(self, "No iroh relay, peers cannot reach us.");
+            None
+        } else {
+            select_iroh_relay(self, &relay_candidates)
+                .await
+                .context("No working iroh relay")
+                .log_err(self)
+                .ok()
+                .map(RelayUrl::from)
+        };
         let relay_mode = match &working_relay_url {
-            Some(relay_url) => RelayMode::Custom(RelayMap::from(relay_url.clone())),
+            Some(relay_url) => RelayMode::Custom(relay_url.clone().into()),
             None => RelayMode::Disabled,
         };
         let secret_key = SecretKey::generate(rand_old::rngs::OsRng);
@@ -361,7 +360,7 @@ impl Context {
 
     /// Returns iroh while it has a working relay
     /// or channels through which peers may have been dialed.
-    pub async fn get_active_iroh(&self) -> Option<Arc<Iroh>> {
+    async fn get_active_iroh(&self) -> Option<Arc<Iroh>> {
         let iroh = self.iroh.read().await.clone()?;
         if iroh.working_relay_url.is_some() || !iroh.iroh_channels.read().await.is_empty() {
             Some(iroh)
@@ -375,7 +374,7 @@ impl Context {
     /// Concurrent calls are serialized, and a call racing [`Context::stop_io`] fails
     /// rather than leaving iroh running after the stop.
     /// Inactive iroh is replaced, probing the relay candidates again.
-    pub async fn get_active_or_init_iroh(&self) -> Result<Arc<Iroh>> {
+    pub(crate) async fn get_active_or_init_iroh(&self) -> Result<Arc<Iroh>> {
         if let Some(iroh) = self.get_active_iroh().await {
             return Ok(iroh);
         }
@@ -390,13 +389,36 @@ impl Context {
             bail!("Io was stopped");
         }
 
-        if let Some(stale) = self.iroh.write().await.take() {
-            stale.close().await.log_err(self).ok();
+        // Close the inactive instance to probe the relay candidates anew,
+        // unless a concurrent task still uses it; share it with them then.
+        if let Some(iroh) = self.close_unused_iroh().await {
+            return Ok(iroh);
         }
 
         let iroh = Arc::new(self.init_iroh().await?);
         *self.iroh.write().await = Some(iroh.clone());
         Ok(iroh)
+    }
+
+    /// Closes iroh if no channel and no concurrent task uses it,
+    /// so that it stops using the network until realtime is used again.
+    /// Returns the instance kept because it is still in use, if any.
+    ///
+    /// The next use initializes iroh again and probes the relay candidates,
+    /// so a relay that stopped working meanwhile is not used again.
+    pub(crate) async fn close_unused_iroh(&self) -> Option<Arc<Iroh>> {
+        let mut slot = self.iroh.write().await;
+        let iroh = slot.take()?;
+        // A reference besides ours means somebody is about to use iroh.
+        if Arc::strong_count(&iroh) > 1 || !iroh.iroh_channels.read().await.is_empty() {
+            *slot = Some(iroh.clone());
+            return Some(iroh);
+        }
+        drop(slot);
+
+        info!(self, "Closing iroh, no realtime channel uses it.");
+        iroh.close().await.log_err(self).ok();
+        None
     }
 
     pub(crate) async fn maybe_add_gossip_peer(&self, topic: TopicId, peer: NodeAddr) -> Result<()> {

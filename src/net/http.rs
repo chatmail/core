@@ -419,7 +419,7 @@ pub(crate) async fn probe_iroh_url(context: &Context, url: &str) -> Result<()> {
         .authority()
         .context("URL has no authority")?
         .clone();
-    let req = hyper::Request::get(parsed_url)
+    let req = hyper::Request::get(origin_form(&parsed_url))
         .header(hyper::header::HOST, authority.as_str())
         .body(http_body_util::Empty::<Bytes>::new())?;
 

@@ -68,6 +68,22 @@ fn test_relay_probe_url() {
     );
 }
 
+/// Sends a webxdc instance and returns it.
+async fn send_webxdc(ctx: &TestContext, peer: &TestContext) -> Result<Message> {
+    let chat = ctx.create_chat(peer).await;
+    let mut instance = Message::new(Viewtype::File);
+    instance.set_file_from_bytes(
+        ctx,
+        "minimal.xdc",
+        include_bytes!("../../test-data/webxdc/minimal.xdc"),
+        None,
+    )?;
+    send_msg(ctx, chat.id, &mut instance).await?;
+    let webxdc = ctx.get_last_msg().await;
+    ctx.pop_sent_msg().await;
+    Ok(webxdc)
+}
+
 /// Returns the relay of the node address to advertise, if any.
 async fn selected_iroh_relay(ctx: &TestContext) -> Result<Option<RelayUrl>> {
     let iroh = ctx.get_active_or_init_iroh().await?;
@@ -84,6 +100,7 @@ async fn test_select_working_iroh_relay() -> Result<()> {
 
     announce_relay(alice, "one@example.net", "https://127.0.0.1:9").await?;
     assert_eq!(selected_iroh_relay(alice).await?, None);
+    alice.assert_warn("No working iroh relay").await;
 
     // Relays announced by unpublished transports are not used
     announce_relay(alice, "two@example.net", WORKING_RELAY).await?;
@@ -91,6 +108,7 @@ async fn test_select_working_iroh_relay() -> Result<()> {
         .set_transport_unpublished("two@example.net", true)
         .await?;
     assert_eq!(selected_iroh_relay(alice).await?, None);
+    alice.assert_warn("No working iroh relay").await;
 
     // The endpoint is initialized again on the next use
     // because it has no working relay and is not in use yet.
@@ -101,6 +119,29 @@ async fn test_select_working_iroh_relay() -> Result<()> {
         selected_iroh_relay(alice).await?,
         Some(RelayUrl::from(Url::parse(WORKING_RELAY)?))
     );
+    Ok(())
+}
+
+/// Iroh is closed once no channel uses it,
+/// but kept while a channel is joined.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_close_unused_iroh() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &mut tcm.alice().await.with_working_iroh_relay().await;
+    let bob = &tcm.bob().await;
+    let alice_webxdc = send_webxdc(alice, bob).await?;
+
+    // A joined channel keeps iroh.
+    send_webxdc_realtime_advertisement(alice, alice_webxdc.id).await?;
+    alice.pop_sent_msg().await;
+    alice.close_unused_iroh().await;
+    assert!(alice.iroh.read().await.is_some());
+
+    // Without a channel iroh is closed and initialized again on demand.
+    leave_webxdc_realtime(alice, alice_webxdc.id).await?;
+    alice.close_unused_iroh().await;
+    assert!(alice.iroh.read().await.is_none());
+    assert!(alice.get_active_or_init_iroh().await.is_ok());
     Ok(())
 }
 
@@ -136,26 +177,27 @@ async fn test_relayless_endpoint() -> Result<()> {
     let alice = &mut tcm.alice().await;
     let bob = &tcm.bob().await;
 
-    let alice_chat = alice.create_chat(bob).await;
-    let mut instance = Message::new(Viewtype::File);
-    instance.set_file_from_bytes(
-        alice,
-        "minimal.xdc",
-        include_bytes!("../../test-data/webxdc/minimal.xdc"),
-        None,
-    )?;
-    send_msg(alice, alice_chat.id, &mut instance).await?;
-    let alice_webxdc = alice.get_last_msg().await;
-    alice.pop_sent_msg().await;
+    let alice_webxdc = send_webxdc(alice, bob).await?;
+
+    // An instance a concurrent task still references is shared,
+    // not closed underneath them.
+    announce_relay(alice, "broken@example.net", "https://127.0.0.1:9").await?;
+    let held = alice.get_active_or_init_iroh().await?;
+    assert!(Arc::ptr_eq(&held, &alice.get_active_or_init_iroh().await?));
+    drop(held);
+    alice.assert_warn("No working iroh relay").await;
 
     // Without a working relay the channel is joined
     // but no advertisement is sent.
-    announce_relay(alice, "broken@example.net", "https://127.0.0.1:9").await?;
     assert!(
         send_webxdc_realtime_advertisement(alice, alice_webxdc.id)
             .await?
             .is_some()
     );
+    alice.assert_warn("No working iroh relay").await;
+    alice
+        .assert_warn("Not sending realtime advertisement without a relay")
+        .await;
     assert_eq!(selected_iroh_relay(alice).await?, None);
 
     // Iroh is kept while its channel is in use,
