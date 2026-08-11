@@ -1354,7 +1354,7 @@ impl Session {
             .get_metadata(
                 mailbox,
                 options,
-                "(/shared/comment /shared/admin /shared/vendor/deltachat/irohrelay /shared/vendor/deltachat/turn /shared/vendor/deltachat/maxsmtprecipients)",
+                "(/shared/comment /shared/admin /shared/vendor/deltachat/irohrelay /shared/vendor/deltachat/turn /shared/vendor/deltachat/maxsmtprecipients /shared/vendor/deltachat/appversions)",
             )
             .await?;
         for m in metadata {
