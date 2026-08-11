@@ -1,8 +1,14 @@
 use std::time::Duration;
 
+use anyhow::Context as _;
+
 use super::*;
-use crate::test_utils::TestContext;
+use crate::chat::{ChatId, get_chat_msgs};
+use crate::contact::Contact;
+use crate::imap::prefetch_should_download;
+use crate::test_utils::{TestContext, TestContextManager};
 use crate::tools::SystemTime;
+use crate::transport::add_pseudo_transport;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_load_relay_candidates_single() -> Result<()> {
@@ -289,4 +295,159 @@ async fn enable_config(context: &Context) {
         .set_config_bool(Config::AutomaticRelayManagement, true)
         .await
         .unwrap();
+}
+
+/// Tests that `record_message_sent_via_transport()`,
+/// `record_message_sent_via_transport_by_msg_id()` and `prefetch_should_download()`
+/// correctly populate the `transport_knowledge_by_contacts` table, and that `output_transport_knowledge()`
+/// turns that table into a human-readable device message.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_transport_knowledge() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    bob.set_config(Config::Displayname, Some("Bob")).await?;
+    let charlie = &tcm.charlie().await;
+    charlie
+        .set_config(Config::Displayname, Some("Charlie"))
+        .await?;
+    let dom = &tcm.dom().await;
+    dom.set_config(Config::Displayname, Some("Dom")).await?;
+    let fiona = &tcm.fiona().await;
+    fiona.set_config(Config::Displayname, Some("Fiona")).await?;
+
+    // Set up two transports.
+    add_pseudo_transport(alice, "transport-a@example.org").await?;
+    add_pseudo_transport(alice, "transport-b@example.org").await?;
+    let transport_a: u32 = alice
+        .sql
+        .query_get_value(
+            "SELECT id FROM transports WHERE addr=?",
+            ("transport-a@example.org",),
+        )
+        .await?
+        .context("transport A not found")?;
+    let transport_b: u32 = alice
+        .sql
+        .query_get_value(
+            "SELECT id FROM transports WHERE addr=?",
+            ("transport-b@example.org",),
+        )
+        .await?
+        .context("transport B not found")?;
+
+    // Fiona is only reachable via transport A, recorded directly
+    // via `record_message_sent_via_transport()`.
+    let fiona_id = alice.add_or_lookup_contact_id(fiona).await;
+    record_message_sent_via_transport(alice, fiona_id, transport_a).await?;
+
+    // Bob is only reachable via transport B, recorded indirectly
+    // via `record_message_sent_via_transport_by_msg_id()`.
+    let bob_id = alice.add_or_lookup_contact_id(bob).await;
+    alice
+        .sql
+        .execute(
+            "INSERT INTO msgs (rfc724_mid, from_id) VALUES (?, ?)",
+            ("bob-message@example.org", bob_id),
+        )
+        .await?;
+    let bob_msg_id: MsgId = alice
+        .sql
+        .query_get_value(
+            "SELECT id FROM msgs WHERE rfc724_mid=?",
+            ("bob-message@example.org",),
+        )
+        .await?
+        .context("Bob's message not found")?;
+    record_message_sent_via_transport_by_msg_id(alice, bob_msg_id, transport_b).await?;
+
+    // Charlie is reachable via both transports, so she should not show up as
+    // "at risk" for either of them. Her usage of transport A is recorded
+    // directly, her usage of transport B is recorded by simulating that an
+    // already-fetched message of hers is prefetched again (as happens e.g.
+    // when the same message is visible on two transports).
+    let charlie_id = alice.add_or_lookup_contact_id(charlie).await;
+    record_message_sent_via_transport(alice, charlie_id, transport_a).await?;
+    alice
+        .sql
+        .execute(
+            "INSERT INTO msgs (rfc724_mid, from_id) VALUES (?, ?)",
+            ("charlie-message@example.org", charlie_id),
+        )
+        .await?;
+    let download = prefetch_should_download(
+        alice,
+        &[],
+        "charlie-message@example.org",
+        std::iter::empty(),
+        transport_b,
+    )
+    .await?;
+    // The message was already fetched, so it should not be downloaded again...
+    assert!(!download);
+
+    // Dom never sent us anything on any transport, so it's unclear how they
+    // can reach us.
+    let _dom_id = alice.add_or_lookup_contact_id(dom).await;
+
+    // ...but `prefetch_should_download()` should have recorded Charlie's use
+    // of transport B regardless.
+    let mut recorded: Vec<(ContactId, u32)> = alice
+        .sql
+        .query_map_vec(
+            "SELECT contact_id, transport_id FROM transport_knowledge_by_contacts",
+            (),
+            |row| {
+                let contact_id: ContactId = row.get(0)?;
+                let transport_id: u32 = row.get(1)?;
+                Ok((contact_id, transport_id))
+            },
+        )
+        .await?;
+    recorded.sort();
+    let mut expected = vec![
+        (fiona_id, transport_a),
+        (bob_id, transport_b),
+        (charlie_id, transport_a),
+        (charlie_id, transport_b),
+    ];
+    expected.sort();
+    assert_eq!(recorded, expected);
+
+    let actual = get_debug_transport_knowledge(alice).await?;
+    assert_eq!(
+        actual,
+        "=== Usage of transports by contacts ===
+These contacts fail to reach you if you remove transport alice@example.org:
+
+These contacts fail to reach you if you remove transport transport-a@example.org:
+Fiona
+These contacts fail to reach you if you remove transport transport-b@example.org:
+Bob
+These contacts likely can't reach you anymore:
+
+For these contact, it's unclear how they can reach you:
+Dom",
+        "Transport usage output didn't match, actual output was:\n{actual}\n"
+    );
+
+    alice.delete_transport("transport-a@example.org").await?;
+
+    let actual = get_debug_transport_knowledge(alice).await?;
+    assert_eq!(
+        actual,
+        "=== Usage of transports by contacts ===
+These contacts fail to reach you if you remove transport alice@example.org:
+
+These contacts fail to reach you if you remove transport transport-b@example.org:
+Bob
+Charlie
+These contacts likely can't reach you anymore:
+Fiona
+For these contact, it's unclear how they can reach you:
+Dom",
+        "Transport usage output didn't match, actual output was:\n{actual}\n"
+    );
+
+    Ok(())
 }

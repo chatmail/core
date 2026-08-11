@@ -21,8 +21,6 @@ use futures_lite::FutureExt;
 use ratelimit::Ratelimit;
 use url::Url;
 
-use crate::chat::{self, add_device_msg};
-use crate::config::Config;
 use crate::constants::DC_VERSION_STR;
 use crate::context::Context;
 use crate::ensure_and_debug_assert;
@@ -41,6 +39,13 @@ use crate::stock_str;
 use crate::tools::{self, create_id, duration_to_str, time};
 use crate::transport::{
     ConfiguredLoginParam, ConfiguredServerLoginParam, prioritize_server_login_params,
+};
+use crate::{
+    automatic_relay_management::record_message_sent_via_transport,
+    chat::{self, add_device_msg},
+};
+use crate::{
+    automatic_relay_management::record_message_sent_via_transport_by_msg_id, config::Config,
 };
 use crate::{
     calls::{UnresolvedIceServer, create_fallback_ice_servers, create_ice_servers_from_metadata},
@@ -651,9 +656,15 @@ impl Imap {
             // message, move it to the movebox and then download the second message before
             // downloading the first one, if downloading from inbox before moving is allowed.
             if folder == target
-                && prefetch_should_download(context, &headers, &message_id, fetch_response.flags())
-                    .await
-                    .context("prefetch_should_download")?
+                && prefetch_should_download(
+                    context,
+                    &headers,
+                    &message_id,
+                    fetch_response.flags(),
+                    session.transport_id(),
+                )
+                .await
+                .context("prefetch_should_download")?
             {
                 if headers
                     .get_header_value(HeaderDef::ChatIsPostMessage)
@@ -1238,6 +1249,11 @@ impl Session {
                     }
                     Ok(msg) => msg,
                 };
+                if let Some(received_msg) = &received_msg {
+                    record_message_sent_via_transport(context, received_msg.from_id, transport_id)
+                        .await
+                        .context("Recording transport")?;
+                }
                 received_msgs_channel
                     .send((request_uid, received_msg))
                     .await?;
@@ -1620,15 +1636,19 @@ pub(crate) fn create_message_id() -> String {
 pub(crate) async fn prefetch_should_download(
     context: &Context,
     headers: &[mailparse::MailHeader<'_>],
-    message_id: &str,
+    rfc724_mid: &str,
     mut flags: impl Iterator<Item = Flag<'_>>,
+    transport_id: u32,
 ) -> Result<bool> {
-    if message::rfc724_mid_fetch_tried(context, message_id).await? {
+    if let Some(msg_id) = message::rfc724_mid_fetch_tried(context, rfc724_mid).await? {
         if let Some(from) = mimeparser::get_from(headers)
             && context.is_self_addr(&from.addr).await?
         {
-            markseen_on_imap_table(context, message_id).await?;
+            markseen_on_imap_table(context, rfc724_mid).await?;
         }
+        record_message_sent_via_transport_by_msg_id(context, msg_id, transport_id)
+            .await
+            .context("Recording transport")?;
         return Ok(false);
     }
 

@@ -82,6 +82,9 @@ pub struct ReceivedMsg {
 
     /// Whether IMAP messages should be immediately deleted.
     pub needs_delete_job: bool,
+
+    /// The database ID of the contact that sent the message.
+    pub(crate) from_id: ContactId,
 }
 
 /// Decision on which kind of chat the message
@@ -492,6 +495,7 @@ pub(crate) async fn receive_imf_inner(
             sort_timestamp: 0,
             msg_ids,
             needs_delete_job: false,
+            from_id: ContactId::UNDEFINED,
         }))
     };
 
@@ -669,6 +673,7 @@ pub(crate) async fn receive_imf_inner(
                     sort_timestamp: mime_parser.timestamp_sent,
                     msg_ids: vec![msg_id],
                     needs_delete_job: res == securejoin::HandshakeMessage::Done,
+                    from_id,
                 });
             }
             securejoin::HandshakeMessage::Propagate => {
@@ -2353,6 +2358,7 @@ INSERT INTO msgs
         sort_timestamp,
         msg_ids: created_db_entries,
         needs_delete_job: false,
+        from_id,
     })
 }
 

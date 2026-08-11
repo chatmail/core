@@ -16,6 +16,7 @@ use mail_builder::mime::MimePart;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
+use crate::automatic_relay_management::output_debug_transport_knowledge;
 use crate::blob::BlobObject;
 use crate::chatlist::Chatlist;
 use crate::chatlist_events;
@@ -2749,6 +2750,10 @@ async fn prepare_send_msg(
         chat_id.unarchive_if_not_muted(context, msg.state).await?;
     }
     chat.prepare_msg_raw(context, msg, update_msg_id).await?;
+
+    if msg.viewtype == Viewtype::Text && msg.text == "/transport_knowledge_by_contacts" {
+        output_debug_transport_knowledge(context).await?;
+    }
 
     let row_ids = create_send_msg_jobs(context, msg)
         .await

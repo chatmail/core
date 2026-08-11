@@ -173,6 +173,7 @@ async fn test_receive_pre_message_and_dl_post_message() -> Result<()> {
             &headers,
             &headers.get_header_value(HeaderDef::MessageId).unwrap(),
             std::iter::empty(),
+            0,
         )
         .await
         .unwrap()

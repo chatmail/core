@@ -2187,18 +2187,21 @@ pub(crate) async fn rfc724_mid_exists_ex(
     Ok(res)
 }
 
-/// Returns `true` if the given `rfc724_mid` has nothing left to fetch from a server,
+/// Returns `Some(msg_id)` if the given `rfc724_mid` has nothing left to fetch from a server,
 /// i.e. it was already fetched or is an outgoing message.
 ///
-/// For post-messages, this returns `true` if an attempt to fetch was made or is ongoing,
+/// For post-messages, this returns `Some(msg_id)` if an attempt to fetch was made or is ongoing,
 /// even if this was not successful,
 /// because we don't want to automatically try fetching these messages over and over again
 /// (this function is not called when the user manually clicked "Download").
-pub(crate) async fn rfc724_mid_fetch_tried(context: &Context, rfc724_mid: &str) -> Result<bool> {
+pub(crate) async fn rfc724_mid_fetch_tried(
+    context: &Context,
+    rfc724_mid: &str,
+) -> Result<Option<MsgId>> {
     let rfc724_mid = rfc724_mid.trim_start_matches('<').trim_end_matches('>');
     if rfc724_mid.is_empty() {
         warn!(context, "Empty rfc724_mid passed to rfc724_mid_fetch_tried");
-        return Ok(false);
+        return Ok(None);
     }
 
     // Explanation of the SQL statement:
@@ -2215,8 +2218,8 @@ pub(crate) async fn rfc724_mid_fetch_tried(context: &Context, rfc724_mid: &str) 
     //   so that we do not need to check the download state.
     let res = context
         .sql
-        .exists(
-            "SELECT COUNT(*) FROM msgs
+        .query_get_value(
+            "SELECT id FROM msgs
              WHERE (rfc724_mid=?1 AND download_state<>?2)
                 OR pre_rfc724_mid=?1",
             (rfc724_mid, DownloadState::Available),

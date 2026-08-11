@@ -648,7 +648,7 @@ async fn test_parse_ndn(
     // Check that the ndn would be downloaded:
     let headers = mailparse::parse_mail(raw_ndn).unwrap().headers;
     assert!(
-        prefetch_should_download(&t, &headers, "some-other-message-id", std::iter::empty(),)
+        prefetch_should_download(&t, &headers, "some-other-message-id", std::iter::empty(), 0)
             .await
             .unwrap()
     );
