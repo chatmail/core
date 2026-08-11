@@ -137,7 +137,8 @@ async fn set_msg_id_reaction(
     if matches!(chat.typ, Chattype::OutBroadcast | Chattype::InBroadcast)
         && !is_allowed_reaction(reaction)
     {
-        bail!("Reaction not allowed: {}", reaction.as_str());
+        info!(context, "Reaction {} filtered.", reaction.as_str());
+        return Ok(());
     }
 
     if reaction.is_empty() {
