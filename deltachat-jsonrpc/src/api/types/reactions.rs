@@ -23,8 +23,11 @@ pub struct JsonrpcReaction {
 #[serde(rename = "Reactions", rename_all = "camelCase")]
 pub struct JsonrpcReactions {
     /// Map from a contact to it's reaction to message.
+    ///
     /// There is only a single reaction per contact,
     /// but this contains a list of reactions for historical reasons.
+    ///
+    /// For channels subscribers, this map is empty or contains `ContactId::SELF` only.
     reactions_by_contact: BTreeMap<u32, Vec<String>>,
     /// Unique reactions and their count, sorted in descending order.
     reactions: Vec<JsonrpcReaction>,
