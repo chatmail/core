@@ -49,7 +49,10 @@ class DirectImap:
                 self.conn.login(user, pw)
                 self.select_folder("INBOX")
                 return
-            except (OSError, ssl.SSLError, imaplib.IMAP4.error):
+            except (OSError, imaplib.IMAP4.abort) as e:
+                # OSError covers ssl.SSLError, "abort" is a dropped connection;
+                # permanent IMAP errors (login rejected etc) must not be retried.
+                print(f"direct_imap connect to {host} failed ({e!r}), retrying")
                 time.sleep(1)
 
     def shutdown(self):

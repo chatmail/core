@@ -7,8 +7,6 @@ from deltachat.capi import ffi, lib
 from deltachat.hookspec import global_hookimpl
 from deltachat.testplugin import (
     ACSetup,
-    create_dict_from_files_in_path,
-    write_dict_to_dir,
 )
 from deltachat.cutil import from_optional_dc_charpointer
 
@@ -16,23 +14,8 @@ from deltachat.cutil import from_optional_dc_charpointer
 
 
 class TestACSetup:
-    def test_cache_writing(self, tmp_path):
-        base = tmp_path.joinpath("hello")
-        base.mkdir()
-        d1 = base.joinpath("dir1")
-        d1.mkdir()
-        d1.joinpath("file1").write_bytes(b"content1")
-        d2 = d1.joinpath("dir2")
-        d2.mkdir()
-        d2.joinpath("file2").write_bytes(b"123")
-        d = create_dict_from_files_in_path(base)
-        newbase = tmp_path.joinpath("other")
-        write_dict_to_dir(d, newbase)
-        assert newbase.joinpath("dir1", "dir2", "file2").exists()
-        assert newbase.joinpath("dir1", "file1").exists()
-
-    def test_basic_states(self, acfactory, monkeypatch, testprocess):
-        pc = ACSetup(init_time=0.0, testprocess=testprocess)
+    def test_basic_states(self, acfactory, monkeypatch):
+        pc = ACSetup(init_time=0.0)
         acc = acfactory.get_unconfigured_account()
         monkeypatch.setattr(acc, "configure", lambda **kwargs: None)
         pc.start_configure(acc)
@@ -45,8 +28,8 @@ class TestACSetup:
         pc.bring_online()
         assert pc._account2state[acc] == pc.IDLEREADY
 
-    def test_two_accounts_one_waited_all_started(self, monkeypatch, acfactory, testprocess):
-        pc = ACSetup(init_time=0.0, testprocess=testprocess)
+    def test_two_accounts_one_waited_all_started(self, monkeypatch, acfactory):
+        pc = ACSetup(init_time=0.0)
         monkeypatch.setattr(pc, "init_imap", lambda *args, **kwargs: None)
         monkeypatch.setattr(pc, "_onconfigure_start_io", lambda *args, **kwargs: None)
         ac1 = acfactory.get_unconfigured_account()
@@ -65,30 +48,6 @@ class TestACSetup:
         pc.bring_online()
         assert pc._account2state[ac1] == pc.IDLEREADY
         assert pc._account2state[ac2] == pc.IDLEREADY
-
-    def test_store_and_retrieve_configured_account_cache(self, acfactory, tmp_path):
-        ac1 = acfactory.get_pseudo_configured_account()
-        holder = acfactory._acsetup.testprocess
-        assert holder.cache_maybe_store_configured_db_files(ac1)
-        assert not holder.cache_maybe_store_configured_db_files(ac1)
-        acdir = tmp_path / "newaccount"
-        acdir.mkdir()
-        addr = ac1.get_config("addr")
-        target_db_path = acdir / "db"
-        assert holder.cache_maybe_retrieve_configured_db_files(addr, str(target_db_path))
-        assert sum(1 for _ in acdir.iterdir()) >= 2
-
-
-def test_liveconfig_caching(acfactory, monkeypatch):
-    prod = [
-        {"addr": "1@example.org", "mail_pw": "123"},
-    ]
-    acfactory._liveconfig_producer = iter(prod)
-    d1 = acfactory.get_next_liveconfig()
-    d1["hello"] = "world"
-    acfactory._liveconfig_producer = iter(prod)
-    d2 = acfactory.get_next_liveconfig()
-    assert "hello" not in d2
 
 
 def test_empty_context():
