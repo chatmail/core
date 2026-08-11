@@ -33,8 +33,7 @@ use crate::key::{
 };
 use crate::log::{LogExt as _, warn};
 use crate::message::{
-    self, Message, MessageState, MessengerMessage, MsgId, Viewtype, insert_tombstone,
-    rfc724_mid_exists,
+    self, Message, MessageState, MsgId, Viewtype, insert_tombstone, rfc724_mid_exists,
 };
 use crate::mimeparser::{
     AvatarAction, GossipedKey, MimeMessage, PreMessageMode, SystemMessage, parse_message_ids,
@@ -690,17 +689,6 @@ pub(crate) async fn receive_imf_inner(
         is_old_contact_request = false;
         received_msg
     } else {
-        let is_dc_message = if mime_parser.has_chat_version() {
-            MessengerMessage::Yes
-        } else if let Some(parent_message) = &parent_message {
-            match parent_message.is_dc_message {
-                MessengerMessage::No => MessengerMessage::No,
-                MessengerMessage::Yes | MessengerMessage::Reply => MessengerMessage::Reply,
-            }
-        } else {
-            MessengerMessage::No
-        };
-
         let allow_creation = if mime_parser.decryption_error.is_some() {
             false
         } else {
@@ -740,7 +728,6 @@ pub(crate) async fn receive_imf_inner(
             prevent_rename,
             chat_id,
             chat_id_blocked,
-            is_dc_message,
             is_created,
         )
         .await
@@ -1739,7 +1726,6 @@ async fn add_parts(
     prevent_rename: bool,
     mut chat_id: ChatId,
     mut chat_id_blocked: Blocked,
-    is_dc_message: MessengerMessage,
     is_chat_created: bool,
 ) -> Result<ReceivedMsg> {
     let to_id = if mime_parser.incoming {
@@ -1878,14 +1864,13 @@ async fn add_parts(
                 context,
                 "Ignoring ephemeral timer change to {ephemeral_timer:?} for chat {chat_id} because sender {from_id} is not a member.",
             );
-        } else if is_dc_message == MessengerMessage::Yes
-            && get_previous_message(context, mime_parser)
-                .await?
-                .map(|p| p.ephemeral_timer)
-                == Some(ephemeral_timer)
+        } else if get_previous_message(context, mime_parser)
+            .await?
+            .map(|p| p.ephemeral_timer)
+            == Some(ephemeral_timer)
             && mime_parser.is_system_message != SystemMessage::EphemeralTimerChanged
         {
-            // The message is a Delta Chat message, so we know that previous message according to
+            // Assuming the message is a chat message, previous message according to
             // References header is the last message in the chat as seen by the sender. The timer
             // is the same in both the received message and the last message, so we know that the
             // sender has not seen any change of the timer between these messages. As our timer
@@ -2184,7 +2169,7 @@ INSERT INTO msgs
   (
     rfc724_mid, pre_rfc724_mid, chat_id,
     from_id, to_id, timestamp, timestamp_sent, 
-    timestamp_rcvd, type, state, msgrmsg, 
+    timestamp_rcvd, type, state,
     txt, txt_normalized, subject, param, hidden,
     bytes, mime_headers, mime_compressed, mime_in_reply_to,
     mime_references, mime_modified, error, ephemeral_timer,
@@ -2193,7 +2178,7 @@ INSERT INTO msgs
   VALUES (
     ?, ?, ?, ?, ?,
     ?, ?, ?, ?,
-    ?, ?, ?, ?,
+    ?, ?, ?,
     ?, ?, ?, ?, ?, 1,
     ?, ?, ?, ?,
     ?, ?, ?, ?
@@ -2231,11 +2216,6 @@ INSERT INTO msgs
                         MessageState::Undefined
                     } else {
                         state
-                    },
-                    if trash {
-                        MessengerMessage::No
-                    } else {
-                        is_dc_message
                     },
                     if trash || hidden { "" } else { msg },
                     if trash || hidden {
