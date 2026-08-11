@@ -3047,11 +3047,6 @@ pub unsafe extern "C" fn dc_chat_can_send(chat: *mut dc_chat_t) -> libc::c_int {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn dc_chat_is_protected(_chat: *mut dc_chat_t) -> libc::c_int {
-    0
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn dc_chat_is_encrypted(chat: *mut dc_chat_t) -> libc::c_int {
     if chat.is_null() {
         eprintln!("ignoring careless call to dc_chat_is_encrypted()");

@@ -3778,17 +3778,6 @@ int             dc_chat_can_send              (const dc_chat_t* chat);
 
 
 /**
- * Deprecated, always returns 0.
- *
- * @memberof dc_chat_t
- * @param chat The chat object.
- * @return Always 0.
- * @deprecated 2025-09-09
- */
-int             dc_chat_is_protected         (const dc_chat_t* chat);
-
-
-/**
  * Check if the chat is encrypted.
  *
  * Single chats with key-contacts and group chats with key-contacts
