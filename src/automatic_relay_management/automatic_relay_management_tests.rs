@@ -315,7 +315,6 @@ async fn test_transport_knowledge() -> Result<()> {
     let fiona = &tcm.fiona().await;
     fiona.set_config(Config::Displayname, Some("Fiona")).await?;
 
-    // Set up two transports.
     add_pseudo_transport(alice, "transport-a@example.org").await?;
     add_pseudo_transport(alice, "transport-b@example.org").await?;
     let transport_a: u32 = alice
@@ -347,23 +346,23 @@ async fn test_transport_knowledge() -> Result<()> {
         .sql
         .execute(
             "INSERT INTO msgs (rfc724_mid, from_id) VALUES (?, ?)",
-            ("bob-message@example.org", bob_id),
+            ("bob-message@localhost", bob_id),
         )
         .await?;
     let bob_msg_id: MsgId = alice
         .sql
         .query_get_value(
             "SELECT id FROM msgs WHERE rfc724_mid=?",
-            ("bob-message@example.org",),
+            ("bob-message@localhost",),
         )
         .await?
         .context("Bob's message not found")?;
     record_message_sent_via_transport_by_msg_id(alice, bob_msg_id, transport_b).await?;
 
     // Charlie is reachable via both transports, so she should not show up as
-    // "at risk" for either of them. Her usage of transport A is recorded
-    // directly, her usage of transport B is recorded by simulating that an
-    // already-fetched message of hers is prefetched again (as happens e.g.
+    // "at risk" for either of them. His usage of transport A is recorded
+    // directly, his usage of transport B is recorded by simulating that an
+    // already-fetched message of him is prefetched again (as happens e.g.
     // when the same message is visible on two transports).
     let charlie_id = alice.add_or_lookup_contact_id(charlie).await;
     record_message_sent_via_transport(alice, charlie_id, transport_a).await?;
@@ -371,26 +370,24 @@ async fn test_transport_knowledge() -> Result<()> {
         .sql
         .execute(
             "INSERT INTO msgs (rfc724_mid, from_id) VALUES (?, ?)",
-            ("charlie-message@example.org", charlie_id),
+            ("charlie-message@localhost", charlie_id),
         )
         .await?;
     let download = prefetch_should_download(
         alice,
         &[],
-        "charlie-message@example.org",
+        "charlie-message@localhost",
         std::iter::empty(),
         transport_b,
     )
     .await?;
-    // The message was already fetched, so it should not be downloaded again...
-    assert!(!download);
+    // The message was already fetched, so it should not be downloaded again
+    assert_eq!(download, false);
 
     // Dom never sent us anything on any transport, so it's unclear how they
     // can reach us.
     let _dom_id = alice.add_or_lookup_contact_id(dom).await;
 
-    // ...but `prefetch_should_download()` should have recorded Charlie's use
-    // of transport B regardless.
     let mut recorded: Vec<(ContactId, u32)> = alice
         .sql
         .query_map_vec(
