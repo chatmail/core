@@ -2791,16 +2791,31 @@ impl CommandApi {
         }
     }
 
-    /// Get version information of a specific client and source.
+    /// Get version information of a specific client and source
+    /// across all configured accounts and transports.
+    ///
+    /// Returns the source with the highest `version_integer`.
+    /// If no matching version information is available at all, `None` is returned.
+    ///
+    /// UIs shall call the function after a reasonable time after app start,
+    /// when most relays have reported the information they have, say 30 seconds.
+    /// After that, once a day.
+    /// (it is accepted if by the simple approach an update message is delayed.
+    /// an event was considered, but that seemed more complex for few benefit:
+    /// as we do not know if "late" relays will report "better" versions,
+    /// also there we would work with timeouts etc.)
+    ///
+    /// If the reported `version_integer` is larger than the running app version,
+    /// the UI shall report to the user, that an update is avialable,
+    /// and, if possible, offer a direct update by the given URL.
     async fn get_app_version(
         &self,
-        account_id: u32,
         client_id: String,
         source_id: String,
     ) -> Result<Option<JsonrpcAppSource>> {
-        let ctx = self.get_context(account_id).await?;
+        let accounts = self.accounts.read().await;
         Ok(
-            deltachat::appversions::get_app_version(&ctx, &client_id, &source_id)
+            deltachat::appversions::get_app_version(&accounts, &client_id, &source_id)
                 .await?
                 .map(|s| JsonrpcAppSource::from_core_type(s)),
         )

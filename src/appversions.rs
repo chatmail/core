@@ -3,7 +3,7 @@
 //! Used by clients to inform about updates.
 //! The version information comes in via IMAP METADATA,
 //! (as JSON) and is parsed to `AppVersionInfo`.
-use crate::context::Context;
+use crate::accounts::Accounts;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
@@ -45,30 +45,50 @@ pub struct AppSource {
 
 /// Get version information of a specific client and source.
 ///
-/// If no matching version information are available, `None` is returned.
+/// Iterates over all accounts and all transports,
+/// checking version information set by IMAP METADATA,
+/// and returns the source with the highest `version_integer`.
+///
+/// If no matching version information is available at all, `None` is returned.
 pub async fn get_app_version(
-    context: &Context,
+    accounts: &Accounts,
     client_id: &str,
     source_id: &str,
 ) -> Result<Option<AppSource>> {
-    if let Some(metadata) = context.metadata.read().await.values().next()
-        && let Some(json) = &metadata.app_versions
-    {
-        let app_versions: AppVersionInfo = serde_json::from_str(json)?;
-        let app_version = app_versions
-            .clients
-            .into_iter()
-            .find(|c| c.client_id == client_id)
-            .and_then(|c| c.sources.into_iter().find(|s| s.source_id == source_id));
-        return Ok(app_version);
+    let mut best: Option<AppSource> = None;
+
+    for account_id in accounts.get_all() {
+        let Some(context) = accounts.get_account(account_id) else {
+            continue;
+        };
+        for metadata in context.metadata.read().await.values() {
+            let Some(json) = &metadata.app_versions else {
+                continue;
+            };
+            let app_versions: AppVersionInfo = serde_json::from_str(json)?;
+            let candidate = app_versions
+                .clients
+                .into_iter()
+                .find(|c| c.client_id == client_id)
+                .and_then(|c| c.sources.into_iter().find(|s| s.source_id == source_id));
+
+            if let Some(candidate) = candidate
+                && best
+                    .as_ref()
+                    .is_none_or(|b| candidate.version_integer > b.version_integer)
+            {
+                best = Some(candidate);
+            }
+        }
     }
-    Ok(None)
+
+    Ok(best)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::TestContextManager;
+    use std::path::PathBuf;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_app_version_info_deserialize() -> Result<()> {
@@ -127,12 +147,150 @@ mod tests {
         Ok(())
     }
 
+    async fn mockup_app_versions(accounts: &Accounts, account_id: u32, json: &str) {
+        let context = accounts.get_account(account_id).expect("account exists");
+        let mut metadata = context.metadata.write().await;
+        let transport_id = 1;
+        metadata.entry(transport_id).or_default().app_versions = Some(json.to_string());
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_get_app_versions() -> Result<()> {
-        let mut tcm = TestContextManager::new();
-        let alice = &tcm.alice().await;
+        let dir = tempfile::tempdir().unwrap();
+        let p: PathBuf = dir.path().join("accounts");
+        let writable = true;
+        let mut accounts = Accounts::new(p.clone(), writable).await.unwrap();
 
-        let version = get_app_version(alice, "deltachat", "gplay").await?;
+        // no accounts configured, means no versions are reported
+        let version = get_app_version(&accounts, "non-", "existant").await?;
+        assert!(version.is_none());
+
+        // first account reports two clients, with one and two sources
+        let account_id = accounts.add_account().await?;
+        let json = r##"{
+            "clients": [
+              {
+                "clientId": "basta",
+                "sources": [
+                  {
+                    "sourceId": "web",
+                    "versionInteger": 754,
+                    "versionString": "2.57.0",
+                    "downloadUrl": "https://example.org/basta-2.57.0.apk"
+                  }
+                ]
+              },
+              {
+                "clientId": "foo",
+                "sources": [
+                  {
+                    "sourceId": "bar",
+                    "versionInteger": 42,
+                    "versionString": "42.0",
+                    "downloadUrl": "https://foo.bar/42.0.prg"
+                  },
+                  {
+                    "sourceId": "baz",
+                    "versionInteger": 1337,
+                    "versionString": "13.37",
+                    "downloadUrl": "https://dl.org/1337.acc"
+                  }
+                ]
+              }
+            ]
+          }"##;
+        mockup_app_versions(&accounts, account_id, json).await;
+
+        let version = get_app_version(&accounts, "basta", "web").await?.unwrap();
+        assert_eq!(version.version_integer, 754);
+        assert_eq!(version.version_string, "2.57.0");
+        assert_eq!(version.download_url, "https://example.org/basta-2.57.0.apk");
+
+        let version = get_app_version(&accounts, "foo", "bar").await?.unwrap();
+        assert_eq!(version.version_integer, 42);
+        assert_eq!(version.version_string, "42.0");
+        assert_eq!(version.download_url, "https://foo.bar/42.0.prg");
+
+        let version = get_app_version(&accounts, "foo", "baz").await?.unwrap();
+        assert_eq!(version.version_integer, 1337);
+        assert_eq!(version.version_string, "13.37");
+        assert_eq!(version.download_url, "https://dl.org/1337.acc");
+
+        let version = get_app_version(&accounts, "non-", "existant").await?;
+        assert!(version.is_none());
+
+        // a second account reports a newer version for "bar"
+        let account_id = accounts.add_account().await?;
+        let json = r##"{
+            "clients": [
+              {
+                "clientId": "foo",
+                "sources": [
+                  {
+                    "sourceId": "bar",
+                    "versionInteger": 43,
+                    "versionString": "43.0",
+                    "downloadUrl": "https://foo.bar/43.0-is-newer.prg"
+                  }
+                ]
+              }
+            ]
+          }"##;
+        mockup_app_versions(&accounts, account_id, json).await;
+
+        let version = get_app_version(&accounts, "basta", "web").await?.unwrap();
+        assert_eq!(version.version_integer, 754);
+        assert_eq!(version.version_string, "2.57.0");
+        assert_eq!(version.download_url, "https://example.org/basta-2.57.0.apk");
+
+        let version = get_app_version(&accounts, "foo", "bar").await?.unwrap();
+        assert_eq!(version.version_integer, 43);
+        assert_eq!(version.version_string, "43.0");
+        assert_eq!(version.download_url, "https://foo.bar/43.0-is-newer.prg");
+
+        let version = get_app_version(&accounts, "foo", "baz").await?.unwrap();
+        assert_eq!(version.version_integer, 1337);
+        assert_eq!(version.version_string, "13.37");
+        assert_eq!(version.download_url, "https://dl.org/1337.acc");
+
+        let version = get_app_version(&accounts, "non-", "existant").await?;
+        assert!(version.is_none());
+
+        // a third account reports a older version for "bar", that is ignored
+        let account_id = accounts.add_account().await?;
+        let json = r##"{
+            "clients": [
+              {
+                "clientId": "foo",
+                "sources": [
+                  {
+                    "sourceId": "bar",
+                    "versionInteger": 39,
+                    "versionString": "39.0",
+                    "downloadUrl": "https://foo.bar/39.0-is-too-old.prg"
+                  }
+                ]
+              }
+            ]
+          }"##;
+        mockup_app_versions(&accounts, account_id, json).await;
+
+        let version = get_app_version(&accounts, "basta", "web").await?.unwrap();
+        assert_eq!(version.version_integer, 754);
+        assert_eq!(version.version_string, "2.57.0");
+        assert_eq!(version.download_url, "https://example.org/basta-2.57.0.apk");
+
+        let version = get_app_version(&accounts, "foo", "bar").await?.unwrap();
+        assert_eq!(version.version_integer, 43);
+        assert_eq!(version.version_string, "43.0");
+        assert_eq!(version.download_url, "https://foo.bar/43.0-is-newer.prg");
+
+        let version = get_app_version(&accounts, "foo", "baz").await?.unwrap();
+        assert_eq!(version.version_integer, 1337);
+        assert_eq!(version.version_string, "13.37");
+        assert_eq!(version.download_url, "https://dl.org/1337.acc");
+
+        let version = get_app_version(&accounts, "non-", "existant").await?;
         assert!(version.is_none());
 
         Ok(())
