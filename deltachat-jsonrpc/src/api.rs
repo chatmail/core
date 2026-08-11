@@ -2817,7 +2817,7 @@ impl CommandApi {
         Ok(
             deltachat::appversions::get_app_version(&accounts, &client_id, &source_id)
                 .await?
-                .map(|s| JsonrpcAppSource::from_core_type(s)),
+                .map(JsonrpcAppSource::from_core_type),
         )
     }
 }
