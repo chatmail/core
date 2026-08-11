@@ -7,7 +7,6 @@ If you want to debug iroh at rust-trace/log level set
     RUST_LOG=iroh_net=trace,iroh_gossip=trace
 """
 
-import itertools
 import logging
 import os
 import threading
@@ -65,18 +64,20 @@ def setup_realtime_webxdc(ac1, ac2, path_to_webxdc, wait=True):
 @contextmanager
 def send_realtime_data_forever(msgs, data=None):
     stop = threading.Event()
+    sending_finished = threading.Event()
     data = data or [SETUP_DATA] * len(msgs)
 
     def thread_run(msg, payload):
-        for i in itertools.count():
+        for i in range(10):  # DEMO: bounded sender as before #8556
             msg.send_webxdc_realtime_data(payload(i) if callable(payload) else payload)
             if stop.wait(1):
                 return
+        sending_finished.set()
 
     for msg_payload in zip(msgs, data, strict=True):
         threading.Thread(target=thread_run, args=msg_payload, daemon=True).start()
     try:
-        yield
+        yield sending_finished
     finally:
         stop.set()
 
@@ -128,6 +129,22 @@ def test_realtime_simultaneously(acfactory, path_to_webxdc):
     """Test two peers trying to establish connection simultaneously."""
     ac1, ac2 = acfactory.get_online_accounts(2)
     setup_realtime_webxdc(ac1, ac2, path_to_webxdc)
+
+
+def test_demo_realtime_data_before_join_hangs(acfactory, path_to_webxdc):
+    ac1, ac2 = acfactory.get_online_accounts(2)
+    ac1_ac2_chat = acfactory.get_accepted_chat(ac1, ac2)
+    ac1_webxdc_msg = ac1_ac2_chat.send_message(text="play", file=path_to_webxdc)
+    ac2_webxdc_msg = ac2.wait_for_incoming_msg()
+
+    # Simulate ac2 being slow and receiving webxdc advertisement after bounded realtime sender finishes
+    ac2.stop_io()
+    ac1_webxdc_msg.send_webxdc_realtime_advertisement()
+    with send_realtime_data_forever([ac1_webxdc_msg]) as sending_finished:
+        sending_finished.wait()
+        log("bringing ac2 online, it joins the gossip only now")
+        ac2.start_io()
+        ac2.wait_for_realtime_data(ac2_webxdc_msg.id)  # never arrives
 
 
 def test_two_parallel_realtime_simultaneously(acfactory, path_to_webxdc):
