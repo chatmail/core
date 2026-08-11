@@ -1692,8 +1692,6 @@ WHERE addr=?
     /// in contact list items and
     /// in chat member list items.
     ///
-    /// In contact profile view, use this function only if there is no chat with the contact,
-    /// otherwise use is_chat_protected().
     /// Use [Self::get_verifier_id] to display the verifier contact
     /// in the info section of the contact profile.
     pub async fn is_verified(&self, context: &Context) -> Result<bool> {
