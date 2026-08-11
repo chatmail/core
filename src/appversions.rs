@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 /// Version information of clients as used on the wire.
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
-pub struct AppVersionInfo {
+struct AppVersionInfo {
     /// Array clients with version information.
     clients: Vec<AppClient>,
 }
@@ -18,7 +18,7 @@ pub struct AppVersionInfo {
 /// Version infomation of a single client, eg. "deltachat" or "ubuntutouch".
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
-pub struct AppClient {
+struct AppClient {
     /// ID how the client identifies itself, eg. "deltachat" or "ubuntutouch"
     client_id: String,
 
@@ -34,29 +34,35 @@ pub struct AppSource {
     app_id: String,
 
     /// Always increasing version number.
-    version_integer: u32,
+    pub version_integer: u32,
 
     /// Any version string.
-    version_string: String,
+    pub version_string: String,
 
     /// Where to download that version.
-    download_url: String,
+    pub download_url: String,
 }
 
-/// Get version information of clients.
+/// Get version information of a specific client and source.
 ///
-/// If no version information are available, `clients` is set to an empty array.
-///
-/// The information is coming from the relay via IMAP METADATA and is not cached.
-/// A call to `get_app_versions()` is cheap and does not involve network or database calls.
-pub async fn get_app_versions(context: &Context) -> Result<AppVersionInfo> {
+/// If no matching version information are available, `None` is returned.
+pub async fn get_app_version(
+    context: &Context,
+    client_id: &str,
+    source_id: &str,
+) -> Result<Option<AppSource>> {
     if let Some(metadata) = context.metadata.read().await.values().next()
         && let Some(json) = &metadata.app_versions
     {
         let app_versions: AppVersionInfo = serde_json::from_str(json)?;
-        return Ok(app_versions);
+        let app_version = app_versions
+            .clients
+            .into_iter()
+            .find(|c| c.client_id == client_id)
+            .and_then(|c| c.sources.into_iter().find(|s| s.app_id == source_id));
+        return Ok(app_version);
     }
-    Ok(AppVersionInfo::default())
+    Ok(None)
 }
 
 #[cfg(test)]
@@ -126,8 +132,8 @@ mod tests {
         let mut tcm = TestContextManager::new();
         let alice = &tcm.alice().await;
 
-        let versions = get_app_versions(alice).await?;
-        assert!(versions.clients.is_empty());
+        let version = get_app_version(alice, "deltachat", "gplay").await?;
+        assert!(version.is_none());
 
         Ok(())
     }
