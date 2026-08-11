@@ -31,7 +31,7 @@ struct AppClient {
 #[serde(rename_all = "camelCase", default)]
 pub struct AppSource {
     /// ID how the client identifies a source, eg. "gplay" or "fdroid"
-    app_id: String,
+    source_id: String,
 
     /// Always increasing version number.
     pub version_integer: u32,
@@ -59,7 +59,7 @@ pub async fn get_app_version(
             .clients
             .into_iter()
             .find(|c| c.client_id == client_id)
-            .and_then(|c| c.sources.into_iter().find(|s| s.app_id == source_id));
+            .and_then(|c| c.sources.into_iter().find(|s| s.source_id == source_id));
         return Ok(app_version);
     }
     Ok(None)
@@ -78,7 +78,7 @@ mod tests {
                 "clientId": "deltachat",
                 "sources": [
                   {
-                    "appId": "gplay",
+                    "sourceId": "gplay",
                     "versionInteger": 754,
                     "versionString": "2.57.0",
                     "downloadUrl": "https://github.com/deltachat/deltachat-android/releases/download/v2.57.0/deltachat-gplay-release-2.57.0.apk"
@@ -91,7 +91,7 @@ mod tests {
         assert_eq!(versions.clients.len(), 1);
         assert_eq!(versions.clients[0].client_id, "deltachat");
         assert_eq!(versions.clients[0].sources.len(), 1);
-        assert_eq!(versions.clients[0].sources[0].app_id, "gplay");
+        assert_eq!(versions.clients[0].sources[0].source_id, "gplay");
         assert_eq!(versions.clients[0].sources[0].version_integer, 754);
         assert_eq!(versions.clients[0].sources[0].version_string, "2.57.0");
         assert_eq!(
