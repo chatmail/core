@@ -6,5 +6,5 @@ Msg#2004: info (Contact#Contact#Info): alice@example.org invited you to join thi
 Waiting for the device of alice@example.org to reply… [NOTICED][INFO]
 Msg#2008🔒:  (Contact#Contact#2001): You joined the channel. [FRESH][INFO]
 Msg#2010🔒:  (Contact#Contact#2001): hi [FRESH]
-Msg#2011🔒:  (Contact#Contact#2001): Member Me removed by alice@example.org. [FRESH][INFO]
+Msg#2011🔒:  (Contact#Contact#2001): You were removed by alice@example.org. [FRESH][INFO]
 --------------------------------------------------------------------------------
