@@ -2751,10 +2751,8 @@ async fn prepare_send_msg(
     }
     chat.prepare_msg_raw(context, msg, update_msg_id).await?;
 
-    if msg.to_id == ContactId::SELF
-        && msg.from_id == ContactId::SELF
-        && msg.text == "/transport_awareness_by_contacts"
-    {
+    info!(context, "dbg sending msg {msg:?}");
+    if msg.text == "/transport_awareness" && chat.is_self_talk() {
         output_debug_transport_awareness(context).await?;
     }
 
