@@ -3,8 +3,6 @@ use std::time::Duration;
 use anyhow::Context as _;
 
 use super::*;
-use crate::chat::{ChatId, get_chat_msgs};
-use crate::contact::Contact;
 use crate::imap::prefetch_should_download;
 use crate::test_utils::{TestContext, TestContextManager};
 use crate::tools::SystemTime;
@@ -299,7 +297,8 @@ async fn enable_config(context: &Context) {
 
 /// Tests that `record_message_sent_via_transport()`,
 /// `record_message_sent_via_transport_by_msg_id()` and `prefetch_should_download()`
-/// correctly populate the `transport_knowledge_by_contacts` table, and that `output_transport_knowledge()`
+/// correctly populate the `transport_knowledge_by_contacts` table,
+/// and that `output_debug_transport_knowledge()`
 /// turns that table into a human-readable device message.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_transport_knowledge() -> Result<()> {
@@ -426,7 +425,7 @@ These contacts fail to reach you if you remove transport transport-b@example.org
 Bob
 These contacts likely can't reach you anymore:
 
-For these contact, it's unclear how they can reach you:
+For these contacts, it's unclear how they can reach you:
 Dom",
         "Transport usage output didn't match, actual output was:\n{actual}\n"
     );
@@ -444,7 +443,7 @@ Bob
 Charlie
 These contacts likely can't reach you anymore:
 Fiona
-For these contact, it's unclear how they can reach you:
+For these contacts, it's unclear how they can reach you:
 Dom",
         "Transport usage output didn't match, actual output was:\n{actual}\n"
     );

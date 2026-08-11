@@ -16,18 +16,14 @@ use deltachat_contact_tools::{EmailAddress, addr_normalize};
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
-use crate::contact::ContactId;
 use crate::context::Context;
 use crate::ensure_and_debug_assert;
 use crate::events::EventType;
-use crate::log::warn;
 use crate::login_param::EnteredLoginParam;
-use crate::message::MsgId;
 use crate::net::load_connection_timestamp;
 use crate::provider::Socket;
 use crate::sql::Sql;
 use crate::sync::{RemovedTransportData, SyncData, TransportData};
-use crate::tools::time;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum ConnectionSecurity {

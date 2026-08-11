@@ -2751,7 +2751,10 @@ async fn prepare_send_msg(
     }
     chat.prepare_msg_raw(context, msg, update_msg_id).await?;
 
-    if msg.viewtype == Viewtype::Text && msg.text == "/transport_knowledge_by_contacts" {
+    if msg.to_id == ContactId::SELF
+        && msg.from_id == ContactId::SELF
+        && msg.text == "/transport_knowledge_by_contacts"
+    {
         output_debug_transport_knowledge(context).await?;
     }
 

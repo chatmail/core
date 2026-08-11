@@ -42,13 +42,10 @@ use crate::transport::{
 };
 use crate::{
     automatic_relay_management::record_message_sent_via_transport,
-    chat::{self, add_device_msg},
-};
-use crate::{
-    automatic_relay_management::record_message_sent_via_transport_by_msg_id, config::Config,
-};
-use crate::{
+    automatic_relay_management::record_message_sent_via_transport_by_msg_id,
     calls::{UnresolvedIceServer, create_fallback_ice_servers, create_ice_servers_from_metadata},
+    chat::{self, add_device_msg},
+    config::Config,
     ephemeral::delete_expired_imap_messages,
 };
 

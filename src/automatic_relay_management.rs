@@ -203,6 +203,10 @@ pub(crate) async fn record_message_sent_via_transport(
     contact_id: ContactId,
     transport_id: u32,
 ) -> Result<()> {
+    if contact_id.is_special() {
+        return Ok(());
+    }
+
     context
         .sql
         .execute(
@@ -311,7 +315,7 @@ async fn get_debug_transport_knowledge(context: &Context) -> Result<String, anyh
             filter_out_empty,
         )
         .await?;
-    msg += "\nFor these contact, it's unclear how they can reach you:\n";
+    msg += "\nFor these contacts, it's unclear how they can reach you:\n";
     msg += &unknown_contacts.join("\n");
 
     Ok(msg)

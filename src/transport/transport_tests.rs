@@ -1,9 +1,7 @@
 use std::collections::BTreeSet;
 use std::time::Duration;
 
-use crate::imap::prefetch_should_download;
 use crate::tools::SystemTime;
-use crate::transport::add_pseudo_transport;
 
 use super::*;
 use crate::test_utils::TestContext;
