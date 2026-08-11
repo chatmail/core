@@ -197,7 +197,7 @@ pub(crate) async fn record_message_sent_via_transport_by_msg_id(
 
 /// Records that the specified contact sent a message via the specified transport,
 /// i.e. that we can be sure that the contact knows about this transport.
-/// This info is saved into the `transport_knowledge_by_contacts` table.
+/// This info is saved into the `transport_awareness_by_contacts` table.
 pub(crate) async fn record_message_sent_via_transport(
     context: &Context,
     contact_id: ContactId,
@@ -210,7 +210,7 @@ pub(crate) async fn record_message_sent_via_transport(
     context
         .sql
         .execute(
-            "INSERT OR REPLACE INTO transport_knowledge_by_contacts(contact_id, transport_id, last_seen)
+            "INSERT OR REPLACE INTO transport_awareness_by_contacts(contact_id, transport_id, last_seen)
             VALUES (?,?,?)",
             (contact_id, transport_id, time()),
         )
@@ -219,15 +219,15 @@ pub(crate) async fn record_message_sent_via_transport(
     Ok(())
 }
 
-pub(crate) async fn output_debug_transport_knowledge(context: &Context) -> Result<()> {
-    let msg = get_debug_transport_knowledge(context).await?;
+pub(crate) async fn output_debug_transport_awareness(context: &Context) -> Result<()> {
+    let msg = get_debug_transport_awareness(context).await?;
     let mut msg = Message::new_text(msg);
     add_device_msg(context, None, Some(&mut msg)).await?;
 
     Ok(())
 }
 
-async fn get_debug_transport_knowledge(context: &Context) -> Result<String, anyhow::Error> {
+async fn get_debug_transport_awareness(context: &Context) -> Result<String, anyhow::Error> {
     fn get_contact_name(row: &rusqlite::Row<'_>) -> Result<String> {
         let name: String = row.get(0)?;
         let authname: String = row.get(1)?;
@@ -262,9 +262,9 @@ async fn get_debug_transport_knowledge(context: &Context) -> Result<String, anyh
                 // but can't reach us via the other transports.
                 // These are the contacts we may lose by removing this transport.
                 "SELECT name, authname FROM contacts
-                WHERE id IN (SELECT contact_id FROM transport_knowledge_by_contacts WHERE transport_id = ?1)
+                WHERE id IN (SELECT contact_id FROM transport_awareness_by_contacts WHERE transport_id = ?1)
                 AND id NOT IN (
-                    SELECT contact_id FROM transport_knowledge_by_contacts WHERE transport_id IN (
+                    SELECT contact_id FROM transport_awareness_by_contacts WHERE transport_id IN (
                         SELECT id FROM transports WHERE id != ?1
                     )
                 )
@@ -286,11 +286,11 @@ async fn get_debug_transport_knowledge(context: &Context) -> Result<String, anyh
             // but could reach us via some transport that's not in use anymore:
             "SELECT name, authname FROM contacts
                 WHERE id NOT IN (
-                    SELECT contact_id FROM transport_knowledge_by_contacts WHERE transport_id IN (
+                    SELECT contact_id FROM transport_awareness_by_contacts WHERE transport_id IN (
                         SELECT id FROM transports
                     )
                 )
-                AND id IN (SELECT contact_id FROM transport_knowledge_by_contacts)
+                AND id IN (SELECT contact_id FROM transport_awareness_by_contacts)
                 AND id>9
                 ORDER BY last_seen DESC",
             (),
@@ -307,7 +307,7 @@ async fn get_debug_transport_knowledge(context: &Context) -> Result<String, anyh
             // Select all contacts that never sent a message
             // since we started recording transport usage
             "SELECT name, authname FROM contacts
-                WHERE id NOT IN (SELECT contact_id FROM transport_knowledge_by_contacts)
+                WHERE id NOT IN (SELECT contact_id FROM transport_awareness_by_contacts)
                 AND id>9
                 ORDER BY last_seen DESC",
             (),

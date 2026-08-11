@@ -297,11 +297,11 @@ async fn enable_config(context: &Context) {
 
 /// Tests that `record_message_sent_via_transport()`,
 /// `record_message_sent_via_transport_by_msg_id()` and `prefetch_should_download()`
-/// correctly populate the `transport_knowledge_by_contacts` table,
-/// and that `output_debug_transport_knowledge()`
+/// correctly populate the `transport_awareness_by_contacts` table,
+/// and that `output_debug_transport_awareness()`
 /// turns that table into a human-readable device message.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_transport_knowledge() -> Result<()> {
+async fn test_transport_awareness() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
@@ -391,7 +391,7 @@ async fn test_transport_knowledge() -> Result<()> {
     let mut recorded: Vec<(ContactId, u32)> = alice
         .sql
         .query_map_vec(
-            "SELECT contact_id, transport_id FROM transport_knowledge_by_contacts",
+            "SELECT contact_id, transport_id FROM transport_awareness_by_contacts",
             (),
             |row| {
                 let contact_id: ContactId = row.get(0)?;
@@ -410,7 +410,7 @@ async fn test_transport_knowledge() -> Result<()> {
     expected.sort();
     assert_eq!(recorded, expected);
 
-    let actual = get_debug_transport_knowledge(alice).await?;
+    let actual = get_debug_transport_awareness(alice).await?;
     assert_eq!(
         actual,
         "=== Usage of transports by contacts ===
@@ -429,7 +429,7 @@ Dom",
 
     alice.delete_transport("transport-a@example.org").await?;
 
-    let actual = get_debug_transport_knowledge(alice).await?;
+    let actual = get_debug_transport_awareness(alice).await?;
     assert_eq!(
         actual,
         "=== Usage of transports by contacts ===

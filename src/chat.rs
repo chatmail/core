@@ -16,7 +16,7 @@ use mail_builder::mime::MimePart;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 
-use crate::automatic_relay_management::output_debug_transport_knowledge;
+use crate::automatic_relay_management::output_debug_transport_awareness;
 use crate::blob::BlobObject;
 use crate::chatlist::Chatlist;
 use crate::chatlist_events;
@@ -2753,9 +2753,9 @@ async fn prepare_send_msg(
 
     if msg.to_id == ContactId::SELF
         && msg.from_id == ContactId::SELF
-        && msg.text == "/transport_knowledge_by_contacts"
+        && msg.text == "/transport_awareness_by_contacts"
     {
-        output_debug_transport_knowledge(context).await?;
+        output_debug_transport_awareness(context).await?;
     }
 
     let row_ids = create_send_msg_jobs(context, msg)
