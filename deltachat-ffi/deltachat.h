@@ -7170,6 +7170,30 @@ void dc_event_unref(dc_event_t* event);
 /// `%1$s` will be replaced by name of the removed contact.
 #define DC_STR_REMOVE_MEMBER 178
 
+/// "You were removed by %1$s."
+///
+/// `%1$s` will be replaced by name of the contact who did the action.
+///
+/// Used in status messages.
+#define DC_STR_REMOVE_YOU_BY 179
+
+/// "You were added by %1$s."
+///
+/// `%1$s` will be replaced by name of the contact who did the action.
+///
+/// Used in status messages.
+#define DC_STR_ADD_YOU_BY 180
+
+/// "You were removed."
+///
+/// Used in status messages.
+#define DC_STR_REMOVE_YOU 181
+
+/// "You were added."
+///
+/// Used in status messages.
+#define DC_STR_ADD_YOU 182
+
 /// "Establishing connection, please wait…"
 ///
 /// Used as info message.

@@ -224,7 +224,7 @@ def test_see_new_verified_member_after_going_online(acfactory, tmp_path, lp):
 
     lp.sec("ac2: sending message")
     # Message can be sent only after a receipt of "vg-member-added" message. Just wait for
-    # "Member Me (<addr>) added by <addr>." message.
+    # "You were added by <addr>." message.
     msg_in = ac2._evtracker.wait_next_incoming_message()
     assert msg_in.is_system_message()
     msg_out = chat2.send_text("hello")
@@ -278,7 +278,7 @@ def test_use_new_verified_group_after_going_online(acfactory, data, tmp_path, lp
 
     lp.sec("ac2_offl: going online, checking the 'member added' message")
     ac2_offl.start_io()
-    # Receive "Member Me (<addr>) added by <addr>." message.
+    # Receive "You were added by <addr>." message.
     msg_in = ac2_offl._evtracker.wait_next_incoming_message()
     contact = msg_in.get_sender_contact()
     assert msg_in.is_system_message()

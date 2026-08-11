@@ -1651,7 +1651,7 @@ async fn test_deduplicate_member_added() -> Result<()> {
 
     let bob_rcvd = bob.recv_msg(&sent1).await;
     assert_eq!(bob_rcvd.chat_id, bob_chat_id);
-    assert_eq!(bob_rcvd.text, "Member Me added by alice@example.org.");
+    assert_eq!(bob_rcvd.text, "You were added by alice@example.org.");
 
     // Second message is a no-op, so it is trashed.
     bob.recv_msg_trash(&sent2).await;

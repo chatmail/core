@@ -157,7 +157,7 @@ def parse_system_add_remove(text: str) -> Optional[Tuple[str, str, str]]:
     """
     # You removed member a@b.
     # You added member a@b.
-    # Member Me (x@y) removed by a@b.
+    # You were removed by a@b.
     # Member x@y added by a@b
     # Member With space (tmp1@x.org) removed by tmp2@x.org.
     # Member With space (tmp1@x.org) removed by Another member (tmp2@x.org).",

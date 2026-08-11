@@ -449,7 +449,7 @@ async fn test_parallel_member_remove() -> Result<()> {
     // Test that remove message is rewritten.
     assert_eq!(
         bob_received_remove_msg.get_text(),
-        "Member Me removed by alice@example.org."
+        "You were removed by alice@example.org."
     );
 
     Ok(())
@@ -4002,7 +4002,7 @@ async fn test_remove_member_from_broadcast() -> Result<()> {
 
     let remove_msg = alice.pop_sent_msg().await;
     let rcvd = bob.recv_msg(&remove_msg).await;
-    assert_eq!(rcvd.text, "Member Me removed by alice@example.org.");
+    assert_eq!(rcvd.text, "You were removed by alice@example.org.");
 
     let bob_chat = Chat::load_from_db(bob, bob_chat_id).await?;
     assert_eq!(bob_chat.is_self_in_chat(bob).await?, false);

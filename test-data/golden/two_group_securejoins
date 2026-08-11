@@ -5,5 +5,5 @@ Msg#6004: info (Contact#Contact#Info): alice@example.org invited you to join thi
 
 Waiting for the device of alice@example.org to reply… [NOTICED][INFO]
 Msg#6006: info (Contact#Contact#Info): alice@example.org replied, waiting for being added to the group… [NOTICED][INFO]
-Msg#6008🔒:  (Contact#Contact#6001): Member Me added by alice@example.org. [FRESH][INFO]
+Msg#6008🔒:  (Contact#Contact#6001): You were added by alice@example.org. [FRESH][INFO]
 --------------------------------------------------------------------------------
