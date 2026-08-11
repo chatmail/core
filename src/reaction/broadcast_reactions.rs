@@ -174,6 +174,7 @@ async fn broadcast_reactions_for_one_chat(context: &Context, chat_id: ChatId) ->
 
 /// Applies incoming, accumulated reactions received via the `Chat-Broadcast-States:` header
 /// to the `broadcasted_reactions` table.
+/// We do not check against allowed reactions here; reactions may be done in the past when different filters were active.
 pub(crate) async fn receive_broadcast_reactions(context: &Context, json: &str) -> Result<()> {
     let payload: WirePayload = serde_json::from_str(json)?;
 
