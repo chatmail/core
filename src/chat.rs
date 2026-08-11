@@ -298,7 +298,7 @@ impl ChatId {
         let timestamp = cmp::min(timestamp, time());
         let row_id =
             context.sql.insert(
-                "INSERT INTO chats (type, name, name_normalized, grpid, blocked, created_timestamp, protected, param) VALUES(?, ?, ?, ?, ?, ?, 0, ?)",
+                "INSERT INTO chats (type, name, name_normalized, grpid, blocked, created_timestamp, param) VALUES(?, ?, ?, ?, ?, ?, ?)",
                 (
                     chattype,
                     &grpname,
