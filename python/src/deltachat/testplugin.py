@@ -157,27 +157,18 @@ class TestProcess:
         self._configlist: List[Dict[str, str]] = []
 
     def get_liveconfig_producer(self):
-        """provide live account configs, cached on a per-test-process scope
-        so that test functions can reuse already known live configs.
-        """
+        """provide fresh live account configs for each requested account."""
         chatmail_opt = self.pytestconfig.getoption("--chatmail")
         if chatmail_opt:
-            # Use a chatmail instance.
             domain = chatmail_opt
-            MAX_LIVE_CREATED_ACCOUNTS = 10
-            for index in range(MAX_LIVE_CREATED_ACCOUNTS):
-                try:
-                    yield self._configlist[index]
-                except IndexError:
-                    part = "".join(random.choices("2345789acdefghjkmnpqrstuvwxyz", k=6))
-                    username = f"ci-{part}"
-                    password = f"{username}${username}"
-                    addr = f"{username}@{domain}"
-                    config = {"addr": addr, "mail_pw": password}
-                    print("newtmpuser {}: addr={}".format(index, config["addr"]))
-                    self._configlist.append(config)
-                    yield config
-            pytest.fail(f"more than {MAX_LIVE_CREATED_ACCOUNTS} live accounts requested.")
+            while True:
+                part = "".join(random.choices("2345789acdefghjkmnpqrstuvwxyz", k=6))
+                username = f"ci-{part}"
+                password = f"{username}${username}"
+                addr = f"{username}@{domain}"
+                config = {"addr": addr, "mail_pw": password}
+                print("newtmpuser: addr={}".format(config["addr"]))
+                yield config
         else:
             pytest.skip(
                 "specify CHATMAIL_DOMAIN or --chatmail to provide live accounts",
