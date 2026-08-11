@@ -2626,7 +2626,6 @@ char*           dc_get_securejoin_qr_svg         (dc_context_t* context, uint32_
  *     to dc_check_qr().
  * @return The chat ID of the joined chat, the UI may redirect to the this chat.
  *     On errors, 0 is returned, however, most errors will happen during handshake later on.
- *     A returned chat ID does not guarantee that the chat is protected or the belonging contact is verified.
  */
 uint32_t        dc_join_securejoin           (dc_context_t* context, const char* qr);
 
