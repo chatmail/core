@@ -336,7 +336,7 @@ mod tests {
 
     use crate::constants;
     use crate::contact::ContactId;
-    use crate::message::{MessengerMessage, Viewtype};
+    use crate::message::Viewtype;
     use crate::receive_imf::receive_imf;
     use crate::test_utils::{TestContext, TestContextManager};
 
@@ -524,7 +524,6 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
         receive_imf(alice, raw, false).await.unwrap();
         let msg = alice.get_last_msg_in(chat.get_id()).await;
         assert_ne!(msg.get_from_id(), ContactId::SELF);
-        assert_eq!(msg.is_dc_message, MessengerMessage::No);
         assert!(!msg.is_forwarded());
         assert!(msg.get_text().contains("this is plain"));
         assert!(msg.has_html());
@@ -539,7 +538,6 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
         async fn check_sender(ctx: &TestContext, chat: &Chat) {
             let msg = ctx.get_last_msg_in(chat.get_id()).await;
             assert_eq!(msg.get_from_id(), ContactId::SELF);
-            assert_eq!(msg.is_dc_message, MessengerMessage::Yes);
             assert!(msg.is_forwarded());
             assert!(msg.get_text().contains("this is plain"));
             assert!(msg.has_html());
@@ -556,7 +554,6 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
             let msg = ctx.recv_msg(&sender.pop_sent_msg().await).await;
             assert_eq!(chat.id, msg.chat_id);
             assert_ne!(msg.get_from_id(), ContactId::SELF);
-            assert_eq!(msg.is_dc_message, MessengerMessage::Yes);
             assert!(msg.is_forwarded());
             assert!(msg.get_text().contains("this is plain"));
             assert!(msg.has_html());
@@ -608,7 +605,6 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
         assert!(!saved_msg.is_forwarded()); // UI should not flag "saved messages" as "forwarded"
         assert_ne!(saved_msg.get_from_id(), ContactId::SELF);
         assert_eq!(saved_msg.get_from_id(), msg.get_from_id());
-        assert_eq!(saved_msg.is_dc_message, MessengerMessage::No);
         assert!(saved_msg.get_text().contains("this is plain"));
         assert!(saved_msg.has_html());
         let html = saved_msg.get_id().get_html(alice).await?.unwrap();
@@ -643,7 +639,6 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
         let msg = alice.recv_msg(&msg).await;
         assert_eq!(msg.chat_id, alice.get_self_chat().await.id);
         assert_eq!(msg.get_from_id(), ContactId::SELF);
-        assert_eq!(msg.is_dc_message, MessengerMessage::Yes);
         assert!(msg.get_showpadlock());
         assert!(msg.is_forwarded());
         assert!(msg.get_text().contains("this is plain"));

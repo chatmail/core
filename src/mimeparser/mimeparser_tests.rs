@@ -8,7 +8,7 @@ use crate::{
     constants::{self, Blocked, DC_DESIRED_TEXT_LEN, DC_ELLIPSIS},
     contact::Contact,
     key,
-    message::{MessageState, MessengerMessage},
+    message::MessageState,
     receive_imf::receive_imf,
     securejoin::QrInvite,
     test_utils::{self, TestContext, TestContextManager},
@@ -1205,7 +1205,6 @@ async fn test_add_subj_to_multimedia_msg() {
     assert_eq!(msg.text, "subj with important info – body text");
     assert_eq!(msg.viewtype, Viewtype::Image);
     assert_eq!(msg.error(), None);
-    assert_eq!(msg.is_dc_message, MessengerMessage::No);
     assert_eq!(msg.chat_blocked, Blocked::Request);
     assert_eq!(msg.state, MessageState::InFresh);
     assert_eq!(msg.get_filebytes(&t).await.unwrap().unwrap(), 2115);

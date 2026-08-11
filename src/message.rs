@@ -387,29 +387,6 @@ impl rusqlite::types::FromSql for MsgId {
     }
 }
 
-#[derive(
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    FromPrimitive,
-    ToPrimitive,
-    FromSql,
-    ToSql,
-    Serialize,
-    Deserialize,
-    Default,
-)]
-#[repr(u8)]
-pub(crate) enum MessengerMessage {
-    #[default]
-    No = 0,
-    Yes = 1,
-
-    /// No, but reply to messenger message.
-    Reply = 2,
-}
-
 /// An object representing a single message in memory.
 /// The message object is not updated.
 /// If you want an update, you have to recreate the object.
@@ -459,7 +436,6 @@ pub struct Message {
 
     /// `In-Reply-To` header value.
     pub(crate) in_reply_to: Option<String>,
-    pub(crate) is_dc_message: MessengerMessage,
     pub(crate) original_msg_id: MsgId,
     pub(crate) pinned: bool,
     pub(crate) mime_modified: bool,
@@ -529,7 +505,6 @@ impl Message {
                     mdns.msg_id AS mdn_msg_id,
                     m.download_state AS download_state,
                     m.error AS error,
-                    m.msgrmsg AS msgrmsg,
                     m.starred AS original_msg_id,
                     m.pinned AS pinned,
                     m.mime_modified AS mime_modified,
@@ -588,7 +563,6 @@ impl Message {
                         download_state: row.get("download_state")?,
                         error: Some(row.get::<_, String>("error")?)
                             .filter(|error| !error.is_empty()),
-                        is_dc_message: row.get("msgrmsg")?,
                         original_msg_id: row.get("original_msg_id")?,
                         pinned: row.get("pinned")?,
                         mime_modified: row.get("mime_modified")?,

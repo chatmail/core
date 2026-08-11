@@ -11,7 +11,7 @@ use crate::constants::{
 use crate::ephemeral::Timer;
 use crate::headerdef::HeaderDef;
 use crate::imex::{ImexMode, has_backup, imex};
-use crate::message::{Message, MessengerMessage, delete_msgs};
+use crate::message::{Message, delete_msgs};
 use crate::mimeparser::{self, MimeMessage};
 use crate::pinned_messages::{get_pinned_messages, set_pinned_state};
 use crate::qr::{Qr, check_qr};
@@ -2457,7 +2457,6 @@ async fn test_save_msgs() -> Result<()> {
     );
     assert_eq!(saved_msg.get_text(), "hi, bob");
     assert!(!saved_msg.is_forwarded()); // UI should not flag "saved messages" as "forwarded"
-    assert_eq!(saved_msg.is_dc_message, MessengerMessage::Yes);
     assert_eq!(saved_msg.get_from_id(), ContactId::SELF);
     assert_eq!(saved_msg.get_state(), MessageState::OutDelivered);
     assert_ne!(saved_msg.rfc724_mid(), sent_msg.rfc724_mid());
@@ -2482,7 +2481,6 @@ async fn test_save_msgs() -> Result<()> {
     );
     assert_eq!(saved_msg.get_text(), "hi, bob");
     assert!(!saved_msg.is_forwarded());
-    assert_eq!(saved_msg.is_dc_message, MessengerMessage::Yes);
     assert_ne!(saved_msg.get_from_id(), ContactId::SELF);
     assert_eq!(saved_msg.get_state(), MessageState::InSeen);
     assert_ne!(saved_msg.rfc724_mid(), rcvd_msg.rfc724_mid());
