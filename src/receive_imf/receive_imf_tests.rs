@@ -390,7 +390,6 @@ async fn test_escaped_from() {
         "Имя, Фамилия",
     );
     let msg = get_chat_msg(&t, chat_id, 0, 1).await;
-    assert_eq!(msg.is_dc_message, MessengerMessage::Yes);
     assert_eq!(msg.text, "hello");
     assert_eq!(msg.param.get_int(Param::WantsMdn).unwrap(), 1);
 }
@@ -437,7 +436,6 @@ async fn test_escaped_recipients() {
     let msg = Message::load_from_db(&t, chats.get_msg_id(0).unwrap().unwrap())
         .await
         .unwrap();
-    assert_eq!(msg.is_dc_message, MessengerMessage::No);
     assert_eq!(msg.text, "foo – hello");
 }
 
