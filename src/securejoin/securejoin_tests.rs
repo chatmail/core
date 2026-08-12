@@ -64,13 +64,12 @@ async fn test_setup_contact_ex(case: SetupContactCase) -> (TestContext, TestCont
     bob.set_config(Config::Displayname, Some("Bob Examplenet"))
         .await
         .unwrap();
-    let alice_auto_submitted_hdr: bool;
-    match case {
+    let alice_auto_submitted_hdr = match case {
         SetupContactCase::AliceIsBot => {
             alice.set_config_bool(Config::Bot, true).await.unwrap();
-            alice_auto_submitted_hdr = true;
+            true
         }
-        _ => alice_auto_submitted_hdr = false,
+        _ => false,
     };
 
     assert_eq!(

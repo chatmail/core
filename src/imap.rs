@@ -800,13 +800,12 @@ impl Session {
         context: &Context,
         folder: &str,
     ) -> Result<()> {
-        let uid_validity;
         // Collect pairs of UID and Message-ID.
         let mut msgs = BTreeMap::new();
 
         let folder_exists = self.select_with_uidvalidity(context, folder).await?;
         let transport_id = self.transport_id();
-        if folder_exists {
+        let uid_validity = if folder_exists {
             let mut list = self
                 .uid_fetch("1:*", RFC724MID_UID)
                 .await
@@ -832,11 +831,11 @@ impl Session {
                 msgs.len(),
             );
 
-            uid_validity = get_uidvalidity(context, transport_id, folder).await?;
+            get_uidvalidity(context, transport_id, folder).await?
         } else {
             warn!(context, "resync_uids_with_server: No folder {folder}.");
-            uid_validity = 0;
-        }
+            0
+        };
 
         // Write collected UIDs to SQLite database.
         context
