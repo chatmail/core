@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 struct AppVersionInfo {
-    /// Array clients with version information.
+    /// Array of clients with version information.
     clients: Vec<AppClient>,
 }
 
