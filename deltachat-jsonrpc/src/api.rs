@@ -2806,7 +2806,7 @@ impl CommandApi {
     /// also there we would work with timeouts etc.)
     ///
     /// If the reported `version_integer` is larger than the running app version,
-    /// the UI shall report to the user, that an update is avialable,
+    /// the UI shall report to the user, that an update is available,
     /// and, if possible, offer a direct update by the given URL.
     async fn get_app_version(
         &self,
