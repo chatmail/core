@@ -15,7 +15,7 @@ struct AppVersionInfo {
     clients: Vec<AppClient>,
 }
 
-/// Version infomation of a single client, eg. "deltachat" or "ubuntutouch".
+/// Version information of a single client, eg. "deltachat" or "ubuntutouch".
 #[derive(Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 struct AppClient {
