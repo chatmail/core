@@ -67,6 +67,24 @@ pub enum PreMessageMode {
     None,
 }
 
+#[derive(Debug, Clone)]
+enum Encryption {
+    /// Unencrypted message.
+    No,
+
+    /// The message is encrypted asymmetrically to public keys.
+    Asymmetric {
+        /// Addresses and OpenPGP keys to use for encryption.
+        ///
+        /// The message is always encrypted to self,
+        /// no need to include own key here.
+        encryption_pubkeys: Vec<(String, SignedPublicKey)>,
+    },
+
+    /// Symmetrically encrypted message with a shared secret.
+    Symmetric { shared_secret: String },
+}
+
 /// Helper to construct mime messages.
 #[derive(Debug, Clone)]
 pub struct MimeFactory {
@@ -98,13 +116,8 @@ pub struct MimeFactory {
     /// but `MimeFactory` is not responsible for this.
     recipients: Vec<String>,
 
-    /// Vector of pairs of recipient
-    /// addresses and OpenPGP keys
-    /// to use for encryption.
-    ///
-    /// If `Some`, encrypt to self also.
-    /// `None` if the message is not encrypted.
-    encryption_pubkeys: Option<Vec<(String, SignedPublicKey)>>,
+    /// Encryption configuration.
+    encryption: Encryption,
 
     /// Vector of pairs of recipient name and address that goes into the `To` field.
     ///
@@ -194,11 +207,8 @@ pub(crate) struct QueuedMail {
     /// Message-ID.
     rfc724_mid: String,
 
-    /// Public keys to which the message should be encrypted.
-    encryption_pubkeys: Option<Vec<(String, SignedPublicKey)>>,
-
-    /// Shared secret if the message should be encrypted symmetrically.
-    shared_secret: Option<String>,
+    /// Whether the message is encrypted and encryption keys.
+    encryption: Encryption,
 
     /// If true, Autocrypt header should be added before sending.
     should_attach_pubkey: bool,
@@ -251,8 +261,7 @@ pub(crate) fn render_queued_mail(
         rfc724_mid,
         display_name,
         raw_message,
-        encryption_pubkeys,
-        shared_secret,
+        encryption,
         should_attach_pubkey,
         should_compress,
         should_sign,
@@ -261,7 +270,7 @@ pub(crate) fn render_queued_mail(
     let mut inner_headers: Vec<u8> = Vec::new();
     let mut outer_headers: Vec<u8> = Vec::new();
 
-    let is_encrypted = encryption_pubkeys.is_some();
+    let is_encrypted = !matches!(encryption, Encryption::No);
 
     fn add_header(
         name: &[u8],
@@ -396,24 +405,12 @@ pub(crate) fn render_queued_mail(
         }
     }
 
-    let message = if let Some(encryption_pubkeys) = encryption_pubkeys {
-        let mut full_raw_message = inner_headers.clone();
-        full_raw_message.extend(raw_message);
+    let message = match encryption {
+        Encryption::No => raw_message,
+        Encryption::Asymmetric { encryption_pubkeys } => {
+            let mut full_raw_message = inner_headers.clone();
+            full_raw_message.extend(raw_message);
 
-        let encrypted = if let Some(shared_secret) = shared_secret {
-            let sign_key = if should_sign {
-                Some(secret_key.clone())
-            } else {
-                None
-            };
-
-            crate::pgp::symm_encrypt_message(
-                full_raw_message,
-                sign_key,
-                shared_secret,
-                should_compress,
-            )?
-        } else {
             // Asymmetric encryption
 
             // Use SEIPDv2 if all recipients support it.
@@ -432,20 +429,37 @@ pub(crate) fn render_queued_mail(
             let mut encryption_keyring = vec![public_key.clone()];
             encryption_keyring.extend(encryption_pubkeys.iter().map(|(_addr, key)| (*key).clone()));
 
-            crate::pgp::pk_encrypt(
+            let encrypted = crate::pgp::pk_encrypt(
                 full_raw_message,
                 encryption_keyring,
                 secret_key.clone(),
                 should_compress,
                 seipd_version,
-            )?
-        };
+            )?;
 
-        let message = wrap_encrypted_part(encrypted);
+            let message = wrap_encrypted_part(encrypted);
+            part_to_bytes(message)
+        }
+        Encryption::Symmetric { shared_secret } => {
+            let mut full_raw_message = inner_headers.clone();
+            full_raw_message.extend(raw_message);
 
-        part_to_bytes(message)
-    } else {
-        raw_message
+            let sign_key = if should_sign {
+                Some(secret_key.clone())
+            } else {
+                None
+            };
+
+            let encrypted = crate::pgp::symm_encrypt_message(
+                full_raw_message,
+                sign_key,
+                shared_secret,
+                should_compress,
+            )?;
+
+            let message = wrap_encrypted_part(encrypted);
+            part_to_bytes(message)
+        }
     };
 
     let mut full_message = outer_headers;
@@ -518,14 +532,14 @@ impl MimeFactory {
             && msg.param.get_int(Param::Reaction).unwrap_or_default() == 0
             && context.should_request_mdns().await?;
 
-        let encryption_pubkeys;
-
         let self_fingerprint = self_fingerprint(context).await?;
 
-        if chat.is_self_talk() {
+        let encryption = if chat.is_self_talk() {
             to.push((from_displayname.to_string(), from_addr.to_string()));
 
-            encryption_pubkeys = Some(Vec::new());
+            Encryption::Asymmetric {
+                encryption_pubkeys: Vec::new(),
+            }
         } else if chat.is_mailing_list() {
             let list_post = chat
                 .param
@@ -535,7 +549,7 @@ impl MimeFactory {
             recipients.push(list_post.to_string());
 
             // Do not encrypt messages to mailing lists.
-            encryption_pubkeys = None;
+            Encryption::No
         } else if let Some(fp) = must_have_only_one_recipient(&msg, &chat) {
             let fp = fp?;
             // In a broadcast channel, only send member-added/removed messages
@@ -569,7 +583,9 @@ impl MimeFactory {
             recipients.extend(relays);
             to.push((authname, addr.clone()));
 
-            encryption_pubkeys = Some(vec![(addr, public_key)]);
+            Encryption::Asymmetric {
+                encryption_pubkeys: vec![(addr, public_key)],
+            }
         } else {
             let email_to_remove = if msg.param.get_cmd() == SystemMessage::MemberRemovedFromGroup {
                 msg.param.get(Param::Arg)
@@ -773,10 +789,15 @@ impl MimeFactory {
                 ContactId::scaleup_origin(context, &recipient_ids, origin).await?;
             }
 
-            encryption_pubkeys = if !is_encrypted {
-                None
+            if !is_encrypted {
+                Encryption::No
             } else if should_encrypt_symmetrically(&msg, &chat) {
-                Some(Vec::new())
+                // Sending a message may fail for old broadcast channels
+                // created before shared secrets were introduced.
+                let shared_secret = load_broadcast_secret(context, chat.id)
+                    .await?
+                    .context("Broadcast has no secret")?;
+                Encryption::Symmetric { shared_secret }
             } else {
                 if keys.is_empty() && !recipients.is_empty() {
                     bail!("No recipient keys are available, cannot encrypt to {recipients:?}.");
@@ -787,9 +808,11 @@ impl MimeFactory {
                     recipients.retain(|addr| !missing_key_addresses.contains(addr));
                 }
 
-                Some(keys)
-            };
-        }
+                Encryption::Asymmetric {
+                    encryption_pubkeys: keys,
+                }
+            }
+        };
 
         let (in_reply_to, references) = context
             .sql
@@ -820,8 +843,8 @@ impl MimeFactory {
         // We don't display avatars for address-contacts, so sending avatars w/o encryption is not
         // useful and causes e.g. Outlook to reject a message with a big header, see
         // https://support.delta.chat/t/invalid-mime-content-single-text-value-size-32822-exceeded-allowed-maximum-32768-for-the-chat-user-avatar-header/4067.
-        let attach_selfavatar =
-            Self::should_attach_selfavatar(context, &msg).await && encryption_pubkeys.is_some();
+        let attach_selfavatar = Self::should_attach_selfavatar(context, &msg).await
+            && !matches!(encryption, Encryption::No);
 
         ensure_and_debug_assert!(
             member_timestamps.is_empty()
@@ -838,7 +861,7 @@ impl MimeFactory {
             sender_displayname,
             selfstatus,
             recipients,
-            encryption_pubkeys,
+            encryption,
             to,
             past_members,
             member_fingerprints,
@@ -867,17 +890,21 @@ impl MimeFactory {
 
         let addr = contact.get_addr().to_string();
         let mut recipients = vec![addr.clone()];
-        let encryption_pubkeys = if from_id == ContactId::SELF {
-            Some(Vec::new())
-        } else if contact.is_key_contact() {
-            if let Some(key) = contact.public_key(context).await? {
-                recipients = addresses_from_public_key(&key).unwrap_or_else(|| vec![addr.clone()]);
-                Some(vec![(addr.clone(), key)])
-            } else {
-                Some(Vec::new())
+
+        let encryption = if from_id == ContactId::SELF {
+            Encryption::Asymmetric {
+                encryption_pubkeys: Vec::new(),
             }
+        } else if contact.is_key_contact() {
+            let encryption_pubkeys = if let Some(key) = contact.public_key(context).await? {
+                recipients = addresses_from_public_key(&key).unwrap_or_else(|| vec![addr.clone()]);
+                vec![(addr.clone(), key)]
+            } else {
+                Vec::new()
+            };
+            Encryption::Asymmetric { encryption_pubkeys }
         } else {
-            None
+            Encryption::No
         };
 
         let res = MimeFactory {
@@ -886,7 +913,7 @@ impl MimeFactory {
             sender_displayname: None,
             selfstatus: "".to_string(),
             recipients,
-            encryption_pubkeys,
+            encryption,
             to: vec![("".to_string(), contact.get_addr().to_string())],
             past_members: vec![],
             member_fingerprints: vec![],
@@ -917,13 +944,14 @@ impl MimeFactory {
     /// still learn our current key and relay list
     /// and will likely re-gossip it to group chats.
     async fn update_mdn_pubkey_attachment(&self, context: &Context) -> Result<bool> {
+        let Encryption::Asymmetric { encryption_pubkeys } = &self.encryption else {
+            return Ok(false);
+        };
         debug_assert!(
-            self.encryption_pubkeys
-                .as_deref()
-                .is_none_or(|keys| keys.len() <= 1),
+            encryption_pubkeys.len() <= 1,
             "MDNs have at most one recipient key; own key is only added at encryption time"
         );
-        let Some([(_, key)]) = self.encryption_pubkeys.as_deref() else {
+        let [(_, ref key)] = encryption_pubkeys[..] else {
             return Ok(false);
         };
         let fingerprint = key.dc_fingerprint().hex();
@@ -1415,19 +1443,10 @@ impl MimeFactory {
         // leaking information about the tokens.
         let should_compress = !is_securejoin_message;
 
-        let shared_secret: Option<String> = match &self.loaded {
-            Loaded::Message { chat, msg } if should_encrypt_with_broadcast_secret(msg, chat) => {
-                // Sending a message may fail for old broadcast channels
-                // created before shared secrets were introduced.
-                let secret = load_broadcast_secret(context, chat.id)
-                    .await?
-                    .context("Broadcast has no secret")?;
-                Some(secret)
-            }
-            _ => None,
-        };
-
-        if let Some(ref encryption_pubkeys) = self.encryption_pubkeys {
+        if let Encryption::Asymmetric {
+            ref encryption_pubkeys,
+        } = self.encryption
+        {
             // Add gossip headers in chats with multiple recipients
             let multiple_recipients =
                 encryption_pubkeys.len() > 1 || context.get_config_bool(Config::BccSelf).await?;
@@ -1530,7 +1549,7 @@ impl MimeFactory {
         let is_mdn = matches!(self.loaded, Loaded::Mdn { .. });
         let should_sign = true;
 
-        let message = if self.encryption_pubkeys.is_some() {
+        let message = if self.will_be_encrypted() {
             add_headers_to_encrypted_part(message, headers)
         } else if is_mdn {
             // Never add outer multipart/mixed wrapper to MDN
@@ -1554,8 +1573,7 @@ impl MimeFactory {
             raw_message,
             rfc724_mid,
             display_name,
-            encryption_pubkeys: self.encryption_pubkeys.clone(),
-            shared_secret,
+            encryption: self.encryption,
             should_attach_pubkey,
             should_sign,
             should_compress,
@@ -2235,7 +2253,10 @@ impl MimeFactory {
     }
 
     pub fn will_be_encrypted(&self) -> bool {
-        self.encryption_pubkeys.is_some()
+        match self.encryption {
+            Encryption::No => false,
+            Encryption::Asymmetric { .. } | Encryption::Symmetric { .. } => true,
+        }
     }
 
     pub fn set_as_post_message(&mut self) {
@@ -2466,8 +2487,9 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
         raw_message,
         display_name: String::new(),
         rfc724_mid: rfc724_mid.to_string(),
-        encryption_pubkeys: Some(vec![]),
-        shared_secret: Some(shared_secret.to_string()),
+        encryption: Encryption::Symmetric {
+            shared_secret: shared_secret.to_string(),
+        },
         should_attach_pubkey,
         should_sign,
         should_compress,
