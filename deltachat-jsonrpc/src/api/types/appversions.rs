@@ -13,6 +13,8 @@ pub struct JsonrpcAppSource {
     pub version_string: String,
 
     /// Where to download that version.
+    /// Security note: consumers need to verify themselves 
+    /// that downloaded app files are valid before installing them.
     pub download_url: String,
 }
 
