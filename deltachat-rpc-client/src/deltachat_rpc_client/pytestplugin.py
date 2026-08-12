@@ -363,10 +363,7 @@ def remote_bob_loop(channel):
         # ACFactory would configure from a "dcaccount" QR,
         # which old cores cannot use on underscore domains
         bob = dc.add_account()
-        bob.set_config_from_qr(dclogin_qr)
-        if not bob.is_configured():
-            # cores <=2.22 only store login values from a "dclogin" QR
-            bob.configure()
+        bob.add_transport_from_qr(dclogin_qr)
         bob.bring_online()
 
         alice_vcard = channel.receive()

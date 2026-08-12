@@ -258,6 +258,15 @@ pub(crate) async fn http_cache_cleanup(context: &Context) -> Result<()> {
     Ok(())
 }
 
+/// Returns the request target in origin form, i.e. the path and query of `url`.
+///
+/// The absolute form is only for proxy requests and
+/// nginx rejects it if the host starts contains an underscore.
+fn origin_form(url: &hyper::Uri) -> &str {
+    url.path_and_query()
+        .map_or("/", |path_and_query| path_and_query.as_str())
+}
+
 /// Fetches URL and updates the cache.
 ///
 /// URL is fetched regardless of whether there is an existing result in the cache.
@@ -276,7 +285,7 @@ async fn fetch_url(context: &Context, original_url: &str, strict_tls: bool) -> R
             .context("URL has no authority")?
             .clone();
 
-        let req = hyper::Request::builder().uri(parsed_url);
+        let req = hyper::Request::builder().uri(origin_form(&parsed_url));
 
         // OSM usage policy requires
         // that User-Agent is set for HTTP GET requests
@@ -409,7 +418,7 @@ pub(crate) async fn post_empty(context: &Context, url: &str) -> Result<(String, 
         .authority()
         .context("URL has no authority")?
         .clone();
-    let req = hyper::Request::post(parsed_url)
+    let req = hyper::Request::post(origin_form(&parsed_url))
         .header(hyper::header::HOST, authority.as_str())
         .body(http_body_util::Empty::<Bytes>::new())?;
 
@@ -431,6 +440,20 @@ mod tests {
     use crate::sql::housekeeping;
     use crate::test_utils::TestContext;
     use crate::tools::SystemTime;
+
+    #[test]
+    fn test_origin_form() {
+        let url = "https://_cm0.localchat/autoconfig?emailaddress=x%40_cm0.localchat"
+            .parse()
+            .unwrap();
+        assert_eq!(
+            origin_form(&url),
+            "/autoconfig?emailaddress=x%40_cm0.localchat"
+        );
+
+        let url = "https://example.org".parse().unwrap();
+        assert_eq!(origin_form(&url), "/");
+    }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_http_cache() -> Result<()> {
