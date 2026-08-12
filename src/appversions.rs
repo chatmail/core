@@ -4,6 +4,7 @@
 //! The version information comes in via IMAP METADATA,
 //! (as JSON) and is parsed to `AppVersionInfo`.
 use crate::accounts::Accounts;
+use crate::log::warn;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
@@ -65,7 +66,13 @@ pub async fn get_app_version(
             let Some(json) = &metadata.app_versions else {
                 continue;
             };
-            let app_versions: AppVersionInfo = serde_json::from_str(json)?;
+            let app_versions: AppVersionInfo = match serde_json::from_str(json) {
+                Ok(app_versions) => app_versions,
+                Err(err) => {
+                    warn!(context, "Failed to parse appversions: {err:#}.");
+                    continue;
+                }
+            };
             let candidate = app_versions
                 .clients
                 .into_iter()
@@ -166,7 +173,7 @@ mod tests {
         assert!(version.is_none());
 
         // first account reports two clients, with one and two sources
-        let account_id = accounts.add_account().await?;
+        let account_id1 = accounts.add_account().await?;
         let json = r##"{
             "clients": [
               {
@@ -199,7 +206,7 @@ mod tests {
               }
             ]
           }"##;
-        mockup_app_versions(&accounts, account_id, json).await;
+        mockup_app_versions(&accounts, account_id1, json).await;
 
         let version = get_app_version(&accounts, "basta", "web").await?.unwrap();
         assert_eq!(version.version_integer, 754);
@@ -220,7 +227,7 @@ mod tests {
         assert!(version.is_none());
 
         // a second account reports a newer version for "bar"
-        let account_id = accounts.add_account().await?;
+        let account_id2 = accounts.add_account().await?;
         let json = r##"{
             "clients": [
               {
@@ -236,7 +243,7 @@ mod tests {
               }
             ]
           }"##;
-        mockup_app_versions(&accounts, account_id, json).await;
+        mockup_app_versions(&accounts, account_id2, json).await;
 
         let version = get_app_version(&accounts, "basta", "web").await?.unwrap();
         assert_eq!(version.version_integer, 754);
@@ -257,7 +264,7 @@ mod tests {
         assert!(version.is_none());
 
         // a third account reports a older version for "bar", that is ignored
-        let account_id = accounts.add_account().await?;
+        let account_id3 = accounts.add_account().await?;
         let json = r##"{
             "clients": [
               {
@@ -273,7 +280,7 @@ mod tests {
               }
             ]
           }"##;
-        mockup_app_versions(&accounts, account_id, json).await;
+        mockup_app_versions(&accounts, account_id3, json).await;
 
         let version = get_app_version(&accounts, "basta", "web").await?.unwrap();
         assert_eq!(version.version_integer, 754);
@@ -292,6 +299,16 @@ mod tests {
 
         let version = get_app_version(&accounts, "non-", "existant").await?;
         assert!(version.is_none());
+
+        // second account returns an invalid json, that account is skipped, but app versionss are still gathered from the other
+        let account_id2 = accounts.add_account().await?;
+        let json = r"bad json!";
+        mockup_app_versions(&accounts, account_id2, json).await;
+
+        let version = get_app_version(&accounts, "foo", "bar").await?.unwrap();
+        assert_eq!(version.version_integer, 42);
+        assert_eq!(version.version_string, "42.0");
+        assert_eq!(version.download_url, "https://foo.bar/42.0.prg");
 
         Ok(())
     }
