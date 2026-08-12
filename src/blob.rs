@@ -68,11 +68,10 @@ impl<'a> BlobObject<'a> {
         // so we are doing essentially the same here.
         task::block_in_place(|| {
             let temp_path;
-            let src_in_blobdir: &Path;
             let blobdir = context.get_blobdir();
 
-            if src.starts_with(blobdir) {
-                src_in_blobdir = src;
+            let src_in_blobdir = if src.starts_with(blobdir) {
+                src
             } else {
                 info!(
                     context,
@@ -84,8 +83,8 @@ impl<'a> BlobObject<'a> {
                     std::fs::create_dir_all(blobdir).log_err(context).ok();
                     std::fs::copy(src, &temp_path).context("Copying new blobfile failed")?;
                 };
-                src_in_blobdir = &temp_path;
-            }
+                &temp_path
+            };
 
             let hash = file_hash(src_in_blobdir)?.to_hex();
             let hash = hash.as_str();
