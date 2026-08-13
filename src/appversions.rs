@@ -154,10 +154,14 @@ mod tests {
         Ok(())
     }
 
-    async fn mockup_app_versions(accounts: &Accounts, account_id: u32, json: &str) {
+    async fn mockup_app_versions(
+        accounts: &Accounts,
+        account_id: u32,
+        transport_id: u32,
+        json: &str,
+    ) {
         let context = accounts.get_account(account_id).expect("account exists");
         let mut metadata = context.metadata.write().await;
-        let transport_id = 1;
         metadata.entry(transport_id).or_default().app_versions = Some(json.to_string());
     }
 
@@ -206,7 +210,7 @@ mod tests {
               }
             ]
           }"##;
-        mockup_app_versions(&accounts, account_id1, json).await;
+        mockup_app_versions(&accounts, account_id1, 1, json).await;
 
         let version = get_app_version(&accounts, "basta", "web").await?.unwrap();
         assert_eq!(version.version_integer, 754);
@@ -243,7 +247,7 @@ mod tests {
               }
             ]
           }"##;
-        mockup_app_versions(&accounts, account_id2, json).await;
+        mockup_app_versions(&accounts, account_id2, 1, json).await;
 
         let version = get_app_version(&accounts, "basta", "web").await?.unwrap();
         assert_eq!(version.version_integer, 754);
@@ -280,7 +284,7 @@ mod tests {
               }
             ]
           }"##;
-        mockup_app_versions(&accounts, account_id3, json).await;
+        mockup_app_versions(&accounts, account_id3, 1, json).await;
 
         let version = get_app_version(&accounts, "basta", "web").await?.unwrap();
         assert_eq!(version.version_integer, 754);
@@ -302,12 +306,38 @@ mod tests {
 
         // second account returns an invalid json, that account is skipped, but app versionss are still gathered from the other
         let json = r"bad json!";
-        mockup_app_versions(&accounts, account_id2, json).await;
+        mockup_app_versions(&accounts, account_id2, 1, json).await;
 
         let version = get_app_version(&accounts, "foo", "bar").await?.unwrap();
         assert_eq!(version.version_integer, 42);
         assert_eq!(version.version_string, "42.0");
         assert_eq!(version.download_url, "https://foo.bar/42.0.prg");
+
+        // second account now has two transports, returning different version information in different orders
+        let json = r##"{
+            "clients": [
+              { "clientId": "a", "sources": [{"sourceId": "a", "versionInteger": 1, "versionString": "1.0", "downloadUrl": "https://a/1.prg"}] },
+              { "clientId": "b", "sources": [{"sourceId": "b", "versionInteger": 2, "versionString": "2.0", "downloadUrl": "https://b/2.prg"}] },
+              { "clientId": "c", "sources": [{"sourceId": "c", "versionInteger": 2, "versionString": "2.0", "downloadUrl": "https://c/2.prg"}] }
+            ]
+          }"##;
+        mockup_app_versions(&accounts, account_id2, 1, json).await;
+        let json = r##"{
+            "clients": [
+              { "clientId": "a", "sources": [{"sourceId": "a", "versionInteger": 2, "versionString": "2.0", "downloadUrl": "https://a/2.prg"}] },
+              { "clientId": "b", "sources": [{"sourceId": "b", "versionInteger": 1, "versionString": "1.0", "downloadUrl": "https://b/1.prg"}] },
+              { "clientId": "d", "sources": [{"sourceId": "d", "versionInteger": 2, "versionString": "2.0", "downloadUrl": "https://d/2.prg"}] }
+            ]
+          }"##;
+        mockup_app_versions(&accounts, account_id2, 2, json).await;
+        let version = get_app_version(&accounts, "a", "a").await?.unwrap();
+        assert_eq!(version.version_integer, 2);
+        let version = get_app_version(&accounts, "b", "b").await?.unwrap();
+        assert_eq!(version.version_integer, 2);
+        let version = get_app_version(&accounts, "c", "c").await?.unwrap();
+        assert_eq!(version.version_integer, 2);
+        let version = get_app_version(&accounts, "d", "d").await?.unwrap();
+        assert_eq!(version.version_integer, 2);
 
         Ok(())
     }
