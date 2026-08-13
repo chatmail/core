@@ -3557,6 +3557,8 @@ dc_lot_t*        dc_chatlist_get_summary2    (dc_context_t* context, uint32_t ch
 /**
  * Get info summary for a chat, in JSON format.
  *
+ * @deprecated 2026-08-13, use dedicatged dc_chat_get_*() getters or jsonrpc
+ *
  * The returned JSON string has the following key/values:
  *
  * id: chat id
