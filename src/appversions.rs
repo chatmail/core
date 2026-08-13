@@ -6,10 +6,10 @@
 use crate::accounts::Accounts;
 use crate::log::warn;
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 /// Version information of clients as used on the wire.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 struct AppVersionInfo {
     /// Array of clients with version information.
@@ -17,7 +17,7 @@ struct AppVersionInfo {
 }
 
 /// Version information of a single client, eg. "deltachat" or "ubuntutouch".
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 struct AppClient {
     /// ID how the client identifies itself, eg. "deltachat" or "ubuntutouch"
@@ -28,7 +28,7 @@ struct AppClient {
 }
 
 /// Version information of a single source of a client, eg. "gplay" or "fdroid".
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct AppSource {
     /// ID how the client identifies a source, eg. "gplay" or "fdroid"
