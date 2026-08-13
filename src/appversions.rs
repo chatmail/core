@@ -301,7 +301,6 @@ mod tests {
         assert!(version.is_none());
 
         // second account returns an invalid json, that account is skipped, but app versionss are still gathered from the other
-        let account_id2 = accounts.add_account().await?;
         let json = r"bad json!";
         mockup_app_versions(&accounts, account_id2, json).await;
 
