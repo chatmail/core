@@ -4275,12 +4275,8 @@ async fn send_member_removal_msg(
 ) -> Result<MsgId> {
     let mut msg = Message::new(Viewtype::Text);
 
-    if contact_id == ContactId::SELF {
-        if chat.typ == Chattype::InBroadcast {
-            msg.text = stock_str::msg_you_left_broadcast(context);
-        } else {
-            msg.text = stock_str::msg_group_left_local(context, ContactId::SELF).await;
-        }
+    if contact_id == ContactId::SELF && chat.typ == Chattype::InBroadcast {
+        msg.text = stock_str::msg_you_left_broadcast(context);
     } else {
         msg.text = stock_str::msg_del_member_local(context, contact_id, ContactId::SELF).await;
     }
