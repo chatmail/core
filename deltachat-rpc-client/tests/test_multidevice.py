@@ -127,3 +127,34 @@ def test_multidevice_sync_seen(acfactory, log):
     assert ac1_clone_message.get_snapshot().state == MessageState.IN_SEEN
     # Test that the timer is started on the second device after synchronizing the seen status.
     assert "Expires: " in ac1_clone_message.get_info()
+
+
+def test_multidevice_sync_seen_mdns_off(acfactory, log):
+    """Test that MDNs to self are sent even if MDNs are disabled."""
+    ac1, ac2 = acfactory.get_online_accounts(2)
+    ac1.set_config("mdns_enabled", "0")
+
+    ac1_clone = ac1.clone()
+    ac1_clone.bring_online()
+
+    assert ac1.get_config("bcc_self") == "1"
+    assert ac1.get_config("mdns_enabled") == "0"
+    assert ac1_clone.get_config("bcc_self") == "1"
+    assert ac1_clone.get_config("mdns_enabled") == "0"
+
+    ac1.create_chat(ac2)
+    ac1_clone_chat = ac1_clone.create_chat(ac2)
+    ac2_chat = ac2.create_chat(ac1)
+
+    log.section("Send a message from ac2 to ac1 and check that it's 'fresh'")
+    ac2_chat.send_text("Hi")
+    ac1_message = ac1.wait_for_incoming_msg()
+    ac1_clone_message = ac1_clone.wait_for_incoming_msg()
+
+    ac1_message.mark_seen()
+    assert ac1_message.get_snapshot().state == MessageState.IN_SEEN
+
+    log.section("ac1 clone detects that message is marked as seen")
+    ev = ac1_clone.wait_for_event(EventType.MSGS_NOTICED)
+    assert ev.chat_id == ac1_clone_chat.id
+    assert ac1_clone_message.get_snapshot().state == MessageState.IN_SEEN

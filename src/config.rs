@@ -177,6 +177,9 @@ pub enum Config {
 
     /// True if Message Delivery Notifications (read receipts) should
     /// be sent and requested.
+    ///
+    /// MDNs to self used for seen status synchronization between devices
+    /// are sent in any case when multi-device mode (bcc_self) is enabled.
     #[strum(props(default = "1"))]
     MdnsEnabled,
 
