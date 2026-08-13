@@ -7,8 +7,10 @@ import os
 import pathlib
 import platform
 import random
+import socket
 import subprocess
 import sys
+import time
 from typing import AsyncGenerator, Optional
 
 import pytest
@@ -24,16 +26,39 @@ Currently this is "Messages are end-to-end encrypted."
 """
 
 
+def pytest_configure(config):
+    # Run only in the xdist controller, before the workers exist.
+    if not hasattr(config, "workerinput"):
+        domain = os.environ.get("CHATMAIL_DOMAIN")
+        if domain:
+            check_chatmail_domain_and_warmup_dns_cache(domain)
+
+
+def check_chatmail_domain_and_warmup_dns_cache(domain):
+    for i in range(6):
+        try:
+            socket.getaddrinfo(domain, 443)
+            return
+        except socket.gaierror as e:
+            error = e
+            logging.warning(f"DNS resolution of {domain} failed (attempt {i}): {e}")
+            time.sleep(10)
+
+    pytest.exit(f"cannot resolve chatmail relay domain {domain}: {error}")
+
+
 def pytest_report_header():
+    headers = [f"CHATMAIL_DOMAIN: {os.environ.get('CHATMAIL_DOMAIN')}"]
     for base in os.get_exec_path():
         fn = pathlib.Path(base).joinpath(base, "deltachat-rpc-server")
         if fn.exists():
             proc = subprocess.Popen([str(fn), "--version"], stderr=subprocess.PIPE)
             proc.wait()
             version = proc.stderr.read().decode().strip()
-            return f"deltachat-rpc-server: {fn} [{version}]"
+            headers.append(f"RPC-SERVER: {fn} [{version}]")
+            break
 
-    return None
+    return headers
 
 
 class ACFactory:
