@@ -2808,6 +2808,9 @@ impl CommandApi {
     /// If the reported `version_integer` is larger than the running app version,
     /// the UI shall report to the user, that an update is available,
     /// and, if possible, offer a direct update by the given URL.
+    ///
+    /// Security note: consumers need to verify themselves
+    /// that downloaded app files are valid before installing them.
     async fn get_app_version(
         &self,
         client_id: String,
