@@ -4,13 +4,9 @@ use anyhow::{Context as _, Error, Result, bail, ensure};
 use deltachat_contact_tools::ContactAddress;
 use percent_encoding::{AsciiSet, utf8_percent_encode};
 
-use crate::chat::{
-    self, Chat, ChatId, ChatIdBlocked, add_info_msg, get_chat_id_by_grpid, load_broadcast_secret,
-};
+use crate::chat::{self, Chat, ChatId, ChatIdBlocked, get_chat_id_by_grpid, load_broadcast_secret};
 use crate::config::Config;
-use crate::constants::{
-    BROADCAST_INCOMPATIBILITY_MSG, Blocked, Chattype, NON_ALPHANUMERIC_WITHOUT_DOT,
-};
+use crate::constants::{Blocked, Chattype, NON_ALPHANUMERIC_WITHOUT_DOT};
 use crate::contact::mark_contact_id_as_verified;
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
@@ -111,14 +107,11 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
                 // If the user created the broadcast before updating Delta Chat,
                 // then the secret will be missing, and the user needs to recreate the broadcast:
                 if load_broadcast_secret(context, chat.id).await?.is_none() {
-                    error!(
-                        context,
-                        "Not creating securejoin QR for old broadcast {}, see chat for more info.",
-                        chat.id,
+                    let err = format!(
+                        "Can't create QR code for old broadcast list {id} without a shared secret"
                     );
-                    let text = BROADCAST_INCOMPATIBILITY_MSG;
-                    add_info_msg(context, chat.id, text).await?;
-                    bail!(text.to_string());
+                    error!(context, "get_securejoin_qr: {err}.");
+                    bail!(err);
                 }
             }
             Some(chat)

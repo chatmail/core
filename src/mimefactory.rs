@@ -17,7 +17,7 @@ use crate::aheader::{Aheader, EncryptPreference};
 use crate::blob::BlobObject;
 use crate::chat::{self, Chat, PARAM_BROADCAST_SECRET, load_broadcast_secret};
 use crate::config::Config;
-use crate::constants::{BROADCAST_INCOMPATIBILITY_MSG, Chattype, DC_FROM_HANDSHAKE};
+use crate::constants::{Chattype, DC_FROM_HANDSHAKE};
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::download::PostMsgMetadata;
@@ -1417,17 +1417,12 @@ impl MimeFactory {
 
         let shared_secret: Option<String> = match &self.loaded {
             Loaded::Message { chat, msg } if should_encrypt_with_broadcast_secret(msg, chat) => {
-                let secret = load_broadcast_secret(context, chat.id).await?;
-                if secret.is_none() {
-                    // If there is no shared secret yet
-                    // because this is an old broadcast channel,
-                    // created before we had symmetric encryption,
-                    // we show an error message.
-                    let text = BROADCAST_INCOMPATIBILITY_MSG;
-                    chat::add_info_msg(context, chat.id, text).await?;
-                    bail!(text);
-                }
-                secret
+                // Sending a message may fail for old broadcast channels
+                // created before shared secrets were introduced.
+                let secret = load_broadcast_secret(context, chat.id)
+                    .await?
+                    .context("Broadcast has no secret")?;
+                Some(secret)
             }
             _ => None,
         };
