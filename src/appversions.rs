@@ -4,6 +4,7 @@
 //! The version information comes in via IMAP METADATA,
 //! (as JSON) and is parsed to `AppVersionInfo`.
 use crate::accounts::Accounts;
+use crate::context::Context;
 use crate::log::warn;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -44,6 +45,26 @@ pub struct AppSource {
     pub download_url: String,
 }
 
+/// Returns version information from every relay of every profile.
+///
+/// Another transport of the same profile and another profile
+/// are the same thing for version information,
+/// so they are flattened into a single list.
+async fn all_app_versions(accounts: &Accounts) -> Vec<(Context, String)> {
+    let mut result = Vec::new();
+    for account_id in accounts.get_all() {
+        let Some(context) = accounts.get_account(account_id) else {
+            continue;
+        };
+        for metadata in context.metadata.read().await.values() {
+            if let Some(json) = &metadata.app_versions {
+                result.push((context.clone(), json.clone()));
+            }
+        }
+    }
+    result
+}
+
 /// Get version information of a specific client and source.
 ///
 /// Iterates over all accounts and all transports,
@@ -58,34 +79,26 @@ pub async fn get_app_version(
 ) -> Result<Option<AppSource>> {
     let mut best: Option<AppSource> = None;
 
-    for account_id in accounts.get_all() {
-        let Some(context) = accounts.get_account(account_id) else {
-            continue;
-        };
-        for metadata in context.metadata.read().await.values() {
-            let Some(json) = &metadata.app_versions else {
+    for (context, json) in all_app_versions(accounts).await {
+        let app_versions: AppVersionInfo = match serde_json::from_str(&json) {
+            Ok(app_versions) => app_versions,
+            Err(err) => {
+                warn!(context, "Failed to parse appversions: {err:#}.");
                 continue;
-            };
-            let app_versions: AppVersionInfo = match serde_json::from_str(json) {
-                Ok(app_versions) => app_versions,
-                Err(err) => {
-                    warn!(context, "Failed to parse appversions: {err:#}.");
-                    continue;
-                }
-            };
-            let candidate = app_versions
-                .clients
-                .into_iter()
-                .find(|c| c.client_id == client_id)
-                .and_then(|c| c.sources.into_iter().find(|s| s.source_id == source_id));
-
-            if let Some(candidate) = candidate
-                && best
-                    .as_ref()
-                    .is_none_or(|b| candidate.version_integer > b.version_integer)
-            {
-                best = Some(candidate);
             }
+        };
+        let candidate = app_versions
+            .clients
+            .into_iter()
+            .find(|c| c.client_id == client_id)
+            .and_then(|c| c.sources.into_iter().find(|s| s.source_id == source_id));
+
+        if let Some(candidate) = candidate
+            && best
+                .as_ref()
+                .is_none_or(|b| candidate.version_integer > b.version_integer)
+        {
+            best = Some(candidate);
         }
     }
 
