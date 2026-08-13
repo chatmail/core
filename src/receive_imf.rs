@@ -3038,12 +3038,8 @@ async fn apply_group_changes(
                 lookup_key_contact_by_address(context, removed_addr, Some(chat.id)).await?;
         }
         if let Some(id) = removed_id {
-            better_msg = if id == from_id {
-                silent = true;
-                Some(stock_str::msg_group_left_local(context, from_id).await)
-            } else {
-                Some(stock_str::msg_del_member_local(context, id, from_id).await)
-            };
+            silent = id == from_id;
+            better_msg = Some(stock_str::msg_del_member_local(context, id, from_id).await);
         } else {
             warn!(context, "Removed {removed_addr:?} has no contact id.")
         }

@@ -387,7 +387,7 @@ async fn test_member_add_remove() -> Result<()> {
     let sent = alice.pop_sent_msg().await;
     assert_eq!(
         sent.load_from_db().await.get_text(),
-        stock_str::msg_group_left_local(&alice, ContactId::SELF).await
+        stock_str::msg_del_member_local(&alice, ContactId::SELF, ContactId::SELF).await
     );
 
     Ok(())

@@ -672,7 +672,9 @@ pub(crate) async fn msg_add_member_local(
 /// - `You removed member %1$s.`,
 /// - `Member %1$s removed by %2$s.`,
 /// - `You were removed by %1$s.`,
-/// - `You were removed.`.
+/// - `You were removed.`,
+/// - `You left the group.`,
+/// - `Group left by %1$s.`.
 ///
 /// The `removed_member` and `by_contact` contacts
 /// are looked up in the database to get the display names.
@@ -682,29 +684,27 @@ pub(crate) async fn msg_del_member_local(
     by_contact: ContactId,
 ) -> String {
     let whom = removed_member.get_stock_name(context).await;
-    // note: this does not properly handle (SELF, SELF) case,
-    // as "you left"/"left by" messages are handled by `msg_group_left_local`.
     match (removed_member, by_contact) {
+        // You left the group.
+        (ContactId::SELF, ContactId::SELF) => translated(context, StockMessage::MsgYouLeftGroup),
+        // You were removed.
         (ContactId::SELF, ContactId::UNDEFINED) => translated(context, StockMessage::MsgRemoved),
+        // You were removed by ...
         (ContactId::SELF, _) => translated(context, StockMessage::MsgRemovedBy)
             .replace1(&by_contact.get_stock_name(context).await),
+        // Member ... removed.
         (_, ContactId::UNDEFINED) => {
             translated(context, StockMessage::MsgDelMember).replace1(&whom)
         }
+        // You removed member ...
         (_, ContactId::SELF) => translated(context, StockMessage::MsgYouDelMember).replace1(&whom),
+        // Group left by ...
+        (a, b) if a == b => translated(context, StockMessage::MsgGroupLeftBy)
+            .replace1(&by_contact.get_stock_name(context).await),
+        // Member ... removed by ...
         _ => translated(context, StockMessage::MsgDelMemberBy)
             .replace1(&whom)
             .replace2(&by_contact.get_stock_name(context).await),
-    }
-}
-
-/// Stock string: `You left the group.` or `Group left by %1$s.`.
-pub(crate) async fn msg_group_left_local(context: &Context, by_contact: ContactId) -> String {
-    if by_contact == ContactId::SELF {
-        translated(context, StockMessage::MsgYouLeftGroup)
-    } else {
-        translated(context, StockMessage::MsgGroupLeftBy)
-            .replace1(&by_contact.get_stock_name(context).await)
     }
 }
 
