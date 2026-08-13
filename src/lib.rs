@@ -54,6 +54,7 @@ pub(crate) mod events;
 pub use events::*;
 
 mod aheader;
+pub mod appversions;
 mod automatic_relay_management;
 pub mod blob;
 pub mod calls;

@@ -1,4 +1,5 @@
 pub mod account;
+pub mod appversions;
 pub mod calls;
 pub mod chat;
 pub mod chat_list;

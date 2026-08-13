@@ -64,6 +64,7 @@ use self::types::{
         JsonrpcMessageListItem, MessageNotificationInfo, MessageSearchResult, MessageViewtype,
     },
 };
+use crate::api::types::appversions::JsonrpcAppSource;
 use crate::api::types::chat_list::{ChatListItemFetchResult, get_chat_list_item_by_id};
 use crate::api::types::login_param::TransportListEntry;
 use crate::api::types::qr::{QrObject, SecurejoinSource, SecurejoinUiPath};
@@ -2787,6 +2788,39 @@ impl CommandApi {
         } else {
             Err(anyhow!("chat with id {chat_id} doesn't have draft message"))
         }
+    }
+
+    /// Get version information of a specific client and source
+    /// across all configured accounts and transports.
+    ///
+    /// Returns the source with the highest `version_integer`.
+    /// If no matching version information is available at all, `None` is returned.
+    ///
+    /// UIs shall call the function after a reasonable time after app start,
+    /// when most relays have reported the information they have, say 30 seconds.
+    /// After that, once a day.
+    /// (it is accepted if by the simple approach an update message is delayed.
+    /// an event was considered, but that seemed more complex for few benefit:
+    /// as we do not know if "late" relays will report "better" versions,
+    /// also there we would work with timeouts etc.)
+    ///
+    /// If the reported `version_integer` is larger than the running app version,
+    /// the UI shall report to the user, that an update is available,
+    /// and, if possible, offer a direct update by the given URL.
+    ///
+    /// Security note: consumers need to verify themselves
+    /// that downloaded app files are valid before installing them.
+    async fn get_app_version(
+        &self,
+        client_id: String,
+        source_id: String,
+    ) -> Result<Option<JsonrpcAppSource>> {
+        let accounts = self.accounts.read().await;
+        Ok(
+            deltachat::appversions::get_app_version(&accounts, &client_id, &source_id)
+                .await?
+                .map(JsonrpcAppSource::from_core_type),
+        )
     }
 }
 

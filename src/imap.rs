@@ -140,6 +140,10 @@ pub(crate) struct ServerMetadata {
     /// should be fetched from the server
     /// to be ready for WebRTC calls.
     pub ice_servers_expiration_timestamp: i64,
+
+    /// App versions, as raw JSON string.
+    /// Consumed by get_app_versions().
+    pub app_versions: Option<String>,
 }
 
 struct UidGrouper<T: Iterator<Item = (i64, u32, String)>> {
@@ -1292,6 +1296,10 @@ impl Session {
             let now = time();
 
             // Refresh TURN server credentials if they expire in 12 hours.
+            //
+            // Moreover, Take the chance to update `app_versions` as well.
+            // As best effort, even checking every some days is good enough -
+            // and saves one additional time get get_metadata() call.
             if now + 3600 * 12 < old_metadata.ice_servers_expiration_timestamp {
                 return Ok(());
             }
@@ -1302,7 +1310,11 @@ impl Session {
                 let mailbox = "";
                 let options = "";
                 let metadata = self
-                    .get_metadata(mailbox, options, "(/shared/vendor/deltachat/turn)")
+                    .get_metadata(
+                        mailbox,
+                        options,
+                        "(/shared/vendor/deltachat/turn /shared/vendor/deltachat/appversions)",
+                    )
                     .await?;
                 for m in metadata {
                     if m.entry == "/shared/vendor/deltachat/turn"
@@ -1318,6 +1330,8 @@ impl Session {
                                 warn!(context, "Failed to parse TURN server metadata: {err:#}.");
                             }
                         }
+                    } else if m.entry == "/shared/vendor/deltachat/appversions" {
+                        old_metadata.app_versions = m.value;
                     }
                 }
             }
@@ -1341,6 +1355,7 @@ impl Session {
         let mut max_smtp_rcpt_to = None;
         let mut ice_servers = None;
         let mut ice_servers_expiration_timestamp = 0;
+        let mut app_versions = None;
 
         let mailbox = "";
         let options = "";
@@ -1348,7 +1363,7 @@ impl Session {
             .get_metadata(
                 mailbox,
                 options,
-                "(/shared/comment /shared/admin /shared/vendor/deltachat/irohrelay /shared/vendor/deltachat/turn /shared/vendor/deltachat/maxsmtprecipients)",
+                "(/shared/comment /shared/admin /shared/vendor/deltachat/irohrelay /shared/vendor/deltachat/turn /shared/vendor/deltachat/maxsmtprecipients /shared/vendor/deltachat/appversions)",
             )
             .await?;
         for m in metadata {
@@ -1396,6 +1411,9 @@ impl Session {
                         }
                     }
                 }
+                "/shared/vendor/deltachat/appversions" => {
+                    app_versions = m.value;
+                }
                 _ => {}
             }
         }
@@ -1417,6 +1435,7 @@ impl Session {
                 supports_push: max_smtp_rcpt_to.is_some() || self.capabilities.has_xdeltapush,
                 ice_servers,
                 ice_servers_expiration_timestamp,
+                app_versions,
             },
         );
         Ok(())
