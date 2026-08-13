@@ -1297,6 +1297,10 @@ impl Session {
             let now = time();
 
             // Refresh TURN server credentials if they expire in 12 hours.
+            //
+            // Moreover, Take the chance to update `app_versions` as well.
+            // As best effort, even checking every some days is good enough -
+            // and saves one additional time get get_metadata() call.
             if now + 3600 * 12 < old_metadata.ice_servers_expiration_timestamp {
                 return Ok(());
             }
@@ -1307,7 +1311,11 @@ impl Session {
                 let mailbox = "";
                 let options = "";
                 let metadata = self
-                    .get_metadata(mailbox, options, "(/shared/vendor/deltachat/turn)")
+                    .get_metadata(
+                        mailbox,
+                        options,
+                        "(/shared/vendor/deltachat/turn /shared/vendor/deltachat/appversions)",
+                    )
                     .await?;
                 for m in metadata {
                     if m.entry == "/shared/vendor/deltachat/turn"
@@ -1323,6 +1331,8 @@ impl Session {
                                 warn!(context, "Failed to parse TURN server metadata: {err:#}.");
                             }
                         }
+                    } else if m.entry == "/shared/vendor/deltachat/appversions" {
+                        old_metadata.app_versions = m.value;
                     }
                 }
             }
