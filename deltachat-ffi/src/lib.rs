@@ -1106,7 +1106,7 @@ pub unsafe extern "C" fn dc_get_webxdc_status_updates(
         MsgId::new(msg_id),
         StatusUpdateSerial::new(last_known_serial),
     ))
-    .unwrap_or_else(|_| "".to_string())
+    .unwrap_or_log_default(ctx, "Failed to get webxdc status updates")
     .strdup()
 }
 
@@ -2410,7 +2410,7 @@ pub unsafe extern "C" fn dc_get_securejoin_qr(
     };
 
     block_on(securejoin::get_securejoin_qr(ctx, chat_id))
-        .unwrap_or_else(|_| "".to_string())
+        .unwrap_or_log_default(ctx, "Failed to generate securejoin QR code")
         .strdup()
 }
 
@@ -2431,7 +2431,7 @@ pub unsafe extern "C" fn dc_get_securejoin_qr_svg(
     };
 
     block_on(get_securejoin_qr_svg(ctx, chat_id))
-        .unwrap_or_else(|_| "".to_string())
+        .unwrap_or_log_default(ctx, "Failed to generate securejoin QR code SVG")
         .strdup()
 }
 
