@@ -37,6 +37,10 @@ and an own build machine.
 
 - `android-rpc-server.sh` compiles binaries of `deltachat-rpc-server` using Android NDK.
 
+- `future-sizes.sh` prints the sizes of the largest Futures.
+  This can be helpful because Async Rust can lead to huge futures,
+  increasing RAM usage and compilation times.
+
 ## Triggering runs on the build machine locally (fast!)
 
 There is experimental support for triggering a remote Python or Rust test run 
