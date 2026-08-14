@@ -277,7 +277,7 @@ mod tests {
 
         let version = get_app_version(&accounts, "foo", "baz").await?.unwrap();
         assert_eq!(version.version_integer, 1337);
-        assert_eq!(version.version_string, "13.37"); // spaces are removed by sanizize_version_string()
+        assert_eq!(version.version_string, "13.37"); // spaces are removed by sanitize_version_string()
         assert_eq!(version.download_url, "https://dl.org/1337.acc");
 
         let version = get_app_version(&accounts, "non-", "existant").await?;
