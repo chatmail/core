@@ -90,7 +90,7 @@ async fn test_send_webxdc_instance() -> Result<()> {
     let mut instance = Message::new(Viewtype::Webxdc);
     instance.set_file_from_bytes(&t, "index.html", b"<html>ola!</html>", None)?;
     assert!(send_msg(&t, chat_id, &mut instance).await.is_err());
-    t.assert_warn("cannot be opened as zip-file").await;
+    t.assert_warn("cannot be opened as zip-file");
     Ok(())
 }
 
@@ -119,8 +119,8 @@ async fn test_send_invalid_webxdc() -> Result<()> {
         None,
     )?;
     assert!(send_msg(&t, chat_id, &mut instance).await.is_err());
-    t.assert_warn("cannot be opened as zip-file").await;
-    t.assert_warn("cannot be opened as zip-file").await;
+    t.assert_warn("cannot be opened as zip-file");
+    t.assert_warn("cannot be opened as zip-file");
     Ok(())
 }
 
@@ -668,7 +668,7 @@ async fn test_receive_status_update() -> Result<()> {
 
 async fn expect_status_update_event(t: &TestContext, instance_id: MsgId) -> Result<()> {
     let event = t
-        .evtracker
+        .get_evtracker()
         .get_matching(|evt| matches!(evt, EventType::WebxdcStatusUpdate { .. }))
         .await;
     match event {
@@ -1299,7 +1299,7 @@ async fn test_get_webxdc_info() -> Result<()> {
     let result = msg.get_webxdc_info(&t).await;
     assert!(result.is_err());
 
-    t.assert_warn("empty name given in manifest").await;
+    t.assert_warn("empty name given in manifest");
     Ok(())
 }
 
@@ -1697,7 +1697,7 @@ async fn test_webxdc_reject_updates_from_non_groupmembers() -> Result<()> {
         status,
         r#"[{"payload":7,"info":"i","summary":"s","serial":1,"max_serial":1}]"#
     );
-    alice.assert_warn("not a member of chat").await;
+    alice.assert_warn("not a member of chat");
     Ok(())
 }
 
@@ -1708,7 +1708,7 @@ async fn test_webxdc_delete_event() -> Result<()> {
     let instance = send_webxdc_instance(&alice, chat_id).await?;
     message::delete_msgs(&alice, &[instance.id]).await?;
     alice
-        .evtracker
+        .get_evtracker()
         .get_matching(|evt| matches!(evt, EventType::WebxdcInstanceDeleted { .. }))
         .await;
     Ok(())
@@ -1738,7 +1738,7 @@ async fn change_logging_webxdc() -> Result<()> {
 
     alice.emit_event(EventType::Info("hi".to_string()));
     alice
-        .evtracker
+        .get_evtracker()
         .get_matching(|ev| matches!(*ev, EventType::WebxdcStatusUpdate { .. }))
         .await;
     assert!(
@@ -1838,7 +1838,7 @@ async fn has_incoming_webxdc_event(
     expected_msg: Message,
     expected_text: &str,
 ) -> bool {
-    t.evtracker
+    t.get_evtracker()
         .get_matching_opt(t, |evt| {
             if let EventType::IncomingWebxdcNotify { msg_id, text, .. } = evt {
                 *msg_id == expected_msg.id && text == expected_text

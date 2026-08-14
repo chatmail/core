@@ -438,7 +438,7 @@ async fn test_get_state() -> Result<()> {
 
     set_msg_failed(&alice, &mut alice_msg, "badly failed").await?;
     assert_state(&alice, alice_msg.id, MessageState::OutFailed).await;
-    alice.assert_warn("badly failed").await;
+    alice.assert_warn("badly failed");
 
     // check incoming message states on receiver side
     let bob_msg = bob.recv_msg(&payload).await;

@@ -358,7 +358,7 @@ mod tests {
                 .await
                 .is_ok()
         );
-        alice.assert_warn("Message is not pinnable").await;
+        alice.assert_warn("Message is not pinnable");
 
         Ok(())
     }

@@ -695,8 +695,8 @@ mod tests {
         bob.recv_msg_trash(&sent_msg).await;
         assert!(!token::exists(&bob, token::Namespace::Auth, "testtoken").await?);
 
-        bob.assert_warn("missing key").await;
-        bob.assert_warn("unencrypted message").await;
+        bob.assert_warn("missing key");
+        bob.assert_warn("unencrypted message");
 
         Ok(())
     }

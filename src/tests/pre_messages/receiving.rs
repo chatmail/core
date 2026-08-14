@@ -386,7 +386,7 @@ async fn test_post_msg_bad_sender() -> Result<()> {
     let msg_bob = Message::load_from_db(bob, msg_bob.id).await?;
     assert_eq!(msg_bob.download_state, DownloadState::Done);
 
-    bob.assert_warn("Bad sender").await;
+    bob.assert_warn("Bad sender");
     Ok(())
 }
 
@@ -412,11 +412,11 @@ async fn test_lost_pre_msg_vs_new_member() -> Result<()> {
 
     chat_id_bob.accept(bob).await?;
     let sent = bob.send_text(chat_id_bob, "Hi all").await;
-    bob.assert_warn("Missing key for fiona@example.net").await;
+    bob.assert_warn("Missing key for fiona@example.net");
     alice.recv_msg(&sent).await;
     fiona.recv_msg_trash(&sent).await; // Undecryptable message
-    fiona.assert_warn("decryption failed").await;
-    fiona.assert_warn("unencrypted message").await;
+    fiona.assert_warn("decryption failed");
+    fiona.assert_warn("unencrypted message");
     Ok(())
 }
 
@@ -574,9 +574,7 @@ async fn test_full_download_after_trashed() -> Result<()> {
     let msg = Message::load_from_db_optional(bob, alice_msg.id).await?;
     assert!(msg.is_none());
 
-    alice
-        .assert_warn("Pre-message was not downloaded yet so treat as normal message")
-        .await;
+    alice.assert_warn("Pre-message was not downloaded yet so treat as normal message");
     Ok(())
 }
 
@@ -767,10 +765,8 @@ async fn test_webxdc_updates_in_post_message_after_deleted_pre_message() -> Resu
             .is_none()
     );
 
-    bob.assert_warn("Pre-message was not downloaded yet so treat as normal message")
-        .await;
-    bob.assert_warn("Received webxdc update, but cannot assign it to message")
-        .await;
+    bob.assert_warn("Pre-message was not downloaded yet so treat as normal message");
+    bob.assert_warn("Received webxdc update, but cannot assign it to message");
 
     Ok(())
 }
@@ -1001,12 +997,12 @@ async fn test_chatlist_event_on_post_msg_download() -> Result<()> {
     assert_eq!(alice.get_last_msg_in(msg.chat_id).await.id, msg.id);
 
     tcm.section("Alice downloads Post-Message and waits for ChatlistItemChanged event ");
-    alice.evtracker.clear_events();
+    alice.get_evtracker().clear_events();
     alice.recv_msg_trash(&post_message).await;
     let msg = Message::load_from_db(alice, msg.id).await?;
     assert_eq!(msg.download_state, DownloadState::Done);
     alice
-        .evtracker
+        .get_evtracker()
         .get_matching(|e| {
             e == &EventType::ChatlistItemChanged {
                 chat_id: Some(msg.chat_id),
@@ -1035,12 +1031,12 @@ async fn test_bot_pre_message_notifications() -> Result<()> {
     .await?;
 
     // Bob receives pre-message
-    bob.evtracker.clear_events();
+    bob.get_evtracker().clear_events();
     receive_imf(&bob, pre_message.payload().as_bytes(), false).await?;
 
     // Verify Bob does NOT get an IncomingMsg event for the pre-message
     assert!(
-        bob.evtracker
+        bob.get_evtracker()
             .get_matching_opt(&bob, |e| matches!(e, EventType::IncomingMsg { .. }))
             .await
             .is_none()
@@ -1050,7 +1046,7 @@ async fn test_bot_pre_message_notifications() -> Result<()> {
     receive_imf(&bob, post_message.payload().as_bytes(), false).await?;
 
     // Verify Bob DOES get an IncomingMsg event for the complete message
-    bob.evtracker
+    bob.get_evtracker()
         .get_matching(|e| matches!(e, EventType::IncomingMsg { .. }))
         .await;
 

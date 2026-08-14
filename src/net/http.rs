@@ -541,7 +541,7 @@ mod tests {
             None
         );
 
-        t.assert_warn("os error 2").await;
+        t.assert_warn("os error 2");
         Ok(())
     }
 }

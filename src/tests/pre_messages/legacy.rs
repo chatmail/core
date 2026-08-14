@@ -52,6 +52,6 @@ async fn test_download_stub_message() -> Result<()> {
     assert_eq!(msg.download_state(), DownloadState::Available);
     assert_eq!(msg.get_subject(), "foo");
     assert!(msg.get_text().contains("[97.66 KiB message]"));
-    t.assert_warn("unencrypted message").await;
+    t.assert_warn("unencrypted message");
     Ok(())
 }

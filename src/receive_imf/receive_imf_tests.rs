@@ -267,7 +267,7 @@ async fn test_mdn_and_alias() -> Result<()> {
 
     let chats = Chatlist::try_load(&alice, 0, None, None).await?;
     assert_eq!(chats.len(), 1);
-    alice.assert_warn("unencrypted message").await;
+    alice.assert_warn("unencrypted message");
     Ok(())
 }
 
@@ -299,7 +299,7 @@ async fn test_no_from() {
     .unwrap()
     .unwrap();
 
-    t.assert_warn("No from in message").await;
+    t.assert_warn("No from in message");
 
     // Check that tombstone MsgId is returned.
     assert_eq!(received.msg_ids.len(), 1);
@@ -358,7 +358,7 @@ async fn test_no_message_id_header() {
     // Check that the message is not shown to the user:
     assert!(chats.is_empty());
 
-    t.assert_warn("No from in message").await;
+    t.assert_warn("No from in message");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -492,8 +492,8 @@ async fn test_parse_ndn_tiscali() {
         Some(msg),
     )
     .await;
-    t.assert_warn("DSN without action").await;
-    t.assert_warn(msg).await;
+    t.assert_warn("DSN without action");
+    t.assert_warn(msg);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -507,7 +507,7 @@ async fn test_parse_ndn_testrun() {
         Some(msg),
     )
     .await;
-    t.assert_warn(msg).await;
+    t.assert_warn(msg);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -521,7 +521,7 @@ async fn test_parse_ndn_yahoo() {
         Some(msg),
     )
     .await;
-    t.assert_warn(msg).await;
+    t.assert_warn(msg);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -535,7 +535,7 @@ async fn test_parse_ndn_gmail() {
             Some("Delivery Status Notification (Failure) – ** Die Adresse wurde nicht gefunden **\n\nIhre Nachricht wurde nicht an assidhfaaspocwaeofi@gmail.com zugestellt, weil die Adresse nicht gefunden wurde oder keine E-Mails empfangen kann.\n\nHier erfahren Sie mehr: https://support.google.com/mail/?p=NoSuchUser\n\nAntwort:\n\n550 5.1.1 The email account that you tried to reach does not exist. Please try double-checking the recipient\'s email address for typos or unnecessary spaces. Learn more at https://support.google.com/mail/?p=NoSuchUser i18sor6261697wrs.38 - gsmtp"),
         )
         .await;
-    t.assert_warn(msg).await;
+    t.assert_warn(msg);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -549,7 +549,7 @@ async fn test_parse_ndn_gmx() {
         Some(msg),
     )
     .await;
-    t.assert_warn(msg).await;
+    t.assert_warn(msg);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -563,7 +563,7 @@ async fn test_parse_ndn_posteo() {
         Some(msg),
     )
     .await;
-    t.assert_warn(msg).await;
+    t.assert_warn(msg);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -577,7 +577,7 @@ async fn test_parse_ndn_testrun_2() {
         Some(msg),
     )
     .await;
-    t.assert_warn(msg).await;
+    t.assert_warn(msg);
 }
 
 /// Tests that text part is not squashed into OpenPGP attachment.
@@ -592,8 +592,8 @@ async fn test_parse_ndn_with_attachment() {
         Some(msg),
     )
     .await;
-    t.assert_warn("Missing attachment").await;
-    t.assert_warn(msg).await;
+    t.assert_warn("Missing attachment");
+    t.assert_warn(msg);
 }
 
 /// Test that DSN is not treated as NDN if Action: is not "failed"
@@ -678,7 +678,7 @@ async fn test_resend_after_ndn() -> Result<()> {
         )
         .await;
     chat::resend_msgs(&t, &[msg_id]).await?;
-    t.assert_warn("Undelivered Mail Returned to Sender").await;
+    t.assert_warn("Undelivered Mail Returned to Sender");
     let msg = Message::load_from_db(&t, msg_id).await?;
     assert_eq!(msg.state, MessageState::OutPending);
     assert_eq!(msg.error(), None);
@@ -741,8 +741,7 @@ async fn test_parse_ndn_group_msg() -> Result<()> {
         ChatItem::Message { msg_id } if msg_id == msg.id
     ));
 
-    t.assert_warn("Delivery Status Notification (Failure)")
-        .await;
+    t.assert_warn("Delivery Status Notification (Failure)");
 
     Ok(())
 }
@@ -794,8 +793,8 @@ async fn test_concat_multiple_ndns() -> Result<()> {
 
     assert_eq!(msg.error(), Some([err.clone(), err.clone()].join("\n\n")));
 
-    t.assert_warn(&err).await;
-    t.assert_warn(&err).await;
+    t.assert_warn(&err);
+    t.assert_warn(&err);
     Ok(())
 }
 
@@ -818,7 +817,7 @@ async fn test_html_only_mail() {
         msg.text,
         "Guten Abend,\n\nLots of text\n\ntext with Umlaut ä...\n\nMfG\n\n--------------------------------------\n\n[Camping ](https://example.com/)\n\nsomeaddress\n\nsometown"
     );
-    t.assert_warn("Missing attachment").await;
+    t.assert_warn("Missing attachment");
 }
 
 static GH_MAILINGLIST: &[u8] =
@@ -1021,7 +1020,7 @@ async fn test_block_mailing_list() {
     t.allow_unencrypted().await.unwrap();
 
     receive_imf(&t.ctx, DC_MAILINGLIST, false).await.unwrap();
-    t.evtracker.wait_next_incoming_message().await;
+    t.get_evtracker().wait_next_incoming_message().await;
     let chats = Chatlist::try_load(&t.ctx, 0, None, None).await.unwrap();
     assert_eq!(chats.len(), 1);
     let chat_id = chats.get_chat_id(0).unwrap();
@@ -1037,7 +1036,7 @@ async fn test_block_mailing_list() {
     receive_imf(&t.ctx, DC_MAILINGLIST2, false).await.unwrap();
 
     // Check that no notification is displayed for blocked mailing list message.
-    while let Ok(event) = t.evtracker.try_recv() {
+    while let Ok(event) = t.get_evtracker().try_recv() {
         assert!(!matches!(event.typ, EventType::IncomingMsg { .. }));
     }
 
@@ -1695,7 +1694,7 @@ async fn test_save_mime_headers_off() -> anyhow::Result<()> {
     assert_eq!(msg.get_text(), "hi!");
     let html = msg.id.get_html(&bob).await?;
     assert!(html.is_none());
-    bob.assert_warn("get_html: no mime").await;
+    bob.assert_warn("get_html: no mime");
     Ok(())
 }
 
@@ -2664,16 +2663,12 @@ Second thread."#;
     chat::add_contact_to_chat(&alice, alice_first_msg.chat_id, alice_fiona_contact_id).await?;
     let alice_first_invite = alice.pop_sent_msg().await;
     let fiona_first_invite = fiona.recv_msg(&alice_first_invite).await;
-    fiona
-        .assert_warn(r#"Added "fiona@example.net" has no gossiped key."#)
-        .await;
+    fiona.assert_warn(r#"Added "fiona@example.net" has no gossiped key."#);
 
     chat::add_contact_to_chat(&alice, alice_second_msg.chat_id, alice_fiona_contact_id).await?;
     let alice_second_invite = alice.pop_sent_msg().await;
     let fiona_second_invite = fiona.recv_msg(&alice_second_invite).await;
-    fiona
-        .assert_warn(r#"Added "fiona@example.net" has no gossiped key."#)
-        .await;
+    fiona.assert_warn(r#"Added "fiona@example.net" has no gossiped key."#);
 
     // Fiona was added to two separate chats and should see two separate chats, even though they
     // don't have different group IDs to distinguish them.
@@ -2791,7 +2786,7 @@ async fn test_incoming_contact_request() -> Result<()> {
     assert!(chat.is_contact_request());
 
     let event = bob
-        .evtracker
+        .get_evtracker()
         .get_matching(|evt| matches!(evt, EventType::IncomingMsg { .. }))
         .await;
     match event {
@@ -2810,7 +2805,7 @@ async fn test_incoming_contact_request() -> Result<()> {
         // There are only `MsgsChanged` events for each message,
         // but no `IncomingMsg` before or after.
         let event = bob
-            .evtracker
+            .get_evtracker()
             .get_matching(|evt| {
                 matches!(
                     evt,
@@ -2936,7 +2931,7 @@ async fn test_invalid_to_address() -> Result<()> {
 
     // receive_imf should not fail on this mail with invalid To: field
     receive_imf(&alice, mime, false).await?;
-    alice.assert_warn("unencrypted message").await;
+    alice.assert_warn("unencrypted message");
     Ok(())
 }
 
@@ -3389,8 +3384,8 @@ async fn test_outgoing_undecryptable() -> Result<()> {
     // The device message mustn't be added too frequently.
     assert_eq!(alice.get_last_msg_in(dev_chat_id).await.id, dev_msg.id);
 
-    alice.assert_warn("decryption failed").await;
-    alice.assert_warn("decryption failed").await;
+    alice.assert_warn("decryption failed");
+    alice.assert_warn("decryption failed");
     Ok(())
 }
 
@@ -3516,9 +3511,8 @@ async fn test_forged_from_and_no_valid_signatures() -> Result<()> {
     let raw = String::from_utf8(raw.to_vec())?.replace("alice@example.org", "clarice@example.org");
     let received_msg = receive_imf(t, raw.as_bytes(), false).await?.unwrap();
     assert!(received_msg.chat_id.is_trash());
-    t.assert_warn("From header in encrypted part doesn't match the outer one")
-        .await;
-    t.assert_warn("From header is forged").await;
+    t.assert_warn("From header in encrypted part doesn't match the outer one");
+    t.assert_warn("From header is forged");
     Ok(())
 }
 
@@ -4535,7 +4529,7 @@ async fn test_outgoing_msg_forgery() -> Result<()> {
     bob.configure_addr("bob@example.net").await;
     imex(bob, ImexMode::ImportSelfKeys, export_dir.path(), None).await?;
     assert_eq!(crate::key::load_self_secret_keyring(bob).await?.len(), 1);
-    bob.assert_warn("Failed to import secret key").await;
+    bob.assert_warn("Failed to import secret key");
     let malice = &tcm.unconfigured().await;
     malice.configure_addr(alice_addr).await;
 
@@ -4548,7 +4542,7 @@ async fn test_outgoing_msg_forgery() -> Result<()> {
     let sent_msg = malice.send_text(malice_chat_id, "hi from malice").await;
     let msg = alice.recv_msg_opt(&sent_msg).await;
     assert!(msg.is_none());
-    alice.assert_warn("unencrypted message").await;
+    alice.assert_warn("unencrypted message");
     Ok(())
 }
 
@@ -4635,8 +4629,8 @@ async fn test_protected_group_add_remove_member_missing_key() -> Result<()> {
         msg.get_text(),
         stock_str::msg_del_member_local(alice, alice_bob_id, ContactId::SELF).await
     );
-    alice.assert_warn("Missing key for bob@example.net").await;
-    alice.assert_warn("Missing key for bob@example.net").await;
+    alice.assert_warn("Missing key for bob@example.net");
+    alice.assert_warn("Missing key for bob@example.net");
     Ok(())
 }
 
@@ -4694,7 +4688,7 @@ Chat-Group-Member-Removed: charlie@example.com",
         false,
     )
     .await?;
-    bob.assert_warn("unencrypted message").await;
+    bob.assert_warn("unencrypted message");
     assert_eq!(get_chat_cnt(bob).await?, chat_cnt);
     Ok(())
 }
@@ -4786,12 +4780,8 @@ async fn test_forged_from() -> Result<()> {
     // We take the address from the encrypted part
     // and send replies there.
     assert_eq!(contact.get_addr(), "bob@example.net");
-    alice
-        .assert_warn(r#"Autocrypt header address "bob@example.net" is not "notbob@example.net""#)
-        .await;
-    alice
-        .assert_warn("From header in encrypted part doesn't match the outer one")
-        .await;
+    alice.assert_warn(r#"Autocrypt header address "bob@example.net" is not "notbob@example.net""#);
+    alice.assert_warn("From header in encrypted part doesn't match the outer one");
     Ok(())
 }
 
@@ -4938,7 +4928,7 @@ async fn test_receive_vcard() -> Result<()> {
             assert_eq!(&parsed[0].addr, "claire@example.org");
         } else {
             assert_eq!(&parsed[0].addr, "");
-            alice.assert_warn("Not a valid DeltaChat vCard").await;
+            alice.assert_warn("Not a valid DeltaChat vCard");
         }
         Ok(())
     }
@@ -5267,9 +5257,7 @@ async fn test_recv_outgoing_msg_no_intended_recipient_fingerprint() -> Result<()
     // Alice does not have Bob's key.
     // Message is encrypted, but is received in ad hoc group with Bob's address.
     let rcvd_msg = receive_imf(alice, payload, false).await?.unwrap();
-    alice
-        .assert_warn("No key-contact looked up. Downgrading to AdHocGroup.")
-        .await;
+    alice.assert_warn("No key-contact looked up. Downgrading to AdHocGroup.");
     let msg_alice = Message::load_from_db(alice, rcvd_msg.msg_ids[0]).await?;
 
     assert!(msg_alice.get_showpadlock());
@@ -5380,7 +5368,7 @@ async fn test_no_address_contact_added_into_group() -> Result<()> {
     // Unencrypted message should not even be assigned to encrypted chat.
     assert_ne!(msg.chat_id, alice_chat_id);
 
-    alice.assert_warn("unencrypted message").await;
+    alice.assert_warn("unencrypted message");
     Ok(())
 }
 
@@ -5414,7 +5402,7 @@ async fn test_outgoing_plaintext_two_member_group() -> Result<()> {
 
     let chat = Chat::load_from_db(alice, msg.chat_id).await?;
     assert_eq!(chat.typ, Chattype::Group);
-    alice.assert_warn("unencrypted message").await;
+    alice.assert_warn("unencrypted message");
     Ok(())
 }
 
@@ -5653,9 +5641,7 @@ async fn test_small_unencrypted_group() -> Result<()> {
     let alice_bob_id = alice.add_or_lookup_address_contact_id(bob).await;
     add_contact_to_chat(alice, alice_chat_id, alice_bob_id).await?;
     send_text_msg(alice, alice_chat_id, "Hello!".to_string()).await?;
-    alice
-        .assert_warn("No good message identifying the chat found")
-        .await;
+    alice.assert_warn("No good message identifying the chat found");
 
     let sent_msg = alice.pop_sent_msg().await;
     let bob_chat_id = bob.recv_msg(&sent_msg).await.chat_id;

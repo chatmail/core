@@ -42,7 +42,7 @@ async fn test_can_communicate() {
 
     bob.recv_msg_trash(&alice.pop_sent_msg().await).await;
     loop {
-        let event = bob.evtracker.recv().await.unwrap();
+        let event = bob.get_evtracker().recv().await.unwrap();
         if let EventType::WebxdcRealtimeAdvertisementReceived { msg_id } = event.typ {
             assert!(msg_id == bob_webxdc.id);
             break;
@@ -91,7 +91,7 @@ async fn test_can_communicate() {
         .unwrap();
 
     loop {
-        let event = bob.evtracker.recv().await.unwrap();
+        let event = bob.get_evtracker().recv().await.unwrap();
         if let EventType::WebxdcRealtimeData { data, .. } = event.typ {
             if data == "alice -> bob".as_bytes() {
                 break;
@@ -112,7 +112,7 @@ async fn test_can_communicate() {
         .unwrap();
 
     loop {
-        let event = alice.evtracker.recv().await.unwrap();
+        let event = alice.get_evtracker().recv().await.unwrap();
         if let EventType::WebxdcRealtimeData { data, .. } = event.typ {
             if data == "bob -> alice".as_bytes() {
                 break;
@@ -154,7 +154,7 @@ async fn test_can_communicate() {
         .unwrap();
 
     loop {
-        let event = alice.evtracker.recv().await.unwrap();
+        let event = alice.get_evtracker().recv().await.unwrap();
         if let EventType::WebxdcRealtimeData { data, .. } = event.typ {
             if data == "bob -> alice 2".as_bytes() {
                 break;
@@ -207,10 +207,11 @@ async fn test_duplicated_out_of_order_advertisement() -> Result<()> {
     bob_webxdc.chat_id.accept(bob).await?;
 
     bob.recv_msg_trash(&advertisement).await;
+    bob.assert_warn("Cannot add iroh peer");
     loop {
-        let event = bob.evtracker.recv().await.unwrap();
+        let event = bob.get_evtracker().recv().await.unwrap();
         if let EventType::WebxdcRealtimeAdvertisementReceived { msg_id } = event.typ {
-            assert!(msg_id == bob_webxdc.id);
+            assert_eq!(msg_id, bob_webxdc.id);
             break;
         }
     }
@@ -224,15 +225,12 @@ async fn test_duplicated_out_of_order_advertisement() -> Result<()> {
         vec![
             alice
                 .get_or_try_init_peer_channel()
-                .await
-                .unwrap()
+                .await?
                 .get_node_addr()
-                .await
-                .unwrap()
+                .await?
                 .node_id
         ]
     );
-    bob.assert_warn("Cannot add iroh peer").await;
     Ok(())
 }
 
@@ -319,7 +317,7 @@ async fn test_can_reconnect() {
         .unwrap();
 
     loop {
-        let event = bob.evtracker.recv().await.unwrap();
+        let event = bob.get_evtracker().recv().await.unwrap();
         if let EventType::WebxdcRealtimeData { data, .. } = event.typ {
             if data == "alice -> bob".as_bytes() {
                 break;
@@ -378,7 +376,7 @@ async fn test_can_reconnect() {
         .unwrap();
 
     loop {
-        let event = alice.evtracker.recv().await.unwrap();
+        let event = alice.get_evtracker().recv().await.unwrap();
         if let EventType::WebxdcRealtimeData { data, .. } = event.typ {
             if data == "bob -> alice".as_bytes() {
                 break;
@@ -503,10 +501,10 @@ async fn test_webxdc_resend() {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         }
     };
-    fiona.assert_warn("Missing key for bob@example.net").await;
+    fiona.assert_warn("Missing key for bob@example.net");
     let realtime_receive_loop = async {
         loop {
-            let event = fiona.evtracker.recv().await.unwrap();
+            let event = fiona.get_evtracker().recv().await.unwrap();
             if let EventType::WebxdcRealtimeData { data, .. } = event.typ {
                 if data == b"alice -> bob & fiona" {
                     break;
@@ -574,7 +572,7 @@ async fn connect_alice_bob(
 
     eprintln!("Waiting for ephemeral message");
     loop {
-        let event = bob.evtracker.recv().await.unwrap();
+        let event = bob.get_evtracker().recv().await.unwrap();
         if let EventType::WebxdcRealtimeData { data, .. } = event.typ {
             if data == b"alice -> bob" {
                 break;

@@ -288,8 +288,7 @@ async fn test_get_attachment_filename_apostrophed_invalid() {
     );
     let filename = get_attachment_filename(&t, &mail.subparts[1]).unwrap();
     assert_eq!(filename, Some("somedäüta.html.zip".to_string()));
-    t.assert_warn("apostrophed encoding invalid: somedäüta.html.zip")
-        .await;
+    t.assert_warn("apostrophed encoding invalid: somedäüta.html.zip");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -345,9 +344,7 @@ async fn test_parse_first_addr() {
     let mimeparser = MimeMessage::from_bytes(&context.ctx, &raw[..]).await;
 
     assert!(mimeparser.is_err());
-    context
-        .assert_warn("Invalid address found: must contain a '@' symbol")
-        .await;
+    context.assert_warn("Invalid address found: must contain a '@' symbol");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -2034,7 +2031,7 @@ async fn test_multiple_autocrypt_hdrs() -> Result<()> {
     .msg_ids[0];
     let msg = Message::load_from_db(bob, msg_id).await?;
     assert!(msg.get_showpadlock());
-    bob.assert_warn("Unknown Autocrypt attribute found").await;
+    bob.assert_warn("Unknown Autocrypt attribute found");
     Ok(())
 }
 

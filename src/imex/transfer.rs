@@ -465,10 +465,10 @@ mod tests {
 
         // Check that both received the ImexProgress events.
         for ctx in [&ctx0, &ctx1] {
-            ctx.evtracker
+            ctx.get_evtracker()
                 .get_matching(|ev| matches!(ev, EventType::ImexProgress(1)))
                 .await;
-            ctx.evtracker
+            ctx.get_evtracker()
                 .get_matching(|ev| matches!(ev, EventType::ImexProgress(1000)))
                 .await;
         }
@@ -488,16 +488,11 @@ mod tests {
         // Try to overwrite an existing profile.
         let err = get_backup(ctx1, provider.qr()).await.unwrap_err();
         assert!(format!("{err:#}").contains("Cannot import backups to accounts in use"));
-        ctx1.assert_error("Cannot import backups to accounts in use")
-            .await;
+        ctx1.assert_error("Cannot import backups to accounts in use");
 
         // ctx0 is supposed to also finish, and emit an error:
         provider.await.unwrap();
-        ctx0.evtracker
-            .get_matching(|e| matches!(e, EventType::Error(_)))
-            .await;
-        ctx0.assert_error("Error while handling backup connection")
-            .await;
+        ctx0.assert_error("Error while handling backup connection");
 
         assert_eq!(ctx1.get_primary_self_addr().await?, "bob@example.net");
 
@@ -511,7 +506,7 @@ mod tests {
 
         let provider = BackupProvider::prepare(&ctx).await.unwrap();
         drop(provider);
-        ctx.evtracker
+        ctx.get_evtracker()
             .get_matching(|ev| matches!(ev, EventType::ImexProgress(0)))
             .await;
     }

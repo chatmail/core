@@ -13,7 +13,7 @@ use crate::test_utils::{EventTracker, TestContext, TestContextManager, sync};
 
 async fn wait_for_item_changed(context: &TestContext) {
     context
-        .evtracker
+        .get_evtracker()
         .get_matching(|evt| matches!(evt, EventType::AccountsItemChanged))
         .await;
 }
@@ -54,7 +54,7 @@ async fn test_account_event() -> Result<()> {
 async fn test_set_displayname() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let context = tcm.alice().await;
-    context.evtracker.clear_events();
+    context.get_evtracker().clear_events();
     context
         .set_config(crate::config::Config::Displayname, Some("🐰 Alice"))
         .await?;
@@ -69,7 +69,7 @@ async fn test_set_selfavatar() -> Result<()> {
     let file = context.dir.path().join("avatar.jpg");
     let bytes = include_bytes!("../../test-data/image/avatar1000x1000.jpg");
     tokio::fs::write(&file, bytes).await?;
-    context.evtracker.clear_events();
+    context.get_evtracker().clear_events();
     context
         .set_config(
             crate::config::Config::Selfavatar,
@@ -84,7 +84,7 @@ async fn test_set_selfavatar() -> Result<()> {
 async fn test_set_private_tag() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let context = tcm.alice().await;
-    context.evtracker.clear_events();
+    context.get_evtracker().clear_events();
     context
         .set_config(crate::config::Config::PrivateTag, Some("Wonderland"))
         .await?;
@@ -105,7 +105,7 @@ async fn test_import_backup() -> Result<()> {
 
     let context2 = TestContext::new().await;
     assert!(!context2.is_configured().await?);
-    context2.evtracker.clear_events();
+    context2.get_evtracker().clear_events();
     let backup = has_backup(&context2, backup_dir.path()).await?;
     imex(&context2, ImexMode::ImportBackup, backup.as_ref(), None).await?;
     assert!(context2.is_configured().await?);
@@ -123,7 +123,7 @@ async fn test_receive_backup() {
     // Set up second device.
     let ctx1 = tcm.unconfigured().await;
 
-    ctx1.evtracker.clear_events();
+    ctx1.get_evtracker().clear_events();
     get_backup(&ctx1, provider.qr()).await.unwrap();
 
     // Make sure the provider finishes without an error.
@@ -147,7 +147,7 @@ async fn test_sync() -> Result<()> {
     alice0
         .set_config(Config::Displayname, Some(new_name))
         .await?;
-    alice1.evtracker.clear_events();
+    alice1.get_evtracker().clear_events();
     sync(&alice0, &alice1).await;
     wait_for_item_changed(&alice1).await;
     assert_eq!(
@@ -162,7 +162,7 @@ async fn test_sync() -> Result<()> {
     alice0
         .set_config(Config::Selfavatar, Some(file.to_str().unwrap()))
         .await?;
-    alice1.evtracker.clear_events();
+    alice1.get_evtracker().clear_events();
     sync(&alice0, &alice1).await;
     wait_for_item_changed(&alice1).await;
 

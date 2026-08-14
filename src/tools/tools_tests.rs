@@ -328,7 +328,7 @@ async fn test_file_handling() {
 
     assert!(delete_file(context, Path::new(fn0)).await.is_ok());
     assert!(!file_exist!(context, &fn0));
-    t.assert_warn("refusing to delete non-file").await;
+    t.assert_warn("refusing to delete non-file");
 }
 
 #[test]

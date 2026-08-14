@@ -35,7 +35,7 @@ async fn test_setup_contact_basic() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_setup_contact_wrong_alice_gossip() {
     let (alice, _) = test_setup_contact_ex(SetupContactCase::WrongAliceGossip).await;
-    alice.assert_warn("No self addr+pubkey gossip found").await;
+    alice.assert_warn("No self addr+pubkey gossip found");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -163,7 +163,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) -> (TestContext, TestCont
 
     // Check Bob emitted the JoinerProgress event.
     let event = bob
-        .evtracker
+        .get_evtracker()
         .get_matching(|evt| matches!(evt, EventType::SecurejoinJoinerProgress { .. }))
         .await;
     match event {
@@ -309,8 +309,8 @@ async fn test_setup_contact_bad_qr() {
     let bob = TestContext::new_bob().await;
     let ret = join_securejoin(&bob.ctx, "not a qr code").await;
     assert!(ret.is_err());
-    bob.assert_warn("Unsupported QR type").await;
-    bob.assert_error("QR process failed").await;
+    bob.assert_warn("Unsupported QR type");
+    bob.assert_error("QR process failed");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -331,7 +331,7 @@ async fn test_setup_contact_bob_knows_alice() -> Result<()> {
 
     // Check Bob emitted the JoinerProgress event.
     let event = bob
-        .evtracker
+        .get_evtracker()
         .get_matching(|evt| matches!(evt, EventType::SecurejoinJoinerProgress { .. }))
         .await;
     match event {
@@ -370,7 +370,7 @@ async fn test_setup_contact_bob_knows_alice() -> Result<()> {
 
     // Check Alice signalled success via the SecurejoinInviterProgress event.
     let event = alice
-        .evtracker
+        .get_evtracker()
         .get_matching(|evt| {
             matches!(
                 evt,
@@ -535,7 +535,7 @@ async fn test_secure_join_group_ex(v3: bool, remove_invite: bool) -> Result<()> 
 
     // Check Bob emitted the JoinerProgress event.
     let event = bob
-        .evtracker
+        .get_evtracker()
         .get_matching(|evt| matches!(evt, EventType::SecurejoinJoinerProgress { .. }))
         .await;
     match event {
@@ -573,7 +573,7 @@ async fn test_secure_join_group_ex(v3: bool, remove_invite: bool) -> Result<()> 
 
     // Check Alice signalled success via the SecurejoinInviterProgress event.
     let event = alice
-        .evtracker
+        .get_evtracker()
         .get_matching(|evt| {
             matches!(
                 evt,
@@ -795,7 +795,7 @@ First thread."#;
     let chat_id = msg.chat_id;
 
     assert!(get_securejoin_qr(&alice, Some(chat_id)).await.is_err());
-    alice.assert_error("Can't generate QR code").await;
+    alice.assert_error("Can't generate QR code");
     Ok(())
 }
 
@@ -988,11 +988,9 @@ async fn test_parallel_setup_contact(bob_deletes_fiona_contact: bool) -> Result<
     let bob_alice_contact = Contact::get_by_id(bob, bob_alice_contact_id).await.unwrap();
     assert_eq!(bob_alice_contact.is_verified(bob).await.unwrap(), true);
 
-    bob.assert_warn("Message does not match expected fingerprint")
-        .await;
+    bob.assert_warn("Message does not match expected fingerprint");
     if bob_deletes_fiona_contact {
-        bob.assert_warn("Message does not match expected fingerprint")
-            .await;
+        bob.assert_warn("Message does not match expected fingerprint");
     }
 
     Ok(())
@@ -1025,7 +1023,7 @@ async fn test_wrong_auth_token() -> Result<()> {
 
     let alice_bob_contact = alice.add_or_lookup_contact(bob).await;
     assert!(!alice_bob_contact.is_verified(alice).await?);
-    alice.assert_warn("invalid auth code").await;
+    alice.assert_warn("invalid auth code");
     Ok(())
 }
 
@@ -1228,7 +1226,7 @@ async fn test_rejoin_group() -> Result<()> {
     // Bob gets two progress events.
     for expected_progress in [400, 1000] {
         let EventType::SecurejoinJoinerProgress { progress, .. } = bob
-            .evtracker
+            .get_evtracker()
             .get_matching(|evt| matches!(evt, EventType::SecurejoinJoinerProgress { .. }))
             .await
         else {
@@ -1242,7 +1240,7 @@ async fn test_rejoin_group() -> Result<()> {
 
     // Bob immediately receives progress 1000 event.
     let EventType::SecurejoinJoinerProgress { progress, .. } = bob
-        .evtracker
+        .get_evtracker()
         .get_matching(|evt| matches!(evt, EventType::SecurejoinJoinerProgress { .. }))
         .await
     else {
@@ -1389,9 +1387,8 @@ async fn test_qr_no_implicit_inviter_addition() -> Result<()> {
     let charlie_chat_contacts = chat::get_chat_contacts(charlie, charlie_chat_id).await?;
     assert_eq!(charlie_chat_contacts.len(), 2);
 
-    bob.assert_error("self not in group").await;
-    bob.assert_warn("the account is not part of the group/broadcast")
-        .await;
+    bob.assert_error("self not in group");
+    bob.assert_warn("the account is not part of the group/broadcast");
 
     Ok(())
 }
@@ -1604,9 +1601,8 @@ async fn test_auth_token_is_synchronized() -> Result<()> {
         .unwrap();
     assert_eq!(auth_count, 2);
 
-    bob.assert_warn("Could not find symmetric secret for session key")
-        .await;
-    bob.assert_warn("unencrypted message").await;
+    bob.assert_warn("Could not find symmetric secret for session key");
+    bob.assert_warn("unencrypted message");
     Ok(())
 }
 

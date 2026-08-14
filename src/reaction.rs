@@ -733,7 +733,7 @@ Content-Disposition: reaction\n\
         expected_contact_id: ContactId,
     ) -> Result<()> {
         let event = t
-            .evtracker
+            .get_evtracker()
             .get_matching(|evt| {
                 matches!(
                     evt,
@@ -764,7 +764,7 @@ Content-Disposition: reaction\n\
         expected_reaction: &str,
     ) -> Result<()> {
         let event = t
-            .evtracker
+            .get_evtracker()
             // Check for absence of `IncomingMsg` events -- it appeared that it's quite easy to make
             // bugs when `IncomingMsg` is issued for reactions.
             .get_matching(|evt| {
@@ -794,7 +794,7 @@ Content-Disposition: reaction\n\
     /// Checks that no unwanted events remain after expecting "wanted" reaction events.
     async fn expect_no_unwanted_events(t: &TestContext) {
         let ev = t
-            .evtracker
+            .get_evtracker()
             .get_matching_opt(t, |evt| {
                 matches!(
                     evt,
@@ -849,7 +849,7 @@ Content-Disposition: reaction\n\
 
         bob_msg.chat_id.accept(&bob).await?;
 
-        bob.evtracker.clear_events();
+        bob.get_evtracker().clear_events();
         send_reaction(&bob, bob_msg.id, "👍").await.unwrap();
         expect_reactions_changed_event(&bob, bob_msg.chat_id, bob_msg.id, ContactId::SELF).await?;
         expect_no_unwanted_events(&bob).await;
@@ -1039,7 +1039,7 @@ Content-Disposition: reaction\n\
         SystemTime::shift(Duration::from_secs(10));
         send_reaction(&alice, alice_msg1.sender_msg_id, "🍿").await?;
         let alice_send_reaction = alice.pop_sent_msg().await;
-        bob.evtracker.clear_events();
+        bob.get_evtracker().clear_events();
         bob.recv_msg_opt(&alice_send_reaction).await;
         expect_no_unwanted_events(&bob).await;
 

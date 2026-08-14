@@ -12,7 +12,6 @@ use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
 use anyhow::Result;
-use async_channel::{self as channel, Receiver, Sender};
 use chat::ChatItem;
 use deltachat_contact_tools::{ContactAddress, EmailAddress};
 use nu_ansi_term::Color;
@@ -443,8 +442,6 @@ pub struct TestContext {
     /// Temporary directory used to store SQLite database.
     pub dir: TempDir,
 
-    pub evtracker: EventTracker,
-
     log_sink: LogSink,
 }
 
@@ -522,13 +519,12 @@ impl TestContext {
             context_names.insert(id, name);
         }
         let events = Events::new();
-        let evtracker_receiver = events.get_emitter();
+        let emitter = events.get_emitter();
         let ctx = Context::new(&dbfile, id, events, StockStrings::new())
             .await
             .expect("failed to create context");
 
-        let log_sink = LogSink::new();
-        log_sink.subscribe(ctx.get_event_emitter());
+        let log_sink = LogSink::new(emitter);
 
         ctx.set_config(Config::SkipStartMessages, Some("1"))
             .await
@@ -536,12 +532,7 @@ impl TestContext {
         ctx.set_config(Config::BccSelf, Some("1")).await.unwrap();
         ctx.set_config(Config::SyncMsgs, Some("0")).await.unwrap();
 
-        Self {
-            ctx,
-            dir,
-            evtracker: EventTracker::new(evtracker_receiver),
-            log_sink,
-        }
+        Self { ctx, dir, log_sink }
     }
 
     /// Sets a name for this [`TestContext`] if one isn't yet set.
@@ -1175,15 +1166,15 @@ ORDER BY id"
     /// Asserts a warning containing `pat` should be logged.
     ///
     /// Delegates to [`InnerLogSink::assert_warn`].
-    pub async fn assert_warn(&self, pat: &str) {
-        self.log_sink.assert_warn(pat).await
+    pub fn assert_warn(&self, pat: &str) {
+        self.log_sink.assert_warn(pat)
     }
 
     /// Asserts an error containing `pat` should be logged.
     ///
     /// Delegates to [`InnerLogSink::assert_error`].
-    pub async fn assert_error(&self, pat: &str) {
-        self.log_sink.assert_error(pat).await
+    pub fn assert_error(&self, pat: &str) {
+        self.log_sink.assert_error(pat)
     }
 
     /// Asserts that a list of errors and/or warnings has been logged,
@@ -1195,8 +1186,13 @@ ORDER BY id"
     /// the first one takes precedence.
     ///
     /// Delegates to [`InnerLogSink::assert_warns_or_errors`].
-    pub async fn assert_warns_or_errors(&self, pats: &[&str]) {
-        self.log_sink.assert_warns_or_errors(pats).await
+    pub fn assert_warns_or_errors(&self, pats: &[&str]) {
+        self.log_sink.assert_warns_or_errors(pats)
+    }
+
+    /// Returns a reference to the event tracker.
+    pub fn get_evtracker(&self) -> &EventTracker {
+        &self.log_sink.evtracker
     }
 }
 
@@ -1311,13 +1307,13 @@ impl Drop for TestContext {
 /// A receiver of [`Event`]s which will log the events to the captured test stdout.
 ///
 /// Panics on [`drop`][`Drop::drop`], if an unexpected warning or error was received.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct LogSink(Arc<InnerLogSink>);
 
 impl LogSink {
     /// Creates a new [`LogSink`] and returns the attached event sink.
-    pub fn new() -> Self {
-        Default::default()
+    pub fn new(event_emitter: EventEmitter) -> Self {
+        Self(Arc::new(InnerLogSink::new(event_emitter)))
     }
 }
 
@@ -1331,54 +1327,33 @@ impl Deref for LogSink {
 
 #[derive(Debug)]
 pub struct InnerLogSink {
-    /// Log events receiver.
-    events: Receiver<Event>,
-
-    /// Sender side of the log receiver.
-    ///
-    /// It is cloned when log sink is subscribed
-    /// to new event emitter.
-    sender: Sender<Event>,
+    pub(crate) evtracker: EventTracker,
 }
 
-impl Default for InnerLogSink {
-    fn default() -> Self {
-        let (tx, rx) = channel::unbounded();
+impl InnerLogSink {
+    fn new(event_emitter: EventEmitter) -> Self {
         Self {
-            events: rx,
-            sender: tx,
+            evtracker: EventTracker::new(event_emitter),
         }
     }
 }
 
 impl InnerLogSink {
-    /// Subscribes this log sink to event emitter.
-    pub fn subscribe(&self, event_emitter: EventEmitter) {
-        let sender = self.sender.clone();
-        task::spawn(async move {
-            while let Some(event) = event_emitter.recv().await {
-                print_event(&event);
-                sender.try_send(event).ok();
-            }
-        });
-    }
-
-    async fn assert(&self, is_error: bool, pat: &str) {
-        while let Ok(Ok(event)) =
-            tokio::time::timeout(Duration::from_secs(1), self.events.recv()).await
-        {
+    fn assert(&self, is_error: bool, pat: &str) {
+        while let Ok(event) = self.evtracker.try_recv() {
             if Self::assert_inner(event, is_error, pat) {
                 return;
             }
         }
         if is_error {
-            panic!("Expected an error log.")
+            panic!("Expected an error log matching '{pat}'.")
         } else {
-            panic!("Expected a warning log.")
+            panic!("Expected a warning log matching '{pat}'.")
         }
     }
 
     fn assert_inner(log_event: Event, is_error: bool, pat: &str) -> bool {
+        print_event(&log_event);
         if let Some(log) = match is_error {
             false => log_event.typ.get_warn(),
             true => log_event.typ.get_error(),
@@ -1408,11 +1383,11 @@ impl InnerLogSink {
     ///
     /// Order of `pats` matters: if a log can be matched by multiple patterns,
     /// the first one takes precedence.
-    pub async fn assert_warns_or_errors(&self, pats: &[&str]) {
+    pub fn assert_warns_or_errors(&self, pats: &[&str]) {
         let mut hits = BTreeSet::new();
-        'events: while let Ok(Ok(event)) =
-            tokio::time::timeout(Duration::from_secs(1), self.events.recv()).await
-        {
+        'events: while let Ok(event) = self.evtracker.try_recv() {
+            print_event(&event);
+
             let Some(log) = event.typ.get_warn().or_else(|| event.typ.get_error()) else {
                 continue 'events;
             };
@@ -1439,13 +1414,13 @@ impl InnerLogSink {
     }
 
     /// Asserts that a warning containing `pat` should be logged.
-    pub async fn assert_warn(&self, pat: &str) {
-        self.assert(false, pat).await
+    pub fn assert_warn(&self, pat: &str) {
+        self.assert(false, pat)
     }
 
     /// Asserts that an error containing `pat` should be logged.
-    pub async fn assert_error(&self, pat: &str) {
-        self.assert(true, pat).await
+    pub fn assert_error(&self, pat: &str) {
+        self.assert(true, pat)
     }
 }
 
@@ -1466,7 +1441,8 @@ macro_rules! soft_assert {
 
 impl Drop for InnerLogSink {
     fn drop(&mut self) {
-        while let Ok(event) = self.events.try_recv() {
+        while let Ok(event) = self.evtracker.try_recv() {
+            print_event(&event);
             soft_assert!(!event.is_warn(), "Logged an unexpected warning: {event:?}");
             soft_assert!(!event.is_error(), "Logged an unexpected error: {event:?}");
         }
@@ -1573,7 +1549,7 @@ pub fn pqc_keypair() -> SignedSecretKey {
 ///
 /// The methods only return [`EventType`] rather than the full [`Event`] since it can only
 /// be attached to a single [`TestContext`] and therefore the context is already known as
-/// you will be accessing it as [`TestContext::evtracker`].
+/// you will be accessing it as [`TestContext::get_evtracker`].
 #[derive(Debug)]
 pub struct EventTracker(EventEmitter);
 

@@ -1120,9 +1120,9 @@ Content-Disposition: attachment; filename="location.kml"
         SystemTime::shift(Duration::from_secs(10));
         delete_expired(alice, time()).await?;
         maybe_send(alice).await?;
-        bob.evtracker.clear_events();
+        bob.get_evtracker().clear_events();
         bob.recv_msg_opt(&alice.pop_sent_msg().await).await;
-        bob.evtracker
+        bob.get_evtracker()
             .get_matching_ex(
                 bob,
                 ExpectedEvents {

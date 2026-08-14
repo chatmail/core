@@ -156,10 +156,10 @@ mod tests {
         };
         assert!(!t.quota_needs_update(0, TIMEOUT).await);
 
-        t.evtracker.clear_events();
+        t.get_evtracker().clear_events();
         t.set_primary_self_addr("new@addr").await?;
         assert!(t.quota.read().await.is_empty());
-        t.evtracker
+        t.get_evtracker()
             .get_matching(|evt| matches!(evt, EventType::ConnectivityChanged))
             .await;
         assert!(t.quota_needs_update(0, TIMEOUT).await);

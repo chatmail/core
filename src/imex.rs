@@ -867,7 +867,7 @@ mod tests {
         {
             panic!("got error on import: {err:#}");
         }
-        context2.assert_warn("Failed to import secret key").await;
+        context2.assert_warn("Failed to import secret key");
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -900,14 +900,12 @@ mod tests {
         assert_eq!(msg.chat_id, alice.get_self_chat().await.id);
         assert_eq!(msg.get_text(), "Encrypted with old key");
 
-        alice
-            .assert_warns_or_errors(&[
-                "rPGP error: unexpected block type: PGP PUBLIC KEY BLOCK",
-                "UNIQUE constraint failed",
-                "IMEX failed to complete",
-                "No private keys found in",
-            ])
-            .await;
+        alice.assert_warns_or_errors(&[
+            "rPGP error: unexpected block type: PGP PUBLIC KEY BLOCK",
+            "UNIQUE constraint failed",
+            "IMEX failed to complete",
+            "No private keys found in",
+        ]);
 
         Ok(())
     }
@@ -930,7 +928,7 @@ mod tests {
                 .is_ok()
         );
         let _event = context1
-            .evtracker
+            .get_evtracker()
             .get_matching(|evt| matches!(evt, EventType::ImexProgress(1000)))
             .await;
 
@@ -948,8 +946,8 @@ mod tests {
             .await
             .is_err()
         );
-        context2.assert_error("file is not a database").await;
-        context2.assert_warn("IMEX failed to complete").await;
+        context2.assert_error("file is not a database");
+        context2.assert_warn("IMEX failed to complete");
 
         assert!(
             imex(&context2, ImexMode::ImportBackup, backup.as_ref(), None)
@@ -957,7 +955,7 @@ mod tests {
                 .is_ok()
         );
         let _event = context2
-            .evtracker
+            .get_evtracker()
             .get_matching(|evt| matches!(evt, EventType::ImexProgress(1000)))
             .await;
 
@@ -991,7 +989,7 @@ mod tests {
 
         imex(context1, ImexMode::ExportBackup, backup_dir.path(), None).await?;
         let _event = context1
-            .evtracker
+            .get_evtracker()
             .get_matching(|evt| matches!(evt, EventType::ImexProgress(1000)))
             .await;
 
@@ -999,7 +997,7 @@ mod tests {
         let backup = has_backup(context2, backup_dir.path()).await?;
         imex(context2, ImexMode::ImportBackup, backup.as_ref(), None).await?;
         let _event = context2
-            .evtracker
+            .get_evtracker()
             .get_matching(|evt| matches!(evt, EventType::ImexProgress(1000)))
             .await;
         assert!(context2.is_configured().await?);
@@ -1031,7 +1029,7 @@ mod tests {
                 .is_ok()
         );
         let _event = context1
-            .evtracker
+            .get_evtracker()
             .get_matching(|evt| matches!(evt, EventType::ImexProgress(1000)))
             .await;
         let backup = has_backup(&context2, backup_dir.path()).await?;
@@ -1067,12 +1065,12 @@ mod tests {
 
         // Some UIs show the error from the event to the user.
         // Therefore, it must also be a user-facing string, rather than some technical info:
-        context2.assert_error("This profile is from a newer version of Delta Chat. Please update Delta Chat and try again").await;
+        context2.assert_error("This profile is from a newer version of Delta Chat. Please update Delta Chat and try again");
 
-        context2.assert_warn("IMEX failed to complete").await;
+        context2.assert_warn("IMEX failed to complete");
 
         context2
-            .evtracker
+            .get_evtracker()
             .get_matching(|evt| matches!(evt, EventType::ImexProgress(0)))
             .await;
 

@@ -278,8 +278,7 @@ async fn test_maybe_add_additional_relays_failure() -> Result<()> {
     t.assert_warns_or_errors(&[
         "DNS lookup with memory cache failure",
         "Could not find DNS resolutions",
-    ])
-    .await;
+    ]);
 
     Ok(())
 }

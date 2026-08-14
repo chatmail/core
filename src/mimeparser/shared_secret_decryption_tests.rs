@@ -89,14 +89,7 @@ async fn test_shared_secret_decryption_ex(
             get_highest_msg_id(recipient_ctx).await,
             "receive_imf() must not add any message. Otherwise, Bob may send something about an error to the attacker, leaking that he knows the secret"
         );
-        let EventType::Warning(warning) = recipient_ctx
-            .evtracker
-            .get_matching(|ev| matches!(ev, EventType::Warning(_)))
-            .await
-        else {
-            unreachable!()
-        };
-        assert!(warning.contains(error_pattern), "Wrong warning: {warning}");
+        recipient_ctx.assert_warn(error_pattern);
     } else {
         let msg = recipient_ctx.get_last_msg().await;
         assert_eq!(&[msg.id], rcvd.msg_ids.as_slice());
@@ -142,8 +135,6 @@ async fn test_broadcast_security_attacker_signature() -> Result<()> {
         Some("This sender is not allowed to encrypt with this secret key"),
     )
     .await?;
-    bob.assert_warn("This sender is not allowed to encrypt with this secret key")
-        .await;
     Ok(())
 }
 
@@ -167,8 +158,6 @@ async fn test_broadcast_security_no_signature() -> Result<()> {
         Some("Unsigned message is not allowed to be encrypted with this shared secret"),
     )
     .await?;
-    bob.assert_warn("Unsigned message is not allowed to be encrypted with this shared secret")
-        .await;
     Ok(())
 }
 
@@ -218,8 +207,6 @@ async fn test_qr_code_security() -> Result<()> {
         Some("This sender is not allowed to encrypt with this secret key"),
     )
     .await?;
-    bob.assert_warn("This sender is not allowed to encrypt with this secret key")
-        .await;
     Ok(())
 }
 
@@ -263,8 +250,6 @@ async fn test_unknown_secret() -> Result<()> {
         Some("Could not find symmetric secret for session key"),
     )
     .await?;
-    bob.assert_warn("Could not find symmetric secret for session key")
-        .await;
-    bob.assert_warn("unencrypted message").await;
+    bob.assert_warn("unencrypted message");
     Ok(())
 }

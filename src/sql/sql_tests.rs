@@ -100,7 +100,7 @@ async fn test_housekeeping_db_closed() {
         }
     }
 
-    t.assert_warns_or_errors(&["no SQL connection"]).await;
+    t.assert_warns_or_errors(&["no SQL connection"]);
 }
 
 /// Regression test for a bug where housekeeping deleted drafts since their
@@ -178,7 +178,7 @@ async fn test_db_reopen() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_migration_flags() -> Result<()> {
     let t = TestContext::new().await;
-    t.evtracker.get_info_contains("Opened database").await;
+    t.get_evtracker().get_info_contains("Opened database").await;
 
     // as migrations::run() was already executed on context creation,
     // another call should not result in any action needed.
@@ -190,7 +190,7 @@ async fn test_migration_flags() -> Result<()> {
 
     loop {
         let evt = t
-            .evtracker
+            .get_evtracker()
             .get_matching(|evt| matches!(evt, EventType::Info(_)))
             .await;
         match evt {

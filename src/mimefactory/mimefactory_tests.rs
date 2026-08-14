@@ -749,12 +749,8 @@ async fn test_remove_member_bcc() -> Result<()> {
         }
     }
 
-    alice
-        .assert_warn("No good message identifying the chat found")
-        .await;
-    alice
-        .assert_warn("No good message identifying the chat found")
-        .await;
+    alice.assert_warn("No good message identifying the chat found");
+    alice.assert_warn("No good message identifying the chat found");
 
     Ok(())
 }

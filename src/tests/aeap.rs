@@ -218,10 +218,8 @@ async fn test_aeap_replay_attack() -> Result<()> {
     assert!(chat::is_contact_in_chat(&bob, group, bob_alice_contact).await?);
     assert!(!chat::is_contact_in_chat(&bob, group, bob_fiona_contact).await?);
 
-    bob.assert_warn(r#"Autocrypt header address "alice@example.org" is not "fiona@example.net""#)
-        .await;
-    bob.assert_warn("From header in encrypted part doesn't match the outer one")
-        .await;
+    bob.assert_warn(r#"Autocrypt header address "alice@example.org" is not "fiona@example.net""#);
+    bob.assert_warn("From header in encrypted part doesn't match the outer one");
 
     Ok(())
 }

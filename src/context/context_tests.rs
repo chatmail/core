@@ -616,11 +616,10 @@ async fn test_cache_is_cleared_when_io_is_started() -> Result<()> {
     // Starting IO will fail of course because no server settings are configured,
     // but it should invalidate the caches:
     alice.start_io().await;
-
-    alice
-        .assert_warn("No IMAP connection candidates provided")
-        .await;
-    alice.assert_warn("IMAP got rate limited").await;
+    // wait for logs
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    alice.assert_warn("No IMAP connection candidates provided");
+    alice.assert_warn("IMAP got rate limited");
 
     assert_eq!(
         alice.get_config(Config::Displayname).await?,

@@ -238,7 +238,7 @@ async fn test_add_or_lookup() {
         "\nWonderland, Alice <alice@w.de>\n",
     );
     assert_eq!(Contact::add_address_book(&t, book).await.unwrap(), 4);
-    t.assert_warn(r#"invalid address "+1234567890""#).await;
+    t.assert_warn(r#"invalid address "+1234567890""#);
 
     // check first added contact, this modifies authname because it is empty
     let (contact_id, sth_modified) = Contact::add_or_lookup(
@@ -999,7 +999,7 @@ async fn test_selfavatar_changed_event() -> Result<()> {
         .await?;
 
     alice1
-        .evtracker
+        .get_evtracker()
         .get_matching(|e| matches!(e, EventType::SelfavatarChanged))
         .await;
 
@@ -1008,7 +1008,7 @@ async fn test_selfavatar_changed_event() -> Result<()> {
     // Alice's second device applies the selfavatar.
     assert!(alice2.get_config(Config::Selfavatar).await?.is_some());
     alice2
-        .evtracker
+        .get_evtracker()
         .get_matching(|e| matches!(e, EventType::SelfavatarChanged))
         .await;
 
@@ -1075,11 +1075,11 @@ async fn test_was_seen_recently_event() -> Result<()> {
         let sent_msg = alice.send_text(chat.id, "moin").await;
         let contact = Contact::get_by_id(&bob, *contacts.first().unwrap()).await?;
         assert!(!contact.was_seen_recently());
-        bob.evtracker.clear_events();
+        bob.get_evtracker().clear_events();
         bob.recv_msg(&sent_msg).await;
         let contact = Contact::get_by_id(&bob, *contacts.first().unwrap()).await?;
         assert!(contact.was_seen_recently());
-        bob.evtracker
+        bob.get_evtracker()
             .get_matching(|evt| matches!(evt, EventType::ContactsChanged { .. }))
             .await;
         recently_seen_loop
@@ -1087,20 +1087,21 @@ async fn test_was_seen_recently_event() -> Result<()> {
             .await;
 
         // Wait for `was_seen_recently()` to turn off.
-        bob.evtracker.clear_events();
+        bob.get_evtracker().clear_events();
         SystemTime::shift(Duration::from_secs(SEEN_RECENTLY_SECONDS as u64 * 2));
         recently_seen_loop.interrupt(ContactId::UNDEFINED, 0).await;
         let contact = Contact::get_by_id(&bob, *contacts.first().unwrap()).await?;
         assert!(!contact.was_seen_recently());
-        bob.evtracker
+        bob.get_evtracker()
             .get_matching(|evt| matches!(evt, EventType::ContactsChanged { .. }))
             .await;
     }
     // this warning is only printed when `RecentlySeenLoop` is dropped,
     // so we can't assert it otherwise.
     drop(recently_seen_loop);
-    bob.assert_warn("receiving from an empty and closed channel")
-        .await;
+    // wait for logs
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    bob.assert_warn("receiving from an empty and closed channel");
     Ok(())
 }
 
@@ -1252,12 +1253,12 @@ async fn test_make_n_import_vcard() -> Result<()> {
     assert!(t0 <= timestamp && timestamp <= t1);
 
     let alice = &TestContext::new_alice().await;
-    alice.evtracker.clear_events();
+    alice.get_evtracker().clear_events();
     let contact_ids = import_vcard(alice, &vcard).await?;
     assert_eq!(contact_ids.len(), 2);
     for _ in 0..contact_ids.len() {
         alice
-            .evtracker
+            .get_evtracker()
             .get_matching(|evt| matches!(evt, EventType::ContactsChanged(Some(_))))
             .await;
     }
@@ -1280,18 +1281,18 @@ async fn test_make_n_import_vcard() -> Result<()> {
     assert!(msg.get_showpadlock());
 
     // Bob only actually imports Fiona, though `ContactId::SELF` is also returned.
-    bob.evtracker.clear_events();
+    bob.get_evtracker().clear_events();
     let contact_ids = import_vcard(bob, &vcard).await?;
     bob.emit_event(EventType::Test);
     assert_eq!(contact_ids.len(), 2);
     assert_eq!(contact_ids[0], ContactId::SELF);
     let ev = bob
-        .evtracker
+        .get_evtracker()
         .get_matching(|evt| matches!(evt, EventType::ContactsChanged { .. }))
         .await;
     assert_eq!(ev, EventType::ContactsChanged(Some(contact_ids[1])));
     let ev = bob
-        .evtracker
+        .get_evtracker()
         .get_matching(|evt| matches!(evt, EventType::ContactsChanged { .. } | EventType::Test))
         .await;
     assert_eq!(ev, EventType::Test);
@@ -1317,10 +1318,10 @@ async fn test_import_vcard_key_change() -> Result<()> {
     let bob_addr = &bob.get_config(Config::Addr).await?.unwrap();
     bob.set_config(Config::Displayname, Some("Bob")).await?;
     let vcard = make_vcard(bob, &[ContactId::SELF]).await?;
-    alice.evtracker.clear_events();
+    alice.get_evtracker().clear_events();
     let alice_bob_id = import_vcard(alice, &vcard).await?[0];
     let ev = alice
-        .evtracker
+        .get_evtracker()
         .get_matching(|evt| matches!(evt, EventType::ContactsChanged { .. }))
         .await;
     assert_eq!(ev, EventType::ContactsChanged(Some(alice_bob_id)));
@@ -1423,10 +1424,10 @@ async fn test_name_changes() -> Result<()> {
     assert_eq!(bob_alice_contact.get_display_name(), "Alice Revision 2");
 
     // Explicitly rename contact to "Renamed".
-    bob.evtracker.clear_events();
+    bob.get_evtracker().clear_events();
     bob_alice_contact.id.set_name(bob, "Renamed").await?;
     let event = bob
-        .evtracker
+        .get_evtracker()
         .get_matching(|e| matches!(e, EventType::ContactsChanged { .. }))
         .await;
     assert_eq!(

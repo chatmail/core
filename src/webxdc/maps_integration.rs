@@ -213,7 +213,7 @@ mod tests {
             )
             .await?;
         alice
-            .evtracker
+            .get_evtracker()
             .get_matching(|evt| matches!(evt, EventType::WebxdcStatusUpdate { .. }))
             .await;
         let updates = alice

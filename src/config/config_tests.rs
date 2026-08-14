@@ -300,7 +300,7 @@ async fn test_event_config_synced() -> Result<()> {
         .set_config(Config::Displayname, Some("Alice Sync"))
         .await?;
     alice0
-        .evtracker
+        .get_evtracker()
         .get_matching(|e| {
             matches!(
                 e,
@@ -316,7 +316,7 @@ async fn test_event_config_synced() -> Result<()> {
         Some("Alice Sync".to_string())
     );
     alice1
-        .evtracker
+        .get_evtracker()
         .get_matching(|e| {
             matches!(
                 e,
@@ -329,7 +329,7 @@ async fn test_event_config_synced() -> Result<()> {
 
     alice0.set_config(Config::Displayname, None).await?;
     alice0
-        .evtracker
+        .get_evtracker()
         .get_matching(|e| {
             matches!(
                 e,

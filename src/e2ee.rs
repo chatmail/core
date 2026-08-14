@@ -47,7 +47,7 @@ Sent with my Delta Chat Messenger: https://delta.chat";
         assert!(chat::send_msg(alice, chat.id, &mut msg).await.is_err());
         let expected_error = "\u{26a0}\u{fe0f} Your email provider example.org requires end-to-end encryption which is not setup yet.";
         assert_eq!(msg.error().unwrap(), expected_error);
-        alice.assert_warn(expected_error).await;
+        alice.assert_warn(expected_error);
         let info_msg = alice.get_last_msg().await;
         assert_eq!(
             info_msg.get_info_type(),
