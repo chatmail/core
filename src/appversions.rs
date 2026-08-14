@@ -48,7 +48,7 @@ pub struct AppSource {
 ///
 /// Replaces untypical characters by `-`
 /// and truncates to at most 16 characters.
-/// This is to avoid to inject unexpected content or long texts.
+/// This is to avoid to inject long text, unexpected content, formatting, homoglyphs.
 ///
 /// Note, that UI should still take care to not linkify versions numbers -
 /// they may still look like phone numbers or IP-addresses.
@@ -58,7 +58,7 @@ fn sanitize_version_string(version_string: &str) -> String {
         .to_lowercase()
         .chars()
         .map(|c| {
-            if matches!(c, 'a'..='z' | '0'..='9' | '.' | '-') {
+            if matches!(c, 'a'..='z' | '0'..='9' | '.') {
                 c
             } else {
                 '-'
@@ -130,6 +130,7 @@ mod tests {
     async fn test_sanitize_version_string() {
         assert_eq!(sanitize_version_string(""), "");
         assert_eq!(sanitize_version_string("\n"), "");
+        assert_eq!(sanitize_version_string("7٣৬¾①و藏"), "7------");
         assert_eq!(sanitize_version_string("2.57.0"), "2.57.0");
         assert_eq!(
             sanitize_version_string("2.57.0 whatever"),
