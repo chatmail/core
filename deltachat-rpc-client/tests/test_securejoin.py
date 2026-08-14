@@ -7,8 +7,8 @@ from deltachat_rpc_client.const import ChatType
 from deltachat_rpc_client.rpc import JsonRpcError
 
 
-def test_qr_setup_contact(acfactory, tmp_path) -> None:
-    alice, bob = acfactory.get_online_accounts(2)
+def test_qr_setup_contact(acf, tmp_path) -> None:
+    alice, bob = acf.get_online_accounts(2)
 
     qr_code = alice.get_qr_code()
     bob.secure_join(qr_code)
@@ -31,7 +31,7 @@ def test_qr_setup_contact(acfactory, tmp_path) -> None:
     # backwards verification is not lost
     # because default key is not changed.
     logging.info("Bob 2 is created")
-    bob2 = acfactory.new_configured_account()
+    bob2 = acf.new_configured_account()
     bob2.export_self_keys(tmp_path)
 
     logging.info("Bob tries to import a key")
@@ -44,8 +44,8 @@ def test_qr_setup_contact(acfactory, tmp_path) -> None:
     assert bob_contact_alice_snapshot.is_verified
 
 
-def test_qr_setup_contact_svg(acfactory) -> None:
-    alice = acfactory.new_configured_account()
+def test_qr_setup_contact_svg(acf) -> None:
+    alice = acf.new_configured_account()
     _, _, domain = alice.get_config("addr").rpartition("@")
 
     _qr_code, svg = alice.get_qr_code_svg()
@@ -59,8 +59,8 @@ def test_qr_setup_contact_svg(acfactory) -> None:
     assert "Alice" in svg
 
 
-def test_qr_securejoin(acfactory):
-    alice, bob, fiona = acfactory.get_online_accounts(3)
+def test_qr_securejoin(acf):
+    alice, bob, fiona = acf.get_online_accounts(3)
 
     # Setup second device for Alice
     # to test observing securejoin protocol.
@@ -111,8 +111,8 @@ def test_qr_securejoin(acfactory):
 
 
 @pytest.mark.parametrize("all_devices_online", [True, False])
-def test_qr_securejoin_broadcast(acfactory, all_devices_online):
-    alice, bob, fiona = acfactory.get_online_accounts(3)
+def test_qr_securejoin_broadcast(acf, all_devices_online):
+    alice, bob, fiona = acf.get_online_accounts(3)
 
     alice2 = alice.clone()
     bob2 = bob.clone()
@@ -252,9 +252,9 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
     check_account(bob, bob.create_contact(alice), inviter_side=False, please_wait_info_msg=True)
 
 
-def test_qr_securejoin_contact_request(acfactory) -> None:
+def test_qr_securejoin_contact_request(acf) -> None:
     """Alice invites Bob to a group when Bob's chat with Alice is in a contact request mode."""
-    alice, bob = acfactory.get_online_accounts(2)
+    alice, bob = acf.get_online_accounts(2)
 
     alice_contact_bob = alice.create_contact(bob, "Bob")
     alice_chat_bob = alice_contact_bob.create_chat()
@@ -278,8 +278,8 @@ def test_qr_securejoin_contact_request(acfactory) -> None:
     assert bob_chat_alice.get_basic_snapshot().is_contact_request
 
 
-def test_qr_readreceipt(acfactory) -> None:
-    alice, bob, charlie = acfactory.get_online_accounts(3)
+def test_qr_readreceipt(acf) -> None:
+    alice, bob, charlie = acf.get_online_accounts(3)
 
     logging.info("Bob and Charlie setup contact with Alice")
     qr_code = alice.get_qr_code()
@@ -335,24 +335,24 @@ def test_qr_readreceipt(acfactory) -> None:
     assert not bob.get_chat_by_contact(bob_contact_charlie)
 
 
-def test_setup_contact_resetup(acfactory) -> None:
+def test_setup_contact_resetup(acf) -> None:
     """Tests that setup contact works after Alice resets the device and changes the key."""
-    alice, bob = acfactory.get_online_accounts(2)
+    alice, bob = acf.get_online_accounts(2)
 
     qr_code = alice.get_qr_code()
     bob.secure_join(qr_code)
     bob.wait_for_securejoin_joiner_success()
 
-    alice = acfactory.resetup_account(alice)
+    alice = acf.resetup_account(alice)
 
     qr_code = alice.get_qr_code()
     bob.secure_join(qr_code)
     bob.wait_for_securejoin_joiner_success()
 
 
-def test_verified_group_member_added_recovery(acfactory) -> None:
+def test_verified_group_member_added_recovery(acf) -> None:
     """Tests verified group recovery by reverifying then removing and adding a member back."""
-    ac1, ac2, ac3 = acfactory.get_online_accounts(3)
+    ac1, ac2, ac3 = acf.get_online_accounts(3)
 
     logging.info("ac1 creates a group")
     chat = ac1.create_group("Group")
@@ -374,7 +374,7 @@ def test_verified_group_member_added_recovery(acfactory) -> None:
     ac3_contact_ac2_old = ac3.create_contact(ac2)
 
     logging.info("ac2 logs in on a new device")
-    ac2 = acfactory.resetup_account(ac2)
+    ac2 = acf.resetup_account(ac2)
 
     logging.info("ac2 reverifies with ac3")
     qr_code = ac3.get_qr_code()
@@ -425,11 +425,11 @@ def test_verified_group_member_added_recovery(acfactory) -> None:
     assert ac1_contact_ac2_snapshot.verifier_id != ac1_contact_ac3.id
 
 
-def test_qr_join_chat_with_pending_bobstate_issue4894(acfactory):
+def test_qr_join_chat_with_pending_bobstate_issue4894(acf):
     """Regression test for
     issue <https://github.com/chatmail/core/issues/4894>.
     """
-    ac1, ac2, ac3, ac4 = acfactory.get_online_accounts(4)
+    ac1, ac2, ac3, ac4 = acf.get_online_accounts(4)
 
     logging.info("ac3: verify with ac2")
     qr_code = ac2.get_qr_code()
@@ -484,7 +484,7 @@ def test_qr_join_chat_with_pending_bobstate_issue4894(acfactory):
             return
 
 
-def test_qr_new_group_unblocked(acfactory):
+def test_qr_new_group_unblocked(acf):
     """Regression test for a bug introduced in core v1.113.0.
     ac2 scans a verified group QR code created by ac1.
     This results in creation of a blocked single chat with ac1 on ac2,
@@ -494,7 +494,7 @@ def test_qr_new_group_unblocked(acfactory):
     Due to a bug previously ac2 created a blocked group.
     """
 
-    ac1, ac2 = acfactory.get_online_accounts(2)
+    ac1, ac2 = acf.get_online_accounts(2)
     ac1_chat = ac1.create_group("Group for joining")
     qr_code = ac1_chat.get_qr_code()
     ac2.secure_join(qr_code)
@@ -513,11 +513,11 @@ def test_qr_new_group_unblocked(acfactory):
 
 
 @pytest.mark.skip(reason="AEAP is disabled for now")
-def test_aeap_flow_verified(acfactory):
+def test_aeap_flow_verified(acf):
     """Test that a new address is added to a contact when it changes its address."""
-    ac1, ac2 = acfactory.get_online_accounts(2)
+    ac1, ac2 = acf.get_online_accounts(2)
 
-    addr, password = acfactory.get_credentials()
+    addr, password = acf.get_credentials()
 
     logging.info("ac1: create verified-group QR, ac2 scans and joins")
     chat = ac1.create_group("hello")
@@ -555,8 +555,8 @@ def test_aeap_flow_verified(acfactory):
     assert addr in [contact.get_snapshot().address for contact in msg_in_2_snapshot.chat.get_contacts()]
 
 
-def test_gossip_verification(acfactory) -> None:
-    alice, bob, carol = acfactory.get_online_accounts(3)
+def test_gossip_verification(acf) -> None:
+    alice, bob, carol = acf.get_online_accounts(3)
 
     # Bob verifies Alice.
     qr_code = alice.get_qr_code()
@@ -605,13 +605,13 @@ def test_gossip_verification(acfactory) -> None:
     assert not carol_contact_alice_snapshot.is_verified
 
 
-def test_securejoin_after_contact_resetup(acfactory) -> None:
+def test_securejoin_after_contact_resetup(acf) -> None:
     """
     Regression test for a bug that prevented joining verified group with a QR code
     if the group is already created and contains
     a contact with inconsistent (Autocrypt and verified keys exist but don't match) key state.
     """
-    ac1, ac2, ac3 = acfactory.get_online_accounts(3)
+    ac1, ac2, ac3 = acf.get_online_accounts(3)
 
     # ac3 creates protected group with ac1.
     ac3_chat = ac3.create_group("Group")
@@ -636,7 +636,7 @@ def test_securejoin_after_contact_resetup(acfactory) -> None:
     assert ac2_contact_ac1.get_snapshot().is_verified
 
     # ac1 resetups the account.
-    ac1 = acfactory.resetup_account(ac1)
+    ac1 = acf.resetup_account(ac1)
     ac2_contact_ac1 = ac2.create_contact(ac1, "")
     assert not ac2_contact_ac1.get_snapshot().is_verified
 
@@ -668,8 +668,8 @@ def test_securejoin_after_contact_resetup(acfactory) -> None:
     assert not ac2_contact_ac1.get_snapshot().is_verified
 
 
-def test_withdraw_securejoin_qr(acfactory):
-    alice, bob = acfactory.get_online_accounts(2)
+def test_withdraw_securejoin_qr(acf):
+    alice, bob = acf.get_online_accounts(2)
 
     logging.info("Alice creates a group")
     alice_chat = alice.create_group("Group")
@@ -706,8 +706,8 @@ def test_withdraw_securejoin_qr(acfactory):
             break
 
 
-def test_qr_scan_updates_new_relay_address(acfactory):
-    alice, bob = acfactory.get_online_accounts(2)
+def test_qr_scan_updates_new_relay_address(acf):
+    alice, bob = acf.get_online_accounts(2)
 
     bob_alice_chat = bob.secure_join(alice.get_qr_code())
     alice.wait_for_securejoin_inviter_success()
@@ -715,7 +715,7 @@ def test_qr_scan_updates_new_relay_address(acfactory):
 
     for ac in [alice, bob]:
         old_addr = ac.get_config("configured_addr")
-        ac.add_transport_from_qr(acfactory.get_account_qr())
+        ac.add_transport_from_qr(acf.get_account_qr())
         ac.set_config("configured_addr", ac.list_transports()[1]["addr"])
         ac.delete_transport(old_addr)
 

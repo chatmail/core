@@ -1,5 +1,5 @@
-def test_vcard(acfactory) -> None:
-    alice, bob, fiona = acfactory.get_online_accounts(3)
+def test_vcard(acf) -> None:
+    alice, bob, fiona = acf.get_online_accounts(3)
 
     bob.create_chat(alice)
     alice_contact_bob = alice.create_contact(bob, "Bob")

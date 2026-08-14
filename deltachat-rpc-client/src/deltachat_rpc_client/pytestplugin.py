@@ -12,7 +12,7 @@ import subprocess
 import sys
 import time
 import urllib.parse
-from typing import AsyncGenerator, Optional
+from typing import Iterator, Optional
 
 import pytest
 
@@ -62,7 +62,7 @@ def pytest_report_header():
     return headers
 
 
-class ACFactory:
+class RPCAccountFactory:
     """Test account factory."""
 
     def __init__(self, deltachat: DeltaChat) -> None:
@@ -175,7 +175,7 @@ class ACFactory:
 
 
 @pytest.fixture
-def rpc(tmp_path) -> AsyncGenerator:
+def rpc(tmp_path) -> Iterator[Rpc]:
     """RPC client fixture."""
     rpc_server = Rpc(accounts_dir=str(tmp_path / "accounts"))
     with rpc_server:
@@ -189,13 +189,13 @@ def dc(rpc) -> DeltaChat:
 
 
 @pytest.fixture
-def acfactory(dc) -> AsyncGenerator:
+def acf(dc) -> RPCAccountFactory:
     """Return account factory fixture."""
-    return ACFactory(dc)
+    return RPCAccountFactory(dc)
 
 
 @pytest.fixture
-def data():
+def rpcdata():
     """Test data."""
 
     class Data:
@@ -292,7 +292,7 @@ def get_core_python_env(tmp_path_factory):
 
 
 @pytest.fixture
-def alice_and_remote_bob(tmp_path, acfactory, get_core_python_env):
+def alice_and_remote_bob(tmp_path, acf, get_core_python_env):
     """return local Alice account, a contact to bob, and a remote 'eval' function for bob.
 
     The 'eval' function allows to remote-execute arbitrary expressions
@@ -309,7 +309,7 @@ def alice_and_remote_bob(tmp_path, acfactory, get_core_python_env):
 
         # old cores need "ic=3" to accept
         # the self-signed cert of an underscore domain
-        addr, password = acfactory.get_credentials()
+        addr, password = acf.get_credentials()
         dclogin_qr = f"dclogin://{urllib.parse.quote(addr, safe='@')}?p={urllib.parse.quote(password)}&v=1"
         if os.environ["CHATMAIL_DOMAIN"].startswith("_"):
             dclogin_qr += "&ic=3"
@@ -318,7 +318,7 @@ def alice_and_remote_bob(tmp_path, acfactory, get_core_python_env):
         channel.send((accounts_dir, str(rpc_server_path), dclogin_qr))
 
         # meanwhile get a local alice account
-        alice = acfactory.get_online_account()
+        alice = acf.get_online_account()
         channel.send(alice.self_contact.make_vcard())
 
         # wait for bob to have started
@@ -360,7 +360,7 @@ def remote_bob_loop(channel):
         dc = DeltaChat(rpc)
         channel.send(dc.rpc.get_system_info()["deltachat_core_version"])
 
-        # ACFactory would configure from a "dcaccount" QR,
+        # RPCAccountFactory would configure from a "dcaccount" QR,
         # which old cores cannot use on underscore domains
         bob = dc.add_account()
         bob.add_transport_from_qr(dclogin_qr)

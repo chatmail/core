@@ -5,12 +5,12 @@ from imap_tools import AND, U
 from deltachat_rpc_client import EventType
 
 
-def test_moved_markseen(acfactory, direct_imap, log):
+def test_moved_markseen(acf, direct_imap, log):
     """Test that message already moved to DeltaChat folder is marked as seen."""
-    ac1 = acfactory.get_online_account()
+    ac1 = acf.get_online_account()
 
-    addr, password = acfactory.get_credentials()
-    ac2 = acfactory.get_unconfigured_account()
+    addr, password = acf.get_credentials()
+    ac2 = acf.get_unconfigured_account()
     ac2.add_or_update_transport({"addr": addr, "password": password})
     ac2.bring_online()
 
@@ -57,14 +57,14 @@ def test_moved_markseen(acfactory, direct_imap, log):
     assert len(list(ac2_direct_imap.conn.fetch(AND(seen=True, uid=U(1, "*")), mark_seen=False))) == 1
 
 
-def test_markseen_message_and_mdn(acfactory, direct_imap):
-    ac1, ac2 = acfactory.get_online_accounts(2)
+def test_markseen_message_and_mdn(acf, direct_imap):
+    ac1, ac2 = acf.get_online_accounts(2)
 
     # Make sure that messages are not immediately auto-deleted on the server:
     ac1.set_config("bcc_self", "1")
     ac2.set_config("bcc_self", "1")
 
-    acfactory.get_accepted_chat(ac1, ac2).send_text("hi")
+    acf.get_accepted_chat(ac1, ac2).send_text("hi")
     msg = ac2.wait_for_incoming_msg()
     msg.mark_seen()
 
@@ -91,8 +91,8 @@ def test_markseen_message_and_mdn(acfactory, direct_imap):
     assert len(list(ac2_direct_imap.conn.fetch(AND(seen=True), mark_seen=False))) == 2
 
 
-def test_trash_multiple_messages(acfactory, direct_imap, log):
-    ac1, ac2 = acfactory.get_online_accounts(2)
+def test_trash_multiple_messages(acf, direct_imap, log):
+    ac1, ac2 = acf.get_online_accounts(2)
     ac2.stop_io()
 
     # Make sure that messages are not immediately auto-deleted on the server:
@@ -101,7 +101,7 @@ def test_trash_multiple_messages(acfactory, direct_imap, log):
     ac2.set_config("sync_msgs", "0")
 
     ac2.start_io()
-    chat12 = acfactory.get_accepted_chat(ac1, ac2)
+    chat12 = acf.get_accepted_chat(ac1, ac2)
 
     log.section("ac1: sending 3 messages")
     texts = ["first", "second", "third"]

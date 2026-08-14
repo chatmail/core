@@ -1,15 +1,15 @@
-def test_set_location(dc, acfactory) -> None:
+def test_set_location(dc, acf) -> None:
     # Try setting location without any accounts.
     assert not dc.set_location(1.0, 2.0, 0.1)
 
     # Create one account that does not stream,
     # set location.
-    acfactory.new_configured_account()
+    acf.new_configured_account()
     assert not dc.set_location(3.0, 4.0, 0.1)
 
 
-def test_send_locations_to_chat(dc, acfactory):
-    alice, bob = acfactory.get_online_accounts(2)
+def test_send_locations_to_chat(dc, acf):
+    alice, bob = acf.get_online_accounts(2)
 
     assert not alice.is_sending_locations()
     alice_chat_bob = alice.create_chat(bob)

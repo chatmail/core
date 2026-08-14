@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from deltachat_rpc_client import Account, EventType, const
 
 if TYPE_CHECKING:
-    from deltachat_rpc_client.pytestplugin import ACFactory
+    from deltachat_rpc_client.pytestplugin import RPCAccountFactory
 
 
 def wait_for_chatlist_and_specific_item(account, chat_id):
@@ -40,11 +40,11 @@ def wait_for_chatlist(account):
             break
 
 
-def test_delivery_status(acfactory: ACFactory) -> None:
+def test_delivery_status(acf: RPCAccountFactory) -> None:
     """
     Test change status on chatlistitem when status changes (delivered, read)
     """
-    alice, bob = acfactory.get_online_accounts(2)
+    alice, bob = acf.get_online_accounts(2)
 
     alice_contact_bob = alice.create_contact(bob, "Bob")
     alice_chat_bob = alice_contact_bob.create_chat()
@@ -82,11 +82,11 @@ def test_delivery_status(acfactory: ACFactory) -> None:
     assert chat_item["summaryStatus"] == const.MessageState.OUT_MDN_RCVD
 
 
-def test_delivery_status_failed(acfactory: ACFactory) -> None:
+def test_delivery_status_failed(acf: RPCAccountFactory) -> None:
     """
     Test change status on chatlistitem when status changes failed
     """
-    (alice,) = acfactory.get_online_accounts(1)
+    (alice,) = acf.get_online_accounts(1)
     alice.set_config("force_encryption", "0")
 
     invalid_contact = alice.create_contact("example@example.com", "invalid address")
@@ -110,12 +110,12 @@ def test_delivery_status_failed(acfactory: ACFactory) -> None:
     assert failing_message.get_snapshot().state == const.MessageState.OUT_FAILED
 
 
-def test_download_on_demand(acfactory: ACFactory, data) -> None:
+def test_download_on_demand(acf: RPCAccountFactory, rpcdata) -> None:
     """
     Test if download on demand emits chatlist update events.
     This is only needed for last message in chat, but finding that out is too expensive, so it's always emitted
     """
-    alice, bob = acfactory.get_online_accounts(2)
+    alice, bob = acf.get_online_accounts(2)
 
     alice_contact_bob = alice.create_contact(bob, "Bob")
     alice_chat_bob = alice_contact_bob.create_chat()
@@ -128,7 +128,7 @@ def test_download_on_demand(acfactory: ACFactory, data) -> None:
     msg.get_snapshot().chat.accept()
     bob.get_chat_by_id(chat_id).send_message(
         "Hello World, this message is bigger than 5 bytes",
-        file=data.get_path("image/screenshot.jpg"),
+        file=rpcdata.get_path("image/screenshot.jpg"),
     )
 
     message = alice.wait_for_incoming_msg()
@@ -144,8 +144,8 @@ def test_download_on_demand(acfactory: ACFactory, data) -> None:
     wait_for_chatlist_specific_item(alice, chat_id)
 
 
-def get_multi_account_test_setup(acfactory: ACFactory) -> [Account, Account, Account]:
-    alice, bob = acfactory.get_online_accounts(2)
+def get_multi_account_test_setup(acf: RPCAccountFactory) -> [Account, Account, Account]:
+    alice, bob = acf.get_online_accounts(2)
 
     alice_contact_bob = alice.create_contact(bob, "Bob")
     alice_chat_bob = alice_contact_bob.create_chat()
@@ -161,12 +161,12 @@ def get_multi_account_test_setup(acfactory: ACFactory) -> [Account, Account, Acc
     return [alice, alice_second_device, bob, alice_chat_bob]
 
 
-def test_imap_sync_seen_msgs(acfactory: ACFactory) -> None:
+def test_imap_sync_seen_msgs(acf: RPCAccountFactory) -> None:
     """
     Test that chatlist changed events are emitted for the second device
     when the message is marked as read on the first device
     """
-    alice, alice_second_device, bob, alice_chat_bob = get_multi_account_test_setup(acfactory)
+    alice, alice_second_device, bob, alice_chat_bob = get_multi_account_test_setup(acf)
 
     bob.create_chat(alice)
 
@@ -191,11 +191,11 @@ def test_imap_sync_seen_msgs(acfactory: ACFactory) -> None:
     wait_for_chatlist_specific_item(alice, alice_chat_bob.id)
 
 
-def test_multidevice_sync_chat(acfactory: ACFactory) -> None:
+def test_multidevice_sync_chat(acf: RPCAccountFactory) -> None:
     """
     Test multidevice sync: syncing chat visibility and muting across multiple devices
     """
-    alice, alice_second_device, bob, alice_chat_bob = get_multi_account_test_setup(acfactory)
+    alice, alice_second_device, bob, alice_chat_bob = get_multi_account_test_setup(acf)
 
     alice_chat_bob.archive()
     wait_for_chatlist_specific_item(alice_second_device, alice_chat_bob.id)
