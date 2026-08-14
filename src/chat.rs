@@ -3037,21 +3037,21 @@ WHERE id=?
             )?;
             let all_recipients = recipients.join(" ");
             if let Some(pre_msg) = &rendered_pre_msg {
-                let row_id = stmt.execute((
+                let row_id = stmt.insert((
                     &pre_msg.rfc724_mid,
                     &all_recipients,
                     &pre_msg.message,
                     msg.id,
                 ))?;
-                row_ids.push(row_id.try_into()?);
+                row_ids.push(row_id);
             }
-            let row_id = stmt.execute((
+            let row_id = stmt.insert((
                 &rendered_msg.rfc724_mid,
                 &all_recipients,
                 &rendered_msg.message,
                 msg.id,
             ))?;
-            row_ids.push(row_id.try_into()?);
+            row_ids.push(row_id);
         }
         Ok(row_ids)
     };
