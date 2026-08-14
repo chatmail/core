@@ -22,8 +22,10 @@ ALL = "1:*"
 class DirectImap:
     """Internal Python-level IMAP handling."""
 
-    def __init__(self, account: Account) -> None:
+    def __init__(self, account: Account, addr=None, password=None) -> None:
         self.account = account
+        self.addr = addr or account.get_config("addr")
+        self.password = password or account.get_config("mail_pw")
         self.logid = account.get_config("displayname") or id(account)
         self._idling = False
         self.connect()
@@ -33,9 +35,9 @@ class DirectImap:
         host = self.account.get_config("configured_mail_server")
         port = 993
 
-        user = self.account.get_config("addr")
+        user = self.addr
         host = user.rsplit("@")[-1]
-        pw = self.account.get_config("mail_pw")
+        pw = self.password
 
         ssl_context = ssl.create_default_context()
         if host.startswith("_"):

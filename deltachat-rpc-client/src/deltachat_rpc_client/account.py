@@ -154,9 +154,10 @@ class Account:
         return transports
 
     def bring_online(self):
-        """Start I/O and wait until IMAP becomes IDLE."""
+        """Start I/O, wait until all transports became IDLE and drop the events seen so far."""
         self.start_io()
-        self.wait_for_event(EventType.IMAP_INBOX_IDLE)
+        self._rpc.wait_for_transports_idle_and_all_work_done(self.id)
+        self.clear_all_events()
 
     def create_contact(self, obj: Union[int, str, Contact, "Account"], name: Optional[str] = None) -> Contact:
         """Create a new Contact or return an existing one.

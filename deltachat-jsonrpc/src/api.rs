@@ -2089,6 +2089,14 @@ impl CommandApi {
         Ok(())
     }
 
+    /// Waits until all transports fetched their inbox and no background work is left.
+    /// Never returns unless I/O is started. Must ONLY be used by tests.
+    async fn wait_for_transports_idle_and_all_work_done(&self, account_id: u32) -> Result<()> {
+        let ctx = self.get_context(account_id).await?;
+        ctx.wait_for_all_work_done().await;
+        Ok(())
+    }
+
     /// Get the current connectivity, i.e. whether the device is connected to the IMAP server.
     /// One of:
     /// - DC_CONNECTIVITY_NOT_CONNECTED (1000): Show e.g. the string "Not connected" or a red dot
