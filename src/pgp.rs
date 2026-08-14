@@ -15,12 +15,13 @@ use pgp::crypto::ecc_curve::ECCCurve;
 use pgp::crypto::hash::HashAlgorithm;
 use pgp::crypto::sym::SymmetricKeyAlgorithm;
 use pgp::packet::{Signature, Subpacket, SubpacketData};
+use pgp::ser::Serialize;
 use pgp::types::{
     CompressionAlgorithm, Imprint, KeyDetails, KeyVersion, Password, SignedUser, SigningKey as _,
     StringToKey,
 };
 use rand_old::{Rng as _, thread_rng};
-use sha2::Sha256;
+use sha2::{Digest as _, Sha256};
 
 use crate::configure::MAX_RELAYS;
 use crate::key::{DcKey, Fingerprint};
@@ -250,7 +251,7 @@ pub fn pk_validate(
 }
 
 /// Symmetrically encrypt the message.
-/// This is used for broadcast channels and for version 2 of the Securejoin protocol.
+/// This is used for broadcast channels, Securejoin v3 and `keyupdate` messages.
 /// `shared secret` is the secret that will be used for symmetric encryption.
 pub fn symm_encrypt_message(
     plain: Vec<u8>,
@@ -452,6 +453,36 @@ pub(crate) fn addresses_from_public_key(public_key: &SignedPublicKey) -> Option<
     None
 }
 
+/// Returns the addresses to reach the owner of `public_key`,
+/// falling back to `addr` if there is no key
+/// (as for key-contacts created from a fingerprint alone)
+/// or if the key carries no relay list.
+pub(crate) fn relay_addrs(public_key: Option<&SignedPublicKey>, addr: &str) -> Vec<String> {
+    public_key
+        .and_then(addresses_from_public_key)
+        .unwrap_or_else(|| vec![addr.to_string()])
+}
+
+/// Returns the symmetric secret for keyupdate messages sent by the owner of `public_key`.
+///
+/// The secret is derived from the primary key packet,
+/// which is immutable and identical in every copy of the key ever handed out:
+/// this is safe to hash directly because rpgp serializes the packet body without the header,
+/// the only part that differs between the legacy and current packet format.
+/// So everyone who ever obtained the key can derive the secret and decrypt, forever.
+/// That is exactly the intended audience of keyupdates (key-contacts),
+/// but messages encrypted with this secret must only carry near-public payloads,
+/// i.e. the key itself and its relay list, never any traces of user content or metadata.
+///
+/// The `keyupdate` prefix domain-separates the digest from v6 fingerprints,
+/// which are also Sha256 hashes over the same key material and travel in invite links.
+pub(crate) fn keyupdate_secret(public_key: &SignedPublicKey) -> Result<String> {
+    let mut hasher = Sha256::new();
+    hasher.update(b"keyupdate");
+    hasher.update(Serialize::to_bytes(&public_key.primary_key)?);
+    Ok(format!("keyupdate/{}", hex::encode(hasher.finalize())))
+}
+
 /// Returns true if public key advertises SEIPDv2 feature.
 pub(crate) fn pubkey_supports_seipdv2(public_key: &SignedPublicKey) -> bool {
     // If any Direct Key Signature or any User ID signature has SEIPDv2 feature,
@@ -492,7 +523,7 @@ mod tests {
         decrypt,
         key::{load_self_public_key, self_fingerprint, store_self_keypair},
         mimefactory::{part_to_bytes, wrap_encrypted_part},
-        test_utils::{TestContext, TestContextManager, alice_keypair, bob_keypair},
+        test_utils::{TestContext, TestContextManager, alice_keypair, bob_keypair, pqc_keypair},
         token,
     };
     use pgp::composed::{Esk, Message};
@@ -846,6 +877,20 @@ mod tests {
         // Cannot merge certificates with different primary key.
         assert!(merge_openpgp_certificates(alice.clone(), bob.clone()).is_err());
         assert!(merge_openpgp_certificates(bob.clone(), alice.clone()).is_err());
+    }
+
+    #[test]
+    fn test_keyupdate_secret() {
+        // Pinned: deployed contacts derive the secret from their stored key copies.
+        // One v4 and one v6 key: the v6 body additionally contains the key material length.
+        assert_eq!(
+            keyupdate_secret(&alice_keypair().to_public_key()).unwrap(),
+            "keyupdate/51d75fab83de11ac2dfbaa4221d4bffe04773da64e3004616f7456f96ae7d6be"
+        );
+        assert_eq!(
+            keyupdate_secret(&pqc_keypair().to_public_key()).unwrap(),
+            "keyupdate/07989f6c74aa553bf1cbed500588fad969be6011ca3ac470781d343f9a2de408"
+        );
     }
 
     /// Test PQC support.

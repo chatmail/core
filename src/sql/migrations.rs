@@ -2610,6 +2610,28 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 164)?;
+    if dbversion < migration_version {
+        // Seed the keyupdate baseline so that upgrading alone
+        // sends nothing, see `keyupdate.rs`.
+        sql.execute_migration_transaction(
+            |transaction| {
+                let relays: Vec<String> = transaction
+                    .prepare("SELECT addr FROM transports WHERE is_published=1 ORDER BY addr")?
+                    .query_map((), |row| row.get(0))?
+                    .collect::<rusqlite::Result<_>>()?;
+                transaction.execute(
+                    "INSERT OR REPLACE INTO config (keyname, value)
+                     VALUES ('keyupdate_baseline', ?)",
+                    (relays.join(","),),
+                )?;
+                Ok(())
+            },
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?

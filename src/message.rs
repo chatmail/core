@@ -1059,6 +1059,7 @@ impl Message {
             | SystemMessage::CallEnded
             | SystemMessage::MessagePinned // UI should scroll to pinned message on tapping
             | SystemMessage::MessageUnpinned // UI should scroll to unpinned message on tapping
+            | SystemMessage::Keyupdate
             | SystemMessage::Unknown => Ok(None),
         }
     }

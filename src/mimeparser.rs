@@ -269,6 +269,10 @@ pub enum SystemMessage {
 
     /// Message unpinned. The unpinned message is referred in `In-Reply-To:` header.
     MessageUnpinned = 72,
+
+    /// Keyupdate message informing contacts about the current key and relay list.
+    /// Receivers apply the key, then trash the message without updating `last_seen`.
+    Keyupdate = 80,
 }
 
 impl MimeMessage {
@@ -751,6 +755,8 @@ impl MimeMessage {
                 self.is_system_message = SystemMessage::MessagePinned;
             } else if value == "message-unpinned" {
                 self.is_system_message = SystemMessage::MessageUnpinned;
+            } else if value == "key-update" {
+                self.is_system_message = SystemMessage::Keyupdate;
             }
         } else if self.get_header(HeaderDef::ChatGroupMemberRemoved).is_some() {
             self.is_system_message = SystemMessage::MemberRemovedFromGroup;

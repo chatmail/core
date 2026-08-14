@@ -430,6 +430,10 @@ pub enum SystemMessageType {
     CallEnded,
     MessagePinned,
     MessageUnpinned,
+
+    /// Keyupdate message informing contacts about the current key and relay list.
+    /// Never shown in chats: receivers apply the key and then trash the message.
+    Keyupdate,
 }
 
 impl From<deltachat::mimeparser::SystemMessage> for SystemMessageType {
@@ -461,6 +465,7 @@ impl From<deltachat::mimeparser::SystemMessage> for SystemMessageType {
             SystemMessage::CallEnded => SystemMessageType::CallEnded,
             SystemMessage::MessagePinned => SystemMessageType::MessagePinned,
             SystemMessage::MessageUnpinned => SystemMessageType::MessageUnpinned,
+            SystemMessage::Keyupdate => SystemMessageType::Keyupdate,
         }
     }
 }

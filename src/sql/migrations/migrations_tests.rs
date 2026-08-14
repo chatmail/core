@@ -30,6 +30,23 @@ async fn test_clear_config_cache() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_keyupdate_baseline_migration() -> Result<()> {
+    let configured = STOP_MIGRATIONS_AT
+        .scope(163, async move { TestContext::new_alice().await })
+        .await;
+    configured.sql.run_migrations(&configured).await?;
+    let relays = configured.get_config(Config::KeyupdateBaseline).await?;
+    assert_eq!(relays.as_deref(), Some("alice@example.org"));
+
+    // A fresh account is seeded with an empty baseline.
+    let fresh = TestContext::new().await;
+    let relays = fresh.get_config(Config::KeyupdateBaseline).await?;
+    assert_eq!(relays.as_deref(), Some(""));
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_key_contacts_migration_autocrypt() -> Result<()> {
     let t = STOP_MIGRATIONS_AT
         .scope(131, async move { TestContext::new_alice().await })

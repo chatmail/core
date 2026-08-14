@@ -1,7 +1,8 @@
 use super::*;
 use crate::chat::{create_broadcast, load_broadcast_secret};
 use crate::constants::DC_CHAT_ID_TRASH;
-use crate::key::{load_self_secret_key, self_fingerprint};
+use crate::contact::Contact;
+use crate::key::{load_self_public_key, load_self_secret_key, self_fingerprint};
 use crate::pgp;
 use crate::qr::{Qr, check_qr};
 use crate::receive_imf::receive_imf;
@@ -248,7 +249,82 @@ async fn test_qr_code_happy_path() -> Result<()> {
     .await
 }
 
-/// Control: Test that the behavior is the same when the shared secret is unknown
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_keyupdate_unsigned_rejected() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    bob.add_or_lookup_contact(alice).await;
+    let secret = pgp::keyupdate_secret(&load_self_public_key(alice).await?)?;
+    let alice_addr = alice.get_config(Config::Addr).await?.unwrap();
+
+    test_shared_secret_decryption_ext(
+        bob,
+        &alice_addr,
+        &secret,
+        None,
+        Some("Unsigned message is not allowed to be encrypted with this shared secret"),
+    )
+    .await?;
+    bob.assert_warn("Unsigned message is not allowed to be encrypted with this shared secret")
+        .await;
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_keyupdate_wrong_signer_rejected() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await; // Attacker who also has Alice's key
+
+    bob.add_or_lookup_contact(alice).await;
+    let secret = pgp::keyupdate_secret(&load_self_public_key(alice).await?)?;
+    let charlie_addr = charlie.get_config(Config::Addr).await?.unwrap();
+
+    test_shared_secret_decryption_ext(
+        bob,
+        &charlie_addr,
+        &secret,
+        Some(charlie),
+        Some("This sender is not allowed to encrypt with this secret key"),
+    )
+    .await?;
+    bob.assert_warn("This sender is not allowed to encrypt with this secret key")
+        .await;
+    Ok(())
+}
+
+/// A blocked contact's keyupdate secret is never tried, so the message stays undecryptable.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_keyupdate_blocked_sender_rejected() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    Contact::block(bob, bob.add_or_lookup_contact_id(alice).await).await?;
+    let secret = pgp::keyupdate_secret(&load_self_public_key(alice).await?)?;
+    let alice_addr = alice.get_config(Config::Addr).await?.unwrap();
+
+    test_shared_secret_decryption_ext(
+        bob,
+        &alice_addr,
+        &secret,
+        Some(alice),
+        Some("Could not find symmetric secret for session key"),
+    )
+    .await?;
+    bob.assert_warn("Could not find symmetric secret for session key")
+        .await;
+    bob.assert_warn("unencrypted message").await;
+    Ok(())
+}
+
+/// Control: Test that the behavior is the same when the shared secret is unknown.
+///
+/// This is also how an old client, or one that does not know the sender's key,
+/// treats a keyupdate message: the secret cannot be derived, so it is unknown.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_unknown_secret() -> Result<()> {
     let mut tcm = TestContextManager::new();
