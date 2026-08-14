@@ -1,5 +1,59 @@
 # Changelog
 
+## [2.59.0] - 2026-08-14
+
+### API-Changes
+
+- [**breaking**] Remove deprecated `dc_chat_is_protected()`.
+- Deprecate `dc_chat_get_info_json()` ([#8580](https://github.com/chatmail/core/pull/8580))
+
+### Features / Changes
+
+- Add stock strings for being added/removed from group ([#8562](https://github.com/chatmail/core/pull/8562)).
+- Client version information ([#8557](https://github.com/chatmail/core/pull/8557)).
+- Remove hidden headers.
+- Stop creating info messages for old broadcast lists.
+
+### Fixes
+
+- Filtered reactions are info, not error in device chat.
+- Send MDNs to self even if MDNs are disabled.
+- Send HTTP requests in origin not absolute form.
+
+### Documentation
+
+- json-rpc: improve `reactions_by_contact` doc.
+- Do not refer to `is_chat_protected()`.
+- Do not talk about verified chats in securejoin QR-scanning functions.
+- Add SQL schema documentation.
+
+### Miscellaneous Tasks
+
+- Fix nightly clippy warnings.
+- cargo: bump astral-tokio-tar from 0.6.3 to 0.6.4.
+- cargo: bump bytes from 1.12.0 to 1.12.1.
+- FFI: don't swallow but log errors in three places.
+
+### Refactor
+
+- Remove `MessengerMessage`.
+- Stop setting chats.protected column explicitly.
+- Merge `msg_group_left_local` into `msg_del_member_local` ([#8575](https://github.com/chatmail/core/pull/8575)).
+- Rename `_ex()` -> `_ext()`.
+- mimefactory: add Encryption enum.
+
+### Tests
+
+- Fix flakyness of iroh tests by sending "forever" so that late swarm-joins still make the test work.
+- Move iroh tests into separate module.
+- Provide complete test isolation by not re-using account addresses.
+- Avoid another source of random failures with `direct_imap` failing to connect on first try.
+- Remove all cache-related logic in the FFI pytest plugin.
+- Add a CI-failing check that documented sql schema matches real one.
+- Abort early if DNS to chatmail domain does not work and nicer pytest startup header.
+- Load test data through the `data` fixture.
+- Allow to run the test suite against underscore-domain relays.
+
 ## [2.58.0] - 2026-08-10
 
 ### API-Changes
@@ -8637,3 +8691,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.56.0]: https://github.com/chatmail/core/compare/v2.55.0..v2.56.0
 [2.57.0]: https://github.com/chatmail/core/compare/v2.56.0..v2.57.0
 [2.58.0]: https://github.com/chatmail/core/compare/v2.57.0..v2.58.0
+[2.59.0]: https://github.com/chatmail/core/compare/v2.58.0..v2.59.0
