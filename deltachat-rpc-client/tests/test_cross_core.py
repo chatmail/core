@@ -43,6 +43,28 @@ def test_qr_setup_contact(acf, alice_and_remote_bob, version) -> None:
     alice2.wait_for_securejoin_inviter_success()
 
 
+@pytest.mark.parametrize("version", ["2.24.0"])
+def test_qr_setup_contact_multitransport(acf, alice_and_remote_bob, version) -> None:
+    """Test other-core Bob profile can do securejoin with Alice on current core, with multiple transports."""
+    alice, alice_contact_bob, remote_eval = alice_and_remote_bob(version)
+    relay_qr = acf.get_account_qr()
+    alice.add_transport_from_qr(relay_qr)
+    alice.add_transport_from_qr(relay_qr)
+
+    qr_code = alice.get_qr_code()
+    remote_eval(f"bob.secure_join({qr_code!r})")
+    alice.wait_for_securejoin_inviter_success()
+
+    # Test that Alice verified Bob's profile.
+    alice_contact_bob_snapshot = alice_contact_bob.get_snapshot()
+    assert alice_contact_bob_snapshot.is_verified
+
+    remote_eval("bob.wait_for_securejoin_joiner_success()")
+
+    # Test that Bob verified Alice's profile.
+    assert remote_eval("bob_contact_alice.get_snapshot().is_verified")
+
+
 def test_send_and_receive_message(alice_and_remote_bob) -> None:
     """Test other-core Bob profile can send a message to Alice on current core."""
     alice, alice_contact_bob, remote_eval = alice_and_remote_bob("2.23.0")

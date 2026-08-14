@@ -139,6 +139,18 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
     let self_addr = context.get_primary_self_addr().await?;
     let self_addr_urlencoded = utf8_percent_encode(&self_addr, DISALLOWED_CHARACTERS).to_string();
 
+    let r_param = context
+        .get_published_secondary_self_addrs()
+        .await?
+        .into_iter()
+        .reduce(|acc, addr| {
+            format!(
+                "{acc},{}",
+                utf8_percent_encode(&addr, DISALLOWED_CHARACTERS)
+            )
+        })
+        .map_or(String::default(), |addrs| format!("&r={addrs}"));
+
     let self_name = context
         .get_config(Config::Displayname)
         .await?
@@ -165,11 +177,11 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
         if chat.typ == Chattype::OutBroadcast {
             // For historic reansons, broadcasts currently use j instead of i for the invitenumber.
             format!(
-                "https://i.delta.chat/#{fingerprint}&v=3&x={grpid}&j={invitenumber}&s={auth}&a={self_addr_urlencoded}&n={self_name_urlencoded}&b={chat_name_urlencoded}",
+                "https://i.delta.chat/#{fingerprint}&v=3&x={grpid}&j={invitenumber}&s={auth}&a={self_addr_urlencoded}{r_param}&n={self_name_urlencoded}&b={chat_name_urlencoded}",
             )
         } else {
             format!(
-                "https://i.delta.chat/#{fingerprint}&v=3&x={grpid}&i={invitenumber}&s={auth}&a={self_addr_urlencoded}&n={self_name_urlencoded}&g={chat_name_urlencoded}",
+                "https://i.delta.chat/#{fingerprint}&v=3&x={grpid}&i={invitenumber}&s={auth}&a={self_addr_urlencoded}{r_param}&n={self_name_urlencoded}&g={chat_name_urlencoded}",
             )
         }
     } else {
@@ -182,7 +194,7 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
         context.scheduler.interrupt_smtp().await;
 
         format!(
-            "https://i.delta.chat/#{fingerprint}&v=3&i={invitenumber}&s={auth}&a={self_addr_urlencoded}&n={self_name_urlencoded}",
+            "https://i.delta.chat/#{fingerprint}&v=3&i={invitenumber}&s={auth}&a={self_addr_urlencoded}{r_param}&n={self_name_urlencoded}",
         )
     };
 

@@ -463,6 +463,8 @@ pub fn format_backup(qr: &Qr) -> Result<String> {
 ///     or: `OPENPGP4FPR:FINGERPRINT#a=ADDR&g=GROUPNAME&x=GROUPID&i=INVITENUMBER&s=AUTH`
 ///     or: `OPENPGP4FPR:FINGERPRINT#a=ADDR&b=BROADCAST_NAME&x=BROADCAST_ID&j=INVITENUMBER&s=AUTH`
 ///     or: `OPENPGP4FPR:FINGERPRINT#a=ADDR`
+///
+/// with optional `&r=ADDRS` param.
 async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
     let payload = qr
         .get(OPENPGP4FPR_SCHEME.len()..)
@@ -492,10 +494,17 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
         })
         .collect();
 
-    let addr = if let Some(addr) = param.get("a") {
-        Some(normalize_address(addr)?)
-    } else {
-        None
+    let addrs = {
+        let mut addrs = Vec::new();
+        if let Some(primary_addr) = param.get("a") {
+            addrs.push(normalize_address(primary_addr)?);
+        };
+        if let Some(secondary_addrs_raw) = param.get("r") {
+            for secondary_address in secondary_addrs_raw.split(',') {
+                addrs.push(normalize_address(secondary_address)?)
+            }
+        }
+        addrs
     };
 
     let name = decode_name(&param, "n")?.unwrap_or_default();
@@ -528,7 +537,9 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
         invitenumber = Some("".to_string());
     }
 
-    if let (Some(addr), Some(invitenumber), Some(authcode)) = (&addr, invitenumber, authcode) {
+    if let (Some(addr), Some(invitenumber), Some(authcode)) =
+        (addrs.first(), invitenumber, authcode)
+    {
         let addr = ContactAddress::new(addr)?;
         let (contact_id, _) = Contact::add_or_lookup_ext(
             context,
@@ -571,7 +582,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                     grpid,
                     contact_id,
                     fingerprint,
-                    addrs: vec![addr.to_string()],
+                    addrs,
                     invitenumber,
                     authcode,
                     is_v3,
@@ -608,7 +619,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                     grpid,
                     contact_id,
                     fingerprint,
-                    addrs: vec![addr.to_string()],
+                    addrs,
                     invitenumber,
                     authcode,
                     is_v3,
@@ -634,16 +645,16 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
             Ok(Qr::AskVerifyContact {
                 contact_id,
                 fingerprint,
-                addrs: vec![addr.to_string()],
+                addrs,
                 invitenumber,
                 authcode,
                 is_v3,
             })
         }
-    } else if let Some(addr) = addr {
+    } else if let Some(addr) = addrs.first() {
         let fingerprint = fingerprint.hex();
         let (contact_id, _) =
-            Contact::add_or_lookup_ext(context, "", &addr, &fingerprint, Origin::UnhandledQrScan)
+            Contact::add_or_lookup_ext(context, "", addr, &fingerprint, Origin::UnhandledQrScan)
                 .await?;
         let contact = Contact::get_by_id(context, contact_id).await?;
 
