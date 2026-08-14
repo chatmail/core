@@ -9,7 +9,9 @@ pub struct JsonrpcAppSource {
     /// Always increasing version number.
     pub version_integer: u32,
 
-    /// Any version string.
+    /// Version string that should be shown to the user.
+    /// UI must not linkify the string
+    /// as it may be interpreted like a phone number or an IP address.
     pub version_string: String,
 
     /// Where to download that version.

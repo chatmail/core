@@ -44,6 +44,24 @@ pub struct AppSource {
     pub download_url: String,
 }
 
+/// Sanitize version string for safe display/use by UIs.
+///
+/// Replaces untypical characters by `-`
+/// and truncates to at most 16 characters.
+/// This is to avoid to inject long text, unexpected content, formatting, homoglyphs.
+///
+/// Note, that UI should still take care to not linkify versions numbers -
+/// they may still look like phone numbers or IP-addresses.
+fn sanitize_version_string(version_string: &str) -> String {
+    version_string
+        .trim()
+        .to_lowercase()
+        .replace(|c: char| !c.is_ascii_alphanumeric() && c != '.', "-")
+        .chars()
+        .take(16)
+        .collect()
+}
+
 /// Get version information of a specific client and source.
 ///
 /// Iterates over all accounts and all transports,
@@ -79,11 +97,16 @@ pub async fn get_app_version(
                 .find(|c| c.client_id == client_id)
                 .and_then(|c| c.sources.into_iter().find(|s| s.source_id == source_id));
 
-            if let Some(candidate) = candidate
+            if let Some(mut candidate) = candidate
                 && best
                     .as_ref()
                     .is_none_or(|b| candidate.version_integer > b.version_integer)
             {
+                candidate.version_string = sanitize_version_string(&candidate.version_string);
+                if candidate.version_string.is_empty() {
+                    warn!(context, "version_string missing.");
+                    continue;
+                }
                 best = Some(candidate);
             }
         }
@@ -96,6 +119,30 @@ pub async fn get_app_version(
 mod tests {
     use super::*;
     use std::path::PathBuf;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_sanitize_version_string() {
+        assert_eq!(sanitize_version_string(""), "");
+        assert_eq!(sanitize_version_string("\n"), "");
+        assert_eq!(sanitize_version_string("7٣৬¾①و藏"), "7------");
+        assert_eq!(sanitize_version_string("2.57.0"), "2.57.0");
+        assert_eq!(
+            sanitize_version_string("2.57.0 whatever"),
+            "2.57.0-whatever"
+        );
+        assert_eq!(sanitize_version_string("2.57.0-RC1"), "2.57.0-rc1");
+        assert_eq!(sanitize_version_string(" 23.0 "), "23.0");
+
+        assert_eq!(
+            sanitize_version_string("666.999 tap https://evil.com"),
+            "666.999-tap-http"
+        );
+        assert_eq!(sanitize_version_string("2.0<br>bla"), "2.0-br-bla");
+        assert_eq!(
+            sanitize_version_string("1.0\nand now let me tell the following: bar baz foo"),
+            "1.0-and-now-let-"
+        );
+    }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_app_version_info_deserialize() -> Result<()> {
@@ -203,7 +250,7 @@ mod tests {
                   {
                     "sourceId": "baz",
                     "versionInteger": 1337,
-                    "versionString": "13.37",
+                    "versionString": " 13.37 ",
                     "downloadUrl": "https://dl.org/1337.acc"
                   }
                 ]
@@ -224,7 +271,7 @@ mod tests {
 
         let version = get_app_version(&accounts, "foo", "baz").await?.unwrap();
         assert_eq!(version.version_integer, 1337);
-        assert_eq!(version.version_string, "13.37");
+        assert_eq!(version.version_string, "13.37"); // spaces are removed by sanitize_version_string()
         assert_eq!(version.download_url, "https://dl.org/1337.acc");
 
         let version = get_app_version(&accounts, "non-", "existant").await?;
