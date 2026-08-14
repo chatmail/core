@@ -1,8 +1,8 @@
 from deltachat_rpc_client import EventType, Message
 
 
-def test_calls(acfactory) -> None:
-    alice, bob = acfactory.get_online_accounts(2)
+def test_calls(acf) -> None:
+    alice, bob = acf.get_online_accounts(2)
 
     place_call_info = "offer"
     accept_call_info = "answer"
@@ -35,14 +35,14 @@ def test_calls(acfactory) -> None:
     assert incoming_call_message.get_call_info().state.kind == "Completed"
 
 
-def test_video_call(acfactory) -> None:
+def test_video_call(acf) -> None:
     # Example from <https://datatracker.ietf.org/doc/rfc9143/>
     # with `s= ` replaced with `s=-`.
     #
     # `s=` cannot be empty according to RFC 3264,
     # so it is more clear as `s=-`.
 
-    alice, bob = acfactory.get_online_accounts(2)
+    alice, bob = acf.get_online_accounts(2)
 
     bob.create_chat(alice)  # Accept the chat so incoming call causes a notification.
     alice_contact_bob = alice.create_contact(bob, "Bob")
@@ -57,8 +57,8 @@ def test_video_call(acfactory) -> None:
     assert incoming_call_message.get_call_info().has_video
 
 
-def test_audio_call(acfactory) -> None:
-    alice, bob = acfactory.get_online_accounts(2)
+def test_audio_call(acf) -> None:
+    alice, bob = acf.get_online_accounts(2)
 
     bob.create_chat(alice)  # Accept the chat so incoming call causes a notification.
     alice_contact_bob = alice.create_contact(bob, "Bob")
@@ -73,15 +73,15 @@ def test_audio_call(acfactory) -> None:
     assert not incoming_call_message.get_call_info().has_video
 
 
-def test_ice_servers(acfactory) -> None:
-    alice = acfactory.get_online_account()
+def test_ice_servers(acf) -> None:
+    alice = acf.get_online_account()
 
     ice_servers = alice.ice_servers()
     assert len(ice_servers) == 1
 
 
-def test_no_contact_request_call(acfactory) -> None:
-    alice, bob = acfactory.get_online_accounts(2)
+def test_no_contact_request_call(acf) -> None:
+    alice, bob = acf.get_online_accounts(2)
 
     alice_chat_bob = alice.create_chat(bob)
     alice_chat_bob.place_outgoing_call("offer", has_video_initially=True)
@@ -101,8 +101,8 @@ def test_no_contact_request_call(acfactory) -> None:
                 break
 
 
-def test_who_can_call_me_nobody(acfactory) -> None:
-    alice, bob = acfactory.get_online_accounts(2)
+def test_who_can_call_me_nobody(acf) -> None:
+    alice, bob = acf.get_online_accounts(2)
 
     # Bob sets "who can call me" to "nobody" (2)
     bob.set_config("who_can_call_me", "2")
@@ -128,9 +128,9 @@ def test_who_can_call_me_nobody(acfactory) -> None:
                 break
 
 
-def test_who_can_call_me_everybody(acfactory) -> None:
+def test_who_can_call_me_everybody(acf) -> None:
     """Test that if "who can call me" setting is set to "everybody", calls arrive even in contact request chats."""
-    alice, bob = acfactory.get_online_accounts(2)
+    alice, bob = acf.get_online_accounts(2)
 
     # Bob sets "who can call me" to "nobody" (0)
     bob.set_config("who_can_call_me", "0")

@@ -5,11 +5,11 @@ from deltachat_rpc_client.const import ChatType, DownloadState
 from deltachat_rpc_client.rpc import JsonRpcError
 
 
-def test_add_second_address(acfactory) -> None:
-    account = acfactory.new_configured_account()
+def test_add_second_address(acf) -> None:
+    account = acf.new_configured_account()
     assert len(account.list_transports()) == 1
 
-    qr = acfactory.get_account_qr()
+    qr = acf.get_account_qr()
     account.add_transport_from_qr(qr)
     assert len(account.list_transports()) == 2
 
@@ -27,9 +27,9 @@ def test_add_second_address(acfactory) -> None:
     assert len(account.list_transports()) == 2
 
 
-def test_change_address(acfactory) -> None:
+def test_change_address(acf) -> None:
     """Test Alice configuring a second transport and setting it as a primary one."""
-    alice, bob = acfactory.get_online_accounts(2)
+    alice, bob = acf.get_online_accounts(2)
 
     bob_addr = bob.get_config("configured_addr")
     bob.create_chat(alice)
@@ -44,7 +44,7 @@ def test_change_address(acfactory) -> None:
     old_alice_addr = alice.get_config("configured_addr")
     alice_vcard = alice.self_contact.make_vcard()
     assert old_alice_addr in alice_vcard
-    qr = acfactory.get_account_qr()
+    qr = acf.get_account_qr()
     alice.add_transport_from_qr(qr)
     new_alice_addr = alice.list_transports()[1]["addr"]
     with pytest.raises(JsonRpcError):
@@ -76,18 +76,18 @@ def test_change_address(acfactory) -> None:
     assert sender_addr2 == new_alice_addr
 
 
-def test_download_on_demand(acfactory, data) -> None:
-    alice, bob = acfactory.get_online_accounts(2)
+def test_download_on_demand(acf, rpcdata) -> None:
+    alice, bob = acf.get_online_accounts(2)
     alice.set_config("download_limit", "1")
 
     alice.stop_io()
-    qr = acfactory.get_account_qr()
+    qr = acf.get_account_qr()
     alice.add_transport_from_qr(qr)
     alice.start_io()
 
     alice.create_chat(bob)
     chat_bob_alice = bob.create_chat(alice)
-    chat_bob_alice.send_message(file=data.get_path("image/screenshot.jpg"))
+    chat_bob_alice.send_message(file=rpcdata.get_path("image/screenshot.jpg"))
     msg = alice.wait_for_incoming_msg()
     snapshot = msg.get_snapshot()
     assert snapshot.download_state == DownloadState.AVAILABLE
@@ -103,15 +103,15 @@ def test_download_on_demand(acfactory, data) -> None:
         assert msg.get_snapshot().download_state == dstate
 
 
-def test_reconfigure_transport(acfactory) -> None:
+def test_reconfigure_transport(acf) -> None:
     """Test that reconfiguring the transport works."""
-    account = acfactory.get_online_account()
+    account = acf.get_online_account()
 
     [transport] = account.list_transports()
     account.add_or_update_transport(transport)
 
 
-def test_transport_synchronization(acfactory, log) -> None:
+def test_transport_synchronization(acf, log) -> None:
     """Test synchronization of transports between devices."""
 
     def wait_for_io_started(ac):
@@ -120,11 +120,11 @@ def test_transport_synchronization(acfactory, log) -> None:
             if "scheduler is running" in ev.msg:
                 return
 
-    ac1, ac2 = acfactory.get_online_accounts(2)
+    ac1, ac2 = acf.get_online_accounts(2)
     ac1_clone = ac1.clone()
     ac1_clone.bring_online()
 
-    qr = acfactory.get_account_qr()
+    qr = acf.get_account_qr()
 
     ac1.add_transport_from_qr(qr)
     ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
@@ -170,13 +170,13 @@ def test_transport_synchronization(acfactory, log) -> None:
     assert ac1_clone.wait_for_incoming_msg().get_snapshot().text == "Hello!"
 
 
-def test_transport_sync_new_as_primary(acfactory, log) -> None:
+def test_transport_sync_new_as_primary(acf, log) -> None:
     """Test that a transport promoted on one device is usable on other devices."""
-    ac1, bob = acfactory.get_online_accounts(2)
+    ac1, bob = acf.get_online_accounts(2)
     ac1_clone = ac1.clone()
     ac1_clone.bring_online()
 
-    qr = acfactory.get_account_qr()
+    qr = acf.get_account_qr()
 
     ac1.add_transport_from_qr(qr)
     ac1_transports = ac1.list_transports()
@@ -202,12 +202,12 @@ def test_transport_sync_new_as_primary(acfactory, log) -> None:
     assert ac1_clone.wait_for_incoming_msg().get_snapshot().text == "hello back"
 
 
-def test_recognize_self_address(acfactory) -> None:
-    alice, bob = acfactory.get_online_accounts(2)
+def test_recognize_self_address(acf) -> None:
+    alice, bob = acf.get_online_accounts(2)
 
     bob_chat = bob.create_chat(alice)
 
-    qr = acfactory.get_account_qr()
+    qr = acf.get_account_qr()
     alice.add_transport_from_qr(qr)
 
     new_alice_addr = alice.list_transports()[1]["addr"]
@@ -218,10 +218,10 @@ def test_recognize_self_address(acfactory) -> None:
     assert msg.chat == alice.create_chat(bob)
 
 
-def test_transport_limit(acfactory) -> None:
+def test_transport_limit(acf) -> None:
     """Test transports limit."""
-    account = acfactory.get_online_account()
-    qr = acfactory.get_account_qr()
+    account = acf.get_online_account()
+    qr = acf.get_account_qr()
 
     limit = 5
 
@@ -251,11 +251,11 @@ def test_transport_limit(acfactory) -> None:
         account.add_transport_from_qr(qr)
 
 
-def test_message_info_imap_urls(acfactory) -> None:
+def test_message_info_imap_urls(acf) -> None:
     """Test that message info contains IMAP URLs of where the message was received."""
-    alice, bob = acfactory.get_online_accounts(2)
+    alice, bob = acf.get_online_accounts(2)
 
-    qr = acfactory.get_account_qr()
+    qr = acf.get_account_qr()
     for i in range(3):
         alice.add_transport_from_qr(qr)
         # Wait for all transports to go IDLE after adding each one.
@@ -290,10 +290,10 @@ def test_message_info_imap_urls(acfactory) -> None:
     assert f"{new_alice_addr}/INBOX" in msg_info
 
 
-def test_remove_primary_transport(acfactory, log) -> None:
+def test_remove_primary_transport(acf, log) -> None:
     """Test that after removing the primary relay, Alice can still receive messages."""
-    alice, bob = acfactory.get_online_accounts(2)
-    qr = acfactory.get_account_qr()
+    alice, bob = acf.get_online_accounts(2)
+    qr = acf.get_account_qr()
 
     alice.add_transport_from_qr(qr)
     alice.bring_online()

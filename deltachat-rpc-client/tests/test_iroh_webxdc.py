@@ -96,14 +96,14 @@ def wait_realtime_connected(msg_pairs):
             receiver.account.wait_for_realtime_data(receiver.id)
 
 
-def test_realtime_sequentially(acfactory, path_to_webxdc):
+def test_realtime_sequentially(acf, path_to_webxdc):
     """Test two peers trying to establish connection sequentially."""
-    ac1, ac2 = acfactory.get_online_accounts(2)
+    ac1, ac2 = acf.get_online_accounts(2)
     ac1.create_chat(ac2)
     ac2.create_chat(ac1)
 
     # share a webxdc app between ac1 and ac2
-    ac1_webxdc_msg = acfactory.send_message(from_account=ac1, to_account=ac2, text="play", file=path_to_webxdc)
+    ac1_webxdc_msg = acf.send_message(from_account=ac1, to_account=ac2, text="play", file=path_to_webxdc)
     ac2_webxdc_msg = ac2.wait_for_incoming_msg()
     snapshot = ac2_webxdc_msg.get_snapshot()
     assert snapshot.text == "play"
@@ -111,7 +111,7 @@ def test_realtime_sequentially(acfactory, path_to_webxdc):
     # send iroh announcements sequentially
     log("sending ac1 -> ac2 realtime advertisement and additional message")
     ac1_webxdc_msg.send_webxdc_realtime_advertisement()
-    acfactory.send_message(from_account=ac1, to_account=ac2, text="ping1")
+    acf.send_message(from_account=ac1, to_account=ac2, text="ping1")
 
     log("waiting for incoming message on ac2")
     snapshot = ac2.wait_for_incoming_msg().get_snapshot()
@@ -119,7 +119,7 @@ def test_realtime_sequentially(acfactory, path_to_webxdc):
 
     log("sending ac2 -> ac1 realtime advertisement and additional message")
     ac2_webxdc_msg.send_webxdc_realtime_advertisement()
-    acfactory.send_message(from_account=ac2, to_account=ac1, text="ping2")
+    acf.send_message(from_account=ac2, to_account=ac1, text="ping2")
 
     log("waiting for incoming message on ac1")
     snapshot = ac1.wait_for_incoming_msg().get_snapshot()
@@ -133,24 +133,24 @@ def test_realtime_sequentially(acfactory, path_to_webxdc):
     assert ac2.wait_for_realtime_data(ac2_webxdc_msg.id) == data
 
 
-def test_realtime_simultaneously(acfactory, path_to_webxdc):
+def test_realtime_simultaneously(acf, path_to_webxdc):
     """Test two peers trying to establish connection simultaneously."""
-    ac1, ac2 = acfactory.get_online_accounts(2)
+    ac1, ac2 = acf.get_online_accounts(2)
     setup_realtime_webxdc(ac1, ac2, path_to_webxdc)
 
 
-def test_two_parallel_realtime_simultaneously(acfactory, path_to_webxdc):
+def test_two_parallel_realtime_simultaneously(acf, path_to_webxdc):
     """Test two peers trying to establish connection simultaneously."""
-    ac1, ac2 = acfactory.get_online_accounts(2)
+    ac1, ac2 = acf.get_online_accounts(2)
     ac1_webxdc_msg, ac2_webxdc_msg = setup_realtime_webxdc(ac1, ac2, path_to_webxdc, wait=False)
     ac1_webxdc_msg2, ac2_webxdc_msg2 = setup_realtime_webxdc(ac1, ac2, path_to_webxdc, wait=False)
     wait_realtime_connected([(ac1_webxdc_msg, ac2_webxdc_msg), (ac2_webxdc_msg, ac1_webxdc_msg)])
     wait_realtime_connected([(ac1_webxdc_msg2, ac2_webxdc_msg2), (ac2_webxdc_msg2, ac1_webxdc_msg2)])
 
 
-def test_no_duplicate_messages(acfactory, path_to_webxdc):
+def test_no_duplicate_messages(acf, path_to_webxdc):
     """Test that messages are received only once."""
-    ac1, ac2 = acfactory.get_online_accounts(2)
+    ac1, ac2 = acf.get_online_accounts(2)
     ac1_ac2_chat = ac1.create_chat(ac2)
 
     ac1_webxdc_msg = ac1_ac2_chat.send_message(text="webxdc", file=path_to_webxdc)
@@ -169,9 +169,9 @@ def test_no_duplicate_messages(acfactory, path_to_webxdc):
         assert int(ac2.wait_for_realtime_data(ac2_webxdc_msg.id).decode()) > n
 
 
-def test_no_reordering(acfactory, path_to_webxdc):
+def test_no_reordering(acf, path_to_webxdc):
     """Test that sending a lot of realtime messages does not result in reordering."""
-    ac1, ac2 = acfactory.get_online_accounts(2)
+    ac1, ac2 = acf.get_online_accounts(2)
     ac1_webxdc_msg, ac2_webxdc_msg = setup_realtime_webxdc(ac1, ac2, path_to_webxdc, wait=True)
 
     for i in range(200):
@@ -184,9 +184,9 @@ def test_no_reordering(acfactory, path_to_webxdc):
         assert data == bytes([i]), "Reordering detected"
 
 
-def test_advertisement_after_chatting(acfactory, path_to_webxdc):
+def test_advertisement_after_chatting(acf, path_to_webxdc):
     """Test that realtime advertisement is assigned to the correct message after chatting."""
-    ac1, ac2 = acfactory.get_online_accounts(2)
+    ac1, ac2 = acf.get_online_accounts(2)
     ac1_ac2_chat = ac1.create_chat(ac2)
     ac1_webxdc_msg = ac1_ac2_chat.send_message(text="WebXDC", file=path_to_webxdc)
     ac2_webxdc_msg = ac2.wait_for_incoming_msg()
@@ -205,14 +205,14 @@ def test_advertisement_after_chatting(acfactory, path_to_webxdc):
     assert event.msg_id == ac1_webxdc_msg.id
 
 
-def test_realtime_large_webxdc(acfactory, path_to_large_webxdc):
+def test_realtime_large_webxdc(acf, path_to_large_webxdc):
     """Tests initializing realtime channel on a large webxdc.
 
     This is a regression test for a bug that existed in version 2.42.0.
     Large webxdc is split into pre- and post- message,
     and this previously resulted in failure to initialize realtime.
     """
-    ac1, ac2 = acfactory.get_online_accounts(2)
+    ac1, ac2 = acf.get_online_accounts(2)
     ac2.create_chat(ac1)
     ac1_ac2_chat = ac1.create_chat(ac2)
     ac1_webxdc_msg = ac1_ac2_chat.send_message(text="realtime check", file=path_to_large_webxdc)

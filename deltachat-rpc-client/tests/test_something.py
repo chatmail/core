@@ -48,8 +48,8 @@ def test_email_address_validity(rpc) -> None:
         assert not rpc.check_email_validity(addr)
 
 
-def test_acfactory(acfactory) -> None:
-    account = acfactory.new_configured_account()
+def test_acf(acf) -> None:
+    account = acf.new_configured_account()
     while True:
         event = account.wait_for_event()
         if event.kind == EventType.CONFIGURE_PROGRESS:
@@ -61,9 +61,9 @@ def test_acfactory(acfactory) -> None:
     logging.info("Successful configuration")
 
 
-def test_configure_starttls(acfactory) -> None:
-    addr, password = acfactory.get_credentials()
-    account = acfactory.get_unconfigured_account()
+def test_configure_starttls(acf) -> None:
+    addr, password = acf.get_credentials()
+    account = acf.get_unconfigured_account()
     account.add_or_update_transport(
         {
             "addr": addr,
@@ -75,10 +75,10 @@ def test_configure_starttls(acfactory) -> None:
     assert account.is_configured()
 
 
-def test_lowercase_address(acfactory) -> None:
-    addr, password = acfactory.get_credentials()
+def test_lowercase_address(acf) -> None:
+    addr, password = acf.get_credentials()
     addr_upper = addr.upper()
-    account = acfactory.get_unconfigured_account()
+    account = acf.get_unconfigured_account()
     account.add_or_update_transport(
         {
             "addr": addr_upper,
@@ -103,9 +103,9 @@ def test_lowercase_address(acfactory) -> None:
     assert addr_upper not in param
 
 
-def test_configure_ip(acfactory) -> None:
-    addr, password = acfactory.get_credentials()
-    account = acfactory.get_unconfigured_account()
+def test_configure_ip(acf) -> None:
+    addr, password = acf.get_credentials()
+    account = acf.get_unconfigured_account()
     ip_address = socket.gethostbyname(addr.rsplit("@")[-1])
 
     with pytest.raises(JsonRpcError):
@@ -119,10 +119,10 @@ def test_configure_ip(acfactory) -> None:
         )
 
 
-def test_configure_alternative_port(acfactory) -> None:
+def test_configure_alternative_port(acf) -> None:
     """Test that configuration with alternative port 443 works."""
-    addr, password = acfactory.get_credentials()
-    account = acfactory.get_unconfigured_account()
+    addr, password = acf.get_credentials()
+    account = acf.get_unconfigured_account()
     account.add_or_update_transport(
         {
             "addr": addr,
@@ -134,9 +134,9 @@ def test_configure_alternative_port(acfactory) -> None:
     assert account.is_configured()
 
 
-def test_list_transports(acfactory) -> None:
-    addr, password = acfactory.get_credentials()
-    account = acfactory.get_unconfigured_account()
+def test_list_transports(acf) -> None:
+    addr, password = acf.get_credentials()
+    account = acf.get_unconfigured_account()
     account.add_or_update_transport(
         {
             "addr": addr,
@@ -152,8 +152,8 @@ def test_list_transports(acfactory) -> None:
     assert params["imapUser"] == addr
 
 
-def test_account(acfactory) -> None:
-    alice, bob = acfactory.get_online_accounts(2)
+def test_account(acf) -> None:
+    alice, bob = acf.get_online_accounts(2)
 
     bob_addr = bob.get_config("addr")
     alice_contact_bob = alice.create_contact(bob, "Bob")
@@ -221,8 +221,8 @@ def test_account(acfactory) -> None:
     alice.stop_io()
 
 
-def test_mark_fresh_vs_self_mdn(acfactory) -> None:
-    alice, bob = acfactory.get_online_accounts(2)
+def test_mark_fresh_vs_self_mdn(acf) -> None:
+    alice, bob = acf.get_online_accounts(2)
     bob.set_config("bcc_self", "1")
 
     alice_contact_bob = alice.create_contact(bob)
@@ -245,8 +245,8 @@ def test_mark_fresh_vs_self_mdn(acfactory) -> None:
     assert bob_chat.get_fresh_message_count() == 2
 
 
-def test_chat(acfactory) -> None:
-    alice, bob = acfactory.get_online_accounts(2)
+def test_chat(acf) -> None:
+    alice, bob = acf.get_online_accounts(2)
 
     alice_contact_bob = alice.create_contact(bob, "Bob")
     alice_chat_bob = alice_contact_bob.create_chat()
@@ -315,8 +315,8 @@ def test_chat(acfactory) -> None:
     group.get_locations()
 
 
-def test_contact(acfactory) -> None:
-    alice, bob = acfactory.get_online_accounts(2)
+def test_contact(acf) -> None:
+    alice, bob = acf.get_online_accounts(2)
 
     bob_addr = bob.get_config("addr")
     alice_contact_bob = alice.create_contact(bob, "Bob")
@@ -332,8 +332,8 @@ def test_contact(acfactory) -> None:
     alice_contact_bob.create_chat()
 
 
-def test_message(acfactory) -> None:
-    alice, bob = acfactory.get_online_accounts(2)
+def test_message(acf) -> None:
+    alice, bob = acf.get_online_accounts(2)
 
     alice_contact_bob = alice.create_contact(bob, "Bob")
     alice_chat_bob = alice_contact_bob.create_chat()
@@ -363,8 +363,8 @@ def test_message(acfactory) -> None:
     assert reactions == snapshot.reactions
 
 
-def test_receive_imf_failure(acfactory) -> None:
-    alice, bob = acfactory.get_online_accounts(2)
+def test_receive_imf_failure(acf) -> None:
+    alice, bob = acf.get_online_accounts(2)
     alice_contact_bob = alice.create_contact(bob, "Bob")
     alice_chat_bob = alice_contact_bob.create_chat()
 
@@ -392,8 +392,8 @@ def test_receive_imf_failure(acfactory) -> None:
     assert snapshot.error is None
 
 
-def test_selfavatar_sync(acfactory, data, log) -> None:
-    alice = acfactory.get_online_account()
+def test_selfavatar_sync(acf, rpcdata, log) -> None:
+    alice = acf.get_online_account()
 
     log.section("Alice adds a second device")
     alice2 = alice.clone()
@@ -402,7 +402,7 @@ def test_selfavatar_sync(acfactory, data, log) -> None:
     alice2.start_io()
 
     log.section("First device changes avatar")
-    image = data.get_path("image/avatar1000x1000.jpg")
+    image = rpcdata.get_path("image/avatar1000x1000.jpg")
     alice.set_config("selfavatar", image)
     avatar_config = alice.get_config("selfavatar")
     avatar_hash = os.path.basename(avatar_config)
@@ -417,9 +417,9 @@ def test_selfavatar_sync(acfactory, data, log) -> None:
     assert avatar_config != avatar_config2
 
 
-def test_dont_move_sync_msgs(acfactory, direct_imap):
-    addr, password = acfactory.get_credentials()
-    ac1 = acfactory.get_unconfigured_account()
+def test_dont_move_sync_msgs(acf, direct_imap):
+    addr, password = acf.get_credentials()
+    ac1 = acf.get_unconfigured_account()
     ac1.set_config("bcc_self", "1")
     ac1.set_config("fix_is_chatmail", "1")
     ac1.add_or_update_transport({"addr": addr, "password": password})
@@ -448,8 +448,8 @@ def test_dont_move_sync_msgs(acfactory, direct_imap):
         time.sleep(1)
 
 
-def test_reaction_seen_on_another_dev(acfactory) -> None:
-    alice, bob = acfactory.get_online_accounts(2)
+def test_reaction_seen_on_another_dev(acf) -> None:
+    alice, bob = acf.get_online_accounts(2)
     alice2 = alice.clone()
     alice2.start_io()
 
@@ -474,8 +474,8 @@ def test_reaction_seen_on_another_dev(acfactory) -> None:
     assert chat_id == alice2_chat_bob.id
 
 
-def test_2nd_device_events_when_msgs_are_seen(acfactory) -> None:
-    alice, bob = acfactory.get_online_accounts(2)
+def test_2nd_device_events_when_msgs_are_seen(acf) -> None:
+    alice, bob = acf.get_online_accounts(2)
     alice2 = alice.clone()
     alice2.start_io()
 
@@ -503,9 +503,9 @@ def test_2nd_device_events_when_msgs_are_seen(acfactory) -> None:
     assert chat_alice2.get_fresh_message_count() == 0
 
 
-def test_is_bot(acfactory) -> None:
+def test_is_bot(acf) -> None:
     """Test that we can recognize messages submitted by bots."""
-    alice, bob = acfactory.get_online_accounts(2)
+    alice, bob = acf.get_online_accounts(2)
 
     alice_contact_bob = alice.create_contact(bob, "Bob")
     alice_chat_bob = alice_contact_bob.create_chat()
@@ -519,18 +519,18 @@ def test_is_bot(acfactory) -> None:
     assert snapshot.is_bot
 
 
-def test_bot(acfactory) -> None:
+def test_bot(acf) -> None:
     mock = MagicMock()
-    user = (acfactory.get_online_accounts(1))[0]
-    bot = acfactory.new_configured_bot()
-    bot2 = acfactory.new_configured_bot()
+    user = (acf.get_online_accounts(1))[0]
+    bot = acf.new_configured_bot()
+    bot2 = acf.new_configured_bot()
 
     assert bot.is_configured()
     assert bot.account.get_config("bot") == "1"
 
     hook = lambda e: mock.hook(e.msg_id) and None, events.RawEvent(EventType.INCOMING_MSG)
     bot.add_hook(*hook)
-    event = acfactory.process_message(from_account=user, to_client=bot, text="Hello!")
+    event = acf.process_message(from_account=user, to_client=bot, text="Hello!")
     snapshot = bot.account.get_message_by_id(event.msg_id).get_snapshot()
     assert not snapshot.is_bot
     mock.hook.assert_called_once_with(event.msg_id)
@@ -543,28 +543,28 @@ def test_bot(acfactory) -> None:
     hook = track, events.NewMessage(r"hello")
     bot.add_hook(*hook)
     bot.add_hook(track, events.NewMessage(command="/help"))
-    event = acfactory.process_message(from_account=user, to_client=bot, text="hello")
+    event = acf.process_message(from_account=user, to_client=bot, text="hello")
     mock.hook.assert_called_with(event.msg_id)
-    event = acfactory.process_message(from_account=user, to_client=bot, text="hello!")
+    event = acf.process_message(from_account=user, to_client=bot, text="hello!")
     mock.hook.assert_called_with(event.msg_id)
-    acfactory.process_message(from_account=bot2.account, to_client=bot, text="hello")
+    acf.process_message(from_account=bot2.account, to_client=bot, text="hello")
     assert len(mock.hook.mock_calls) == 2  # bot messages are ignored between bots
-    acfactory.process_message(from_account=user, to_client=bot, text="hey!")
+    acf.process_message(from_account=user, to_client=bot, text="hey!")
     assert len(mock.hook.mock_calls) == 2
     bot.remove_hook(*hook)
 
     mock.hook.reset_mock()
-    acfactory.process_message(from_account=user, to_client=bot, text="hello")
-    event = acfactory.process_message(from_account=user, to_client=bot, text="/help")
+    acf.process_message(from_account=user, to_client=bot, text="hello")
+    event = acf.process_message(from_account=user, to_client=bot, text="/help")
     mock.hook.assert_called_once_with(event.msg_id)
 
 
-def test_wait_next_messages(acfactory) -> None:
-    alice = acfactory.get_online_account()
+def test_wait_next_messages(acf) -> None:
+    alice = acf.get_online_account()
 
     # Create a bot account so it does not receive device messages in the beginning.
-    addr, password = acfactory.get_credentials()
-    bot = acfactory.get_unconfigured_account()
+    addr, password = acf.get_credentials()
+    bot = acf.get_unconfigured_account()
     bot.set_config("bot", "1")
     bot.add_or_update_transport({"addr": addr, "password": password})
     assert bot.is_configured()
@@ -590,19 +590,19 @@ def test_wait_next_messages(acfactory) -> None:
     assert snapshot.text == "Hello!"
 
 
-def test_import_export_backup(acfactory, tmp_path) -> None:
-    alice = acfactory.new_configured_account()
+def test_import_export_backup(acf, tmp_path) -> None:
+    alice = acf.new_configured_account()
     alice.export_backup(tmp_path)
 
     files = list(tmp_path.glob("*.tar"))
-    alice2 = acfactory.get_unconfigured_account()
+    alice2 = acf.get_unconfigured_account()
     alice2.import_backup(files[0])
 
     assert alice2.manager.get_system_info()
 
 
-def test_import_export_online_all(acfactory, tmp_path, data, log) -> None:
-    (ac1, some1) = acfactory.get_online_accounts(2)
+def test_import_export_online_all(acf, tmp_path, rpcdata, log) -> None:
+    (ac1, some1) = acf.get_online_accounts(2)
 
     log.section("create some chat content")
     some1_addr = some1.get_config("addr")
@@ -610,7 +610,7 @@ def test_import_export_online_all(acfactory, tmp_path, data, log) -> None:
     chat1.send_text("msg1")
     assert len(ac1.get_contacts()) == 1
 
-    original_image_path = data.get_path("image/avatar64x64.png")
+    original_image_path = rpcdata.get_path("image/avatar64x64.png")
     chat1.send_file(str(original_image_path))
 
     # Add another 100KB file that ensures that the progress is smooth enough
@@ -661,7 +661,7 @@ def test_import_export_online_all(acfactory, tmp_path, data, log) -> None:
     ac1.start_io()
 
     log.section("get fresh empty account")
-    ac2 = acfactory.get_unconfigured_account()
+    ac2 = acf.get_unconfigured_account()
 
     log.section("import backup and check it's proper")
     ac2.import_backup(files_written[0])
@@ -698,8 +698,8 @@ def test_import_export_online_all(acfactory, tmp_path, data, log) -> None:
     assert len(list(backupdir.glob("*.tar"))) == 2
 
 
-def test_import_export_keys(acfactory, tmp_path) -> None:
-    alice, bob = acfactory.get_online_accounts(2)
+def test_import_export_keys(acf, tmp_path) -> None:
+    alice, bob = acf.get_online_accounts(2)
 
     alice_chat_bob = alice.create_chat(bob)
     alice_chat_bob.send_text("Hello Bob!")
@@ -711,7 +711,7 @@ def test_import_export_keys(acfactory, tmp_path) -> None:
     alice_keys_path = tmp_path / "alice_keys"
     alice_keys_path.mkdir()
     alice.export_self_keys(alice_keys_path)
-    alice = acfactory.resetup_account(alice)
+    alice = acf.resetup_account(alice)
     alice.import_self_keys(alice_keys_path)
 
     snapshot.chat.accept()
@@ -747,8 +747,8 @@ def test_early_failure(tmp_path) -> None:
         rpc.start()
 
 
-def test_mdn_doesnt_break_autocrypt(acfactory) -> None:
-    alice, bob = acfactory.get_online_accounts(2)
+def test_mdn_doesnt_break_autocrypt(acf) -> None:
+    alice, bob = acf.get_online_accounts(2)
 
     alice_contact_bob = alice.create_contact(bob, "Bob")
 
@@ -778,10 +778,10 @@ def test_mdn_doesnt_break_autocrypt(acfactory) -> None:
 
 
 @pytest.mark.parametrize("n_accounts", [3, 2])
-def test_download_limit_chat_assignment(acfactory, tmp_path, n_accounts):
+def test_download_limit_chat_assignment(acf, tmp_path, n_accounts):
     download_limit = 300000
 
-    alice, *others = acfactory.get_online_accounts(n_accounts)
+    alice, *others = acf.get_online_accounts(n_accounts)
     bob = others[0]
 
     alice_group = alice.create_group("test group")
@@ -817,10 +817,10 @@ def test_download_limit_chat_assignment(acfactory, tmp_path, n_accounts):
         assert snapshot.chat == bob_group
 
 
-def test_download_small_msg_first(acfactory, tmp_path):
+def test_download_small_msg_first(acf, tmp_path):
     download_limit = 70000
 
-    alice, bob0 = acfactory.get_online_accounts(2)
+    alice, bob0 = acf.get_online_accounts(2)
     bob1 = bob0.clone()
     bob1.set_config("download_limit", str(download_limit))
 
@@ -841,14 +841,14 @@ def test_download_small_msg_first(acfactory, tmp_path):
 
 
 @pytest.mark.parametrize("delete_chat", [False, True])
-def test_delete_available_msg(acfactory, tmp_path, direct_imap, delete_chat):
+def test_delete_available_msg(acf, tmp_path, direct_imap, delete_chat):
     """
     Tests `DownloadState.AVAILABLE` message deletion on the receiver side.
     Also tests pre- and post-message deletion on the sender side.
     """
     # Min. UI setting as of v2.35
     download_limit = 163840
-    alice, bob = acfactory.get_online_accounts(2)
+    alice, bob = acf.get_online_accounts(2)
     bob.set_config("download_limit", str(download_limit))
     # Avoid immediate deletion from the server
     alice.set_config("bcc_self", "1")
@@ -891,8 +891,8 @@ def test_delete_available_msg(acfactory, tmp_path, direct_imap, delete_chat):
                 break
 
 
-def test_delete_fully_downloaded_msg(acfactory, tmp_path, direct_imap):
-    alice, bob = acfactory.get_online_accounts(2)
+def test_delete_fully_downloaded_msg(acf, tmp_path, direct_imap):
+    alice, bob = acf.get_online_accounts(2)
     # Avoid immediate deletion from the server
     bob.set_config("bcc_self", "1")
 
@@ -927,8 +927,8 @@ def test_delete_fully_downloaded_msg(acfactory, tmp_path, direct_imap):
             break
 
 
-def test_imap_autodelete_fully_downloaded_msg(acfactory, tmp_path, direct_imap):
-    alice, bob = acfactory.get_online_accounts(2)
+def test_imap_autodelete_fully_downloaded_msg(acf, tmp_path, direct_imap):
+    alice, bob = acf.get_online_accounts(2)
 
     chat_alice = alice.create_chat(bob)
     path = tmp_path / "large"
@@ -956,12 +956,12 @@ def test_imap_autodelete_fully_downloaded_msg(acfactory, tmp_path, direct_imap):
                 break
 
 
-def test_markseen_contact_request(acfactory):
+def test_markseen_contact_request(acf):
     """
     Test that seen status is synchronized for contact request messages
     even though read receipt is not sent.
     """
-    alice, bob = acfactory.get_online_accounts(2)
+    alice, bob = acf.get_online_accounts(2)
 
     # Bob sets up a second device.
     bob2 = bob.clone()
@@ -980,11 +980,11 @@ def test_markseen_contact_request(acfactory):
 
 
 @pytest.mark.parametrize("team_profile", [True, False])
-def test_no_markseen_in_team_profile(team_profile, acfactory):
+def test_no_markseen_in_team_profile(team_profile, acf):
     """
     Test that seen status is synchronized iff `team_profile` isn't set.
     """
-    alice, bob = acfactory.get_online_accounts(2)
+    alice, bob = acf.get_online_accounts(2)
     if team_profile:
         bob.set_config("team_profile", "1")
 
@@ -1025,11 +1025,11 @@ def test_no_markseen_in_team_profile(team_profile, acfactory):
         assert message2.get_snapshot().state == MessageState.IN_SEEN
 
 
-def test_read_receipt(acfactory):
+def test_read_receipt(acf):
     """
     Test sending a read receipt and ensure it is attributed to the correct contact.
     """
-    alice, bob = acfactory.get_online_accounts(2)
+    alice, bob = acf.get_online_accounts(2)
 
     alice_chat_bob = alice.create_chat(bob)
     alice_contact_bob = alice.create_contact(bob)
@@ -1048,15 +1048,15 @@ def test_read_receipt(acfactory):
     assert read_receipt_cnt == 1
 
 
-def test_get_http_response(acfactory):
-    alice = acfactory.new_configured_account()
+def test_get_http_response(acf):
+    alice = acf.new_configured_account()
     http_response = alice._rpc.get_http_response(alice.id, "https://example.org")
     assert http_response["mimetype"] == "text/html"
     assert b"<title>Example Domain</title>" in base64.b64decode((http_response["blob"] + "==").encode())
 
 
-def test_configured_imap_certificate_checks(acfactory):
-    alice = acfactory.new_configured_account()
+def test_configured_imap_certificate_checks(acf):
+    alice = acf.new_configured_account()
 
     # Certificate checks should be configured (not None)
     assert "cert_strict" in alice.get_info().used_transport_settings
@@ -1075,8 +1075,8 @@ def test_configured_imap_certificate_checks(acfactory):
     assert "cert_old_automatic" not in alice.get_info().used_transport_settings
 
 
-def test_no_old_msg_is_fresh(acfactory):
-    ac1, ac2 = acfactory.get_online_accounts(2)
+def test_no_old_msg_is_fresh(acf):
+    ac1, ac2 = acf.get_online_accounts(2)
     ac1_clone = ac1.clone()
     ac1_clone.start_io()
 
@@ -1103,9 +1103,9 @@ def test_no_old_msg_is_fresh(acfactory):
     assert len(list(ac1.get_fresh_messages())) == 0
 
 
-def test_rename_synchronization(acfactory):
+def test_rename_synchronization(acf):
     """Test synchronization of contact renaming."""
-    alice, bob = acfactory.get_online_accounts(2)
+    alice, bob = acf.get_online_accounts(2)
     alice2 = alice.clone()
     alice2.bring_online()
 
@@ -1120,9 +1120,9 @@ def test_rename_synchronization(acfactory):
     assert alice2_msg.sender.get_snapshot().display_name == "Bobby"
 
 
-def test_rename_group(acfactory):
+def test_rename_group(acf):
     """Test renaming the group."""
-    alice, bob = acfactory.get_online_accounts(2)
+    alice, bob = acf.get_online_accounts(2)
 
     alice_group = alice.create_group("Test group")
     alice_contact_bob = alice.create_contact(bob)
@@ -1151,8 +1151,8 @@ def test_get_all_accounts_deadlock(rpc):
 
 
 @pytest.mark.parametrize("all_devices_online", [True, False])
-def test_leave_broadcast(acfactory, all_devices_online):
-    alice, bob = acfactory.get_online_accounts(2)
+def test_leave_broadcast(acf, all_devices_online):
+    alice, bob = acf.get_online_accounts(2)
 
     bob2 = bob.clone()
 
@@ -1252,8 +1252,8 @@ def test_leave_broadcast(acfactory, all_devices_online):
     check_account(bob2, bob2.create_contact(alice), inviter_side=False)
 
 
-def test_leave_and_delete_group(acfactory, log):
-    alice, bob = acfactory.get_online_accounts(2)
+def test_leave_and_delete_group(acf, log):
+    alice, bob = acf.get_online_accounts(2)
 
     log.section("Alice creates a group")
     alice_chat = alice.create_group("Group")
@@ -1276,12 +1276,12 @@ def test_leave_and_delete_group(acfactory, log):
         alice.wait_for_event(EventType.CHAT_MODIFIED)
 
 
-def test_immediate_autodelete(acfactory, direct_imap, log):
+def test_immediate_autodelete(acf, direct_imap, log):
     """
     `bcc_self` is off by default,
     so that messages are supposed to be immediately autodeleted
     """
-    ac1, ac2 = acfactory.get_online_accounts(2)
+    ac1, ac2 = acf.get_online_accounts(2)
     assert ac1.get_config("bcc_self") == "0"
 
     log.section("ac1: create chat with ac2")
@@ -1312,8 +1312,8 @@ def test_immediate_autodelete(acfactory, direct_imap, log):
     assert ev.msg_id == sent_msg.id
 
 
-def test_background_fetch(acfactory, dc):
-    ac1, ac2 = acfactory.get_online_accounts(2)
+def test_background_fetch(acf, dc):
+    ac1, ac2 = acf.get_online_accounts(2)
     ac1.stop_io()
 
     ac1_chat = ac1.create_chat(ac2)
@@ -1349,8 +1349,8 @@ def test_background_fetch(acfactory, dc):
             break
 
 
-def test_message_exists(acfactory):
-    ac1, ac2 = acfactory.get_online_accounts(2)
+def test_message_exists(acf):
+    ac1, ac2 = acf.get_online_accounts(2)
     chat = ac1.create_chat(ac2)
     message1 = chat.send_text("Hello!")
     message2 = chat.send_text("Hello again!")
@@ -1368,7 +1368,7 @@ def test_message_exists(acfactory):
     assert not message2.exists()
 
 
-def test_synchronize_member_list_on_group_rejoin(acfactory, log):
+def test_synchronize_member_list_on_group_rejoin(acf, log):
     """
     Test that user recreates group member list when it joins the group again.
     ac1 creates a group with two other accounts: ac2 and ac3
@@ -1376,7 +1376,7 @@ def test_synchronize_member_list_on_group_rejoin(acfactory, log):
     ac2 did not see that ac3 is removed, so it should rebuild member list from scratch.
     """
     log.section("setting up accounts, accepted with each other")
-    ac1, ac2, ac3 = accounts = acfactory.get_online_accounts(3)
+    ac1, ac2, ac3 = accounts = acf.get_online_accounts(3)
 
     log.section("ac1: creating group chat with 2 other members")
     chat = ac1.create_group("title1")
@@ -1412,17 +1412,17 @@ def test_synchronize_member_list_on_group_rejoin(acfactory, log):
     assert msg.get_snapshot().chat.num_contacts() == 2
 
 
-def test_large_message(acfactory, data) -> None:
+def test_large_message(acf, rpcdata) -> None:
     """
     Test sending large message without download limit set,
     so it is sent with pre-message but downloaded without user interaction.
     """
-    alice, bob = acfactory.get_online_accounts(2)
+    alice, bob = acf.get_online_accounts(2)
 
     alice_chat_bob = alice.create_chat(bob)
     alice_chat_bob.send_message(
         "Hello World, this message is bigger than 5 bytes",
-        file=data.get_path("image/screenshot.jpg"),
+        file=rpcdata.get_path("image/screenshot.jpg"),
     )
 
     msg = bob.wait_for_incoming_msg()

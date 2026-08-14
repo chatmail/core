@@ -80,8 +80,8 @@ def read_database_schema(dbfile):
     return ";\n".join(row[0] for row in rows)
 
 
-def test_documented_schema_matches_database(acfactory):
-    account = acfactory.get_unconfigured_account()
+def test_documented_schema_matches_database(acf):
+    account = acf.get_unconfigured_account()
     real = parse_schema(read_database_schema(account.get_info()["database_dir"]))
     documented = parse_schema(DOC_PATH.read_text())
 

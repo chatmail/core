@@ -4,8 +4,8 @@ from deltachat_rpc_client import EventType
 from deltachat_rpc_client.const import MessageState
 
 
-def test_bcc_self_is_enabled_when_setting_up_second_device(acfactory):
-    ac = acfactory.get_online_account()
+def test_bcc_self_is_enabled_when_setting_up_second_device(acf):
+    ac = acf.get_online_account()
 
     # Initially after getting online
     # the setting bcc_self is set to 0 because there is only one device
@@ -29,8 +29,8 @@ def test_bcc_self_is_enabled_when_setting_up_second_device(acfactory):
     assert ac.get_config("bcc_self") == "1"
 
 
-def test_one_account_send_bcc_setting(acfactory, log, direct_imap):
-    ac1, ac2 = acfactory.get_online_accounts(2)
+def test_one_account_send_bcc_setting(acf, log, direct_imap):
+    ac1, ac2 = acf.get_online_accounts(2)
     ac1_clone = ac1.clone()
     ac1_clone.bring_online()
 
@@ -75,9 +75,9 @@ def test_one_account_send_bcc_setting(acfactory, log, direct_imap):
     assert len(list(ac1_direct_imap.conn.fetch(AND(seen=True)))) == 1
 
 
-def test_multidevice_sync_seen(acfactory, log):
+def test_multidevice_sync_seen(acf, log):
     """Test that message marked as seen on one device is marked as seen on another."""
-    ac1, ac2 = acfactory.get_online_accounts(2)
+    ac1, ac2 = acf.get_online_accounts(2)
     ac1_clone = ac1.clone()
     ac1_clone.bring_online()
 
@@ -129,9 +129,9 @@ def test_multidevice_sync_seen(acfactory, log):
     assert "Expires: " in ac1_clone_message.get_info()
 
 
-def test_multidevice_sync_seen_mdns_off(acfactory, log):
+def test_multidevice_sync_seen_mdns_off(acf, log):
     """Test that MDNs to self are sent even if MDNs are disabled."""
-    ac1, ac2 = acfactory.get_online_accounts(2)
+    ac1, ac2 = acf.get_online_accounts(2)
     ac1.set_config("mdns_enabled", "0")
 
     ac1_clone = ac1.clone()

@@ -5,16 +5,16 @@ from typing import TYPE_CHECKING
 from deltachat_rpc_client import EventType
 
 if TYPE_CHECKING:
-    from deltachat_rpc_client.pytestplugin import ACFactory
+    from deltachat_rpc_client.pytestplugin import RPCAccountFactory
 
 
-def test_event_on_configuration(acfactory: ACFactory) -> None:
+def test_event_on_configuration(acf: RPCAccountFactory) -> None:
     """
     Test if ACCOUNTS_ITEM_CHANGED event is emitted on configure
     """
 
-    addr, password = acfactory.get_credentials()
-    account = acfactory.get_unconfigured_account()
+    addr, password = acf.get_credentials()
+    account = acf.get_unconfigured_account()
     account.clear_all_events()
     assert not account.is_configured()
     future = account.add_or_update_transport.future({"addr": addr, "password": password})
