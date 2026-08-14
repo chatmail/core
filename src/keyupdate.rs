@@ -33,6 +33,7 @@ use anyhow::Result;
 use deltachat_contact_tools::addr_normalize;
 use rand::seq::SliceRandom;
 
+use crate::chat;
 use crate::chat::ChatId;
 use crate::config::Config;
 use crate::constants::Chattype;
@@ -40,9 +41,9 @@ use crate::contact::ContactId;
 use crate::context::Context;
 use crate::key::{DcKey, SignedPublicKey};
 use crate::log::warn;
+use crate::message;
 use crate::mimefactory::render_keyupdate_message;
 use crate::pgp::{pubkey_can_encrypt, relay_addrs};
-use crate::smtp::insert_into_smtp;
 use crate::tools::{create_outgoing_rfc724_mid, time};
 
 /// Maximum number of contacts one (chunk of a) keyupdate message is encrypted to.
@@ -145,14 +146,14 @@ async fn keyupdate_recipients(
 
 /// Returns the deduplicated relay addresses to put into the SMTP envelope
 /// for the keyupdate encrypted to a `chunk` of recipients.
-fn envelope_recipients(chunk: &[KeyupdateRecipient]) -> String {
+fn envelope_recipients(chunk: &[KeyupdateRecipient]) -> Vec<String> {
     let mut addrs = BTreeSet::new();
     for recipient in chunk {
         for relay in &recipient.relays {
             addrs.insert(addr_normalize(relay));
         }
     }
-    Vec::from_iter(addrs).join(" ")
+    Vec::from_iter(addrs)
 }
 
 /// Returns the relay list in the format stored in [`Config::KeyupdateBaseline`].
@@ -191,9 +192,20 @@ pub(crate) async fn maybe_send_keyupdate_message(context: &Context) -> Result<()
     for chunk in recipients.chunks(KEYUPDATE_CHUNK_CONTACTS) {
         let envelope = envelope_recipients(chunk);
         let rfc724_mid = create_outgoing_rfc724_mid();
+        let msg_id = message::insert_tombstone(context, &rfc724_mid).await?;
         let keys = chunk.iter().map(|r| r.public_key.clone()).collect();
-        let rendered_message = render_keyupdate_message(context, &rfc724_mid, keys).await?;
-        insert_into_smtp(context, &rfc724_mid, &envelope, rendered_message).await?;
+        let queued_msg = render_keyupdate_message(context, &rfc724_mid, keys).await?;
+        let now = time();
+        chat::enqueue_mail(
+            context,
+            now,
+            msg_id,
+            ChatId::TRASH,
+            &queued_msg,
+            &Default::default(),
+            &envelope,
+        )
+        .await?;
     }
 
     // Record only after queueing, so failed queueing is retried by a later check.

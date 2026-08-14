@@ -2642,6 +2642,30 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 166)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "
+CREATE TABLE smtp2 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    display_name TEXT NOT NULL,
+    rfc724_mid TEXT NOT NULL,
+    mime BLOB NOT NULL,
+    should_attach_pubkey INTEGER NOT NULL,
+    should_compress INTEGER NOT NULL,
+    should_sign INTEGER NOT NULL,
+    msg_id INTEGER NOT NULL,
+    recipients TEXT NOT NULL,
+    is_encrypted INTEGER NOT NULL,
+    shared_secret TEXT NOT NULL DEFAULT '',
+    encryption_fingerprints TEXT NOT NULL DEFAULT '',
+    retries INTEGER NOT NULL DEFAULT 0
+) STRICT;",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?

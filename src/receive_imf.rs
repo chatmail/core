@@ -574,7 +574,7 @@ pub(crate) async fn receive_imf_inner(
         context
             .sql
             .execute(
-                "DELETE FROM smtp \
+                "DELETE FROM smtp2 \
                 WHERE rfc724_mid=?1 AND (recipients LIKE ?2 OR recipients LIKE ('% ' || ?2))",
                 (rfc724_mid_orig, &self_addr),
             )

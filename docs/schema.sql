@@ -400,14 +400,43 @@ CREATE TABLE bobstate (
     chat_id INTEGER NOT NULL
 );
 
-CREATE TABLE smtp (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  rfc724_mid TEXT NOT NULL,          -- Message-ID
-  mime TEXT NOT NULL,                -- SMTP payload
-  msg_id INTEGER NOT NULL,           -- ID of the message in `msgs` table
-  recipients TEXT NOT NULL,          -- List of recipients separated by space
-  retries INTEGER NOT NULL DEFAULT 0 -- Number of failed attempts to send the message
-);
+CREATE TABLE smtp2 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    display_name TEXT NOT NULL, -- Display name to put into the From field.
+    rfc724_mid TEXT NOT NULL, -- Message-ID
+
+    -- Unencrypted payload with some headers.
+    mime BLOB NOT NULL,
+
+    -- True if Autocrypt header should be added before sending.
+    should_attach_pubkey INTEGER NOT NULL,
+
+    -- True if OpenPGP-encrypted message may use compression.
+    should_compress INTEGER NOT NULL,
+
+    -- True if encrypted message should be signed as well.
+    should_sign INTEGER NOT NULL,
+
+    -- ID of the message in `msgs` table
+    msg_id INTEGER NOT NULL,
+
+    -- List of recipients separated by space
+    recipients TEXT NOT NULL,
+
+    -- True if the message is encrypted.
+    -- If true, exactly one of the shared_secret or encryption_fingerprints should be non-empty.
+    -- If false, both must be empty.
+    is_encrypted INTEGER NOT NULL,
+
+    -- Shared secret if the message is to be encrypted symmetrically.
+    shared_secret TEXT NOT NULL DEFAULT '',
+
+    -- Pairs of addresses and fingerprints of the key the message should be encrypted to.
+    -- Stored as a JSON.
+    encryption_fingerprints TEXT NOT NULL DEFAULT '',
+
+    retries INTEGER NOT NULL DEFAULT 0 -- Number of failed attempts to send the message
+) STRICT;
 
 CREATE TABLE smtp_mdns (
     msg_id INTEGER NOT NULL, -- id of the message in msgs table which requested MDN (DEPRECATED 2024-06-21)
@@ -780,4 +809,14 @@ CREATE TABLE old_keypairs (
 CREATE TABLE sending_domains(
     domain TEXT PRIMARY KEY,
     dkim_works INTEGER DEFAULT 0
+);
+
+-- Replaced with smtp2.
+CREATE TABLE smtp (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  rfc724_mid TEXT NOT NULL,          -- Message-ID
+  mime TEXT NOT NULL,                -- SMTP payload
+  msg_id INTEGER NOT NULL,           -- ID of the message in `msgs` table
+  recipients TEXT NOT NULL,          -- List of recipients separated by space
+  retries INTEGER NOT NULL DEFAULT 0 -- Number of failed attempts to send the message
 );

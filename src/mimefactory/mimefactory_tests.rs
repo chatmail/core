@@ -308,9 +308,9 @@ async fn test_mdn_create_encrypted() -> Result<()> {
     message::markseen_msgs(&bob, vec![rcvd.id]).await?;
     let mimefactory =
         MimeFactory::from_mdn(&bob, rcvd.from_id, rcvd.rfc724_mid.clone(), vec![]).await?;
+    assert!(!mimefactory.will_be_encrypted());
     let rendered_msg = mimefactory.render(&bob).await?;
 
-    assert!(!rendered_msg.is_encrypted);
     assert!(!rendered_msg.message.contains("Bob Examplenet"));
     assert!(!rendered_msg.message.contains("Alice Exampleorg"));
     let bob_alice_contact = bob.add_or_lookup_contact(&alice).await;
@@ -321,9 +321,9 @@ async fn test_mdn_create_encrypted() -> Result<()> {
     message::markseen_msgs(&bob, vec![rcvd.id]).await?;
 
     let mimefactory = MimeFactory::from_mdn(&bob, rcvd.from_id, rcvd.rfc724_mid, vec![]).await?;
+    assert!(mimefactory.will_be_encrypted());
     let rendered_msg = mimefactory.render(&bob).await?;
 
-    assert!(rendered_msg.is_encrypted);
     assert!(!rendered_msg.message.contains("Bob Examplenet"));
     assert!(!rendered_msg.message.contains("Alice Exampleorg"));
 
