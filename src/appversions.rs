@@ -56,14 +56,8 @@ fn sanitize_version_string(version_string: &str) -> String {
     version_string
         .trim()
         .to_lowercase()
+        .replace(|c: char| !c.is_ascii_alphanumeric() && c != '.', "-")
         .chars()
-        .map(|c| {
-            if matches!(c, 'a'..='z' | '0'..='9' | '.') {
-                c
-            } else {
-                '-'
-            }
-        })
         .take(16)
         .collect()
 }
