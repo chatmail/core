@@ -360,36 +360,40 @@ impl Context {
             };
 
             if call.is_incoming() {
+                let can_call_me = match who_can_call_me(self).await? {
+                    WhoCanCallMe::Contacts => ChatIdBlocked::lookup_by_contact(self, from_id)
+                        .await?
+                        .is_some_and(|chat_id_blocked| {
+                            match chat_id_blocked.blocked {
+                                Blocked::Not => true,
+                                Blocked::Yes | Blocked::Request => {
+                                    // Do not notify about incoming calls
+                                    // from contact requests and blocked contacts.
+                                    //
+                                    // User can still access the call and accept it
+                                    // via the chat in case of contact requests.
+                                    false
+                                }
+                            }
+                        }),
+                    WhoCanCallMe::Everybody => ChatIdBlocked::lookup_by_contact(self, from_id)
+                        .await?
+                        .is_none_or(|chat_id_blocked| chat_id_blocked.blocked != Blocked::Yes),
+                    WhoCanCallMe::Nobody => false,
+                };
                 if call.is_stale() {
                     let missed_call_str = stock_str::missed_call(self);
                     call.update_text(self, &missed_call_str).await?;
-                    self.emit_incoming_msg(call.msg.chat_id, call_id); // notify missed call
+                    let important = can_call_me;
+                    // notify missed call
+                    call.msg
+                        .chat_id
+                        .emit_msg_event(self, call.msg.id, important);
                 } else {
                     let incoming_call_str =
                         stock_str::incoming_call(self, call.has_video_initially());
                     call.update_text(self, &incoming_call_str).await?;
                     self.emit_msgs_changed(call.msg.chat_id, call_id); // ringing calls are not additionally notified
-                    let can_call_me = match who_can_call_me(self).await? {
-                        WhoCanCallMe::Contacts => ChatIdBlocked::lookup_by_contact(self, from_id)
-                            .await?
-                            .is_some_and(|chat_id_blocked| {
-                                match chat_id_blocked.blocked {
-                                    Blocked::Not => true,
-                                    Blocked::Yes | Blocked::Request => {
-                                        // Do not notify about incoming calls
-                                        // from contact requests and blocked contacts.
-                                        //
-                                        // User can still access the call and accept it
-                                        // via the chat in case of contact requests.
-                                        false
-                                    }
-                                }
-                            }),
-                        WhoCanCallMe::Everybody => ChatIdBlocked::lookup_by_contact(self, from_id)
-                            .await?
-                            .is_none_or(|chat_id_blocked| chat_id_blocked.blocked != Blocked::Yes),
-                        WhoCanCallMe::Nobody => false,
-                    };
                     if can_call_me {
                         self.emit_event(EventType::IncomingCall {
                             msg_id: call.msg.id,
