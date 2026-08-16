@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import itertools
 import json
 import logging
@@ -38,8 +39,15 @@ class RpcMethod:
             "params": args,
             "id": request_id,
         }
-        self.rpc.request_results[request_id] = queue = Queue()
-        self.rpc.request_queue.put(request)
+        queue: Queue = Queue()
+        # Register before testing for shutdown, so that either the reader loop
+        # finds this request while draining, or the test below catches it here.
+        # Testing first would race with the reader loop finishing in between.
+        self.rpc.request_results[request_id] = queue
+        if self.rpc.request_queue_closed:
+            self.rpc._fail_request(request_id)
+        else:
+            self.rpc.request_queue.put(request)
 
         def rpc_future():
             """Wait for the request to receive a result."""
@@ -78,6 +86,10 @@ class Rpc:
         # Map from request ID to a Queue which provides a single result
         self.request_results: dict[int, Queue]
         self.request_queue: Queue[Any]
+        # Emulates `request_queue.shutdown(immediate=False)`, which needs Python 3.13:
+        # https://github.com/python/cpython/blob/v3.13.0/Lib/queue.py#L236-L257
+        # Note that `request_queue_closed` is set by the reader loop.
+        self.request_queue_closed: bool
         self.closing: bool
         self.reader_thread: Thread
         self.writer_thread: Thread
@@ -107,6 +119,7 @@ class Rpc:
         self.event_queues = {}
         self.request_results = {}
         self.request_queue = Queue()
+        self.request_queue_closed = False
         self.closing = False
         self.reader_thread = Thread(target=self.reader_loop)
         self.reader_thread.start()
@@ -123,6 +136,8 @@ class Rpc:
             # The reader_loop already saw EOF on stdout, so the process
             # has exited and stderr is available.
             stderr = self.process.stderr.read().decode(errors="replace").strip()
+            self.closing = True
+            self._shutdown_loops()
             if stderr:
                 raise JsonRpcError(f"RPC server failed to start: {stderr}") from e
             raise JsonRpcError(f"RPC server startup check failed: {e}") from e
@@ -135,11 +150,31 @@ class Rpc:
         """Terminate RPC server process and wait until the reader loop finishes."""
         self.closing = True
         self.stop_io_for_all_accounts()
+        # Let `events_loop` stop cleanly on `closing` before the pipe goes away,
+        # otherwise it might exit through an "RPC server closed" error instead.
         self.events_thread.join()
-        self.process.stdin.close()
-        self.reader_thread.join()
+        self._shutdown_loops()
+
+    def _shutdown_loops(self) -> None:
+        """Close the server pipe and wait for the loop threads to finish.
+
+        The writer blocks on an empty request queue,
+        so it needs the sentinel to notice the shutdown.
+        """
+        with contextlib.suppress(BrokenPipeError):
+            # An exited server may leave data unflushed,
+            # which close() would try to write out again.
+            self.process.stdin.close()
         self.request_queue.put(None)
+        self.reader_thread.join()
         self.writer_thread.join()
+        self.events_thread.join()
+
+    def _fail_request(self, request_id: int) -> None:
+        """Answer a registered request with an error, unless it was answered already."""
+        queue = self.request_results.pop(request_id, None)
+        if queue is not None:
+            queue.put({"error": {"code": -32000, "message": "RPC server closed"}})
 
     def __enter__(self):
         self.start()
@@ -162,9 +197,11 @@ class Rpc:
             # Log an exception if the reader loop dies.
             logging.exception("Exception in the reader loop")
         finally:
-            # Unblock any pending requests when the server closes stdout.
-            for _request_id, queue in self.request_results.items():
-                queue.put({"error": {"code": -32000, "message": "RPC server closed"}})
+            # Shut the request queue first, so that requests registered from now
+            # on are failed by their caller, then answer the pending ones here.
+            self.request_queue_closed = True
+            for request_id in list(self.request_results):
+                self._fail_request(request_id)
 
     def writer_loop(self) -> None:
         """Writer loop ensuring only a single thread writes requests."""

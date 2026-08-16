@@ -746,6 +746,11 @@ def test_early_failure(tmp_path) -> None:
     with pytest.raises(JsonRpcError, match="invalid_dir"):
         rpc.start()
 
+    # Requests issued after the server exited must fail immediately
+    # instead of waiting forever for the finished reader loop.
+    with pytest.raises(JsonRpcError, match="RPC server closed"):
+        rpc.get_system_info()
+
 
 def test_mdn_doesnt_break_autocrypt(acf) -> None:
     alice, bob = acf.get_online_accounts(2)
