@@ -381,16 +381,15 @@ pub(crate) fn render_queued_mail(
                 // <https://www.rfc-editor.org/rfc/rfc9787.html#structural-header-fields>.
                 continue;
             }
-            let header_value =
-                if header_name == "chat-version" || header_name == "chat-is-post-message" {
-                    parsed_header.get_value_raw()
-                } else if header_name == "subject" {
-                    &b"[...]"[..]
-                } else if header_name == "to" {
-                    &b"\"hidden-recipients\": ;"[..]
-                } else {
-                    continue;
-                };
+            let header_value = if header_name == "chat-is-post-message" {
+                parsed_header.get_value_raw()
+            } else if header_name == "subject" {
+                &b"[...]"[..]
+            } else if header_name == "to" {
+                &b"\"hidden-recipients\": ;"[..]
+            } else {
+                continue;
+            };
 
             outer_headers.extend(original_header_name.as_bytes());
             outer_headers.extend(b": ");
