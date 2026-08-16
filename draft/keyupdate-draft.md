@@ -1,7 +1,18 @@
 # A keyupdate push channel to maintain reliable chat connectivity
 
+[Multi-relay support for chat profiles was added in March 2026][multi-relay],
+allowing them to use multiple relays for receiving and sending messages.
+While instant onboarding is being extended to multi-relay onboarding ([#8444]),
+adding and removing relays automatically is not settled,
+not least because changing a relay is unsafe today.
+This draft proposes a keyupdate push channel
+that shares our current key with our contacts when it changes,
+without waiting for a chat interaction.
+It helps keep chats connected now,
+and makes automatic relay changes safe enough to design later.
 
-## Problem
+
+## Problems of maintaining reliable chat connectivity today
 
 A profile's relay list lives inside its own key,
 as a signed notation that travels with the key.
@@ -89,7 +100,7 @@ The price is that users cannot end their relationship with a relay:
   it", patched as a symptom in [#8550] while the relay itself stayed.
 
 This grows with multi-relay setups, and multi-relay onboarding ([#8444]) brings them.
-The [privacy notes being drafted for the apps](https://github.com/deltachat/deltachat-pages/pull/1385)
+The [privacy notes being drafted for the apps][privacy notes]
 would somehow need to describe this behaviour, and the description would read badly.
 
 Unpublished relays exist to protect exactly the contacts
@@ -168,7 +179,7 @@ Nothing here is ephemeral and the secret never rotates,
 so blocking or deleting a contact does not take that ability away.
 
 However, deriving the secret is not the same as getting the message:
-keyupdates go only to our own contacts (see below),
+Keyupdates go only to our own contacts (see below),
 so the wider set only matters for someone who also obtains a copy,
 a relay in the path for example.
 
@@ -216,7 +227,7 @@ That single decision gives us the rest:
   A device applying a relay change received over
   multi-device sync should record the resulting list as announced without sending.
   That also systematically prevents a device catching up on a backlog of old sync
-  messages from announcing withering historical states.
+  messages from announcing historical states.
 
 
 ## Cryptographic and implementation considerations
@@ -496,6 +507,8 @@ re-establishing chats over time, scaling chat connectivity for everyone.
 [#8481]: https://github.com/chatmail/core/pull/8481 "Improve and speed up autocrypt/pgp gossipping with MDNs"
 [#8550]: https://github.com/chatmail/core/pull/8550 "fix: multi relay connectivity"
 [#8588]: https://github.com/chatmail/core/pull/8588 "feat: Key update messages"
+[multi-relay]: https://delta.chat/en/2026-03-31-zero#maximizing-availability-and-resilience-through-multi-path-delivery "Maximizing availability and resilience through multi-path delivery"
+[privacy notes]: https://github.com/deltachat/deltachat-pages/pull/1385 "Privacy notes being drafted for the apps"
 [RFC 9580]: https://www.rfc-editor.org/rfc/rfc9580.html "OpenPGP"
 [v6 SKESK]: https://www.rfc-editor.org/rfc/rfc9580.html#section-5.3.2 "RFC 9580 5.3.2: Version 6 Symmetric Key Encrypted Session Key Packet Format"
 [SEIPDv2]: https://www.rfc-editor.org/rfc/rfc9580.html#section-5.13.2 "RFC 9580 5.13.2: Version 2 Symmetrically Encrypted and Integrity Protected Data Packet Format"
