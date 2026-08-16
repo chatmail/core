@@ -101,11 +101,8 @@ so the channel would let us drop the concept completely.
 
 We should be able to hand our current key to our contacts
 without waiting for a conversation to happen.
-One way to address such a message is per recipient,
-in chunks of about twenty contacts, as sketched in [#8588].
-To name two problems: it reveals a slice of your contact list to each contact,
-because the signature names every intended recipient in the chunk,
-and it uploads the keyupdate message 10 times for 200 contacts.
+The straightforward way is to address such a message per recipient,
+in chunks of a few dozen contacts, as sketched in [#8588].
 This draft argues for a different way of sending key updates,
 starting with a simple observation:
 
@@ -127,17 +124,19 @@ What using automatically derived secrets and existing broadcast encryption buys:
 - No new header names, no new key distribution or bookkeeping protocol (phew!),
   only a new `Chat-Content` value.
 
-- Network cost is largely independent of contact count for senders.
-  One message per relay change rather than one per chunk.
-  Relays by default currently allow 1000 recipients per submission,
-  so a keyupdate (which is below 10Kbyte even with Autocrypt2),
-  would be uploaded once for anyone below 1K contacts,
-  which today is the vast majority by a wide margin.
+- Network cost is largely independent of recipient count.
+  A keyupdate is a few KB, rendered once per relay change,
+  and addresses only travel as `RCPT TO` commands in the SMTP transaction.
+  Chatmail relays take 1000 addresses per submission,
+  so for most profiles today a keyupdate is a single upload,
+  and each upload stays well under 100KB on the wire.
 
-- Recipients learn nothing about our contact list.
-  Every recipient gets the same encrypted message with no per-recipient framing,
-  and no chunk has to group contacts together.
-  The submitting relay still sees the envelope, as it does today.
+- Recipients learn nothing about our contact list
+  because nothing in the message is recipient-specific:
+  one password-encrypted session key packet instead of one per recipient,
+  and a signature that names only its issuer,
+  with no `intended recipient fingerprint` subpackets.
+  The submitting relay still sees the envelope metadata, as it does today.
 
 - Contacts acquired at any point in the past are reached.
   The secret comes from the key itself and not from a shared session,
@@ -154,14 +153,14 @@ so "Remove" can mean actually removed, like users intend it.
 It would also unblock automatic relay management.
 What ships under that name today is initial onboarding only
 ([#8444], still off by default): no rotation, no removal.
-Designing those is hard while changing a relay is unsafe,
+Designing those proved to be hard while changing a relay is unsafe,
 because any automatic change would silently cut off
 the contacts who do not hear about it.
 Keyupdates would lift that constraint and could land in the next release,
 well before automatic addition/removal mechanics are settled.
 
 
-## Keyupdates are decryptable forever, MUST only contain key updates
+## Keyupdates are decryptable forever, so MUST only contain key updates
 
 Anyone who ever obtained our "public" key could derive the secret
 and decrypt these messages, forever.
@@ -280,14 +279,13 @@ Properties that follow, and requirements they imply:
 - **Only update the key the secret was derived from.**
   A keyupdate must be signed by that key and carry an update to it,
   and anything else is dropped.
-  The rule is needed because the AEAD tag only proves the writer knew the
-  secret, which every key holder does, so it authenticates nobody by itself.
-  Certificate merging already prevents a forged relay list,
-  but without the rule anyone holding a contact's key could send
+  Without the rule anyone holding a contact's key could send
   a stream of messages carrying freshly generated keys in the Autocrypt
-  header, each silently creating a contact and a stored key
-  the user never sees, because keyupdates are trashed.
-  Note that keyupdates can only arrive for contacts whose key we already have.
+  header, each silently creating a contact the user never sees,
+  because keyupdates are trashed.
+  The signature is not what makes the key credible, though,
+  and it is not what limits the audience either,
+  see *Keyupdates could come from anywhere but are signed anyway* below.
 
 - **Domain-separated.**
   A v6 fingerprint is also a SHA-256 over the same key material,
@@ -320,9 +318,8 @@ Properties that follow, and requirements they imply:
   which any sender could trigger with undecryptable garbage.
   Keyupdate secrets should therefore be tried last,
   after the securejoin and broadcast secrets.
-  Parsing and deriving on-demand in the try-decryption pipeline
-  is probably fine even for thousands of contacts,
-  at tens of microseconds per certificate.
+  Parsing and deriving on demand was measured at under a second
+  for a thousand contacts, so the secrets need no caching layer.
 
 - **One body, many deliveries.**
   The body would be rendered once and independently from the contact count.
@@ -353,6 +350,39 @@ Properties that follow, and requirements they imply:
   We inform about relay changes through regular multi-device sync,
   because changing transports involves private credentials for accessing a relay address,
   and because we perform some merging on concurrent transport additions.
+
+
+### Keyupdates could come from anywhere but are signed anyway
+
+The relay list in a keyupdate lives in a direct key self-signature,
+and certificate merging verifies it and prefers the newest one,
+so the resulting certificate is as trustworthy whether the keyupdate
+arrived signed or unsigned, from the key owner or from a stranger.
+Merging, not signing, is the cryptographic gate for every certificate we get,
+so conceptually we could accept keyupdates from anyone.
+However, the secret is derived from the key,
+so we only ever ingest keyupdates from contacts whose certificate we store,
+an audience fixed by construction rather than by policy.
+
+Keyupdates should be signed
+for implementation simplicity and a smaller attack surface:
+every past holder of the key can derive the secret,
+so the AEAD tag says only that the writer was one of them
+while the signature narrows it to the key owner,
+and core takes the sender contact from it,
+treating a message without one as unencrypted and discarding it.
+Unsigned keyupdates stay conceptually defensible,
+but they would need an exception from the rule
+that a contact-bound secret implies exactly one signature by that contact,
+which broadcast channels and securejoin rest on too, and that is not worth it.
+
+The same reasoning bounds a possible extension:
+If we let our key-contacts gossip us other keys,
+a keyupdate can carry `Autocrypt-Gossip` headers,
+constrained to contacts we already share so no unknown one is added.
+Conceptually that is fine but requires more implementation changes,
+including the sender side of gossiping keyupdates,
+so it is best considered separately from a first keyupdate release.
 
 
 ## Out of scope: envelope SMTP failures can terminate all sending
