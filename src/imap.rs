@@ -146,18 +146,6 @@ pub(crate) struct ServerMetadata {
     pub app_versions: Option<String>,
 }
 
-/// Selects the most actionable error from failed IMAP connection candidates.
-///
-/// A login error proves that a connection succeeded, so it takes precedence over network errors.
-fn select_connect_error(
-    first_connection_error: Option<anyhow::Error>,
-    first_login_error: Option<anyhow::Error>,
-) -> anyhow::Error {
-    first_login_error
-        .or(first_connection_error)
-        .unwrap_or_else(|| format_err!("No IMAP connection candidates provided"))
-}
-
 struct UidGrouper<T: Iterator<Item = (i64, u32, String)>> {
     inner: Peekable<T>,
 }
@@ -459,10 +447,9 @@ impl Imap {
             }
         }
 
-        Err(select_connect_error(
-            first_connection_error,
-            first_login_error,
-        ))
+        Err(first_login_error
+            .or(first_connection_error)
+            .unwrap_or_else(|| format_err!("No IMAP connection candidates provided")))
     }
 
     /// Prepare a new IMAP session.

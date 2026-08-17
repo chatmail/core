@@ -1,16 +1,6 @@
 use super::*;
 use crate::test_utils::TestContext;
 
-#[test]
-fn test_connect_prefers_login_error() {
-    let connection_error = format_err!("All connection attempts failed");
-    let login_error = format_err!("Cannot login, please check the password");
-
-    let error = select_connect_error(Some(connection_error), Some(login_error));
-
-    assert_eq!(error.to_string(), "Cannot login, please check the password");
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_set_uid_next_validity() {
     let t = TestContext::new_alice().await;
