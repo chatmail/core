@@ -5,17 +5,19 @@ allowing them to use multiple relays for receiving and sending messages.
 While instant onboarding is being extended to multi-relay onboarding ([#8444]),
 adding and removing relays automatically is not settled,
 not least because changing a relay is unsafe today.
-This draft proposes a keyupdate push channel
+This draft proposes a *keyupdate push channel*
 that shares our current key with our contacts when it changes,
 without waiting for a chat interaction.
 It helps keep chats connected now,
 and makes automatic relay changes safe enough to design later.
+The draft stays with the concept:
+how such a message is encrypted and addressed is left to the two
+implementations summarized in [Two ways to send a keyupdate](#two-ways-to-send-a-keyupdate).
 
 
 ## Problems of maintaining reliable chat connectivity today
 
-A profile's relay list lives inside its own key,
-as a signed notation that travels with the key.
+A profile's relay list lives inside its own key, as a signed notation that travels with the key.
 A contact sends to the addresses contained in the key, signed by the key holder.
 Rooted in the [Autocrypt 1](https://autocrypt.org) inline key-distribution specification,
 there is no central directory, no probe and no removal notice,
@@ -105,94 +107,100 @@ would somehow need to describe this behaviour, and the description would read ba
 
 Unpublished relays exist to protect exactly the contacts
 the new keyupdate push channel would reach,
-so the channel would let us drop the concept completely.
+so the keyupdate push channel would let us drop the concept completely.
 
 
 ## Moving on from Autocrypt1: A keyupdate push channel
 
 We should be able to hand our current key to our contacts
 without waiting for a conversation to happen.
-The straightforward way is to address such a message per recipient,
-in chunks of a few dozen contacts, as sketched in [#8588].
-This draft argues for a different way of sending key updates,
-starting with a simple observation:
+A keyupdate is a message that does exactly that:
+it carries our current key with its signed relay list
+to the contacts who still hold an older copy,
+sent when that list changes rather than when a chat happens.
 
-**A keyupdate needs to reach everyone holding a copy of our key,
-and that audience already shares a secret: the identity key of a contact**.
-From that key we can derive a secret deterministically,
-so everyone already holding the key computes the same value,
-and nobody else can.
-That lets us re-use the symmetric broadcast encryption core already has:
-one signed, symmetrically encrypted message to many recipients at once,
-with the secret derived rather than generated and handed out to subscribers.
+Whichever way such a message is sent, the same things follow from it:
 
-In chatmail clients "public" keys are by default hidden identities,
-only transmitted in encrypted messages, with the goal of preventing
-a curious or abusive relay operator to track identities.
-
-What using automatically derived secrets and existing broadcast encryption buys:
-
-- No new header names, no new key distribution or bookkeeping protocol (phew!),
-  only a new `Chat-Content` value.
-
-- Network cost is largely independent of recipient count.
-  A keyupdate is a few KB, rendered once per relay change,
-  and addresses only travel as `RCPT TO` commands in the SMTP transaction.
-  Chatmail relays take 1000 addresses per submission,
-  so for most profiles today a keyupdate is a single upload,
-  and each upload stays well under 100KB on the wire.
-
-- Recipients learn nothing about our contact list
-  because nothing in the message is recipient-specific:
-  one password-encrypted session key packet instead of one per recipient,
-  and a signature that names only its issuer,
-  with no `intended recipient fingerprint` subpackets.
-  The submitting relay still sees the envelope metadata, as it does today.
-
-- Contacts acquired at any point in the past are reached.
-  The secret comes from the key itself and not from a shared session,
-  so a contact from years ago can decrypt an update sent today,
+- **Contacts acquired at any point in the past are reached**,
+  and not only the ones we happen to write to,
   given they have updated to a post-keyupdate app release.
 
-Delivery would not have to be complete to be useful.
-In group chats, cooperative Autocrypt gossip spreads what arrived:
-members who received the fresher key pass it on to the others,
-whenever one of them next writes to the group.
+- **Delivery does not have to be complete to be useful.**
+  In group chats, cooperative Autocrypt gossip spreads what arrived:
+  members who received the fresher key pass it on to the others,
+  whenever one of them next writes to the group.
 
-Pushing keyupdates removes the last reason to keep "unpublished relays" around,
-so "Remove" can mean actually removed, like users intend it.
-It would also unblock automatic relay management.
-What ships under that name today is initial onboarding only
-([#8444], still off by default): no rotation, no removal.
-Designing those proved to be hard while changing a relay is unsafe,
-because any automatic change would silently cut off
-the contacts who do not hear about it.
-Keyupdates would lift that constraint and could land in the next release,
-well before automatic addition/removal mechanics are settled.
+- **"Remove" can mean actually removed.**
+  Pushing keyupdates removes the last reason to keep "unpublished relays" around,
+  so removing a relay can do what users intend it to do.
 
-
-## Keyupdates are decryptable forever, so MUST only contain key updates
-
-Anyone who ever obtained our "public" key could derive the secret
-and decrypt these messages, forever.
-Nothing here is ephemeral and the secret never rotates,
-so blocking or deleting a contact does not take that ability away.
-
-However, deriving the secret is not the same as getting the message:
-Keyupdates go only to our own contacts (see below),
-so the wider set only matters for someone who also obtains a copy,
-a relay in the path for example.
-
-This is acceptable because the payload is "contacts-public" anyway:
-it is the key and its relay list,
-the same data we hand out in every chat where we participate.
-Whoever can derive the secret already holds an earlier copy of that key,
-so what a keyupdate adds for them is the current relay list.
-It follows that **the keyupdate channel must never carry user generated data
-or metadata besides the public key itself.**
+- **Automatic relay management becomes easier to design.**
+  What ships under that name today is initial onboarding only
+  ([#8444], still off by default): no rotation, no removal.
+  Designing those proved to be hard while changing a relay is unsafe,
+  because any automatic change would silently cut off
+  the contacts who do not hear about it.
+  Keyupdates would lift that constraint and could land in the next release,
+  well before automatic addition/removal mechanics are settled.
 
 
-## When a keyupdate goes out
+## Constraints of keyupdate messages, metadata and processing
+
+- **A keyupdate carries the key and nothing else.**
+  The keyupdate push payload is "contacts-public":
+  it is the key and its relay list,
+  the same data we hand out in every chat where we participate.
+  But a keyupdate is not a conversation,
+  and it travels automatically to an audience nobody picks per message,
+  so **the keyupdate channel must never carry user generated data
+  or metadata besides the public key itself and it must not reveal
+  to contacts the identity of other contacts.**
+
+- **It is end-to-end encrypted.**
+  In chatmail clients "public" keys are by default hidden identities,
+  only transmitted in encrypted messages, with the goal of preventing
+  a curious or abusive relay operator to track identities.
+
+- **It goes to contacts, not to subscribers, and not to our own devices.**
+  The recipients are unblocked key-contacts we share an accepted 1:1,
+  group or subscribed-channel chat with.
+  Subscribers of our own channels should be left out,
+  because they could be a big number and it doesn't contribute to better chat connectivity.
+  Our own devices learn relay changes through regular multi-device sync,
+  because changing transports involves private credentials
+  for accessing a relay address,
+  and because we perform some merging on concurrent transport additions.
+
+- **It is accepted from any unblocked key-contact.**
+  The relay list lives in a direct key self-signature,
+  and certificate merging verifies it and prefers the newest one,
+  so merging, and not the way a keyupdate arrived,
+  is the cryptographic gate for every certificate we get.
+  A stale relay list is worth updating in any case,
+  whatever chat state we have with that contact.
+
+- **Replay changes nothing.**
+  An old update can be replayed forever,
+  but certificate merging keeps the direct key signature
+  with the newest creation time, on a tie the one already stored,
+  so a replay can not revert a relay list.
+  The rest of the certificate is fixed today:
+  a key carries one encryption subkey that never rotates.
+  Rotating Autocrypt 2 subkeys might need a fresh look at this.
+
+- **It is invisible on arrival.**
+  The key should be applied on the normal Autocrypt path
+  and the message then trashed rather than filed:
+  no chat, no counter, and no refresh of the sender's "last seen",
+  because an invisible message should not light up an online dot.
+
+- **It stays quiet on clients that do not know it yet.**
+  No new chat and no contact request should ever be created there.
+  Old and new clients can therefore ship together,
+  with coverage growing as clients update.
+
+
+## When and how a keyupdate goes out
 
 Sending should be driven by a diff, not by an event.
 A device records the relay list it last announced,
@@ -212,11 +220,6 @@ That single decision gives us the rest:
   can still watch the effect arrive with chat peers,
   which is worth more than optimising against a few small extra messages.
 
-- **Behind real traffic.**
-  The message should leave from the SMTP loop once its queue is drained,
-  so a keyupdate never delays a user message
-  and is only attempted on a connection that just proved to work.
-
 - **Nothing on upgrade.**
   Existing profiles must start with their current relay list
   already recorded as announced.
@@ -229,206 +232,52 @@ That single decision gives us the rest:
   That also systematically prevents a device catching up on a backlog of old sync
   messages from announcing historical states.
 
-
-## Cryptographic and implementation considerations
-
-The keyupdate design needs no new cryptographic primitives,
-only the broadcast machinery named above with a different secret.
-Both symmetric secrets core has today, for broadcast channels and for
-securejoin, are random values shared out of band by QR code or invite.
-Deriving one from public key material instead
-is the part most worth scrutinising.
-
-**The construction of the derived secret:**
-
-- Derive the secret as a canonical `keyupdate/` followed by the hex of
-  `SHA256("keyupdate" || <primary key packet body>)`,
-  where the body is the OpenPGP primary key packet without its packet header:
-  one octet version, four octets big-endian creation time,
-  one octet algorithm, for v6 a four-octet length of the key material,
-  then the key material.
-  This layout is normative and must be pinned by test vectors,
-  not left as "whatever the OpenPGP library happens to serialize".
-
-- Send it as an ordinary [RFC 9580] password-encrypted message.
-  Nothing about the format is specific to keyupdates,
-  it is what any OpenPGP implementation writes for a passphrase:
-  one [v6 SKESK] packet whose [salted S2K]
-  (type 1, SHA-256, eight random salt bytes)
-  turns the secret, via HKDF, into the key
-  that wraps a fresh random session key,
-  plus one [SEIPDv2] packet, AES-128 in OCB mode, ZLIB compressed,
-  signed by the sender.
-  AES-128 is what all our symmetrically encrypted messages already use.
-  Carry our key in a protected `Autocrypt` header,
-  next to a protected `Chat-Content: key-update` header.
-
-Properties that follow, and requirements they imply:
-
-- **Who can read it is not who we send it to.**
-  Anyone holding a copy of our key can derive the secret (see above),
-  including people who got it by gossip or vCard.
-  What we choose is the recipient set:
-  unblocked key-contacts we share an accepted 1:1,
-  group or subscribed-channel chat with.
-  Subscribers of our own channels should be left out,
-  because they could be massive and it doesn't contribute to better chat connectivity.
-  Receivers in turn can accept from any unblocked key-contact.
-
-- **Retroactive.**
-  The primary key packet is fixed when the key is generated,
-  and re-signing with a new relay list does not touch it,
-  so the secret is stable for the lifetime of the key.
-
-- **v4 and v6 keys both work.**
-  The derivation reads the serialized key body, not the fingerprint,
-  so it does not depend on the fingerprint algorithm.
-  The body layout does differ between the two versions, so the digest differs per version.
-  Both derivations should be pinned by test vectors,
-  since deployed contacts recompute them from their stored copies.
-
-- **Only update the key the secret was derived from.**
-  A keyupdate must be signed by that key and carry an update to it,
-  and anything else is dropped.
-  Without the rule anyone holding a contact's key could send
-  a stream of messages carrying freshly generated keys in the Autocrypt
-  header, each silently creating a contact the user never sees,
-  because keyupdates are trashed.
-  The signature is not what makes the key credible, though,
-  and it is not what limits the audience either,
-  see *Keyupdates could come from anywhere but are signed anyway* below.
-
-- **Domain-separated.**
-  A v6 fingerprint is also a SHA-256 over the same key material,
-  but the two preimages are already disjoint,
-  so the hashed `keyupdate` prefix is documentation rather than protection.
-  The `keyupdate/` prefix on the password string does carry weight:
-  it separates these secrets from the securejoin and broadcast secrets
-  that share the same trial-decryption pool.
-
-- **Replay changes nothing.**
-  An old update can be replayed forever.
-  The relay list lives in the direct key signature,
-  and certificate merging keeps the one with the newest creation time,
-  on a tie the one already stored.
-  The rest of the certificate is fixed today:
-  a key carries one encryption subkey that never rotates,
-  so an old copy differs from the current one only in that signature.
-  Rotating Autocrypt 2 subkeys might need a fresh look at this.
-
-- **Trial decryption must stay bounded.**
-  A symmetrically encrypted message carries no hint of which secret opens it,
-  so a receiver has to try every secret it knows until one works,
-  and the cost of a single failed attempt matters.
-  Core already restricts symmetric decryption to a single ESK packet with a
-  salted S2K, so an attacker cannot make it expensive with an iterated S2K
-  or a stack of session keys.
-  A single hash is on purpose here: the secret is a full 256-bit digest
-  rather than a passphrase, so hardening would buy nothing.
-  What is not bounded is one certificate parse per unblocked key-contact,
-  which any sender could trigger with undecryptable garbage.
-  Keyupdate secrets should therefore be tried last,
-  after the securejoin and broadcast secrets.
-  Parsing and deriving on demand was measured at under a second
-  for a thousand contacts, so the secrets need no caching layer.
-
-- **One body, many deliveries.**
-  The body would be rendered once and independently from the contact count.
-  The SMTP envelope still lists every distinct relay address,
-  chunked at whatever limit the relay advertises over IMAP METADATA.
-  The relay therefore learns the keyupdate addressee set,
-  though it can track our send and receive history anyway
-  and largely observes a similar set over time.
-
-- **Invisible on arrival.**
-  The key should be applied on the normal Autocrypt path
-  and the message then trashed rather than filed:
-  no chat, no counter, and no refresh of the sender's "last seen",
-  because an invisible message should not light up an online dot.
-
-- **Old clients stay quiet.**
-  Without the secret the message is undecryptable,
-  and with `force_encryption` being true by default
-  unsigned incoming mail is discarded before any chat is touched.
-  A user who turns encryption enforcement off,
-  and who already has a plain-address chat with our address,
-  may see an undecipherable message there.
-  No new chat and no contact request should ever be created.
-  Old and new clients can therefore ship together,
-  with coverage growing as clients update.
-
-- **Not sent to our own devices.**
-  We inform about relay changes through regular multi-device sync,
-  because changing transports involves private credentials for accessing a relay address,
-  and because we perform some merging on concurrent transport additions.
+- **Behind real traffic.**
+  The message should best leave from the SMTP loop once its queue is drained,
+  so a keyupdate never delays a user message
+  and is only attempted on a connection that just proved to work.
 
 
-### Keyupdates could come from anywhere but are signed anyway
 
-The relay list in a keyupdate lives in a direct key self-signature,
-and certificate merging verifies it and prefers the newest one,
-so the resulting certificate is as trustworthy whether the keyupdate
-arrived signed or unsigned, from the key owner or from a stranger.
-Merging, not signing, is the cryptographic gate for every certificate we get,
-so conceptually we could accept keyupdates from anyone.
-However, the secret is derived from the key,
-so we only ever ingest keyupdates from contacts whose certificate we store,
-an audience fixed by construction rather than by policy.
+## Two ways to send a keyupdate
 
-Keyupdates should be signed
-for implementation simplicity and a smaller attack surface:
-every past holder of the key can derive the secret,
-so the AEAD tag says only that the writer was one of them
-while the signature narrows it to the key owner,
-and core takes the sender contact from it,
-treating a message without one as unencrypted and discarding it.
-Unsigned keyupdates stay conceptually defensible,
-but they would need an exception from the rule
-that a contact-bound secret implies exactly one signature by that contact,
-which broadcast channels and securejoin rest on too, and that is not worth it.
+Nothing above says how a keyupdate reaches its recipients,
+and two implementations currently explore that question:
 
-The same reasoning bounds a possible extension:
-If we let our key-contacts gossip us other keys,
-a keyupdate can carry `Autocrypt-Gossip` headers,
-constrained to contacts we already share so no unknown one is added.
-Conceptually that is fine but requires more implementation changes,
-including the sender side of gossiping keyupdates,
-so it is best considered separately from a first keyupdate release.
+- [#8601] sends a single symmetrically encrypted message
+  to all recipients at once, re-using the broadcast machinery core has,
+  with the secret derived from our own key
+  so that everyone already holding a copy computes the same value.
+  Nothing in the message is recipient-specific
+  and its cost is largely independent of the recipient count.
+  Wire format, secret derivation, audience and sending policy
+  are documented in its `src/keyupdate.rs` module docs.
 
+- [#8588] (WIP) sends ordinary asymmetrically encrypted messages,
+  addressed per recipient in chunks of a few dozen contacts,
+  staying on paths core already has
+  at a cost that grows with the number of contacts.
 
-## Out of scope: envelope SMTP failures can terminate all sending
-
-A permanently refused `RCPT TO` would fail the whole SMTP transaction,
-and core then drops the queued message
-without attempting the remaining chunks,
-so with one envelope a single dead address
-would cost the announcement for everyone behind it.
-Chatmail relays never get there: they accept every recipient
-and report delivery failures afterwards as DSNs.
-The hazard is real only on a deployment that rejects unknown or
-over-quota recipients at `RCPT TO`,
-and it affects regular group messages and even 1:1 chats today,
-so it is out of scope for keyupdates, which carry less critical data.
-Losing all relays on both sides at once is out of scope too,
-but for a different reason: nothing we send can help there,
-see the last section.
+Both fit the concept described here,
+and they trade off differently on who can decrypt a keyupdate,
+what a relay observes, and how much machinery is involved,
+which is a discussion for the PRs rather than for this draft.
 
 
 ## Open questions
 
-- Should a keyupdate be rate limited beyond coalescing,
-  for a profile whose relay list flaps on its own?
+- Should a keyupdate be rate limited for a profile whose relay list flaps on its own?
   Manual fiddling is bounded by the person
   doing it, but future automatic relay add/remove needs to think about limits.
 
-- What should happen to delivery status notifications for dead addresses in
-  a large envelope? They arrive per address and refer to one Message-ID
+- What should happen to delivery status notifications for dead addresses?
+  They arrive per address and refer to one Message-ID
   but we don't do much with them. We could probably evolve to exclude such
   bounced addresses from future key updates but it shouldn't block
   a first key update implementation.
 
 - Is the sending set right? Narrowing the keyupdate recipient set
-  by activity would shrink the envelope, but it would also disclose
+  by activity would shrink what we send, but it would also disclose
   to the relay which of our contacts are close ones.
   Note that a quiet contact is indistinguishable from one who left,
   so dropping them silently loses their next message.
@@ -480,9 +329,9 @@ But new relays, for example in sprouting mesh networks, might become available
 and wouldn't it be useful to re-establish chat connectivity with those
 who might be able to help you, or where you can pool resources?
 
-Interestingly, a keyupdate message is not addressed to anyone in particular.
-It is one ciphertext readable by whoever holds the sender's key,
-so it does not have to be directly delivered to be useful:
+Interestingly, a keyupdate does not have to be addressed to anyone in particular.
+Sent as one ciphertext readable by whoever holds the sender's key ([#8601]),
+it does not have to be directly delivered to be useful:
 something parked now can be picked up later.
 Making it discoverable without handing everyone a way to enumerate and track profiles
 is an interesting enough challenge to make cryptographers have exciting discussions.
@@ -507,9 +356,6 @@ re-establishing chats over time, scaling chat connectivity for everyone.
 [#8481]: https://github.com/chatmail/core/pull/8481 "Improve and speed up autocrypt/pgp gossipping with MDNs"
 [#8550]: https://github.com/chatmail/core/pull/8550 "fix: multi relay connectivity"
 [#8588]: https://github.com/chatmail/core/pull/8588 "feat: Key update messages"
+[#8601]: https://github.com/chatmail/core/pull/8601 "feat: introduce keyupdate message to inform contacts about relay changes"
 [multi-relay]: https://delta.chat/en/2026-03-31-zero#maximizing-availability-and-resilience-through-multi-path-delivery "Maximizing availability and resilience through multi-path delivery"
 [privacy notes]: https://github.com/deltachat/deltachat-pages/pull/1385 "Privacy notes being drafted for the apps"
-[RFC 9580]: https://www.rfc-editor.org/rfc/rfc9580.html "OpenPGP"
-[v6 SKESK]: https://www.rfc-editor.org/rfc/rfc9580.html#section-5.3.2 "RFC 9580 5.3.2: Version 6 Symmetric Key Encrypted Session Key Packet Format"
-[SEIPDv2]: https://www.rfc-editor.org/rfc/rfc9580.html#section-5.13.2 "RFC 9580 5.13.2: Version 2 Symmetrically Encrypted and Integrity Protected Data Packet Format"
-[salted S2K]: https://www.rfc-editor.org/rfc/rfc9580.html#section-3.7.1.2 "RFC 9580 3.7.1.2: Salted S2K"
