@@ -281,6 +281,40 @@ impl SchedulerState {
             scheduler.interrupt_recently_seen(contact_id, timestamp);
         }
     }
+
+    /// Fetches from all transports at once, each on a dedicated connection.
+    ///
+    /// IO is paused while fetching so that the scheduler does not connect as well.
+    pub(crate) async fn fetch_from_all_transports_at_once(&self, context: &Context) -> Result<()> {
+        let _pause_guard = self.pause(context).await?;
+
+        let mut futures = Vec::new();
+        for (transport_id, param, _is_published) in ConfiguredLoginParam::load_all(context).await? {
+            futures.push(async move {
+                if let Err(err) = fetch_from_transport(context, transport_id, param).await {
+                    warn!(context, "Transport {transport_id}: fetch failed: {err:#}.");
+                }
+            });
+        }
+        futures::future::join_all(futures).await;
+        Ok(())
+    }
+}
+
+async fn fetch_from_transport(
+    context: &Context,
+    transport_id: u32,
+    param: ConfiguredLoginParam,
+) -> Result<()> {
+    // A single fetch has nothing to interrupt.
+    let (_, idle_interrupt_receiver) = channel::bounded(1);
+    let mut connection = Imap::new(context, transport_id, param, idle_interrupt_receiver).await?;
+    let mut session = connection.prepare(context).await?;
+
+    let folder = connection.folder.clone();
+    connection
+        .fetch_move_delete(context, &mut session, &folder)
+        .await
 }
 
 #[derive(Debug, Default)]

@@ -16,11 +16,11 @@ use tokio::sync::{Mutex, Notify, RwLock};
 
 use crate::chat::{ChatId, get_chat_cnt};
 use crate::config::Config;
-use crate::constants::{self, DC_BACKGROUND_FETCH_QUOTA_CHECK_RATELIMIT, DC_VERSION_STR};
+use crate::constants::{self, DC_VERSION_STR};
 use crate::contact::{Contact, ContactId};
 use crate::debug_logging::DebugLogging;
 use crate::events::{Event, EventEmitter, EventType, Events};
-use crate::imap::{Imap, ServerMetadata};
+use crate::imap::ServerMetadata;
 use crate::log::warn;
 use crate::logged_debug_assert;
 use crate::message::{self, MessageState, MsgId};
@@ -598,56 +598,30 @@ impl Context {
         Ok(constants::DEFAULT_MAX_SMTP_RCPT_TO)
     }
 
-    /// Does a single round of fetching from IMAP and returns.
+    /// Does a single round of fetching messages from all transports and returns.
     ///
     /// Can be used even if I/O is currently stopped.
-    /// If I/O is currently stopped, starts a new IMAP connection
-    /// and fetches from Inbox and DeltaChat folders.
+    /// If I/O is stopped, starts a new IMAP connection for each transport.
     pub async fn background_fetch(&self) -> Result<()> {
         if !(self.is_configured().await?) {
             return Ok(());
         }
 
-        let address = self.get_primary_self_addr().await?;
         let time_start = tools::Time::now();
-        info!(self, "background_fetch started fetching {address}.");
+        info!(self, "background_fetch started.");
 
         if self.scheduler.is_running().await {
             self.scheduler.maybe_network().await;
             self.wait_for_all_work_done().await;
         } else {
-            // Pause the scheduler to ensure another connection does not start
-            // while we are fetching on a dedicated connection.
-            let _pause_guard = self.scheduler.pause(self).await?;
-
-            // Start a new dedicated connection.
-            let mut connection = Imap::new_configured(self, channel::bounded(1).1).await?;
-            let mut session = connection.prepare(self).await?;
-
-            // Fetch IMAP folders.
-            let folder = connection.folder.clone();
-            connection
-                .fetch_move_delete(self, &mut session, &folder)
+            self.scheduler
+                .fetch_from_all_transports_at_once(self)
                 .await?;
-
-            // Update quota (to send warning if full) - but only check it once in a while.
-            // note: For now this only checks quota of primary transport,
-            // because background check only checks primary transport at the moment
-            if self
-                .quota_needs_update(
-                    session.transport_id(),
-                    DC_BACKGROUND_FETCH_QUOTA_CHECK_RATELIMIT,
-                )
-                .await
-                && let Err(err) = self.update_recent_quota(&mut session, &folder).await
-            {
-                warn!(self, "Failed to update quota: {err:#}.");
-            }
         }
 
         info!(
             self,
-            "background_fetch done for {address} took {:?}.",
+            "background_fetch done, took {:?}.",
             time_elapsed(&time_start),
         );
 
