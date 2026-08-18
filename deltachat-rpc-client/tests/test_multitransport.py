@@ -1,3 +1,5 @@
+import urllib.parse
+
 import pytest
 
 from deltachat_rpc_client import EventType
@@ -319,3 +321,33 @@ def test_remove_primary_transport(acf, log) -> None:
     assert msg2.text == "Hello again!"
     assert msg2.chat.get_basic_snapshot().chat_type == ChatType.SINGLE
     assert msg2.chat == alice.create_chat(bob)
+
+
+def test_qr_works_after_removing_primary_transport(acf, log) -> None:
+    log.section("Alice setups an account and adds two additional relays")
+    alice = acf.new_configured_account()
+    relay_qr = acf.get_account_qr()
+    alice.add_transport_from_qr(relay_qr)
+    alice.add_transport_from_qr(relay_qr)
+
+    first_addr = alice.list_transports()[0]["addr"]
+    second_addr = alice.list_transports()[1]["addr"]
+    third_addr = alice.list_transports()[2]["addr"]
+
+    log.section("Alice creates a QR code")
+    chat_qr = alice.get_qr_code()
+    chat_qr_unquoted = urllib.parse.unquote(chat_qr)
+    assert f"&a={first_addr}" in chat_qr_unquoted
+    assert f"&r={third_addr},{second_addr}" in chat_qr_unquoted
+
+    log.section("Alice removes first and second transport")
+    alice.set_config("configured_addr", third_addr)
+    alice.delete_transport(first_addr)
+    alice.delete_transport(second_addr)
+
+    log.section("Bob scans the QR code, which still works")
+    alice.bring_online()
+    bob = acf.get_online_account()
+    bob.secure_join(chat_qr)
+    alice.wait_for_securejoin_inviter_success()
+    bob.wait_for_securejoin_joiner_success()
