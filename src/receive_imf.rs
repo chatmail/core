@@ -740,7 +740,9 @@ pub(crate) async fn receive_imf_inner(
         msg
     };
 
-    if !from_id.is_special() {
+    // A keyupdate is invisible, so refreshing `last_seen` would light up the
+    // sender's green "online" dot with no visible user message sent.
+    if !from_id.is_special() && mime_parser.is_system_message != SystemMessage::Keyupdate {
         contact::update_last_seen(context, from_id, mime_parser.timestamp_sent).await?;
     }
 
@@ -1152,6 +1154,9 @@ async fn decide_chat_assignment(
         true
     } else if mime_parser.is_system_message == SystemMessage::MessageUnpinned {
         info!(context, "Message unpinned (TRASH).");
+        true
+    } else if mime_parser.is_system_message == SystemMessage::Keyupdate {
+        info!(context, "Keyupdate message (TRASH).");
         true
     } else if let Some(ref decryption_error) = mime_parser.decryption_error
         && !mime_parser.incoming

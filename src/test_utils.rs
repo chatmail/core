@@ -25,7 +25,8 @@ use uuid::Uuid;
 
 use crate::aheader::{Aheader, EncryptPreference};
 use crate::chat::{
-    self, Chat, ChatId, ChatIdBlocked, MessageListOptions, add_to_chat_contacts_table, create_group,
+    self, Chat, ChatId, ChatIdBlocked, MessageListOptions, add_to_chat_contacts_table,
+    create_broadcast, create_group,
 };
 use crate::chatlist::Chatlist;
 use crate::config::Config;
@@ -200,17 +201,7 @@ impl TestContextManager {
             test_context.name()
         ));
 
-        // Insert a transport for the new address.
-        test_context.sql
-          .execute(
-            "INSERT OR IGNORE INTO transports (addr, entered_param, configured_param) VALUES (?, ?, ?)",
-               (
-                   new_addr,
-                   serde_json::to_string(&EnteredLoginParam{addr: new_addr.to_string(), ..Default::default()}).unwrap(),
-                   format!(r#"{{"addr":"{new_addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic"}}"#)
-              ),
-          ).await.unwrap();
-
+        test_context.add_transport(new_addr).await;
         test_context.set_primary_self_addr(new_addr).await.unwrap();
         // ensure_secret_key_exists() is called during configure
         key::ensure_secret_key_exists(test_context).await.unwrap();
@@ -576,6 +567,32 @@ impl TestContext {
         if let Some(name) = addr.split('@').next() {
             self.set_name(name);
         }
+    }
+
+    /// Adds a published transport for `addr` without any network activity.
+    pub async fn add_transport(&self, addr: &str) {
+        // A fresh `add_timestamp` makes the re-signed self key newer than the copies
+        // contacts hold, so that certificate merging prefers the new relay list.
+        self.sql
+            .execute(
+                "INSERT OR IGNORE INTO transports (addr, entered_param, configured_param, add_timestamp) VALUES (?, ?, ?, ?)",
+                (
+                    addr,
+                    serde_json::to_string(&EnteredLoginParam {
+                        addr: addr.to_string(),
+                        ..Default::default()
+                    })
+                    .unwrap(),
+                    format!(
+                        r#"{{"addr":"{addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic"}}"#
+                    ),
+                    time(),
+                ),
+            )
+            .await
+            .unwrap();
+        // Invalidate the cached self key so that it is regenerated with the new list.
+        self.self_public_key.lock().await.take();
     }
 
     /// Retrieves a sent message from the jobs table.
@@ -1146,6 +1163,25 @@ ORDER BY id"
         for member in members {
             let contact_id = self.add_or_lookup_contact_id(member).await;
             to_add.push(contact_id);
+        }
+        add_to_chat_contacts_table(self, time(), chat_id, &to_add)
+            .await
+            .unwrap();
+
+        chat_id
+    }
+
+    /// Creates a broadcast channel with `subscribers` added as member rows directly.
+    /// Joining via securejoin instead would also create accepted 1:1 chats with them.
+    pub async fn create_broadcast_with_subscribers(
+        &self,
+        name: &str,
+        subscribers: &[&TestContext],
+    ) -> ChatId {
+        let chat_id = create_broadcast(self, name.to_string()).await.unwrap();
+        let mut to_add = vec![];
+        for subscriber in subscribers {
+            to_add.push(self.add_or_lookup_contact_id(subscriber).await);
         }
         add_to_chat_contacts_table(self, time(), chat_id, &to_add)
             .await

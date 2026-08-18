@@ -21,6 +21,7 @@ use crate::download::{download_known_post_messages_without_pre_message, download
 use crate::ephemeral;
 use crate::events::EventType;
 use crate::imap::{Imap, session::Session};
+use crate::keyupdate::{maybe_send_keyupdate_message, schedule_keyupdate_check};
 use crate::location;
 use crate::log::{LogExt, warn};
 use crate::reaction::broadcast_reactions::maybe_broadcast_reactions;
@@ -573,6 +574,9 @@ async fn smtp_loop(
             return;
         }
 
+        // Re-arm the non-persistent deadline to catch changes lost to a restart.
+        schedule_keyupdate_check(&ctx);
+
         let mut timeout = None;
         loop {
             if let Err(err) = send_smtp_messages(&ctx, &mut connection).await {
@@ -626,8 +630,26 @@ async fn smtp_loop(
                     slept.saturating_add(rand::random_range((slept / 2)..=slept)),
                 ));
             } else {
+                // Queue is drained: send a due keyupdate without delaying real messages.
+                let check_deadline = ctx.keyupdate_check_deadline.load(Ordering::Relaxed);
+                let wait = check_deadline.saturating_sub(time());
+                if check_deadline != 0 && wait <= 0 {
+                    // Clear first so that a change arriving meanwhile sets a new deadline.
+                    ctx.keyupdate_check_deadline.store(0, Ordering::Relaxed);
+                    // A failed check is retried at the next loop start or transport change;
+                    // re-arming here would retry persistent failures every 30 seconds forever.
+                    maybe_send_keyupdate_message(&ctx).await.log_err(&ctx).ok();
+                    continue;
+                }
+
                 info!(ctx, "SMTP has no messages to retry, waiting for interrupt.");
-                idle_interrupt_receiver.recv().await.unwrap_or_default();
+                let interrupt = async { idle_interrupt_receiver.recv().await.unwrap_or_default() };
+                if check_deadline != 0 {
+                    let duration = std::time::Duration::from_secs(u64::try_from(wait).unwrap_or(1));
+                    tokio::time::timeout(duration, interrupt).await.ok();
+                } else {
+                    interrupt.await;
+                }
             };
 
             info!(ctx, "SMTP fake idle interrupted.")

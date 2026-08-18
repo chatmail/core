@@ -366,6 +366,9 @@ pub enum Config {
     /// Whether automatic relay management successfully added the desired number of relays
     AutomaticRelayManagementFinished,
 
+    /// Sorted, comma-separated relay list for which no keyupdate is due.
+    KeyupdateBaseline,
+
     /// Whether to avoid using IMAP IDLE even if the server supports it.
     ///
     /// This is a developer option for testing "fake idle".

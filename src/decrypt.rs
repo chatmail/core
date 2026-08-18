@@ -22,8 +22,8 @@ use crate::chat::ChatId;
 use crate::constants::Chattype;
 use crate::contact::ContactId;
 use crate::context::Context;
-use crate::key::self_fingerprint;
-use crate::key::{Fingerprint, SignedPublicKey, load_self_secret_keyring};
+use crate::key::{DcKey, Fingerprint, SignedPublicKey, load_self_secret_keyring, self_fingerprint};
+use crate::pgp::keyupdate_secret;
 use crate::token::Namespace;
 
 /// Tries to decrypt the message,
@@ -135,12 +135,17 @@ async fn decrypt_session_key_symmetrically(
                 return Ok((plain_session_key, fingerprint));
             }
 
-            // Finally, try decrypting using own AUTH tokens
+            // Then, try decrypting using own AUTH tokens
             // There can be a lot of AUTH tokens,
             // because a new one is generated every time a QR code is shown
             let res: Option<PlainSessionKey> = try_decrypt_with_auth_token(esk, conn, self_fp)?;
             if let Some(plain_session_key) = res {
                 return Ok((plain_session_key, None));
+            }
+
+            // Finally, try decrypting using the keyupdate secrets of the key-contacts
+            if let Some((psk, fingerprint)) = try_decrypt_with_keyupdate_secret(esk, conn)? {
+                return Ok((psk, Some(fingerprint)));
             }
 
             bail!("Could not find symmetric secret for session key")
@@ -161,6 +166,35 @@ fn try_decrypt_with_bobstate(
         let shared_secret = format!("securejoin/{alice_fp}/{authcode}");
         if let Ok(psk) = decrypt_session_key_with_password(esk, &Password::from(shared_secret)) {
             let fingerprint = invite.fingerprint().hex();
+            return Ok(Some((psk, fingerprint)));
+        }
+    }
+    Ok(None)
+}
+
+/// Tries to decrypt the session key with the keyupdate secrets derived
+/// from the keys of the unblocked key-contacts,
+/// so keyupdates from blocked contacts are not processed.
+///
+/// Only reached for keyupdates and undecryptable garbage,
+/// so any sender can trigger one certificate parse per key-contact.
+fn try_decrypt_with_keyupdate_secret(
+    esk: &SymKeyEncryptedSessionKey,
+    conn: &mut rusqlite::Connection,
+) -> Result<Option<(PlainSessionKey, String)>> {
+    let mut stmt = conn.prepare(
+        "SELECT c.fingerprint, k.public_key
+         FROM contacts c INNER JOIN public_keys k ON k.fingerprint=c.fingerprint
+         WHERE c.id>9 AND c.blocked=0",
+    )?;
+    let mut rows = stmt.query(())?;
+    while let Some(row) = rows.next()? {
+        let fingerprint: String = row.get(0)?;
+        let public_key_bytes: Vec<u8> = row.get(1)?;
+        if let Ok(key) = SignedPublicKey::from_slice(&public_key_bytes)
+            && let Ok(secret) = keyupdate_secret(&key)
+            && let Ok(psk) = decrypt_session_key_with_password(esk, &Password::from(secret))
+        {
             return Ok(Some((psk, fingerprint)));
         }
     }

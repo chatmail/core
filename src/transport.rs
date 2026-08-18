@@ -19,6 +19,7 @@ use crate::config::Config;
 use crate::context::Context;
 use crate::ensure_and_debug_assert;
 use crate::events::EventType;
+use crate::keyupdate::{schedule_keyupdate_check, set_current_relays_as_keyupdate_baseline};
 use crate::login_param::EnteredLoginParam;
 use crate::net::load_connection_timestamp;
 use crate::provider::Socket;
@@ -614,6 +615,8 @@ pub(crate) async fn send_sync_transports(context: &Context) -> Result<()> {
             removed_transports,
         })
         .await?;
+    // Set the deadline before interrupting, so the woken SMTP loop sees it.
+    schedule_keyupdate_check(context);
     context.scheduler.interrupt_smtp().await;
 
     Ok(())
@@ -678,6 +681,12 @@ pub(crate) async fn sync_transports(
             .restart_io_after_fetch
             .store(true, Ordering::Relaxed);
         context.emit_event(EventType::TransportsModified);
+
+        // Only the originating device sends a keyupdate;
+        // a device ingesting a sync message just records the new baseline, see `keyupdate.rs`.
+        // Acceptable gap: with concurrent changes on two devices,
+        // contacts may only learn the merged list with the next relay change or regular message.
+        set_current_relays_as_keyupdate_baseline(context).await?;
     }
     Ok(())
 }
