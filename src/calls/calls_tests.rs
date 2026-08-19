@@ -458,11 +458,13 @@ async fn test_get_call_from_blocked_chat_normal() -> Result<()> {
     let stale = false;
     test_get_call_from_blocked_chat(stale).await
 }
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_call_from_blocked_chat_stale() -> Result<()> {
     let stale = true;
     test_get_call_from_blocked_chat(stale).await
 }
+
 async fn test_get_call_from_blocked_chat(stale: bool) -> Result<()> {
     let _n = TimeShiftFalsePositiveNote;
 
