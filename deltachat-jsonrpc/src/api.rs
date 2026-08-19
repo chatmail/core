@@ -11,9 +11,9 @@ pub use deltachat::accounts::Accounts;
 use deltachat::blob::BlobObject;
 use deltachat::calls::ice_servers;
 use deltachat::chat::{
-    self, Chat, ChatId, ChatItem, MessageListOptions, add_contact_to_chat, forward_msgs,
-    forward_msgs_2ctx, get_chat_media, get_chat_msgs, get_chat_msgs_ext, markfresh_chat,
-    marknoticed_all_chats, marknoticed_chat, remove_contact_from_chat,
+    self, Chat, ChatId, MessageListOptions, add_contact_to_chat, forward_msgs, forward_msgs_2ctx,
+    get_chat_media, get_chat_msgs_ext, get_first_unread_msg, markfresh_chat, marknoticed_all_chats,
+    marknoticed_chat, remove_contact_from_chat,
 };
 use deltachat::chatlist::Chatlist;
 use deltachat::config::{Config, get_all_ui_config_keys};
@@ -23,7 +23,7 @@ use deltachat::ephemeral::Timer;
 use deltachat::imex;
 use deltachat::location;
 use deltachat::message::{
-    self, Message, MessageState, MsgId, Viewtype, delete_msgs_ext, get_existing_msg_ids,
+    self, Message, MsgId, Viewtype, delete_msgs_ext, get_existing_msg_ids,
     get_msg_read_receipt_count, get_msg_read_receipts, markseen_msgs,
 };
 use deltachat::peer_channels::{
@@ -1273,22 +1273,8 @@ impl CommandApi {
         chat_id: u32,
     ) -> Result<Option<u32>> {
         let ctx = self.get_context(account_id).await?;
-
-        // TODO: implement this in core with an SQL query, that will be way faster
-        let messages = get_chat_msgs(&ctx, ChatId::new(chat_id)).await?;
-        let mut first_unread_message_id = None;
-        for item in messages.into_iter().rev() {
-            if let ChatItem::Message { msg_id } = item {
-                match msg_id.get_state(&ctx).await? {
-                    MessageState::InSeen => break,
-                    MessageState::InFresh | MessageState::InNoticed => {
-                        first_unread_message_id = Some(msg_id)
-                    }
-                    _ => continue,
-                }
-            }
-        }
-        Ok(first_unread_message_id.map(|id| id.to_u32()))
+        let msg_id = get_first_unread_msg(&ctx, ChatId::new(chat_id)).await?;
+        Ok(msg_id.map(|id| id.to_u32()))
     }
 
     /// Set mute duration of a chat.
