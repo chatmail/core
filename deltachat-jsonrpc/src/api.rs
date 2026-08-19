@@ -24,8 +24,8 @@ use deltachat::ephemeral::Timer;
 use deltachat::imex;
 use deltachat::location;
 use deltachat::message::{
-    self, Message, MessageState, MsgId, Viewtype, delete_msgs_ext, get_existing_msg_ids,
-    get_msg_read_receipt_count, get_msg_read_receipts, markseen_msgs,
+    self, Message, MessageState, MsgId, Viewtype, delete_msgs_ext, dont_truncate_long_messages,
+    get_existing_msg_ids, get_msg_read_receipt_count, get_msg_read_receipts, markseen_msgs,
 };
 use deltachat::peer_channels::{
     leave_webxdc_realtime, send_webxdc_realtime_advertisement, send_webxdc_realtime_data,
@@ -1467,6 +1467,15 @@ impl CommandApi {
     async fn get_message_html(&self, account_id: u32, message_id: u32) -> Result<Option<String>> {
         let ctx = self.get_context(account_id).await?;
         MsgId::new(message_id).get_html(&ctx).await
+    }
+
+    /// Opt out of truncating long messages when loading.
+    ///
+    /// Should be used by the UIs that can handle long text messages.
+    async fn dont_truncate_long_messages(&self, account_id: u32) -> Result<()> {
+        let ctx = self.get_context(account_id).await?;
+        dont_truncate_long_messages(&ctx);
+        Ok(())
     }
 
     /// get multiple messages in one call,
