@@ -10,6 +10,7 @@ use deltachat_derive::{FromSql, ToSql};
 use humansize::BINARY;
 use humansize::format_size;
 use num_traits::FromPrimitive;
+use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use tokio::{fs, io};
 
@@ -470,8 +471,22 @@ impl Message {
     ///
     /// Returns an error if the message does not exist.
     pub async fn load_from_db(context: &Context, id: MsgId) -> Result<Message> {
-        let message = Self::load_from_db_optional(context, id)
-            .await?
+        let query_only = true;
+        context
+            .sql
+            // `call` instead of `transaction_ex` because it's a single query.
+            .call(query_only, |conn| {
+                Self::load_from_db_trans(context, conn, id)
+            })
+            .await
+    }
+    /// See [`Self::load_from_db`].
+    pub(crate) fn load_from_db_trans(
+        context: &Context,
+        conn: &rusqlite::Connection,
+        id: MsgId,
+    ) -> Result<Message> {
+        let message = Self::load_from_db_optional_trans(context, conn, id)?
             .with_context(|| format!("Message {id} does not exist"))?;
         Ok(message)
     }
@@ -480,13 +495,27 @@ impl Message {
     ///
     /// Returns `None` if the message does not exist.
     pub async fn load_from_db_optional(context: &Context, id: MsgId) -> Result<Option<Message>> {
+        let query_only = true;
+        context
+            .sql
+            // `call` instead of `transaction_ex` because it's a single query.
+            .call(query_only, |conn| {
+                Self::load_from_db_optional_trans(context, conn, id)
+            })
+            .await
+    }
+    /// See [`Self::load_from_db_optional`].
+    pub(crate) fn load_from_db_optional_trans(
+        context: &Context,
+        conn: &rusqlite::Connection,
+        id: MsgId,
+    ) -> Result<Option<Message>> {
         ensure!(
             !id.is_special(),
             "Can not load special message ID {id} from DB"
         );
-        let mut msg = context
-            .sql
-            .query_row_optional(
+        let mut msg = conn
+            .query_row(
                 "SELECT
                     m.id AS id,
                     rfc724_mid AS rfc724mid,
@@ -580,7 +609,7 @@ impl Message {
                     Ok(msg)
                 },
             )
-            .await
+            .optional()
             .with_context(|| format!("failed to load message {id} from the database"))?;
 
         if let Some(msg) = &mut msg {
