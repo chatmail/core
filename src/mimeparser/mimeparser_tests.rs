@@ -2181,3 +2181,26 @@ async fn test_load_shared_secrets_with_legacy_state() -> Result<()> {
 
     Ok(())
 }
+
+/// Tests reception of a message from Apple Mail.
+///
+/// The message is a multiplart/mixed message
+/// with a text part and multipart/related part.
+///
+/// multipart/related part has an HTML and images,
+/// but images are not referenced with blob:applewebdata://
+/// instead of cid: URLs.
+///
+/// See also related test_many_images and test-data/message/many_images_amazon_via_apple_mail.eml
+/// for a similar message, but images properly referenced in HTML.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_apple_blob() {
+    let mut tcm = TestContextManager::new();
+    let context = &tcm.alice().await;
+    let raw = include_bytes!("../../test-data/message/apple-blob.eml");
+    let mimeparser = MimeMessage::from_bytes(context, &raw[..])
+        .await
+        .unwrap();
+
+    assert_eq!(mimeparser.parts.len(), 4);
+}
