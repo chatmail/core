@@ -3386,65 +3386,92 @@ pub async fn get_chat_media(
     msg_type2: Viewtype,
     msg_type3: Viewtype,
 ) -> Result<Vec<MsgId>> {
+    fn row_to_msg_id(row: &rusqlite::Row) -> Result<MsgId> {
+        let msg_id: MsgId = row.get(0)?;
+        Ok(msg_id)
+    }
+
+    // Don't use `(1=? OR chat_id=?)` here: the `OR` makes
+    //`msgs_index2` unusable, so even a single chat scans
+    // all of `msgs`.
+    let chat_filter = match chat_id {
+        Some(_) => "chat_id=? AND",
+        None => "",
+    };
+
     let list = if msg_type == Viewtype::Webxdc
         && msg_type2 == Viewtype::Unknown
         && msg_type3 == Viewtype::Unknown
     {
-        context
-            .sql
-            .query_map_vec(
-                "SELECT id
+        let query = format!(
+            "SELECT id
                FROM msgs
-              WHERE (1=? OR chat_id=?)
-                AND chat_id != ?
+              WHERE {chat_filter}
+                    chat_id != ?
                 AND type = ?
                 AND hidden=0
-              ORDER BY max(timestamp, timestamp_rcvd), id;",
-                (
-                    chat_id.is_none(),
-                    chat_id.unwrap_or_else(|| ChatId::new(0)),
-                    ChatId::TRASH,
-                    Viewtype::Webxdc,
-                ),
-                |row| {
-                    let msg_id: MsgId = row.get(0)?;
-                    Ok(msg_id)
-                },
-            )
-            .await?
+              ORDER BY max(timestamp, timestamp_rcvd), id;"
+        );
+        match chat_id {
+            Some(chat_id) => {
+                context
+                    .sql
+                    .query_map_vec(
+                        &query,
+                        (chat_id, ChatId::TRASH, Viewtype::Webxdc),
+                        row_to_msg_id,
+                    )
+                    .await?
+            }
+            None => {
+                context
+                    .sql
+                    .query_map_vec(&query, (ChatId::TRASH, Viewtype::Webxdc), row_to_msg_id)
+                    .await?
+            }
+        }
     } else {
-        context
-            .sql
-            .query_map_vec(
-                "SELECT id
+        let query = format!(
+            "SELECT id
                FROM msgs
-              WHERE (1=? OR chat_id=?)
-                AND chat_id != ?
+              WHERE {chat_filter}
+                    chat_id != ?
                 AND type IN (?, ?, ?)
                 AND hidden=0
-              ORDER BY timestamp, id;",
-                (
-                    chat_id.is_none(),
-                    chat_id.unwrap_or_else(|| ChatId::new(0)),
-                    ChatId::TRASH,
-                    msg_type,
-                    if msg_type2 != Viewtype::Unknown {
-                        msg_type2
-                    } else {
-                        msg_type
-                    },
-                    if msg_type3 != Viewtype::Unknown {
-                        msg_type3
-                    } else {
-                        msg_type
-                    },
-                ),
-                |row| {
-                    let msg_id: MsgId = row.get(0)?;
-                    Ok(msg_id)
-                },
-            )
-            .await?
+              ORDER BY timestamp, id;"
+        );
+        let msg_type2 = if msg_type2 != Viewtype::Unknown {
+            msg_type2
+        } else {
+            msg_type
+        };
+        let msg_type3 = if msg_type3 != Viewtype::Unknown {
+            msg_type3
+        } else {
+            msg_type
+        };
+        match chat_id {
+            Some(chat_id) => {
+                context
+                    .sql
+                    .query_map_vec(
+                        &query,
+                        (chat_id, ChatId::TRASH, msg_type, msg_type2, msg_type3),
+                        row_to_msg_id,
+                    )
+                    .await?
+            }
+            None => {
+                context
+                    .sql
+                    .query_map_vec(
+                        &query,
+                        (ChatId::TRASH, msg_type, msg_type2, msg_type3),
+                        row_to_msg_id,
+                    )
+                    .await?
+            }
+        }
     };
     Ok(list)
 }

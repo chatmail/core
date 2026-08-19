@@ -115,20 +115,26 @@ impl Chatlist {
             ChatId::new(0)
         };
 
+        // No `OR` here: with `OR`, SQLite does not get the rows in timestamp order,
+        // so `LIMIT 1` cannot stop at the first match and reads the whole chat.
         macro_rules! last_visible_msg_id_in {
             ($chat_id:expr) => {
                 concat!(
                     "
-(SELECT id FROM msgs WHERE
-    -- state=`OutDraft`.
-    state=19 AND hidden=1 AND chat_id=",
-                    $chat_id,
-                    " OR
-    -- `InFresh`...`OutDelivered` inclusive, except `OutDraft`.
-    state IN (10,13,16,20,24,26) AND hidden=0 AND chat_id=",
+(SELECT id FROM (
+    -- state=`OutDraft` (at most one draft per chat).
+    SELECT id, timestamp FROM msgs WHERE state=19 AND hidden=1 AND chat_id=",
                     $chat_id,
                     "
-ORDER BY timestamp DESC, id DESC LIMIT 1)"
+    UNION ALL
+    -- Newest of `InFresh`...`OutDelivered` inclusive, except `OutDraft`.
+    SELECT id, timestamp FROM (
+        SELECT id, timestamp FROM msgs WHERE state IN (10,13,16,20,24,26) AND hidden=0 AND chat_id=",
+                    $chat_id,
+                    "
+        ORDER BY timestamp DESC, id DESC LIMIT 1
+    )
+) ORDER BY timestamp DESC, id DESC LIMIT 1)"
                 )
             };
         }
