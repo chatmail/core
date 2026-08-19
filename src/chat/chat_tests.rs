@@ -4374,6 +4374,7 @@ async fn test_chat_get_encryption_info() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
+    bob.set_config(Config::Displayname, Some("Bob")).await?;
     let fiona = &tcm.fiona().await;
 
     let contact_bob = alice.add_or_lookup_contact_id(bob).await;
@@ -4390,7 +4391,7 @@ async fn test_chat_get_encryption_info() -> Result<()> {
         chat_id.get_encryption_info(alice).await?,
         "Messages are end-to-end encrypted.\n\
          \n\
-         bob@example.net(bob@example.net)\n\
+         Bob(bob@example.net)\n\
          CCCB 5AA9 F6E1 141C 9431\n\
          65F1 DB18 B18C BCF7 0487"
     );
@@ -4404,7 +4405,7 @@ async fn test_chat_get_encryption_info() -> Result<()> {
          C8BA 50BF 4AC1 2FAF 38D7\n\
          F657 DDFC 8E9F 3C79 9195\n\
          \n\
-         bob@example.net(bob@example.net)\n\
+         Bob(bob@example.net)\n\
          CCCB 5AA9 F6E1 141C 9431\n\
          65F1 DB18 B18C BCF7 0487"
     );
@@ -4425,7 +4426,7 @@ async fn test_chat_get_encryption_info() -> Result<()> {
          C8BA 50BF 4AC1 2FAF 38D7\n\
          F657 DDFC 8E9F 3C79 9195\n\
          \n\
-         bob@example.net\n\
+         Bob\n\
          (key missing)\n\
          CCCB 5AA9 F6E1 141C 9431\n\
          65F1 DB18 B18C BCF7 0487"
