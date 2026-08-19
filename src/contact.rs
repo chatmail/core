@@ -1633,20 +1633,21 @@ WHERE addr=?
     ) -> Result<Option<PathBuf>> {
         if self.id == ContactId::SELF {
             if let Some(p) = context.get_config(Config::Selfavatar).await? {
-                return Ok(Some(PathBuf::from(p))); // get_config() calls get_abs_path() internally already
+                Ok(Some(PathBuf::from(p))) // get_config() calls get_abs_path() internally already
+            } else {
+                Ok(None)
             }
         } else if self.id == ContactId::DEVICE {
-            return Ok(Some(chat::get_device_icon(context).await?));
-        }
-        if show_fallback_icon && !self.id.is_special() && !self.is_key_contact() {
-            return Ok(Some(chat::get_unencrypted_icon(context).await?));
-        }
-        if let Some(image_rel) = self.param.get(Param::ProfileImage)
+            Ok(Some(chat::get_device_icon(context).await?))
+        } else if show_fallback_icon && !self.id.is_special() && !self.is_key_contact() {
+            Ok(Some(chat::get_unencrypted_icon(context).await?))
+        } else if let Some(image_rel) = self.param.get(Param::ProfileImage)
             && !image_rel.is_empty()
         {
-            return Ok(Some(get_abs_path(context, Path::new(image_rel))));
+            Ok(Some(get_abs_path(context, Path::new(image_rel))))
+        } else {
+            Ok(None)
         }
-        Ok(None)
     }
 
     /// Returns a color for the contact.
