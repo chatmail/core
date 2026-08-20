@@ -16,11 +16,12 @@ use crate::key;
 use crate::key::{DcKey, Fingerprint, load_self_public_key, self_fingerprint};
 use crate::log::LogExt as _;
 use crate::log::warn;
-use crate::message::{self, Message, MsgId, Viewtype};
+use crate::message::{self, Message, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;
 use crate::qr::check_qr;
 use crate::securejoin::bob::JoinerProgress;
+use crate::smtp::insert_into_smtp;
 use crate::sync::Sync::*;
 use crate::tools::{create_id, create_outgoing_rfc724_mid, time};
 use crate::{SecurejoinSource, mimefactory, stats};
@@ -741,24 +742,6 @@ pub(crate) async fn handle_securejoin_handshake(
             Ok(HandshakeMessage::Ignore)
         }
     }
-}
-
-async fn insert_into_smtp(
-    context: &Context,
-    rfc724_mid: &str,
-    recipients: &str,
-    rendered_message: String,
-    msg_id: MsgId,
-) -> Result<(), Error> {
-    context
-        .sql
-        .execute(
-            "INSERT INTO smtp (rfc724_mid, recipients, mime, msg_id)
-            VALUES            (?1,         ?2,         ?3,   ?4)",
-            (&rfc724_mid, &recipients, &rendered_message, msg_id),
-        )
-        .await?;
-    Ok(())
 }
 
 /// Observe self-sent Securejoin message.

@@ -16,9 +16,8 @@ use crate::message::{self, Message, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::{Param, Params};
 use crate::pgp::addresses_from_public_key;
-use crate::securejoin::{
-    ContactId, encrypted_and_signed, insert_into_smtp, verify_sender_by_fingerprint,
-};
+use crate::securejoin::{ContactId, encrypted_and_signed, verify_sender_by_fingerprint};
+use crate::smtp::insert_into_smtp;
 use crate::stock_str;
 use crate::sync::Sync::*;
 use crate::tools::{create_outgoing_rfc724_mid, time};
