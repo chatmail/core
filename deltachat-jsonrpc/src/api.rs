@@ -652,6 +652,18 @@ impl CommandApi {
             .collect())
     }
 
+    /// Returns the number of _fresh_ messages of any chat,
+    /// i.e. the length of the list returned by `get_fresh_msgs()`.
+    ///
+    /// Use this instead of `get_fresh_msgs()` when only the number is needed,
+    /// e.g. for a badge counter on the app icon: the ids do not have to be
+    /// sorted and transferred then, which matters in accounts with many
+    /// fresh messages.
+    async fn get_fresh_msgs_cnt(&self, account_id: u32) -> Result<usize> {
+        let ctx = self.get_context(account_id).await?;
+        ctx.get_fresh_msgs_cnt().await
+    }
+
     /// Get the number of _fresh_ messages in a chat.
     /// Typically used to implement a badge with a number in the chatlist.
     ///

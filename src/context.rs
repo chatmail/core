@@ -1046,6 +1046,36 @@ ORDER BY m.timestamp DESC,m.id DESC",
         Ok(list)
     }
 
+    /// Returns the number of _fresh_ messages of any chat,
+    /// i.e. the length of the list returned by [`Context::get_fresh_msgs`].
+    ///
+    /// Use this instead of `get_fresh_msgs()` when only the number is needed,
+    /// e.g. for badge counters: counting does not have to sort the messages
+    /// and does not return their ids, which makes a large difference in
+    /// accounts that have many fresh messages.
+    pub async fn get_fresh_msgs_cnt(&self) -> Result<usize> {
+        // Keep the `WHERE` clause in sync with `get_fresh_msgs()` above.
+        let count = self
+            .sql
+            .count(
+                "SELECT COUNT(*)
+FROM msgs m
+LEFT JOIN contacts ct
+    ON m.from_id=ct.id
+LEFT JOIN chats c
+    ON m.chat_id=c.id
+WHERE m.state=?
+AND m.hidden=0
+AND m.chat_id>9
+AND ct.blocked=0
+AND c.blocked=0
+AND NOT(c.muted_until=-1 OR c.muted_until>?)",
+                (MessageState::InFresh, time()),
+            )
+            .await?;
+        Ok(count)
+    }
+
     /// (deprecated) Returns a list of messages with database ID higher than requested.
     ///
     /// Blocked contacts and chats are excluded,
