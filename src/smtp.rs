@@ -327,6 +327,25 @@ pub(crate) async fn smtp_send(
     status
 }
 
+/// Inserts a rendered message into the `smtp` table for sending.
+pub(crate) async fn insert_into_smtp(
+    context: &Context,
+    rfc724_mid: &str,
+    recipients: &str,
+    rendered_message: String,
+    msg_id: MsgId,
+) -> Result<(), Error> {
+    context
+        .sql
+        .execute(
+            "INSERT INTO smtp (rfc724_mid, recipients, mime, msg_id)
+            VALUES            (?1,         ?2,         ?3,   ?4)",
+            (&rfc724_mid, &recipients, &rendered_message, msg_id),
+        )
+        .await?;
+    Ok(())
+}
+
 /// Sends message identified by `smtp` table rowid over SMTP connection.
 ///
 /// Removes row if the message should not be retried, otherwise increments retry count.

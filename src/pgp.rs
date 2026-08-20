@@ -452,6 +452,12 @@ pub(crate) fn addresses_from_public_key(public_key: &SignedPublicKey) -> Option<
     None
 }
 
+/// Returns the addresses to reach the owner of `public_key`,
+/// falling back to `addr` if the key carries no relay list.
+pub(crate) fn relay_addrs(public_key: &SignedPublicKey, addr: &str) -> Vec<String> {
+    addresses_from_public_key(public_key).unwrap_or_else(|| vec![addr.to_string()])
+}
+
 /// Returns true if public key advertises SEIPDv2 feature.
 pub(crate) fn pubkey_supports_seipdv2(public_key: &SignedPublicKey) -> bool {
     // If any Direct Key Signature or any User ID signature has SEIPDv2 feature,

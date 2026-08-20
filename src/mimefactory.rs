@@ -10,6 +10,8 @@ use deltachat_contact_tools::sanitize_bidi_characters;
 use iroh_gossip::proto::TopicId;
 use mail_builder::headers::HeaderType;
 use mail_builder::headers::address::Address;
+use mail_builder::headers::raw::Raw;
+use mail_builder::headers::text::Text;
 use mail_builder::mime::MimePart;
 use tokio::fs;
 
@@ -32,7 +34,7 @@ use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::SystemMessage;
 use crate::param::Param;
 use crate::peer_channels::{create_iroh_header, get_iroh_topic_for_msg};
-use crate::pgp::{SeipdVersion, addresses_from_public_key, pubkey_supports_seipdv2};
+use crate::pgp::{SeipdVersion, addresses_from_public_key, pubkey_supports_seipdv2, relay_addrs};
 use crate::simplify::escape_message_footer_marks;
 use crate::stock_str;
 use crate::tools::{IsNoneOrEmpty, create_outgoing_rfc724_mid, remove_subject_prefix, time};
@@ -578,9 +580,7 @@ impl MimeFactory {
 
             let public_key = SignedPublicKey::from_slice(&public_key_bytes)?;
 
-            let relays =
-                addresses_from_public_key(&public_key).unwrap_or_else(|| vec![addr.clone()]);
-            recipients.extend(relays);
+            recipients.extend(relay_addrs(&public_key, &addr));
             to.push((authname, addr.clone()));
 
             Encryption::Asymmetric {
@@ -897,7 +897,7 @@ impl MimeFactory {
             }
         } else if contact.is_key_contact() {
             let encryption_pubkeys = if let Some(key) = contact.public_key(context).await? {
-                recipients = addresses_from_public_key(&key).unwrap_or_else(|| vec![addr.clone()]);
+                recipients = relay_addrs(&key, &addr);
                 vec![(addr.clone(), key)]
             } else {
                 Vec::new()
@@ -2439,6 +2439,42 @@ fn b_encode(value: &str) -> String {
     )
 }
 
+/// Returns the headers to place into the encrypted part
+/// of messages that are not part of a chat.
+async fn non_chat_protected_headers(
+    context: &Context,
+    subject: &str,
+) -> Result<Vec<(&'static str, HeaderType<'static>)>> {
+    let date = chrono::DateTime::<chrono::Utc>::from_timestamp(time(), 0)
+        .unwrap()
+        .to_rfc2822();
+    let mut headers = vec![
+        ("To", Address::new_list(vec![hidden_recipients()]).into()),
+        ("Date", Raw::new(date).into()),
+        ("Subject", Text::new(subject.to_string()).into()),
+    ];
+    // Automatic Response headers <https://www.rfc-editor.org/rfc/rfc3834>
+    if context.get_config_bool(Config::Bot).await? {
+        headers.push(("Auto-Submitted", Raw::new("auto-generated").into()));
+    }
+    Ok(headers)
+}
+
+/// Renders `queued_mail` for SMTP with the own key pair and primary address.
+async fn render_with_self_key(context: &Context, queued_mail: QueuedMail) -> Result<String> {
+    let public_key = key::load_self_public_key(context).await?;
+    let secret_key = key::load_self_secret_key(context).await?;
+    let from_addr = context.get_primary_self_addr().await?;
+    let rendered_mail = render_queued_mail(
+        queued_mail,
+        &public_key,
+        &secret_key,
+        from_addr,
+        RenderSideEffects::default(),
+    )?;
+    Ok(rendered_mail.message)
+}
+
 pub(crate) async fn render_symm_encrypted_securejoin_message(
     context: &Context,
     step: &str,
@@ -2451,81 +2487,29 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
 
     let message: MimePart<'static> = MimePart::new("text/plain", "Secure-Join");
 
-    let mut headers = Vec::<(&'static str, HeaderType<'static>)>::new();
-
-    let to: Vec<Address<'static>> = vec![hidden_recipients()];
-    headers.push((
-        "To",
-        mail_builder::headers::address::Address::new_list(to.clone()).into(),
-    ));
-
-    let timestamp = time();
-    let date = chrono::DateTime::<chrono::Utc>::from_timestamp(timestamp, 0)
-        .unwrap()
-        .to_rfc2822();
-    headers.push(("Date", mail_builder::headers::raw::Raw::new(date).into()));
-
-    headers.push((
-        "Subject",
-        mail_builder::headers::text::Text::new("Secure-Join".to_string()).into(),
-    ));
-
-    // Automatic Response headers <https://www.rfc-editor.org/rfc/rfc3834>
-    if context.get_config_bool(Config::Bot).await? {
-        headers.push((
-            "Auto-Submitted",
-            mail_builder::headers::raw::Raw::new("auto-generated".to_string()).into(),
-        ));
-    }
-
-    headers.push((
-        "Secure-Join",
-        mail_builder::headers::raw::Raw::new(step.to_string()).into(),
-    ));
-
-    headers.push((
-        "Secure-Join-Auth",
-        mail_builder::headers::text::Text::new(auth.to_string()).into(),
-    ));
+    let mut headers = non_chat_protected_headers(context, "Secure-Join").await?;
+    headers.push(("Secure-Join", Raw::new(step.to_string()).into()));
+    headers.push(("Secure-Join-Auth", Text::new(auth.to_string()).into()));
 
     let message = add_headers_to_encrypted_part(message, headers);
 
-    // Disable compression for SecureJoin to ensure
-    // there are no compression side channels
-    // leaking information about the tokens.
-    let should_compress = false;
-
-    // Only sign the message if we attach the pubkey.
-    let should_sign = should_attach_pubkey;
-
-    let raw_message = part_to_bytes(message);
-
     let queued_mail = QueuedMail {
-        raw_message,
+        raw_message: part_to_bytes(message),
         display_name: String::new(),
         rfc724_mid: rfc724_mid.to_string(),
         encryption: Encryption::Symmetric {
             shared_secret: shared_secret.to_string(),
         },
         should_attach_pubkey,
-        should_sign,
-        should_compress,
+        // Only sign the message if we attach the pubkey.
+        should_sign: should_attach_pubkey,
+        // Disable compression for SecureJoin to ensure
+        // there are no compression side channels
+        // leaking information about the tokens.
+        should_compress: false,
     };
 
-    let public_key = key::load_self_public_key(context).await?;
-    let secret_key = key::load_self_secret_key(context).await?;
-    let side_effects = RenderSideEffects::default();
-
-    let from_addr = context.get_primary_self_addr().await?;
-    let rendered_mail = render_queued_mail(
-        queued_mail,
-        &public_key,
-        &secret_key,
-        from_addr,
-        side_effects,
-    )?;
-
-    Ok(rendered_mail.message)
+    render_with_self_key(context, queued_mail).await
 }
 
 /// Renders MIME part into a vector of bytes.
