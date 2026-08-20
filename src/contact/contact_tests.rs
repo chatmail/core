@@ -1015,6 +1015,32 @@ async fn test_selfavatar_changed_event() -> Result<()> {
     Ok(())
 }
 
+/// Tests that for self contact avatar is not loaded from the params.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_selfavatar_no_param() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+
+    let alice = &tcm.alice().await;
+
+    // SELF contact should not have the avatar set
+    // because avatar path is stored in `selfavatar` config,
+    // but apparently some older profiles have it,
+    // possibly due to a bug.
+    let mut self_contact = Contact::get_by_id(alice, ContactId::SELF).await?;
+    self_contact
+        .param
+        .set(Param::ProfileImage, "$BLOBDIR/avatar.jpg");
+    self_contact.update_param(alice).await?;
+
+    assert_eq!(alice.get_config(Config::Selfavatar).await?, None);
+    let self_contact = Contact::get_by_id(alice, ContactId::SELF).await?;
+
+    // Profile image parameter is ignored for self contact.
+    assert_eq!(self_contact.get_profile_image(alice).await?, None);
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_last_seen() -> Result<()> {
     let mut tcm = TestContextManager::new();
