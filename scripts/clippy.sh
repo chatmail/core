@@ -6,4 +6,4 @@
 #
 # To automatically fix warnings, run
 #   scripts/clippy.sh --fix --allow-dirty
-cargo clippy --workspace --all-targets --all-features "$@" -- -D warnings
+cargo clippy --locked --workspace --all-targets --all-features "$@" -- -D warnings
