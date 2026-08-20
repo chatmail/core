@@ -17,7 +17,7 @@ Install ``deltachat-rpc-server``
 To get ``deltachat-rpc-server`` binary you have three options:
 
 1. Install ``deltachat-rpc-server`` from PyPI using ``pip install deltachat-rpc-server``.
-2. Build and install ``deltachat-rpc-server`` from source with ``cargo install --git https://github.com/chatmail/core/ deltachat-rpc-server``.
+2. Build and install ``deltachat-rpc-server`` from source with ``cargo install --locked --git https://github.com/chatmail/core/ deltachat-rpc-server``.
 3. Download prebuilt release from https://github.com/chatmail/core/releases and install it into ``PATH``.
 
 Check that ``deltachat-rpc-server`` is installed and can run::

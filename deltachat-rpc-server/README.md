@@ -11,7 +11,7 @@ Rename the downloaded binary to `deltachat-rpc-server` and add it to your `PATH`
 To install from source run:
 
 ```sh
-cargo install --git https://github.com/chatmail/core/ deltachat-rpc-server
+cargo install --locked --git https://github.com/chatmail/core/ deltachat-rpc-server
 ```
 
 The `deltachat-rpc-server` executable will be installed into `$HOME/.cargo/bin` that should be available
