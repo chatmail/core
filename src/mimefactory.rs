@@ -1560,6 +1560,23 @@ impl MimeFactory {
             // that normally only allows encrypted mails.
             message
         } else {
+            // Unencrypted message.
+            let message = if let Loaded::Message { msg, .. } = &self.loaded
+                && msg.param.get_cmd() == SystemMessage::SecurejoinMessage
+                && matches!(
+                    msg.param.get(Param::Arg),
+                    Some("vc-request") | Some("vg-request")
+                ) {
+                // Workaround for legacy SecureJoin {vc,vg}-request messages.
+                // They must be sent as multipart/mixed
+                // for compatibility with chatmail relays
+                // that allow to send these messages unencrypted,
+                // but only as long as they have this MIME structure.
+                MimePart::new("multipart/mixed", vec![message])
+            } else {
+                message
+            };
+
             headers.iter().fold(message, |message, (header, value)| {
                 debug_assert_ne!(*header, "from");
                 debug_assert_ne!(*header, "message-id");

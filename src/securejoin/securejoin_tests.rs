@@ -494,6 +494,11 @@ async fn test_secure_join_group_ext(v3: bool, remove_invite: bool) -> Result<()>
             "vg-request"
         }
     );
+    if !v3 {
+        // Legacy {vc,vg}-request should be sent as multipart/mixed
+        // to pass chatmail relay filters.
+        assert!(sent.payload.contains("Content-Type: multipart/mixed"));
+    }
     assert_eq!(msg.get_header(HeaderDef::SecureJoinAuth).is_some(), v3);
     assert_eq!(
         msg.get_header(HeaderDef::SecureJoinInvitenumber).is_some(),
