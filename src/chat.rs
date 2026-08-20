@@ -1213,7 +1213,7 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
             .filter(|&contact_id| !contact_id.is_special())
         {
             let contact = Contact::get_by_id(context, contact_id).await?;
-            let addr = contact.get_addr();
+            let name = contact.get_display_name();
             logged_debug_assert!(
                 context,
                 contact.is_key_contact(),
@@ -1226,12 +1226,12 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
             if let Some(public_key) = contact.public_key(context).await? {
                 if let Some(relay_addrs) = addresses_from_public_key(&public_key) {
                     let relays = relay_addrs.join(",");
-                    ret += &format!("\n{addr}({relays})\n{fingerprint}\n");
+                    ret += &format!("\n{name}({relays})\n{fingerprint}\n");
                 } else {
-                    ret += &format!("\n{addr}\n{fingerprint}\n");
+                    ret += &format!("\n{name}\n{fingerprint}\n");
                 }
             } else {
-                ret += &format!("\n{addr}\n(key missing)\n{fingerprint}\n");
+                ret += &format!("\n{name}\n(key missing)\n{fingerprint}\n");
             }
         }
 
