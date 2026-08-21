@@ -680,20 +680,18 @@ ORDER BY id"
             .ctx
             .sql
             .query_map_vec(
-                "SELECT id, msg_id, mime, recipients FROM smtp WHERE msg_id=?",
+                "SELECT mime, recipients FROM smtp WHERE msg_id=?",
                 (msg_id,),
                 |row| {
-                    let _id: MsgId = row.get(0)?;
-                    let msg_id: MsgId = row.get(1)?;
-                    let mime: String = row.get(2)?;
-                    let recipients: String = row.get(3)?;
-                    Ok((msg_id, mime, recipients))
+                    let mime: String = row.get(0)?;
+                    let recipients: String = row.get(1)?;
+                    Ok((mime, recipients))
                 },
             )
             .await
             .unwrap()
             .into_iter()
-            .map(|(msg_id, mime, recipients)| SentMessage {
+            .map(|(mime, recipients)| SentMessage {
                 payload: mime,
                 sender_msg_id: msg_id,
                 sender_context: &self.ctx,
