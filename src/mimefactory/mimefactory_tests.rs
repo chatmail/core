@@ -1055,7 +1055,6 @@ Message-ID: <MESSAGE_ID@localhost>
 MIME-Version: 1.0
 To: "hidden-recipients": ;
 Subject: [...]
-Chat-Version: 1.0
 Content-Type: multipart/encrypted; protocol="application/pgp-encrypted"; 
 	boundary="BOUNDARY"
 
