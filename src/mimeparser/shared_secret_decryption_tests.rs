@@ -46,7 +46,7 @@ async fn test_shared_secret_decryption_ext(
 
     let encrypted_msg = pgp::symm_encrypt_message(
         plain_text.as_bytes().to_vec(),
-        signer_key,
+        signer_key.as_ref(),
         secret_for_encryption.to_string(),
         true,
     )?;

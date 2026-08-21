@@ -1241,7 +1241,7 @@ Content-Transfer-Encoding: base64\r
         let encrypted_payload = pk_encrypt(
             plain_text.as_bytes().to_vec(),
             public_keys_for_encryption,
-            alice_secret_key,
+            Some(&alice_secret_key),
             compress,
             SeipdVersion::V2,
         )?;
