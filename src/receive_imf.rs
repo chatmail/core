@@ -2588,24 +2588,11 @@ async fn save_locations(
     }
 
     if let Some(location_kml) = &mime_parser.location_kml
-        && let Some(addr) = &location_kml.addr
+        && location::save(context, chat_id, from_id, &location_kml.locations, false)
+            .await?
+            .is_some()
     {
-        let contact = Contact::get_by_id(context, from_id).await?;
-        if contact.get_addr().to_lowercase() == addr.to_lowercase() {
-            if location::save(context, chat_id, from_id, &location_kml.locations, false)
-                .await?
-                .is_some()
-            {
-                send_event = true;
-            }
-        } else {
-            warn!(
-                context,
-                "Address in location.kml {:?} is not the same as the sender address {:?}.",
-                addr,
-                contact.get_addr()
-            );
-        }
+        send_event = true;
     }
     if send_event {
         context.emit_location_changed(Some(from_id)).await?;
