@@ -101,7 +101,7 @@ async fn ctext_signed() -> &'static String {
             pk_encrypt(
                 CLEARTEXT.to_vec(),
                 keyring,
-                KEYS.alice_secret.clone(),
+                Some(&KEYS.alice_secret),
                 compress,
                 SeipdVersion::V2,
             )
@@ -118,6 +118,32 @@ async fn test_encrypt_signed() {
             .await
             .starts_with("-----BEGIN PGP MESSAGE-----")
     );
+}
+
+/// Tests that a message encrypted without a signing key has no signature,
+/// and therefore no intended recipient fingerprints naming the other recipients.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_encrypt_unsigned() {
+    let keyring = vec![KEYS.alice_public.clone(), KEYS.bob_public.clone()];
+    let compress = true;
+    let ctext = pk_encrypt(
+        CLEARTEXT.to_vec(),
+        keyring,
+        None,
+        compress,
+        SeipdVersion::V2,
+    )
+    .unwrap();
+
+    let decrypt_keyring = vec![KEYS.bob_secret.clone()];
+    let sig_check_keyring = vec![KEYS.alice_public.clone()];
+    let (msg, valid_signatures, content) =
+        pk_decrypt_and_validate(ctext.as_bytes(), &decrypt_keyring, &sig_check_keyring)
+            .await
+            .unwrap();
+    assert_eq!(content, CLEARTEXT);
+    assert!(!msg.is_signed());
+    assert_eq!(valid_signatures.len(), 0);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -291,7 +317,7 @@ async fn test_decryption_error_msg() -> Result<()> {
     let ctext = pk_encrypt(
         plain,
         vec![pk_for_encryption],
-        KEYS.alice_secret.clone(),
+        Some(&KEYS.alice_secret),
         compress,
         SeipdVersion::V2,
     )?;

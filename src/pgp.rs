@@ -106,13 +106,46 @@ pub enum SeipdVersion {
     V2,
 }
 
-/// Encrypts `plain` text using `public_keys_for_encryption`
-/// and signs it using `private_key_for_signing`.
+/// Returns the subpackets for a signature over a message
+/// encrypted to `public_keys_for_encryption`.
 #[expect(clippy::arithmetic_side_effects)]
+fn signature_subpackets(
+    private_key_for_signing: &SignedSecretKey,
+    public_keys_for_encryption: &[SignedPublicKey],
+) -> Result<SubpacketConfig> {
+    let mut hashed = Vec::with_capacity(1 + public_keys_for_encryption.len() + 1);
+    hashed.push(Subpacket::critical(SubpacketData::SignatureCreationTime(
+        pgp::types::Timestamp::now(),
+    ))?);
+    for key in public_keys_for_encryption {
+        let data = SubpacketData::IntendedRecipientFingerprint(key.fingerprint());
+        let subpkt = match private_key_for_signing.version() < KeyVersion::V6 {
+            true => Subpacket::regular(data)?,
+            false => Subpacket::critical(data)?,
+        };
+        hashed.push(subpkt);
+    }
+    hashed.push(Subpacket::regular(SubpacketData::IssuerFingerprint(
+        private_key_for_signing.fingerprint(),
+    ))?);
+    let mut unhashed = vec![];
+    if private_key_for_signing.version() <= KeyVersion::V4 {
+        unhashed.push(Subpacket::regular(SubpacketData::IssuerKeyId(
+            private_key_for_signing.legacy_key_id(),
+        ))?);
+    }
+    Ok(SubpacketConfig::UserDefined { hashed, unhashed })
+}
+
+/// Encrypts `plain` text using `public_keys_for_encryption`,
+/// signing it with `private_key_for_signing` if there is one.
+///
+/// An unsigned message carries no intended recipient fingerprints,
+/// so its recipients do not learn who else received it.
 pub fn pk_encrypt(
     plain: Vec<u8>,
     public_keys_for_encryption: Vec<SignedPublicKey>,
-    private_key_for_signing: SignedSecretKey,
+    private_key_for_signing: Option<&SignedSecretKey>,
     compress: bool,
     seipd_version: SeipdVersion,
 ) -> Result<String> {
@@ -122,30 +155,6 @@ pub fn pk_encrypt(
         let pkeys = public_keys_for_encryption
             .iter()
             .filter_map(select_pk_for_encryption);
-        let subpkts = {
-            let mut hashed = Vec::with_capacity(1 + public_keys_for_encryption.len() + 1);
-            hashed.push(Subpacket::critical(SubpacketData::SignatureCreationTime(
-                pgp::types::Timestamp::now(),
-            ))?);
-            for key in &public_keys_for_encryption {
-                let data = SubpacketData::IntendedRecipientFingerprint(key.fingerprint());
-                let subpkt = match private_key_for_signing.version() < KeyVersion::V6 {
-                    true => Subpacket::regular(data)?,
-                    false => Subpacket::critical(data)?,
-                };
-                hashed.push(subpkt);
-            }
-            hashed.push(Subpacket::regular(SubpacketData::IssuerFingerprint(
-                private_key_for_signing.fingerprint(),
-            ))?);
-            let mut unhashed = vec![];
-            if private_key_for_signing.version() <= KeyVersion::V4 {
-                unhashed.push(Subpacket::regular(SubpacketData::IssuerKeyId(
-                    private_key_for_signing.legacy_key_id(),
-                ))?);
-            }
-            SubpacketConfig::UserDefined { hashed, unhashed }
-        };
 
         let msg = MessageBuilder::from_bytes("", plain);
         let encoded_msg = match seipd_version {
@@ -156,13 +165,16 @@ pub fn pk_encrypt(
                     msg.encrypt_to_key_anonymous(&mut rng, &pkey)?;
                 }
 
-                let hash_algorithm = private_key_for_signing.hash_alg();
-                msg.sign_with_subpackets(
-                    &*private_key_for_signing,
-                    Password::empty(),
-                    hash_algorithm,
-                    subpkts,
-                );
+                if let Some(secret_key) = private_key_for_signing {
+                    let subpkts = signature_subpackets(secret_key, &public_keys_for_encryption)?;
+                    let hash_algorithm = secret_key.hash_alg();
+                    msg.sign_with_subpackets(
+                        &**secret_key,
+                        Password::empty(),
+                        hash_algorithm,
+                        subpkts,
+                    );
+                }
                 if compress {
                     msg.compression(CompressionAlgorithm::ZLIB);
                 }
@@ -181,13 +193,16 @@ pub fn pk_encrypt(
                     msg.encrypt_to_key_anonymous(&mut rng, &pkey)?;
                 }
 
-                let hash_algorithm = private_key_for_signing.hash_alg();
-                msg.sign_with_subpackets(
-                    &*private_key_for_signing,
-                    Password::empty(),
-                    hash_algorithm,
-                    subpkts,
-                );
+                if let Some(secret_key) = private_key_for_signing {
+                    let subpkts = signature_subpackets(secret_key, &public_keys_for_encryption)?;
+                    let hash_algorithm = secret_key.hash_alg();
+                    msg.sign_with_subpackets(
+                        &**secret_key,
+                        Password::empty(),
+                        hash_algorithm,
+                        subpkts,
+                    );
+                }
                 if compress {
                     msg.compression(CompressionAlgorithm::ZLIB);
                 }
@@ -254,7 +269,7 @@ pub fn pk_validate(
 /// `shared secret` is the secret that will be used for symmetric encryption.
 pub fn symm_encrypt_message(
     plain: Vec<u8>,
-    private_key_for_signing: Option<SignedSecretKey>,
+    private_key_for_signing: Option<&SignedSecretKey>,
     shared_secret: String,
     compress: bool,
 ) -> Result<String> {
@@ -277,9 +292,13 @@ pub fn symm_encrypt_message(
         );
         msg.encrypt_with_password(&mut rng, s2k, &shared_secret)?;
 
-        if let Some(private_key_for_signing) = private_key_for_signing.as_deref() {
+        if let Some(private_key_for_signing) = private_key_for_signing {
             let hash_algorithm = private_key_for_signing.hash_alg();
-            msg.sign(private_key_for_signing, Password::empty(), hash_algorithm);
+            msg.sign(
+                &**private_key_for_signing,
+                Password::empty(),
+                hash_algorithm,
+            );
         }
         if compress {
             msg.compression(CompressionAlgorithm::ZLIB);

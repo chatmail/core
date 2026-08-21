@@ -407,6 +407,8 @@ pub(crate) fn render_queued_mail(
         }
     }
 
+    let sign_key = if should_sign { Some(secret_key) } else { None };
+
     let message = match encryption {
         Encryption::No => raw_message,
         Encryption::Asymmetric { encryption_pubkeys } => {
@@ -434,7 +436,7 @@ pub(crate) fn render_queued_mail(
             let encrypted = crate::pgp::pk_encrypt(
                 full_raw_message,
                 encryption_keyring,
-                secret_key.clone(),
+                sign_key,
                 should_compress,
                 seipd_version,
             )?;
@@ -445,12 +447,6 @@ pub(crate) fn render_queued_mail(
         Encryption::Symmetric { shared_secret } => {
             let mut full_raw_message = inner_headers.clone();
             full_raw_message.extend(raw_message);
-
-            let sign_key = if should_sign {
-                Some(secret_key.clone())
-            } else {
-                None
-            };
 
             let encrypted = crate::pgp::symm_encrypt_message(
                 full_raw_message,

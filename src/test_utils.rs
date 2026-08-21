@@ -1224,11 +1224,11 @@ pub async fn encrypt_raw_message(
     let mut cleartext = format!("Autocrypt: {aheader}").into_bytes();
     cleartext.extend_from_slice(b"\r\n");
     cleartext.extend_from_slice(payload);
-    let sign_key = key::load_self_secret_key(context).await?;
+    let sign_key = Some(key::load_self_secret_key(context).await?);
     let encrypted_payload = crate::pgp::pk_encrypt(
         cleartext,
         encryption_keyring,
-        sign_key,
+        sign_key.as_ref(),
         compress,
         SeipdVersion::V2,
     )?;
