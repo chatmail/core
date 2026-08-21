@@ -105,6 +105,7 @@ pub struct MessageObject {
 
     is_pinned: bool,
 
+    /// `None` when there are no reactions.
     reactions: Option<JsonrpcReactions>,
 
     vcard_contact: Option<VcardContact>,

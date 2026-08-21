@@ -2458,6 +2458,7 @@ impl CommandApi {
     }
 
     /// Returns reactions to the message.
+    /// `None` when there are no reactions.
     async fn get_message_reactions(
         &self,
         account_id: u32,
