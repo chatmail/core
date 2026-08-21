@@ -337,6 +337,7 @@ CREATE INDEX msgs_index7 ON msgs (state, hidden, chat_id, timestamp);
 CREATE INDEX msgs_index8 ON msgs (ephemeral_timestamp);
 CREATE INDEX msgs_index9 ON msgs (pre_rfc724_mid);
 CREATE INDEX msgs_index10 ON msgs (pinned) WHERE pinned=1;
+CREATE INDEX msgs_index11 ON msgs (chat_id, timestamp);
 
 CREATE TABLE leftgrps (
     id INTEGER PRIMARY KEY,

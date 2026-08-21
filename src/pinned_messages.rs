@@ -107,9 +107,12 @@ pub async fn get_pinned_messages(context: &Context, chat_id: ChatId) -> Result<V
     let pinned_msg_ids = context
         .sql
         .query_map_vec(
+            // The `+` keeps SQLite on the small `msgs_index10 (pinned)`:
+            // to avoid sorting, it would otherwise pick `msgs_index11
+            // (chat_id, timestamp)` and walk all messages of the chat.
             "SELECT id
                FROM msgs
-              WHERE pinned=1 AND chat_id=?
+              WHERE pinned=1 AND +chat_id=?
               ORDER BY timestamp, id;",
             (chat_id,),
             |row| {

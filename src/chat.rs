@@ -3406,7 +3406,10 @@ pub async fn get_first_unread_msg(context: &Context, chat_id: ChatId) -> Result<
                FROM msgs
               WHERE state IN (?1, ?2) AND hidden=0 AND chat_id=?3
                 AND (timestamp > ?4 OR (timestamp = ?4 AND id > ?5))
-           ORDER BY timestamp, id
+           -- The `+` keeps SQLite on the index above. To avoid sorting, it would
+           -- otherwise walk the whole chat via `msgs_index11 (chat_id, timestamp)`
+           -- if nothing is unread and nothing was seen yet, e.g. in a channel.
+           ORDER BY +timestamp, id
               LIMIT 1",
             (
                 MessageState::InFresh,
@@ -4027,7 +4030,8 @@ async fn get_broadcast_msgs_to_resend(context: &Context, chat_id: ChatId) -> Res
             "
 SELECT id, timestamp FROM msgs WHERE id IN
     (
-        SELECT id FROM msgs WHERE chat_id=?1 -- UNION requires simple SELECT statements without LIMIT; therefore the sub-SELECT
+        SELECT id FROM msgs WHERE +chat_id=?1 -- UNION requires simple SELECT statements without LIMIT; therefore the sub-SELECT
+            -- The `+` keeps SQLite on `msgs_index10 (pinned)` instead of walking the chat.
             AND pinned=1 AND hidden=0 AND type!=?2
             ORDER BY timestamp DESC, id DESC LIMIT ?3
     )
