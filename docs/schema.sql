@@ -621,6 +621,9 @@ CREATE TABLE transports (
     -- this is ensured during configuration.
     configured_param TEXT NOT NULL,
 
+    -- Bumping this forces re-signing the key:
+    -- the relay-list signature is created at MAX(add_timestamp, remove_timestamp)
+    -- over this table and `removed_transports`, and contacts keep the newest one.
     add_timestamp INTEGER NOT NULL DEFAULT 0,
 
     -- True if the transport address is published
