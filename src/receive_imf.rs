@@ -506,6 +506,18 @@ pub(crate) async fn receive_imf_inner(
         Ok(mime_parser) => mime_parser,
     };
 
+    if !mime_parser.mdn_reports.is_empty()
+        && mime_parser.mdn_reports.iter().all(|report| {
+            report.original_message_id.is_none() && report.additional_message_ids.is_empty()
+        })
+    {
+        // A report naming no message can never be applied to one,
+        // and nothing else should come out of it: no contact, no chat,
+        // and no `last_seen` update lighting up an online dot.
+        info!(context, "Report without message reference (TRASH).");
+        return trash().await;
+    }
+
     if !mime_parser.was_encrypted()
         && mime_parser.get_header(HeaderDef::SecureJoin).is_none()
         && context.get_config_bool(Config::ForceEncryption).await?
