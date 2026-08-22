@@ -80,6 +80,42 @@ def read_database_schema(dbfile):
     return ";\n".join(row[0] for row in rows)
 
 
+# Tables where every column carries a comment in docs/schema.sql.
+# Opt-in: document a table's columns, then add it here to lock it in.
+FULLY_DOCUMENTED_TABLES = {
+    "contacts",
+    "imap_markseen",
+    "multi_device_sync",
+    "transports",
+}
+
+
+def undocumented_columns(sql, tables):
+    result = []
+    table = None
+    documented = False
+    for line in sql.splitlines():
+        code, _, comment = line.strip().partition("--")
+        code = code.strip()
+        if code.startswith("CREATE TABLE "):
+            name = code.removeprefix("CREATE TABLE ").partition("(")[0].strip()
+            table = name if name in tables else None
+            assert not table or code.endswith("("), f"{code}: want one column per line"
+        elif code.startswith(")"):
+            table = None
+        elif table and code and not re.match(r"(UNIQUE|PRIMARY|FOREIGN|CHECK)\b", code):
+            column = re.match(r"(\w+) (?!INTEGER PRIMARY KEY)", code)
+            if column and not documented and not comment:
+                result.append(f"{table}.{column.group(1)}")
+        documented = bool(comment) and not code
+    return result
+
+
+def test_documented_tables_stay_documented():
+    missing = undocumented_columns(DOC_PATH.read_text(), FULLY_DOCUMENTED_TABLES)
+    assert not missing, "columns without a comment in docs/schema.sql:\n" + "\n".join(missing)
+
+
 def test_documented_schema_matches_database(acf):
     account = acf.get_unconfigured_account()
     real = parse_schema(read_database_schema(account.get_info()["database_dir"]))
