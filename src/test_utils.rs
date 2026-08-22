@@ -29,8 +29,7 @@ use crate::chat::{
 };
 use crate::chatlist::Chatlist;
 use crate::config::Config;
-use crate::constants::{Blocked, Chattype};
-use crate::constants::{DC_CHAT_ID_TRASH, DC_GCL_NO_SPECIALS};
+use crate::constants::{Blocked, Chattype, DC_GCL_NO_SPECIALS};
 use crate::contact::{
     Contact, ContactId, Modifier, Origin, import_vcard, make_vcard, mark_contact_id_as_verified,
 };
@@ -774,7 +773,7 @@ ORDER BY id"
         receive_imf(self, msg.payload().as_bytes(), false)
             .await
             .unwrap()
-            .filter(|msg| msg.chat_id != DC_CHAT_ID_TRASH)
+            .filter(|msg| msg.chat_id != ChatId::TRASH)
     }
 
     /// Receives a message and asserts that it goes to trash chat.
@@ -783,7 +782,7 @@ ORDER BY id"
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(received.chat_id, DC_CHAT_ID_TRASH);
+        assert_eq!(received.chat_id, ChatId::TRASH);
     }
 
     /// Gets the most recent message ID of a chat.
