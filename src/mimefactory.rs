@@ -2528,6 +2528,71 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
     Ok(rendered_mail.message)
 }
 
+pub(crate) async fn render_key_update_message(
+    context: &Context,
+    rfc724_mid: &str,
+) -> Result<String> {
+    let message: MimePart<'static> = MimePart::new("text/plain", "Secure-Join");
+
+    let mut headers = Vec::<(&'static str, HeaderType<'static>)>::new();
+
+    let to: Vec<Address<'static>> = vec![hidden_recipients()];
+    headers.push((
+        "To",
+        mail_builder::headers::address::Address::new_list(to.clone()).into(),
+    ));
+
+    let timestamp = time();
+    let date = chrono::DateTime::<chrono::Utc>::from_timestamp(timestamp, 0)
+        .unwrap()
+        .to_rfc2822();
+    headers.push(("Date", mail_builder::headers::raw::Raw::new(date).into()));
+
+    // Automatic Response headers <https://www.rfc-editor.org/rfc/rfc3834>
+    if context.get_config_bool(Config::Bot).await? {
+        headers.push((
+            "Auto-Submitted",
+            mail_builder::headers::raw::Raw::new("auto-generated".to_string()).into(),
+        ));
+    }
+
+    let message = add_headers_to_encrypted_part(message, headers);
+
+    // No need to sign; key updates are applied from whatever message.
+    let should_sign = false;
+    let should_attach_pubkey = true;
+    let should_compress = true;
+
+    let raw_message = part_to_bytes(message);
+
+    let encryption = todo!();
+
+    let queued_mail = QueuedMail {
+        raw_message,
+        display_name: String::new(),
+        rfc724_mid: rfc724_mid.to_string(),
+        encryption,
+        should_attach_pubkey,
+        should_sign,
+        should_compress,
+    };
+
+    let public_key = key::load_self_public_key(context).await?;
+    let secret_key = key::load_self_secret_key(context).await?;
+    let side_effects = RenderSideEffects::default();
+
+    let from_addr = context.get_primary_self_addr().await?;
+    let rendered_mail = render_queued_mail(
+        queued_mail,
+        &public_key,
+        &secret_key,
+        from_addr,
+        side_effects,
+    )?;
+
+    Ok(rendered_mail.message)
+}
+
 /// Renders MIME part into a vector of bytes.
 pub(crate) fn part_to_bytes(message: MimePart<'static>) -> Vec<u8> {
     let mut raw_message = Vec::new();

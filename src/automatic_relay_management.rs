@@ -174,5 +174,17 @@ pub(crate) fn login_param_from_host(host: &str) -> EnteredLoginParam {
     }
 }
 
+pub(crate) async fn send_key_update_messages(context: &Context) -> Result<()> {
+    let contacts_to_update: Vec<ContactId> = contacts_to_update(context).await?;
+
+    let chunks = contacts_to_update.chunks(20);
+
+    for chunk in chunks {
+        send_key_update_message(context, chunk).await?;
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod automatic_relay_management_tests;
