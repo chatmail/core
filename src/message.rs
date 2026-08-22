@@ -17,7 +17,7 @@ use crate::blob::BlobObject;
 use crate::chat::{Chat, ChatId, ChatIdBlocked, ChatVisibility, send_msg};
 use crate::chatlist_events;
 use crate::config::Config;
-use crate::constants::{Blocked, Chattype, DC_MSG_ID_LAST_SPECIAL};
+use crate::constants::{Blocked, Chattype};
 use crate::contact::{self, Contact, ContactId};
 use crate::context::Context;
 use crate::debug_logging::set_debug_logging_xdc;
@@ -49,13 +49,18 @@ use crate::tools::{
 pub struct MsgId(u32);
 
 impl MsgId {
+    /// Markers added before each day in a local timezone.
+    pub const DAYMARKER: MsgId = MsgId::new(9);
+    /// Largest reserved message ID.
+    pub const LAST_SPECIAL: MsgId = MsgId::new(9);
+
     /// Create a new [MsgId].
-    pub fn new(id: u32) -> MsgId {
+    pub const fn new(id: u32) -> MsgId {
         MsgId(id)
     }
 
     /// Create a new unset [MsgId].
-    pub fn new_unset() -> MsgId {
+    pub const fn new_unset() -> MsgId {
         MsgId(0)
     }
 
@@ -63,7 +68,7 @@ impl MsgId {
     ///
     /// This kind of message ID can not be used for real messages.
     pub fn is_special(self) -> bool {
-        self.0 <= DC_MSG_ID_LAST_SPECIAL
+        (0..=Self::LAST_SPECIAL.0).contains(&self.0)
     }
 
     /// Whether the message ID is unset.
@@ -362,7 +367,7 @@ impl std::fmt::Display for MsgId {
 /// the database and the conversion will fail if this is not the case.
 impl rusqlite::types::ToSql for MsgId {
     fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
-        if self.0 <= DC_MSG_ID_LAST_SPECIAL {
+        if self.is_special() {
             return Err(rusqlite::Error::ToSqlConversionFailure(
                 format_err!("Invalid MsgId {}", self.0).into(),
             ));
@@ -2105,7 +2110,7 @@ pub async fn estimate_deletion_cnt(
                AND chat_id != ?
                AND chat_id != ? AND hidden = 0;",
             (
-                DC_MSG_ID_LAST_SPECIAL,
+                MsgId::LAST_SPECIAL,
                 threshold_timestamp,
                 self_chat_id,
                 ChatId::TRASH,
