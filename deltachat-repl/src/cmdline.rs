@@ -228,7 +228,7 @@ async fn log_msg(context: &Context, prefix: impl AsRef<str>, msg: &Message) {
 async fn log_msglist(context: &Context, msglist: &[MsgId]) -> Result<()> {
     let mut lines_out = 0;
     for &msg_id in msglist {
-        if msg_id == MsgId::new(DC_MSG_ID_DAYMARKER) {
+        if msg_id == MsgId::DAYMARKER {
             println!(
                 "--------------------------------------------------------------------------------"
             );
@@ -630,7 +630,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                 .into_iter()
                 .map(|x| match x {
                     ChatItem::Message { msg_id } => msg_id,
-                    ChatItem::DayMarker { .. } => MsgId::new(DC_MSG_ID_DAYMARKER),
+                    ChatItem::DayMarker { .. } => MsgId::DAYMARKER,
                 })
                 .collect();
 
