@@ -1,0 +1,23 @@
+From: bob@example.net
+To: alice@example.org
+Subject: message opened
+Date: Sun, 22 Mar 2020 23:37:57 +0000
+Message-ID: <aranudiaerudiaduiaertd@example.com>
+Content-Type: multipart/report; report-type=disposition-notification; boundary="SNIPP"
+
+
+--SNIPP
+Content-Type: text/plain; charset=utf-8
+
+Read receipts do not guarantee sth. was read.
+
+
+--SNIPP
+Content-Type: message/disposition-notification
+
+Original-Recipient: rfc822;bob@example.net
+Final-Recipient: rfc822;bob@example.net
+Disposition: automatic-action/MDN-sent-automatically; processed
+
+
+--SNIPP--

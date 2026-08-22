@@ -271,6 +271,33 @@ async fn test_mdn_and_alias() -> Result<()> {
     Ok(())
 }
 
+/// Tests that an MDN referencing no message is trashed early:
+/// there is nothing it could ever be applied to,
+/// so it must not create a contact or a chat on the way.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_mdn_without_message_reference() -> Result<()> {
+    let alice = TestContext::new_alice().await;
+    alice
+        .set_config_bool(Config::ForceEncryption, false)
+        .await?;
+    let contacts = Contact::get_real_cnt(&alice).await?;
+    let chatlist_len = Chatlist::try_load(&alice, 0, None, None).await?.len();
+
+    receive_imf(
+        &alice,
+        include_bytes!("../../test-data/message/mdn_without_message_reference.eml"),
+        false,
+    )
+    .await?;
+
+    assert_eq!(Contact::get_real_cnt(&alice).await?, contacts);
+    assert_eq!(
+        Chatlist::try_load(&alice, 0, None, None).await?.len(),
+        chatlist_len
+    );
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_no_from() {
     // if there is no from given, from_id stays 0 which is just fine. These messages
