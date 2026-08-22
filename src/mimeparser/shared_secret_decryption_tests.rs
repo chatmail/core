@@ -1,6 +1,5 @@
 use super::*;
-use crate::chat::{create_broadcast, load_broadcast_secret};
-use crate::constants::DC_CHAT_ID_TRASH;
+use crate::chat::{ChatId, create_broadcast, load_broadcast_secret};
 use crate::key::{load_self_secret_key, self_fingerprint};
 use crate::pgp;
 use crate::qr::{Qr, check_qr};
@@ -83,7 +82,7 @@ async fn test_shared_secret_decryption_ext(
         .expect("A trashed message should be created, otherwise we'll unnecessarily download it again");
 
     if let Some(error_pattern) = expected_error {
-        assert!(rcvd.chat_id == DC_CHAT_ID_TRASH);
+        assert_eq!(rcvd.chat_id, ChatId::TRASH);
         assert_eq!(
             previous_highest_msg_id,
             get_highest_msg_id(recipient_ctx).await,
@@ -112,7 +111,7 @@ async fn get_highest_msg_id(context: &Context) -> MsgId {
         .sql
         .query_get_value(
             "SELECT MAX(id) FROM msgs WHERE chat_id!=?",
-            (DC_CHAT_ID_TRASH,),
+            (ChatId::TRASH,),
         )
         .await
         .unwrap()

@@ -1,10 +1,9 @@
 use super::*;
 use crate::chat::{
-    ChatVisibility, MuteDuration, add_contact_to_chat, marknoticed_chat, remove_contact_from_chat,
-    set_muted,
+    ChatId, ChatVisibility, MuteDuration, add_contact_to_chat, marknoticed_chat,
+    remove_contact_from_chat, set_muted,
 };
 use crate::config::Config;
-use crate::constants::DC_CHAT_ID_ARCHIVED_LINK;
 use crate::download::DownloadState;
 use crate::location;
 use crate::message::markseen_msgs;
@@ -796,7 +795,7 @@ async fn test_archived_ephemeral_timer() -> Result<()> {
     let bob_received_message_2 = tcm.send_recv(alice, bob, "Hello again!").await;
     assert_eq!(bob_received_message_2.state, MessageState::InFresh);
 
-    marknoticed_chat(bob, DC_CHAT_ID_ARCHIVED_LINK).await?;
+    marknoticed_chat(bob, ChatId::ARCHIVED_LINK).await?;
     SystemTime::shift(Duration::from_secs(100));
 
     delete_expired_messages(bob, time()).await?;

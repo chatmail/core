@@ -74,7 +74,6 @@ use tokio::time::timeout;
 
 use crate::chat::{ChatId, ChatIdBlocked, send_msg};
 use crate::config::Config;
-use crate::constants::{DC_CHAT_ID_LAST_SPECIAL, DC_CHAT_ID_TRASH};
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::download::DownloadState;
@@ -384,7 +383,7 @@ WHERE
   AND ephemeral_timestamp <= ?
   AND chat_id != ?
 "#,
-            (now, DC_CHAT_ID_TRASH),
+            (now, ChatId::TRASH),
             |row| {
                 let id: MsgId = row.get("id")?;
                 let chat_id: ChatId = row.get("chat_id")?;
@@ -426,7 +425,7 @@ WHERE
 "#,
                 (
                     threshold_timestamp,
-                    DC_CHAT_ID_LAST_SPECIAL,
+                    ChatId::LAST_SPECIAL,
                     self_chat_id,
                     device_chat_id,
                 ),
@@ -480,7 +479,7 @@ SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ? FROM msgs WHERE id=?1
                 let mut del_location_stmt =
                     transaction.prepare("DELETE FROM locations WHERE independent=1 AND id=?")?;
                 for (msg_id, chat_id, viewtype, location_id) in rows {
-                    del_msg_stmt.execute((msg_id, DC_CHAT_ID_TRASH))?;
+                    del_msg_stmt.execute((msg_id, ChatId::TRASH))?;
                     if location_id > 0 {
                         del_location_stmt.execute((location_id,))?;
                     }
@@ -537,7 +536,7 @@ async fn next_delete_device_after_timestamp(context: &Context) -> Result<Option<
                   AND chat_id != ?
                 HAVING count(*) > 0
                 "#,
-                (DC_CHAT_ID_TRASH, self_chat_id, device_chat_id),
+                (ChatId::TRASH, self_chat_id, device_chat_id),
             )
             .await?;
 
@@ -562,7 +561,7 @@ async fn next_expiration_timestamp(context: &Context) -> Option<i64> {
               AND chat_id != ?
             HAVING count(*) > 0
             "#,
-            (DC_CHAT_ID_TRASH,), // Trash contains already deleted messages, skip them
+            (ChatId::TRASH,), // Trash contains already deleted messages, skip them
         )
         .await
     {

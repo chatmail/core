@@ -17,7 +17,7 @@ use crate::blob::BlobObject;
 use crate::chat::{Chat, ChatId, ChatIdBlocked, ChatVisibility, send_msg};
 use crate::chatlist_events;
 use crate::config::Config;
-use crate::constants::{Blocked, Chattype, DC_CHAT_ID_TRASH, DC_MSG_ID_LAST_SPECIAL};
+use crate::constants::{Blocked, Chattype, DC_MSG_ID_LAST_SPECIAL};
 use crate::contact::{self, Contact, ContactId};
 use crate::context::Context;
 use crate::debug_logging::set_debug_logging_xdc;
@@ -132,7 +132,7 @@ impl MsgId {
 INSERT OR REPLACE INTO msgs (id, rfc724_mid, pre_rfc724_mid, timestamp, chat_id, deleted)
 SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ?, ? FROM msgs WHERE id=?1
                 ",
-                (self, DC_CHAT_ID_TRASH, on_server),
+                (self, ChatId::TRASH, on_server),
             )
             .await?;
 
@@ -518,7 +518,7 @@ impl Message {
                  FROM msgs m
                  LEFT JOIN chats c ON c.id=m.chat_id
                  LEFT JOIN msgs_mdns mdns ON mdns.msg_id=m.id
-                 WHERE m.id=? AND chat_id!=3 -- DC_CHAT_ID_TRASH
+                 WHERE m.id=? AND chat_id!=3 -- ChatId::TRASH
                  LIMIT 1",
                 (id,),
                 |row| {
@@ -602,7 +602,7 @@ impl Message {
             .sql
             .query_row_optional(
                 "SELECT id FROM msgs WHERE rfc724_mid=? AND chat_id != ?",
-                (rfc724_mid, DC_CHAT_ID_TRASH),
+                (rfc724_mid, ChatId::TRASH),
                 |row| {
                     let msg_id: MsgId = row.get(0)?;
                     Ok(msg_id)
@@ -1319,7 +1319,7 @@ impl Message {
             .sql
             .query_get_value(
                 "SELECT id FROM msgs WHERE starred=? AND chat_id!=?",
-                (self.id, DC_CHAT_ID_TRASH),
+                (self.id, ChatId::TRASH),
             )
             .await?;
         Ok(res)
@@ -2018,7 +2018,7 @@ pub(crate) async fn insert_tombstone(context: &Context, rfc724_mid: &str) -> Res
         .sql
         .insert(
             "INSERT INTO msgs(rfc724_mid, chat_id) VALUES (?,?)",
-            (rfc724_mid, DC_CHAT_ID_TRASH),
+            (rfc724_mid, ChatId::TRASH),
         )
         .await?;
     let msg_id = MsgId::new(u32::try_from(row_id)?);
@@ -2108,7 +2108,7 @@ pub async fn estimate_deletion_cnt(
                 DC_MSG_ID_LAST_SPECIAL,
                 threshold_timestamp,
                 self_chat_id,
-                DC_CHAT_ID_TRASH,
+                ChatId::TRASH,
             ),
         )
         .await?;

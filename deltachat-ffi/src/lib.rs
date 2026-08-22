@@ -1774,7 +1774,7 @@ pub unsafe extern "C" fn dc_set_chat_name(
     chat_id: u32,
     name: *const libc::c_char,
 ) -> libc::c_int {
-    if context.is_null() || chat_id <= constants::DC_CHAT_ID_LAST_SPECIAL.to_u32() || name.is_null()
+    if context.is_null() || chat_id <= ChatId::LAST_SPECIAL.to_u32() || name.is_null()
     {
         eprintln!("ignoring careless call to dc_set_chat_name()");
         return 0;
@@ -1796,7 +1796,7 @@ pub unsafe extern "C" fn dc_set_chat_profile_image(
     chat_id: u32,
     image: *const libc::c_char,
 ) -> libc::c_int {
-    if context.is_null() || chat_id <= constants::DC_CHAT_ID_LAST_SPECIAL.to_u32() {
+    if context.is_null() || chat_id <= ChatId::LAST_SPECIAL.to_u32() {
         eprintln!("ignoring careless call to dc_set_chat_profile_image()");
         return 0;
     }
@@ -1958,7 +1958,7 @@ pub unsafe extern "C" fn dc_forward_msgs(
     if context.is_null()
         || msg_ids.is_null()
         || msg_cnt <= 0
-        || chat_id <= constants::DC_CHAT_ID_LAST_SPECIAL.to_u32()
+        || chat_id <= ChatId::LAST_SPECIAL.to_u32()
     {
         eprintln!("ignoring careless call to dc_forward_msgs()");
         return;
@@ -2462,7 +2462,7 @@ pub unsafe extern "C" fn dc_send_locations_to_chat(
     chat_id: u32,
     seconds: libc::c_int,
 ) {
-    if context.is_null() || chat_id <= constants::DC_CHAT_ID_LAST_SPECIAL.to_u32() || seconds < 0 {
+    if context.is_null() || chat_id <= ChatId::LAST_SPECIAL.to_u32() || seconds < 0 {
         eprintln!("ignoring careless call to dc_send_locations_to_chat()");
         return;
     }

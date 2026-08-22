@@ -1,7 +1,6 @@
 use super::*;
 use crate::chat::forward_msgs;
 use crate::config::Config;
-use crate::constants::DC_CHAT_ID_TRASH;
 use crate::message::MessageState;
 use crate::receive_imf::receive_imf;
 use crate::test_utils;
@@ -678,7 +677,7 @@ async fn test_end_text_call() -> Result<()> {
         .await?
         .unwrap();
     assert_eq!(received2.msg_ids.len(), 1);
-    assert_eq!(received2.chat_id, DC_CHAT_ID_TRASH);
+    assert_eq!(received2.chat_id, ChatId::TRASH);
     alice.assert_warn("does not refer to a call message").await;
 
     Ok(())

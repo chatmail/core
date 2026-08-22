@@ -892,7 +892,7 @@ impl Contact {
                     blocked.is_none(),
                     blocked.unwrap_or(Blocked::Not),
                     Chattype::Single,
-                    constants::DC_CHAT_ID_LAST_SPECIAL,
+                    ChatId::LAST_SPECIAL,
                     blocked.unwrap_or(Blocked::Not),
                 ),
             )
