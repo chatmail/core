@@ -558,6 +558,7 @@ pub(crate) async fn handle_securejoin_handshake(
             let self_fp = self_fingerprint(context).await?;
             let shared_secret = format!("securejoin/{self_fp}/{auth}");
             let now = time();
+            let recipients = vec![addr];
             let queued_message = mimefactory::render_symm_encrypted_securejoin_message(
                 context,
                 "vc-pubkey",
@@ -565,6 +566,7 @@ pub(crate) async fn handle_securejoin_handshake(
                 attach_self_pubkey,
                 auth,
                 &shared_secret,
+                recipients,
             )
             .await?;
 
@@ -576,7 +578,6 @@ pub(crate) async fn handle_securejoin_handshake(
                 ChatId::TRASH,
                 &queued_message,
                 &Default::default(),
-                &[addr],
             )
             .await?;
             context.scheduler.interrupt_smtp().await;

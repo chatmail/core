@@ -194,7 +194,7 @@ pub(crate) async fn maybe_send_keyupdate_message(context: &Context) -> Result<()
         let rfc724_mid = create_outgoing_rfc724_mid();
         let msg_id = message::insert_tombstone(context, &rfc724_mid).await?;
         let keys = chunk.iter().map(|r| r.public_key.clone()).collect();
-        let queued_msg = render_keyupdate_message(context, &rfc724_mid, keys).await?;
+        let queued_msg = render_keyupdate_message(context, &rfc724_mid, keys, envelope).await?;
         let now = time();
         chat::enqueue_mail(
             context,
@@ -203,7 +203,6 @@ pub(crate) async fn maybe_send_keyupdate_message(context: &Context) -> Result<()
             ChatId::TRASH,
             &queued_msg,
             &Default::default(),
-            &envelope,
         )
         .await?;
     }

@@ -230,6 +230,9 @@ pub(crate) struct QueuedMail {
 
     /// If true, encrypted message should be signed as well.
     pub(crate) should_sign: bool,
+
+    /// Recipient addresses.
+    pub(crate) recipients: Vec<String>,
 }
 
 /// Side effects that should be applied at the same time
@@ -276,6 +279,7 @@ pub(crate) fn render_queued_mail(
         should_attach_pubkey,
         should_compress,
         should_sign,
+        recipients: _,
     } = queued_mail;
 
     let mut inner_headers: Vec<u8> = Vec::new();
@@ -1542,7 +1546,7 @@ impl MimeFactory {
         let is_mdn = matches!(self.loaded, Loaded::Mdn { .. });
         let should_sign = true;
 
-        let message = if self.will_be_encrypted() {
+        let message = if is_encrypted {
             add_headers_to_encrypted_part(message, headers)
         } else if is_mdn {
             // Never add outer multipart/mixed wrapper to MDN
@@ -1578,6 +1582,7 @@ impl MimeFactory {
             })
         };
         let raw_message = part_to_bytes(message);
+        let recipients = self.recipients();
 
         let queued_email = QueuedMail {
             raw_message,
@@ -1587,6 +1592,7 @@ impl MimeFactory {
             should_attach_pubkey,
             should_sign,
             should_compress,
+            recipients,
         };
         Ok((queued_email, side_effects))
     }
@@ -2460,6 +2466,7 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
     should_attach_pubkey: bool,
     auth: &str,
     shared_secret: &str,
+    recipients: Vec<String>,
 ) -> Result<QueuedMail> {
     info!(context, "Sending secure-join message {step:?}.");
 
@@ -2485,6 +2492,7 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
         // there are no compression side channels
         // leaking information about the tokens.
         should_compress: false,
+        recipients,
     };
 
     Ok(queued_mail)
@@ -2523,6 +2531,7 @@ pub(crate) async fn render_keyupdate_message(
     context: &Context,
     rfc724_mid: &str,
     recipient_keys: Vec<SignedPublicKey>,
+    recipients: Vec<String>,
 ) -> Result<QueuedMail> {
     info!(
         context,
@@ -2554,6 +2563,7 @@ pub(crate) async fn render_keyupdate_message(
 
         // Disable compression to avoid side channels, message body is small anyway.
         should_compress: false,
+        recipients,
     };
     Ok(queued_mail)
 }

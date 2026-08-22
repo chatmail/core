@@ -375,10 +375,11 @@ pub(crate) async fn send_msg_to_smtp(
     else {
         return Ok(());
     };
-    let (queued_mail, recipients) = context
+    let queued_mail = context
         .sql
         .transaction_ext(true, |transaction| load_queued_mail(transaction, rowid))
         .await?;
+    let recipients = queued_mail.recipients.clone();
     let public_key = key::load_self_public_key(context).await?;
     let secret_key = key::load_self_secret_key(context).await?;
 
@@ -407,7 +408,7 @@ pub(crate) async fn send_msg_to_smtp(
     );
 
     let recipients_list = recipients
-        .split(' ')
+        .into_iter()
         .filter_map(
             |addr| match async_smtp::EmailAddress::new(addr.to_string()) {
                 Ok(addr) => Some(addr),
@@ -757,8 +758,8 @@ pub(crate) async fn add_self_recipients(
 pub(crate) fn load_queued_mail(
     transaction: &mut rusqlite::Transaction<'_>,
     row_id: i64,
-) -> Result<(QueuedMail, String)> {
-    let (mut queued_mail, encryption_fingerprints, recipients) = transaction
+) -> Result<QueuedMail> {
+    let (mut queued_mail, encryption_fingerprints) = transaction
         .query_row_and_then(
             "
 SELECT display_name,
@@ -796,6 +797,12 @@ FROM smtp2 WHERE id = ?
                         })?
                     };
                 let recipients: String = row.get(9)?;
+                let recipients: Vec<String> = if recipients.is_empty() {
+                    Vec::new()
+                } else {
+                    recipients.split(' ').map(|s| s.to_string()).collect()
+                };
+                debug_assert!(!recipients.iter().any(|s| s.is_empty()));
 
                 let encryption = match (
                     is_encrypted,
@@ -819,9 +826,9 @@ FROM smtp2 WHERE id = ?
                         should_attach_pubkey,
                         should_compress,
                         should_sign,
+                        recipients,
                     },
                     encryption_fingerprints,
-                    recipients,
                 ))
             },
         )
@@ -851,5 +858,5 @@ FROM smtp2 WHERE id = ?
         }
     }
 
-    Ok((queued_mail, recipients))
+    Ok(queued_mail)
 }

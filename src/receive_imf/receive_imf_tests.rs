@@ -5870,7 +5870,7 @@ pub(crate) async fn first_row_in_smtp_queue(context: &TestContext) -> (MsgId, St
     let secret_key = key::load_self_secret_key(context).await.unwrap();
     let from_addr = context.get_primary_self_addr().await.unwrap();
     let query_only = true;
-    let (queued_mail, _recipients) = context
+    let queued_mail = context
         .sql
         .transaction_ext(query_only, |transaction| {
             smtp::load_queued_mail(transaction, rowid)

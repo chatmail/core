@@ -2825,7 +2825,6 @@ pub(crate) async fn enqueue_mail(
     chat_id: ChatId,
     queued_mail: &QueuedMail,
     side_effects: &RenderSideEffects,
-    recipients: &[String],
 ) -> Result<i64> {
     if let Some(last_added_location_timestamp) = side_effects.last_added_location_timestamp {
         location::set_kml_sent_timestamp(context, chat_id, last_added_location_timestamp).await?;
@@ -2849,7 +2848,7 @@ pub(crate) async fn enqueue_mail(
     }
 
     // Store mail into queue.
-    let all_recipients = recipients.join(" ");
+    let all_recipients = queued_mail.recipients.join(" ");
     let is_encrypted = queued_mail.encryption.is_encrypted();
 
     let row_id = context
@@ -2952,7 +2951,7 @@ async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -> Result<Ve
             return Err(err);
         }
     };
-    let mut recipients = mimefactory.recipients();
+    let recipients = mimefactory.recipients();
 
     // Default Webxdc integrations are hidden messages and must not be sent out:
     if (msg.param.get_int(Param::WebxdcIntegration).is_some() && msg.hidden)
@@ -2970,7 +2969,8 @@ async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -> Result<Ve
         return Ok(Vec::new());
     }
 
-    let (queued_pre_msg_pair, queued_msg_pair) =
+    let is_encrypted = mimefactory.will_be_encrypted();
+    let (mut queued_pre_msg_pair, queued_msg_pair) =
         match render_mime_message_and_pre_message(context, msg, mimefactory).await {
             Ok(res) => Ok(res),
             Err(err) => {
@@ -2983,10 +2983,14 @@ async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -> Result<Ve
         msg.pre_rfc724_mid = pre_msg.rfc724_mid.clone();
     }
 
-    let (queued_msg, side_effects) = queued_msg_pair;
-    let is_encrypted = queued_msg.encryption.is_encrypted();
+    let (mut queued_msg, side_effects) = queued_msg_pair;
+
     if context.get_config_bool(Config::BccSelf).await? {
-        smtp::add_self_recipients(context, &mut recipients, is_encrypted).await?;
+        smtp::add_self_recipients(context, &mut queued_msg.recipients, is_encrypted).await?;
+        if let Some((ref mut queued_pre_msg, _)) = queued_pre_msg_pair {
+            smtp::add_self_recipients(context, &mut queued_pre_msg.recipients, is_encrypted)
+                .await?;
+        }
     }
 
     if needs_encryption && !is_encrypted {
@@ -3063,7 +3067,6 @@ WHERE id=?
             msg.chat_id,
             &queued_pre_msg,
             &pre_side_effects,
-            &recipients,
         )
         .await
         .context("Failed to enqueue pre-message")?;
@@ -3077,7 +3080,6 @@ WHERE id=?
             msg.chat_id,
             &queued_msg,
             &side_effects,
-            &recipients,
         )
         .await
         .context("Failed to enqueue message")?,

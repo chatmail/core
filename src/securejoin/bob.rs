@@ -336,6 +336,7 @@ pub(crate) async fn send_handshake_message(
             attach_self_pubkey,
             auth,
             &shared_secret,
+            recipients.clone(),
         )
         .await?;
         let now = time();
@@ -347,7 +348,6 @@ pub(crate) async fn send_handshake_message(
             chat_id,
             &queued_msg,
             &Default::default(),
-            recipients,
         )
         .await?;
 

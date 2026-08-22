@@ -604,26 +604,25 @@ impl TestContext {
 
     pub async fn pop_sent_msg_ext(&self, rev_order: bool) -> Option<SentMessage<'_>> {
         let mut query = "
-SELECT id, msg_id, recipients
+SELECT id, msg_id
 FROM smtp2
 ORDER BY id"
             .to_string();
         if rev_order {
             query += " DESC";
         }
-        let (rowid, msg_id, recipients) = self
+        let (rowid, msg_id) = self
             .ctx
             .sql
             .query_row_optional(&query, (), |row| {
                 let rowid: i64 = row.get(0)?;
                 let msg_id: MsgId = row.get(1)?;
-                let recipients: String = row.get(2)?;
-                Ok((rowid, msg_id, recipients))
+                Ok((rowid, msg_id))
             })
             .await
             .expect("query_row_optional failed")?;
         let query_only = true;
-        let (queued_mail, _recipients) = self
+        let queued_mail = self
             .ctx
             .sql
             .transaction_ext(query_only, |transaction| {
@@ -631,6 +630,7 @@ ORDER BY id"
             })
             .await
             .expect("Failed to load queued mail");
+        let recipients = queued_mail.recipients.join(" ");
         self.ctx
             .sql
             .execute("DELETE FROM smtp2 WHERE id=?;", (rowid,))
@@ -722,23 +722,18 @@ ORDER BY id"
 
         let mut sent_msgs = Vec::new();
 
-        for (rowid, recipients) in self
+        for rowid in self
             .ctx
             .sql
-            .query_map_vec(
-                "SELECT id, recipients FROM smtp2 WHERE msg_id=?",
-                (msg_id,),
-                |row| {
-                    let rowid: i64 = row.get(0)?;
-                    let recipients: String = row.get(1)?;
-                    Ok((rowid, recipients))
-                },
-            )
+            .query_map_vec("SELECT id FROM smtp2 WHERE msg_id=?", (msg_id,), |row| {
+                let rowid: i64 = row.get(0)?;
+                Ok(rowid)
+            })
             .await
             .unwrap()
         {
             let query_only = true;
-            let (queued_mail, _recipients) = self
+            let queued_mail = self
                 .ctx
                 .sql
                 .transaction_ext(query_only, |transaction| {
@@ -746,6 +741,7 @@ ORDER BY id"
                 })
                 .await
                 .expect("Failed to load queued mail");
+            let recipients = queued_mail.recipients.join(" ");
             let rendered_mail = mimefactory::render_queued_mail(
                 queued_mail,
                 &public_key,
