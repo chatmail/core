@@ -2100,10 +2100,11 @@ pub async fn estimate_deletion_cnt(
         .count(
             "SELECT COUNT(*)
              FROM msgs m
-             WHERE m.id > ?
-               AND timestamp < ?
-               AND chat_id != ?
-               AND chat_id != ? AND hidden = 0;",
+             WHERE m.id > ?1
+               AND timestamp < ?2      -- Sorting timestamp may be 0 for system messages
+               AND timestamp_rcvd < ?2 -- so we check 'received' timestamp as well.
+               AND chat_id != ?3
+               AND chat_id != ?4 AND hidden = 0;",
             (
                 DC_MSG_ID_LAST_SPECIAL,
                 threshold_timestamp,
