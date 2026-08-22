@@ -7,7 +7,7 @@ use crate::config::Config;
 use crate::constants::DC_CHAT_ID_ARCHIVED_LINK;
 use crate::download::DownloadState;
 use crate::location;
-use crate::message::markseen_msgs;
+use crate::message::{estimate_deletion_cnt, markseen_msgs};
 use crate::receive_imf::receive_imf;
 use crate::test_utils;
 use crate::test_utils::{TestContext, TestContextManager};
@@ -280,12 +280,14 @@ async fn test_ephemeral_delete_msgs() -> Result<()> {
 
     // Set DeleteDeviceAfter to 1800s. Then send a saved message which will
     // still be deleted after 3600s because DeleteDeviceAfter doesn't apply to saved messages.
+    assert_eq!(estimate_deletion_cnt(t, false, 1800).await.unwrap(), 0);
     t.set_config(Config::DeleteDeviceAfter, Some("1800"))
         .await?;
 
     let now = time();
     let msg = t.send_text(self_chat.id, "Message text").await;
 
+    assert_eq!(estimate_deletion_cnt(t, false, 1800).await.unwrap(), 0);
     check_msg_will_be_deleted(t, msg.sender_msg_id, &self_chat, now + 3559, time() + 3601)
         .await
         .unwrap();
@@ -894,12 +896,20 @@ async fn test_delete_device_after_unknown_viewtype() -> Result<()> {
     let bob = &tcm.bob().await;
 
     let chat = alice.create_chat(bob).await;
+
+    // There may be a message created saying that all messages are encrypted
+    // with timestamp 0 so it is always at the top.
+    // It should still be not deleted because of the "received timestamp" that is recent.
+    assert_eq!(estimate_deletion_cnt(alice, false, 600).await.unwrap(), 0);
     alice
         .set_config(Config::DeleteDeviceAfter, Some("600"))
         .await?;
 
     let mut msg = Message::new_text("Some message".to_string());
     let _alice_sent_message = alice.send_msg(chat.id, &mut msg).await;
+
+    // New message should not be deleted as well yet.
+    assert_eq!(estimate_deletion_cnt(alice, false, 600).await.unwrap(), 0);
 
     // Set message viewtype to unassigned
     // type 70 that was previously used for videochat invitations.
@@ -909,6 +919,10 @@ async fn test_delete_device_after_unknown_viewtype() -> Result<()> {
         .await?;
 
     SystemTime::shift(Duration::from_secs(1000));
+
+    // Now both the system message about the chat being encrypted
+    // and the message sent by Alice are going to be deleted.
+    assert_eq!(estimate_deletion_cnt(alice, false, 600).await.unwrap(), 2);
 
     // This should not fail.
     delete_expired_messages(alice, time()).await?;
