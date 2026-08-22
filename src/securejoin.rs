@@ -6,7 +6,7 @@ use percent_encoding::{AsciiSet, utf8_percent_encode};
 
 use crate::chat::{self, Chat, ChatId, ChatIdBlocked, get_chat_id_by_grpid, load_broadcast_secret};
 use crate::config::Config;
-use crate::constants::{Blocked, Chattype, NON_ALPHANUMERIC_WITHOUT_DOT};
+use crate::constants::{Blocked, Chattype, DC_CHAT_ID_TRASH, NON_ALPHANUMERIC_WITHOUT_DOT};
 use crate::contact::mark_contact_id_as_verified;
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
@@ -16,7 +16,7 @@ use crate::key;
 use crate::key::{DcKey, Fingerprint, load_self_public_key, self_fingerprint};
 use crate::log::LogExt as _;
 use crate::log::warn;
-use crate::message::{self, Message, MsgId, Viewtype};
+use crate::message::{self, Message, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;
 use crate::qr::check_qr;
@@ -552,11 +552,13 @@ pub(crate) async fn handle_securejoin_handshake(
             }
 
             let rfc724_mid = create_outgoing_rfc724_mid();
-            let addr = ContactAddress::new(&mime_message.from.addr)?;
+            let addr = mime_message.from.addr.clone();
             let attach_self_pubkey = true;
             let self_fp = self_fingerprint(context).await?;
             let shared_secret = format!("securejoin/{self_fp}/{auth}");
-            let rendered_message = mimefactory::render_symm_encrypted_securejoin_message(
+            let now = time();
+            let msg_id = message::insert_tombstone(context, &rfc724_mid).await?;
+            let queued_message = mimefactory::render_symm_encrypted_securejoin_message(
                 context,
                 "vc-pubkey",
                 &rfc724_mid,
@@ -566,8 +568,16 @@ pub(crate) async fn handle_securejoin_handshake(
             )
             .await?;
 
-            let msg_id = message::insert_tombstone(context, &rfc724_mid).await?;
-            insert_into_smtp(context, &rfc724_mid, &addr, rendered_message, msg_id).await?;
+            chat::enqueue_mail(
+                context,
+                now,
+                msg_id,
+                DC_CHAT_ID_TRASH,
+                &queued_message,
+                &Default::default(),
+                &[addr],
+            )
+            .await?;
             context.scheduler.interrupt_smtp().await;
 
             Ok(HandshakeMessage::Done)
@@ -741,24 +751,6 @@ pub(crate) async fn handle_securejoin_handshake(
             Ok(HandshakeMessage::Ignore)
         }
     }
-}
-
-async fn insert_into_smtp(
-    context: &Context,
-    rfc724_mid: &str,
-    recipients: &str,
-    rendered_message: String,
-    msg_id: MsgId,
-) -> Result<(), Error> {
-    context
-        .sql
-        .execute(
-            "INSERT INTO smtp (rfc724_mid, recipients, mime, msg_id)
-            VALUES            (?1,         ?2,         ?3,   ?4)",
-            (&rfc724_mid, &recipients, &rendered_message, msg_id),
-        )
-        .await?;
-    Ok(())
 }
 
 /// Observe self-sent Securejoin message.

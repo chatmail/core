@@ -2610,6 +2610,49 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 164)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "
+CREATE TABLE smtp2 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    display_name TEXT NOT NULL, -- Display name to put into the From field.
+    rfc724_mid TEXT NOT NULL, -- Message-ID
+
+    -- Unencrypted payload with some headers.
+    mime BLOB NOT NULL,
+
+    -- True if Autocrypt header should be added before sending.
+    should_attach_pubkey INTEGER NOT NULL,
+
+    -- True if OpenPGP-encrypted message may use compression.
+    may_compress INTEGER NOT NULL,
+
+    -- True if encrypted message should be signed as well.
+    should_sign INTEGER NOT NULL,
+
+    msg_id INTEGER NOT NULL,           -- ID of the message in `msgs` table
+    recipients TEXT NOT NULL,          -- List of recipients separated by space
+
+    -- True if the message is encrypted.
+    -- If true, exactly one of the shared_secret or encryption_fingerprints should be non-empty.
+    -- If false, both must be empty.
+    is_encrypted INTEGER NOT NULL,
+
+    -- Shared secret if the message is to be encrypted symmetrically.
+    shared_secret TEXT NOT NULL DEFAULT '',
+
+    -- Pairs of addresses and fingerprints of the key the message should be encrypted to.
+    -- Stored as a JSON.
+    encryption_fingerprints TEXT NOT NULL DEFAULT '',
+
+    retries INTEGER NOT NULL DEFAULT 0 -- Number of failed attempts to send the message
+) STRICT;",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?

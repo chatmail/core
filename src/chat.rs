@@ -11,7 +11,6 @@ use std::time::Duration;
 use anyhow::{Context as _, Result, anyhow, bail, ensure};
 use chrono::TimeZone;
 use deltachat_contact_tools::{ContactAddress, sanitize_bidi_characters, sanitize_single_line};
-use humansize::{BINARY, format_size};
 use mail_builder::mime::MimePart;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
@@ -29,20 +28,17 @@ use crate::constants::{
 use crate::contact::{self, Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::debug_logging::maybe_set_logging_xdc;
-use crate::download::{
-    DownloadState, PRE_MSG_ATTACHMENT_SIZE_THRESHOLD, PRE_MSG_SIZE_WARNING_THRESHOLD,
-};
+use crate::download::{DownloadState, PRE_MSG_ATTACHMENT_SIZE_THRESHOLD};
 use crate::ensure_and_debug_assert_eq;
 use crate::ephemeral::{Timer as EphemeralTimer, start_chat_ephemeral_timers};
 use crate::events::EventType;
-use crate::key;
-use crate::key::{Fingerprint, self_fingerprint};
+use crate::key::{DcKey as _, Fingerprint, self_fingerprint};
 use crate::location;
 use crate::log::{LogExt, warn};
 use crate::logged_debug_assert;
 use crate::message::{self, Message, MessageState, MsgId, Viewtype};
 use crate::mimefactory;
-use crate::mimefactory::{MimeFactory, RenderedEmail};
+use crate::mimefactory::{MimeFactory, QueuedMail, RenderSideEffects};
 use crate::mimeparser::SystemMessage;
 use crate::param::{Param, Params};
 use crate::pgp::addresses_from_public_key;
@@ -2769,11 +2765,10 @@ async fn render_mime_message_and_pre_message(
     context: &Context,
     msg: &mut Message,
     mimefactory: MimeFactory,
-) -> Result<(Option<RenderedEmail>, RenderedEmail)> {
-    let from_addr = context.get_primary_self_addr().await?;
-    let public_key = key::load_self_public_key(context).await?;
-    let secret_key = key::load_self_secret_key(context).await?;
-
+) -> Result<(
+    Option<(QueuedMail, RenderSideEffects)>,
+    (QueuedMail, RenderSideEffects),
+)> {
     let needs_pre_message = msg.viewtype.has_file()
         && mimefactory.will_be_encrypted() // unencrypted is likely email, we don't want to spam by sending multiple messages
         && msg
@@ -2794,50 +2789,117 @@ async fn render_mime_message_and_pre_message(
             .await
             .context("Failed to render post-message")?;
 
-        let rendered_msg = mimefactory::render_queued_mail(
-            queued_msg,
-            &public_key,
-            &secret_key,
-            from_addr.clone(),
-            side_effects,
-        )?;
-
         let mut mimefactory_pre_msg = mimefactory;
-        mimefactory_pre_msg.set_as_pre_message_for(&rendered_msg);
+        mimefactory_pre_msg.set_as_pre_message_for(&queued_msg.rfc724_mid);
         let (queued_pre_msg, pre_side_effects) =
             Box::pin(mimefactory_pre_msg.into_queued_mail(context))
                 .await
                 .context("pre-message failed to render")?;
-        let rendered_pre_msg = mimefactory::render_queued_mail(
-            queued_pre_msg,
-            &public_key,
-            &secret_key,
-            from_addr,
-            pre_side_effects,
-        )?;
 
-        if rendered_pre_msg.message.len() > PRE_MSG_SIZE_WARNING_THRESHOLD {
-            warn!(
-                context,
-                "Pre-message for message {} is larger than expected: {}.",
-                msg.id,
-                rendered_pre_msg.message.len()
-            );
-        }
-
-        Ok((Some(rendered_pre_msg), rendered_msg))
+        Ok((
+            Some((queued_pre_msg, pre_side_effects)),
+            (queued_msg, side_effects),
+        ))
     } else {
         let (queued_msg, side_effects) = Box::pin(mimefactory.into_queued_mail(context)).await?;
-        let rendered_msg = mimefactory::render_queued_mail(
-            queued_msg,
-            &public_key,
-            &secret_key,
-            from_addr,
-            side_effects,
-        )?;
 
-        Ok((None, rendered_msg))
+        Ok((None, (queued_msg, side_effects)))
     }
+}
+
+/// Process side effects and store queued mail.
+///
+/// TODO: convert to sync and do everything in a single transaction
+pub(crate) async fn enqueue_mail(
+    context: &Context,
+    now: i64,
+    msg_id: MsgId,
+    // TODO: chat ID is only used with side effects, make it optional
+    chat_id: ChatId,
+    queued_mail: &QueuedMail,
+    side_effects: &RenderSideEffects,
+    recipients: &[String],
+) -> Result<i64> {
+    if let Some(last_added_location_timestamp) = side_effects.last_added_location_timestamp {
+        location::set_kml_sent_timestamp(context, chat_id, last_added_location_timestamp).await?;
+    }
+
+    if side_effects.avatar_is_attached {
+        chat_id
+            .set_selfavatar_timestamp(context, now)
+            .await
+            .context("Failed to set selfavatar timestamp")?;
+    }
+
+    if let Some(ref sync_ids) = side_effects.sync_ids_to_delete {
+        context
+            .sql
+            .execute(
+                &format!("DELETE FROM multi_device_sync WHERE id IN ({sync_ids})"),
+                (),
+            )
+            .await?;
+    }
+
+    // Store mail into queue.
+    let all_recipients = recipients.join(" ");
+    let is_encrypted = !matches!(queued_mail.encryption, mimefactory::Encryption::No);
+
+    let row_id = context
+        .sql
+        .insert(
+            "
+INSERT INTO smtp2 (
+  display_name,
+  rfc724_mid,
+  mime,
+  should_attach_pubkey,
+  may_compress,
+  should_sign,
+  msg_id,
+  recipients,
+  is_encrypted,
+  shared_secret,
+  encryption_fingerprints
+)
+VALUES (
+  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+)
+",
+            (
+                &queued_mail.display_name,
+                &queued_mail.rfc724_mid,
+                &queued_mail.raw_message,
+                queued_mail.should_attach_pubkey,
+                queued_mail.may_compress,
+                queued_mail.should_sign,
+                msg_id,
+                &all_recipients,
+                is_encrypted,
+                if let mimefactory::Encryption::Symmetric { ref shared_secret } =
+                    queued_mail.encryption
+                {
+                    shared_secret
+                } else {
+                    ""
+                },
+                if let mimefactory::Encryption::Asymmetric {
+                    ref encryption_pubkeys,
+                } = queued_mail.encryption
+                {
+                    let res: Vec<(String, String)> = encryption_pubkeys
+                        .iter()
+                        .map(|(addr, pubkey)| (addr.clone(), pubkey.dc_fingerprint().hex()))
+                        .collect();
+                    serde_json::to_string(&res)?
+                } else {
+                    "".to_string()
+                },
+            ),
+        )
+        .await
+        .context("Failed to insert a row into smtp2 table")?;
+    Ok(row_id)
 }
 
 /// Constructs jobs for sending a message and inserts them into the `smtp` table.
@@ -2850,6 +2912,8 @@ async fn render_mime_message_and_pre_message(
 ///
 /// The caller has to interrupt SMTP loop or otherwise process new rows.
 pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -> Result<Vec<i64>> {
+    let now = time();
+
     let cmd = msg.param.get_cmd();
     if cmd == SystemMessage::GroupNameChanged || cmd == SystemMessage::GroupDescriptionChanged {
         msg.chat_id
@@ -2899,7 +2963,7 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
         return Ok(Vec::new());
     }
 
-    let (rendered_pre_msg, rendered_msg) =
+    let (queued_pre_msg_pair, queued_msg_pair) =
         match render_mime_message_and_pre_message(context, msg, mimefactory).await {
             Ok(res) => Ok(res),
             Err(err) => {
@@ -2908,29 +2972,17 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
             }
         }?;
 
-    if let (post_msg, Some(pre_msg)) = (&rendered_msg, &rendered_pre_msg) {
-        info!(
-            context,
-            "Message {} sizes: pre-message: {}; post-message: {}.",
-            msg.id,
-            format_size(pre_msg.message.len(), BINARY),
-            format_size(post_msg.message.len(), BINARY),
-        );
+    if let Some((pre_msg, _)) = &queued_pre_msg_pair {
         msg.pre_rfc724_mid = pre_msg.rfc724_mid.clone();
-    } else {
-        info!(
-            context,
-            "Message {} will be sent in one shot (no pre- and post-message). Size: {}.",
-            msg.id,
-            format_size(rendered_msg.message.len(), BINARY),
-        );
     }
 
+    let (queued_msg, side_effects) = queued_msg_pair;
+    let is_encrypted = !matches!(queued_msg.encryption, mimefactory::Encryption::No);
     if context.get_config_bool(Config::BccSelf).await? {
-        smtp::add_self_recipients(context, &mut recipients, rendered_msg.is_encrypted).await?;
+        smtp::add_self_recipients(context, &mut recipients, is_encrypted).await?;
     }
 
-    if needs_encryption && !rendered_msg.is_encrypted {
+    if needs_encryption && !is_encrypted {
         let addr = context.get_config(Config::ConfiguredAddr).await?;
         let text = stock_str::unencrypted_email(
             context,
@@ -2960,32 +3012,13 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
         );
     }
 
-    let now = time();
-
-    if let Some(last_added_location_timestamp) =
-        rendered_msg.side_effects.last_added_location_timestamp
-    {
-        location::set_kml_sent_timestamp(context, msg.chat_id, last_added_location_timestamp)
-            .await?;
-    }
-
-    if rendered_msg.side_effects.avatar_is_attached
-        || rendered_pre_msg
-            .as_ref()
-            .is_some_and(|msg| msg.side_effects.avatar_is_attached)
-    {
-        msg.chat_id
-            .set_selfavatar_timestamp(context, now)
-            .await
-            .context("Failed to set selfavatar timestamp")?;
-    }
-
-    if rendered_msg.is_encrypted {
+    msg.subject.clone_from(&side_effects.subject);
+    if is_encrypted {
         msg.param.set_int(Param::GuaranteeE2ee, 1);
     } else {
         msg.param.remove(Param::GuaranteeE2ee);
     }
-    msg.subject.clone_from(&rendered_msg.side_effects.subject);
+
     // Sort the message to the bottom. Employ `msgs_index7` to compute `timestamp`.
     context
         .sql
@@ -3014,41 +3047,36 @@ WHERE id=?
         )
         .await?;
 
-    let trans_fn = |t: &mut rusqlite::Transaction| {
-        let mut row_ids = Vec::<i64>::new();
+    let mut row_ids = Vec::new();
+    if let Some((queued_pre_msg, pre_side_effects)) = queued_pre_msg_pair {
+        let row_id = enqueue_mail(
+            context,
+            now,
+            msg.id,
+            msg.chat_id,
+            &queued_pre_msg,
+            &pre_side_effects,
+            &recipients,
+        )
+        .await
+        .context("Failed to enqueue pre-message")?;
+        row_ids.push(row_id)
+    }
+    row_ids.push(
+        enqueue_mail(
+            context,
+            now,
+            msg.id,
+            msg.chat_id,
+            &queued_msg,
+            &side_effects,
+            &recipients,
+        )
+        .await
+        .context("Failed to enqueue message")?,
+    );
 
-        if let Some(sync_ids) = rendered_msg.side_effects.sync_ids_to_delete {
-            t.execute(
-                &format!("DELETE FROM multi_device_sync WHERE id IN ({sync_ids})"),
-                (),
-            )?;
-        }
-        if !recipients.is_empty() {
-            let mut stmt = t.prepare(
-                "INSERT INTO smtp (rfc724_mid, recipients, mime, msg_id)
-                VALUES            (?1,         ?2,         ?3,   ?4)",
-            )?;
-            let all_recipients = recipients.join(" ");
-            if let Some(pre_msg) = &rendered_pre_msg {
-                let row_id = stmt.execute((
-                    &pre_msg.rfc724_mid,
-                    &all_recipients,
-                    &pre_msg.message,
-                    msg.id,
-                ))?;
-                row_ids.push(row_id.try_into()?);
-            }
-            let row_id = stmt.execute((
-                &rendered_msg.rfc724_mid,
-                &all_recipients,
-                &rendered_msg.message,
-                msg.id,
-            ))?;
-            row_ids.push(row_id.try_into()?);
-        }
-        Ok(row_ids)
-    };
-    context.sql.transaction(trans_fn).await
+    Ok(row_ids)
 }
 
 /// Sends a text message to the given chat.
