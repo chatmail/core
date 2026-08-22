@@ -23,7 +23,6 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::Context as _;
 use deltachat::chat::{ChatId, ChatVisibility, MessageListOptions, MuteDuration};
-use deltachat::constants::DC_MSG_ID_LAST_SPECIAL;
 use deltachat::contact::{Contact, ContactId, Origin};
 use deltachat::context::{Context, ContextBuilder};
 use deltachat::ephemeral::Timer as EphemeralTimer;
@@ -2038,7 +2037,7 @@ pub unsafe extern "C" fn dc_get_msg(context: *mut dc_context_t, msg_id: u32) -> 
     {
         Ok(msg) => msg,
         Err(_) => {
-            if msg_id <= constants::DC_MSG_ID_LAST_SPECIAL {
+            if MsgId::new(msg_id).is_special() {
                 // C-core API returns empty messages, do the same
                 message::Message::new(Viewtype::default())
             } else {
@@ -4407,7 +4406,7 @@ fn convert_and_prune_message_ids(msg_ids: *const u32, msg_cnt: libc::c_int) -> V
     let ids = unsafe { std::slice::from_raw_parts(msg_ids, msg_cnt as usize) };
     let msg_ids: Vec<MsgId> = ids
         .iter()
-        .filter(|id| **id > DC_MSG_ID_LAST_SPECIAL)
+        .filter(|id| **id > MsgId::LAST_SPECIAL.to_u32())
         .map(|id| MsgId::new(*id))
         .collect();
 

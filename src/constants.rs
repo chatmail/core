@@ -130,9 +130,6 @@ pub enum Chattype {
     InBroadcast = 165,
 }
 
-pub const DC_MSG_ID_DAYMARKER: u32 = 9;
-pub const DC_MSG_ID_LAST_SPECIAL: u32 = 9;
-
 /// String that indicates that something is left out or truncated.
 pub(crate) const DC_ELLIPSIS: &str = "[...]";
 // how many lines desktop can display when fullscreen (fullscreen at zoomlevel 1x)
