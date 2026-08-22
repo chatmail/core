@@ -17,7 +17,6 @@ use deltachat::chat::{
 };
 use deltachat::chatlist::Chatlist;
 use deltachat::config::{Config, get_all_ui_config_keys};
-use deltachat::constants::DC_MSG_ID_DAYMARKER;
 use deltachat::contact::{Contact, ContactId, Origin, may_be_valid_addr};
 use deltachat::context::get_info;
 use deltachat::ephemeral::Timer;
@@ -1382,7 +1381,7 @@ impl CommandApi {
     ///
     /// * chat_id The chat ID of which the messages IDs should be queried.
     /// * _info_only: Deprecated, pass `false` here.
-    /// * `add_daymarker` - If `true`, add day markers as `DC_MSG_ID_DAYMARKER` to the result,
+    /// * `add_daymarker` - If `true`, add day markers as `MsgId::DAYMARKER` to the result,
     ///   e.g. [1234, 1237, 9, 1239]. The day marker timestamp is the midnight one for the
     ///   corresponding (following) day in the local timezone.
     async fn get_message_ids(
@@ -1404,7 +1403,7 @@ impl CommandApi {
             .map(|chat_item| -> u32 {
                 match chat_item {
                     deltachat::chat::ChatItem::Message { msg_id } => msg_id.to_u32(),
-                    deltachat::chat::ChatItem::DayMarker { .. } => DC_MSG_ID_DAYMARKER,
+                    deltachat::chat::ChatItem::DayMarker { .. } => MsgId::DAYMARKER.to_u32(),
                 }
             })
             .collect())

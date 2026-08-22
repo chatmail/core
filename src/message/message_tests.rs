@@ -338,7 +338,7 @@ async fn test_msg_seen_on_imap_when_downloaded() -> Result<()> {
     let rcvd_msg = receive_imf(alice, sent_msg.payload().as_bytes(), seen)
         .await?
         .unwrap();
-    assert_eq!(rcvd_msg.chat_id, DC_CHAT_ID_TRASH);
+    assert_eq!(rcvd_msg.chat_id, ChatId::TRASH);
     let msg = Message::load_from_db(alice, msg.id).await?;
     assert_eq!(msg.download_state, DownloadState::Done);
     assert!(msg.param.get_bool(Param::WantsMdn).unwrap_or_default());

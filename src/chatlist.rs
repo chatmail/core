@@ -5,8 +5,8 @@ use std::sync::LazyLock;
 
 use crate::chat::{Chat, ChatId, ChatVisibility, update_special_chat_names};
 use crate::constants::{
-    Blocked, Chattype, DC_CHAT_ID_ALLDONE_HINT, DC_CHAT_ID_ARCHIVED_LINK, DC_GCL_ADD_ALLDONE_HINT,
-    DC_GCL_ARCHIVED_ONLY, DC_GCL_FOR_FORWARDING, DC_GCL_NO_SPECIALS,
+    Blocked, Chattype, DC_GCL_ADD_ALLDONE_HINT, DC_GCL_ARCHIVED_ONLY, DC_GCL_FOR_FORWARDING,
+    DC_GCL_NO_SPECIALS,
 };
 use crate::contact::{Contact, ContactId};
 use crate::context::Context;
@@ -61,19 +61,19 @@ impl Chatlist {
     ///
     /// By default, the function adds some special entries to the list.
     /// These special entries can be identified by the ID returned by chatlist.get_chat_id():
-    /// - DC_CHAT_ID_ARCHIVED_LINK (6) - this special chat is present if the user has
+    /// - ChatId::ARCHIVED_LINK (6) - this special chat is present if the user has
     ///   archived *any* chat using dc_set_chat_visibility(). The UI should show a link as
     ///   "Show archived chats", if the user clicks this item, the UI should show a
     ///   list of all archived chats that can be created by this function hen using
     ///   the DC_GCL_ARCHIVED_ONLY flag.
-    /// - DC_CHAT_ID_ALLDONE_HINT (7) - this special chat is present
+    /// - ChatId::ALLDONE_HINT (7) - this special chat is present
     ///   if DC_GCL_ADD_ALLDONE_HINT is added to listflags
     ///   and if there are only archived chats.
     ///
     /// The `listflags` is a combination of flags:
     /// - if the flag DC_GCL_ARCHIVED_ONLY is set, only archived chats are returned.
     ///   if DC_GCL_ARCHIVED_ONLY is not set, only unarchived chats are returned and
-    ///   the pseudo-chat DC_CHAT_ID_ARCHIVED_LINK is added if there are *any* archived
+    ///   the pseudo-chat ChatId::ARCHIVED_LINK is added if there are *any* archived
     ///   chats
     /// - the flag DC_GCL_FOR_FORWARDING sorts "Saved messages" to the top of the chatlist
     ///   and hides the device-chat, contact requests and incoming broadcasts.
@@ -81,7 +81,7 @@ impl Chatlist {
     /// - if the flag DC_GCL_NO_SPECIALS is set, archive link is not added
     ///   to the list (may be used eg. for selecting chats on forwarding, the flag is
     ///   not needed when DC_GCL_ARCHIVED_ONLY is already set)
-    /// - if the flag DC_GCL_ADD_ALLDONE_HINT is set, DC_CHAT_ID_ALLDONE_HINT
+    /// - if the flag DC_GCL_ADD_ALLDONE_HINT is set, ChatId::ALLDONE_HINT
     ///   is added as needed.
     ///
     /// `query`: An optional query for filtering the list. Only chats matching this query
@@ -272,9 +272,9 @@ ORDER BY timestamp DESC, id DESC LIMIT 1)"
             };
             if !flag_no_specials && get_archived_cnt(context).await? > 0 {
                 if ids.is_empty() && flag_add_alldone_hint {
-                    ids.push((DC_CHAT_ID_ALLDONE_HINT, None));
+                    ids.push((ChatId::ALLDONE_HINT, None));
                 }
-                ids.insert(0, (DC_CHAT_ID_ARCHIVED_LINK, None));
+                ids.insert(0, (ChatId::ARCHIVED_LINK, None));
             }
             ids
         };

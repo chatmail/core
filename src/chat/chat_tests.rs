@@ -77,7 +77,7 @@ async fn test_get_draft_no_draft() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_draft_special_chat_id() {
     let t = TestContext::new().await;
-    let draft = DC_CHAT_ID_LAST_SPECIAL.get_draft(&t).await.unwrap();
+    let draft = ChatId::LAST_SPECIAL.get_draft(&t).await.unwrap();
     assert!(draft.is_none());
 }
 
@@ -1096,7 +1096,7 @@ async fn test_archive() {
             == ChatVisibility::Normal
     );
     assert_eq!(get_chat_cnt(&t).await.unwrap(), 2);
-    assert_eq!(chatlist_len(&t, 0).await, 2); // including DC_CHAT_ID_ARCHIVED_LINK now
+    assert_eq!(chatlist_len(&t, 0).await, 2); // including ChatId::ARCHIVED_LINK now
     assert_eq!(chatlist_len(&t, DC_GCL_NO_SPECIALS).await, 1);
     assert_eq!(chatlist_len(&t, DC_GCL_ARCHIVED_ONLY).await, 1);
 
@@ -1122,7 +1122,7 @@ async fn test_archive() {
             == ChatVisibility::Archived
     );
     assert_eq!(get_chat_cnt(&t).await.unwrap(), 2);
-    assert_eq!(chatlist_len(&t, 0).await, 1); // only DC_CHAT_ID_ARCHIVED_LINK now
+    assert_eq!(chatlist_len(&t, 0).await, 1); // only ChatId::ARCHIVED_LINK now
     assert_eq!(chatlist_len(&t, DC_GCL_NO_SPECIALS).await, 0);
     assert_eq!(chatlist_len(&t, DC_GCL_ARCHIVED_ONLY).await, 2);
 
@@ -1333,7 +1333,7 @@ async fn test_marknoticed_all_chats() -> Result<()> {
             chat_id: Some(alice_chat_archived_and_muted),
         },
         EventType::ChatlistItemChanged {
-            chat_id: Some(DC_CHAT_ID_ARCHIVED_LINK),
+            chat_id: Some(ChatId::ARCHIVED_LINK),
         },
     ] {
         assert!(emitted_events.iter().any(|Event { typ, .. }| typ == event));
@@ -1434,13 +1434,13 @@ async fn test_archive_fresh_msgs() -> Result<()> {
     bob_chat_id
         .set_visibility(&t, ChatVisibility::Archived)
         .await?;
-    assert_eq!(DC_CHAT_ID_ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 0);
+    assert_eq!(ChatId::ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 0);
 
     msg_from(&t, "bob", 2).await?;
-    assert_eq!(DC_CHAT_ID_ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 1);
+    assert_eq!(ChatId::ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 1);
 
     msg_from(&t, "bob", 3).await?;
-    assert_eq!(DC_CHAT_ID_ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 1);
+    assert_eq!(ChatId::ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 1);
 
     msg_from(&t, "claire", 4).await?;
     let claire_chat_id = t.get_last_msg().await.get_chat_id();
@@ -1454,7 +1454,7 @@ async fn test_archive_fresh_msgs() -> Result<()> {
     msg_from(&t, "claire", 7).await?;
     assert_eq!(bob_chat_id.get_fresh_msg_cnt(&t).await?, 2);
     assert_eq!(claire_chat_id.get_fresh_msg_cnt(&t).await?, 3);
-    assert_eq!(DC_CHAT_ID_ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 2);
+    assert_eq!(ChatId::ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 2);
 
     // mark one of the archived+muted chats as noticed: check that the archive-link counter is changed as well
     t.evtracker.clear_events();
@@ -1465,7 +1465,7 @@ async fn test_archive_fresh_msgs() -> Result<()> {
             matches!(
                 ev,
                 EventType::MsgsChanged {
-                    chat_id: DC_CHAT_ID_ARCHIVED_LINK,
+                    chat_id: ChatId::ARCHIVED_LINK,
                     ..
                 }
             )
@@ -1474,34 +1474,34 @@ async fn test_archive_fresh_msgs() -> Result<()> {
     assert_eq!(
         ev,
         EventType::MsgsChanged {
-            chat_id: DC_CHAT_ID_ARCHIVED_LINK,
+            chat_id: ChatId::ARCHIVED_LINK,
             msg_id: MsgId::new(0),
         }
     );
     assert_eq!(bob_chat_id.get_fresh_msg_cnt(&t).await?, 2);
     assert_eq!(claire_chat_id.get_fresh_msg_cnt(&t).await?, 0);
-    assert_eq!(DC_CHAT_ID_ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 1);
+    assert_eq!(ChatId::ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 1);
 
     // receive some more messages
     msg_from(&t, "claire", 8).await?;
     assert_eq!(bob_chat_id.get_fresh_msg_cnt(&t).await?, 2);
     assert_eq!(claire_chat_id.get_fresh_msg_cnt(&t).await?, 1);
-    assert_eq!(DC_CHAT_ID_ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 2);
+    assert_eq!(ChatId::ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 2);
     assert_eq!(t.get_fresh_msgs().await?.len(), 0);
 
     msg_from(&t, "dave", 9).await?;
     let dave_chat_id = t.get_last_msg().await.get_chat_id();
     dave_chat_id.accept(&t).await?;
     assert_eq!(dave_chat_id.get_fresh_msg_cnt(&t).await?, 1);
-    assert_eq!(DC_CHAT_ID_ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 2);
+    assert_eq!(ChatId::ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 2);
     assert_eq!(t.get_fresh_msgs().await?.len(), 1);
 
     // mark the archived-link as noticed: check that the real chats are noticed as well
-    marknoticed_chat(&t, DC_CHAT_ID_ARCHIVED_LINK).await?;
+    marknoticed_chat(&t, ChatId::ARCHIVED_LINK).await?;
     assert_eq!(bob_chat_id.get_fresh_msg_cnt(&t).await?, 0);
     assert_eq!(claire_chat_id.get_fresh_msg_cnt(&t).await?, 0);
     assert_eq!(dave_chat_id.get_fresh_msg_cnt(&t).await?, 1);
-    assert_eq!(DC_CHAT_ID_ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 0);
+    assert_eq!(ChatId::ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 0);
     assert_eq!(t.get_fresh_msgs().await?.len(), 1);
 
     Ok(())

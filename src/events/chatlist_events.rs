@@ -68,7 +68,6 @@ mod test_chatlist_events {
             self, ChatId, ChatVisibility, MuteDuration, create_broadcast, create_group, set_muted,
         },
         config::Config,
-        constants::*,
         contact::Contact,
         message::{self, Message, MessageState},
         reaction,
@@ -206,8 +205,8 @@ mod test_chatlist_events {
         bob.recv_msg(&sent_msg).await;
 
         bob.evtracker.clear_events();
-        chat::marknoticed_chat(&bob, DC_CHAT_ID_ARCHIVED_LINK).await?;
-        wait_for_chatlist_specific_item(&bob, DC_CHAT_ID_ARCHIVED_LINK).await;
+        chat::marknoticed_chat(&bob, ChatId::ARCHIVED_LINK).await?;
+        wait_for_chatlist_specific_item(&bob, ChatId::ARCHIVED_LINK).await;
 
         Ok(())
     }

@@ -4,10 +4,9 @@ use deltachat_contact_tools::EmailAddress;
 use regex::Regex;
 
 use super::*;
-use crate::chat::{CantSendReason, add_contact_to_chat, remove_contact_from_chat};
+use crate::chat::{CantSendReason, ChatId, add_contact_to_chat, remove_contact_from_chat};
 use crate::chatlist::Chatlist;
 use crate::constants::Chattype;
-use crate::constants::DC_CHAT_ID_TRASH;
 use crate::key::self_fingerprint;
 use crate::mimeparser::{GossipedKey, SystemMessage};
 use crate::qr::Qr;
@@ -1534,7 +1533,7 @@ gU6dGXsFMe/RpRHrIAkMAaM5xkxMDRuRJDxiUdS/X+Y8
     let received = receive_imf(alice, payload.as_bytes(), false)
         .await?
         .unwrap();
-    assert_eq!(received.chat_id, DC_CHAT_ID_TRASH);
+    assert_eq!(received.chat_id, ChatId::TRASH);
 
     // Test that Alice sends vc-auth-required after processing vc-request.
     let sent = alice.pop_sent_msg().await;

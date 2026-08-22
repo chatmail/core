@@ -6,8 +6,6 @@ use deltachat_derive::{FromSql, ToSql};
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC};
 use serde::{Deserialize, Serialize};
 
-use crate::chat::ChatId;
-
 pub static DC_VERSION_STR: &str = env!("CARGO_PKG_VERSION");
 
 /// Set of characters to percent-encode in email addresses and names.
@@ -70,15 +68,6 @@ pub(crate) const DC_RESEND_USER_AVATAR_DAYS: i64 = 14;
 // "90 days" has proven to be too short at some point (user were informed but there was no update)
 pub(crate) const DC_OUTDATED_WARNING_DAYS: i64 = 183;
 
-/// messages that should be deleted get this chat_id; the messages are deleted from the working thread later then. This is also needed as rfc724_mid should be preset as long as the message is not deleted on the server (otherwise it is downloaded again)
-pub const DC_CHAT_ID_TRASH: ChatId = ChatId::new(3);
-/// only an indicator in a chatlist
-pub const DC_CHAT_ID_ARCHIVED_LINK: ChatId = ChatId::new(6);
-/// only an indicator in a chatlist
-pub const DC_CHAT_ID_ALLDONE_HINT: ChatId = ChatId::new(7);
-/// larger chat IDs are "real" chats, their messages are "real" messages.
-pub const DC_CHAT_ID_LAST_SPECIAL: ChatId = ChatId::new(9);
-
 /// Chat type.
 #[derive(
     Debug,
@@ -101,7 +90,7 @@ pub const DC_CHAT_ID_LAST_SPECIAL: ChatId = ChatId::new(9);
 pub enum Chattype {
     /// A single chat (a chat with a single contact).
     ///
-    /// Created by [`ChatId::create_for_contact`].
+    /// Created by [`crate::chat::ChatId::create_for_contact`].
     Single = 100,
 
     /// Group chat.
@@ -140,9 +129,6 @@ pub enum Chattype {
     /// which would make it hard to grep for it.
     InBroadcast = 165,
 }
-
-pub const DC_MSG_ID_DAYMARKER: u32 = 9;
-pub const DC_MSG_ID_LAST_SPECIAL: u32 = 9;
 
 /// String that indicates that something is left out or truncated.
 pub(crate) const DC_ELLIPSIS: &str = "[...]";
