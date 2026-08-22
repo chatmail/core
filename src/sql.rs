@@ -9,8 +9,8 @@ use rusqlite::{Connection, OpenFlags, Row, config::DbConfig, types::ValueRef};
 use tokio::sync::RwLock;
 
 use crate::blob::BlobObject;
+use crate::chat::ChatId;
 use crate::config::Config;
-use crate::constants::DC_CHAT_ID_TRASH;
 use crate::context::Context;
 use crate::debug_logging::set_debug_logging_xdc;
 use crate::ephemeral::start_ephemeral_timers;
@@ -842,7 +842,7 @@ pub async fn housekeeping(context: &Context) -> Result<()> {
         .execute(
             "DELETE FROM msgs_mdns WHERE msg_id NOT IN \
             (SELECT id FROM msgs WHERE chat_id!=?)",
-            (DC_CHAT_ID_TRASH,),
+            (ChatId::TRASH,),
         )
         .await
         .context("failed to remove old MDNs")
@@ -854,7 +854,7 @@ pub async fn housekeeping(context: &Context) -> Result<()> {
         .execute(
             "DELETE FROM msgs_status_updates WHERE msg_id NOT IN \
             (SELECT id FROM msgs WHERE chat_id!=?)",
-            (DC_CHAT_ID_TRASH,),
+            (ChatId::TRASH,),
         )
         .await
         .context("failed to remove old webxdc status updates")
@@ -1209,7 +1209,7 @@ async fn prune_tombstones(sql: &Sql) -> Result<()> {
          AND NOT EXISTS (
          SELECT * FROM imap WHERE msgs.rfc724_mid=rfc724_mid AND target!=''
          )",
-        (DC_CHAT_ID_TRASH, timestamp_max),
+        (ChatId::TRASH, timestamp_max),
     )
     .await?;
     Ok(())

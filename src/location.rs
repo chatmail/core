@@ -19,7 +19,6 @@ use quick_xml::events::{BytesEnd, BytesStart, BytesText};
 use tokio::time::timeout;
 
 use crate::chat::{self, ChatId};
-use crate::constants::DC_CHAT_ID_TRASH;
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::events::EventType;
@@ -504,7 +503,7 @@ pub(crate) async fn delete_orphaned_poi(context: &Context) -> Result<()> {
     (SELECT location_id from MSGS LEFT JOIN locations
      ON locations.id=location_id
      WHERE location_id>0 -- This check makes the query faster by not looking for locations with ID 0 that don't exist.
-     AND msgs.chat_id != ?)", (DC_CHAT_ID_TRASH,)).await?;
+     AND msgs.chat_id != ?)", (ChatId::TRASH,)).await?;
     Ok(())
 }
 

@@ -18,7 +18,7 @@ use crate::chat::{
     self, Chat, ChatId, ChatIdBlocked, ChatVisibility, is_contact_in_chat, save_broadcast_secret,
 };
 use crate::config::Config;
-use crate::constants::{self, Blocked, Chattype, DC_CHAT_ID_TRASH, EDITED_PREFIX};
+use crate::constants::{Blocked, Chattype, EDITED_PREFIX};
 use crate::contact::{self, Contact, ContactId, Origin, mark_contact_id_as_verified};
 use crate::context::Context;
 use crate::debug_logging::maybe_set_logging_xdc_inner;
@@ -460,7 +460,7 @@ async fn get_to_and_past_contact_ids(
 /// e.g. has nonstandard MIME structure.
 ///
 /// If possible, creates a database entry to prevent the message from being
-/// downloaded again, sets `chat_id=DC_CHAT_ID_TRASH` and returns `Ok(Some(…))`.
+/// downloaded again, sets `chat_id=ChatId::TRASH` and returns `Ok(Some(…))`.
 /// If the message is so wrong that we didn't even create a database entry,
 /// returns `Ok(None)`.
 pub(crate) async fn receive_imf_inner(
@@ -485,7 +485,7 @@ pub(crate) async fn receive_imf_inner(
     let trash = || async {
         let msg_ids = vec![insert_tombstone(context, rfc724_mid).await?];
         Ok(Some(ReceivedMsg {
-            chat_id: DC_CHAT_ID_TRASH,
+            chat_id: ChatId::TRASH,
             state: MessageState::Undefined,
             hidden: false,
             sort_timestamp: 0,
@@ -662,7 +662,7 @@ pub(crate) async fn receive_imf_inner(
             securejoin::HandshakeMessage::Done | securejoin::HandshakeMessage::Ignore => {
                 let msg_id = insert_tombstone(context, rfc724_mid).await?;
                 received_msg = Some(ReceivedMsg {
-                    chat_id: DC_CHAT_ID_TRASH,
+                    chat_id: ChatId::TRASH,
                     state: MessageState::InSeen,
                     hidden: false,
                     sort_timestamp: mime_parser.timestamp_sent,
@@ -1441,7 +1441,7 @@ async fn do_chat_assignment(
 
         match &chat_assignment {
             ChatAssignment::Trash => {
-                chat_id = Some(DC_CHAT_ID_TRASH);
+                chat_id = Some(ChatId::TRASH);
             }
             ChatAssignment::GroupChat { grpid } => {
                 // Try to assign to a chat based on Chat-Group-ID.
@@ -1571,7 +1571,7 @@ async fn do_chat_assignment(
 
         match &chat_assignment {
             ChatAssignment::Trash => {
-                chat_id = Some(DC_CHAT_ID_TRASH);
+                chat_id = Some(ChatId::TRASH);
             }
             ChatAssignment::GroupChat { grpid } => {
                 if let Some((id, blocked)) = chat::get_chat_id_by_grpid(context, grpid).await? {
@@ -1706,7 +1706,7 @@ async fn do_chat_assignment(
     }
     let chat_id = chat_id.unwrap_or_else(|| {
         info!(context, "No chat id for message (TRASH).");
-        DC_CHAT_ID_TRASH
+        ChatId::TRASH
     });
     Ok((chat_id, chat_id_blocked, chat_created))
 }
@@ -2010,7 +2010,7 @@ async fn add_parts(
         .as_ref()
         .is_some_and(|better_msg| better_msg.is_empty())
     {
-        DC_CHAT_ID_TRASH
+        ChatId::TRASH
     } else {
         chat_id
     };
@@ -2200,7 +2200,7 @@ INSERT INTO msgs
                     } else {
                         ""
                     },
-                    if trash { DC_CHAT_ID_TRASH } else { chat_id },
+                    if trash { ChatId::TRASH } else { chat_id },
                     if trash { ContactId::UNDEFINED } else { from_id },
                     if trash { ContactId::UNDEFINED } else { to_id },
                     sort_timestamp,
@@ -2886,7 +2886,7 @@ async fn create_group(
         // The message was decrypted successfully, but contains a late "quit" or otherwise
         // unwanted message.
         info!(context, "Message belongs to unwanted group (TRASH).");
-        Ok(Some((DC_CHAT_ID_TRASH, Blocked::Not)))
+        Ok(Some((ChatId::TRASH, Blocked::Not)))
     }
 }
 
@@ -3925,7 +3925,7 @@ async fn create_adhoc_group(
             context,
             "Message removes member from unknown ad-hoc group (TRASH)."
         );
-        return Ok(Some((DC_CHAT_ID_TRASH, Blocked::Not)));
+        return Ok(Some((ChatId::TRASH, Blocked::Not)));
     }
 
     let new_chat_id: ChatId = ChatId::create_multiuser_record(
@@ -4217,12 +4217,7 @@ async fn lookup_key_contact_by_address(
                          ) DESC,
                          last_seen DESC, id DESC
                      ",
-                    (
-                        addr,
-                        Chattype::Single,
-                        constants::DC_CHAT_ID_LAST_SPECIAL,
-                        Blocked::Not,
-                    ),
+                    (addr, Chattype::Single, ChatId::LAST_SPECIAL, Blocked::Not),
                     |row| {
                         let contact_id: ContactId = row.get(0)?;
                         Ok(contact_id)

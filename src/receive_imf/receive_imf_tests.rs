@@ -348,7 +348,7 @@ async fn test_no_message_id_header() {
         !t.sql
             .exists(
                 "SELECT COUNT(*) FROM msgs WHERE chat_id=?;",
-                (DC_CHAT_ID_TRASH,),
+                (ChatId::TRASH,),
             )
             .await
             .unwrap()
