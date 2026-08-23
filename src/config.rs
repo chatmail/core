@@ -353,13 +353,13 @@ pub enum Config {
     LastCantDecryptOutgoingMsgs,
 
     /// Timestamp of the last time automatic relay management was run
-    LastAutomaticRelayManagement,
+    LastAutorelay,
 
     /// Whether to automatically add/remove transports
-    AutomaticRelayManagement,
+    Autorelay,
 
     /// Whether automatic relay management successfully added the desired number of relays
-    AutomaticRelayManagementFinished,
+    AutorelayFinished,
 
     /// Whether to avoid using IMAP IDLE even if the server supports it.
     ///

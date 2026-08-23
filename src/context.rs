@@ -1047,20 +1047,18 @@ impl Context {
                 .to_string(),
         );
         res.insert(
-            "last_automatic_relay_management",
-            self.get_config_i64(Config::LastAutomaticRelayManagement)
+            "last_autorelay",
+            self.get_config_i64(Config::LastAutorelay)
                 .await?
                 .to_string(),
         );
         res.insert(
-            "automatic_relay_management",
-            self.get_config_bool(Config::AutomaticRelayManagement)
-                .await?
-                .to_string(),
+            "autorelay",
+            self.get_config_bool(Config::Autorelay).await?.to_string(),
         );
         res.insert(
-            "automatic_relay_management_finished",
-            self.get_config_bool(Config::AutomaticRelayManagementFinished)
+            "autorelay_finished",
+            self.get_config_bool(Config::AutorelayFinished)
                 .await?
                 .to_string(),
         );

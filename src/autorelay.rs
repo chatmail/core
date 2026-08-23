@@ -1,3 +1,18 @@
+//! # Automatic relay handling (experimental, still in development)
+//!
+//! Chatmail relays create an account on first login,
+//! so a profile can add further transports on its own without user interaction.
+//! Candidate hosts come from the `relay_candidates` table,
+//! which migrations seed with a list of known chatmail relays.
+//!
+//! Status of implementation:
+//! Additions are attempted right before going into IMAP IDLE,
+//! i.e. only while connected and with nothing more important to do,
+//! and only if a UI opted in via [`Config::Autorelay`].
+//! Once a profile has reached `NUM_TRANSPORTS_TARGET` transports,
+//! [`Config::AutorelayFinished`] is set and nothing is ever added again,
+//! so deleting a transport later does not pull in a replacement.
+
 use std::pin::Pin;
 
 use anyhow::Result;
@@ -46,9 +61,7 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
         // Housekeeping or automatic relay management is already running in another thread, do nothing.
         return Ok(false);
     };
-    let last_timestamp = context
-        .get_config_i64(Config::LastAutomaticRelayManagement)
-        .await?;
+    let last_timestamp = context.get_config_i64(Config::LastAutorelay).await?;
     if last_timestamp > now {
         warn!(
             context,
@@ -57,22 +70,16 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
     } else if last_timestamp > now.saturating_sub(AUTOMATIC_ADDITION_DEBOUNCE_SECONDS) {
         return Ok(false);
     }
-    if !context
-        .get_config_bool(Config::AutomaticRelayManagement)
-        .await?
-    {
+    if !context.get_config_bool(Config::Autorelay).await? {
         return Ok(false);
     }
-    if context
-        .get_config_bool(Config::AutomaticRelayManagementFinished)
-        .await?
-    {
+    if context.get_config_bool(Config::AutorelayFinished).await? {
         return Ok(false);
     }
     // Set the config at the beginning to avoid endless loops.
     // Race conditions are not a concern because we locked the mutex.
     context
-        .set_config_internal(Config::LastAutomaticRelayManagement, Some(&now.to_string()))
+        .set_config_internal(Config::LastAutorelay, Some(&now.to_string()))
         .await?;
 
     let mut relay_added = false;
@@ -80,10 +87,7 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
     for _ in 0..NUM_TRANSPORTS_TARGET {
         if context.count_transports().await? >= NUM_TRANSPORTS_TARGET {
             context
-                .set_config_internal(
-                    Config::AutomaticRelayManagementFinished,
-                    config::from_bool(true),
-                )
+                .set_config_internal(Config::AutorelayFinished, config::from_bool(true))
                 .await?;
 
             return Ok(relay_added);
@@ -175,4 +179,4 @@ pub(crate) fn login_param_from_host(host: &str) -> EnteredLoginParam {
 }
 
 #[cfg(test)]
-mod automatic_relay_management_tests;
+mod autorelay_tests;

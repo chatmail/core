@@ -73,12 +73,9 @@ async fn test_load_relay_candidates_multiple() -> Result<()> {
     Ok(())
 }
 
-async fn assert_automatic_relay_management_does_nothing(t: &TestContext) {
+async fn assert_autorelay_does_nothing(t: &TestContext) {
     let transports_before = t.count_transports().await.unwrap();
-    let config_before = t
-        .get_config_i64(Config::LastAutomaticRelayManagement)
-        .await
-        .unwrap();
+    let config_before = t.get_config_i64(Config::LastAutorelay).await.unwrap();
 
     let skip_network = false; // No need to skip network, nothing is supposed to happen
     let relay_added = maybe_add_additional_relays_inner(t, skip_network)
@@ -86,10 +83,7 @@ async fn assert_automatic_relay_management_does_nothing(t: &TestContext) {
         .unwrap();
     assert_eq!(relay_added, false);
 
-    let config_after = t
-        .get_config_i64(Config::LastAutomaticRelayManagement)
-        .await
-        .unwrap();
+    let config_after = t.get_config_i64(Config::LastAutorelay).await.unwrap();
     let transports_after = t.count_transports().await.unwrap();
 
     assert_eq!(config_after, config_before);
@@ -105,7 +99,7 @@ async fn test_maybe_add_additional_relays_mutex_held() -> Result<()> {
     // already running housekeeping or relay management.
     let _lock = t.background_task_mutex.lock().await;
 
-    assert_automatic_relay_management_does_nothing(t).await;
+    assert_autorelay_does_nothing(t).await;
 
     Ok(())
 }
@@ -117,13 +111,10 @@ async fn test_maybe_add_additional_relays_debounce() -> Result<()> {
     let some_seconds_ago = time() - 10;
 
     // Pretend automatic relay management just ran.
-    t.set_config_internal(
-        Config::LastAutomaticRelayManagement,
-        Some(&some_seconds_ago.to_string()),
-    )
-    .await?;
+    t.set_config_internal(Config::LastAutorelay, Some(&some_seconds_ago.to_string()))
+        .await?;
 
-    assert_automatic_relay_management_does_nothing(t).await;
+    assert_autorelay_does_nothing(t).await;
 
     Ok(())
 }
@@ -132,7 +123,7 @@ async fn test_maybe_add_additional_relays_debounce() -> Result<()> {
 async fn test_maybe_add_additional_relays_disabled() {
     // By default, automatic relay management is disabled:
     let t = &TestContext::new_alice().await;
-    assert_automatic_relay_management_does_nothing(t).await;
+    assert_autorelay_does_nothing(t).await;
 }
 
 /// Runs maybe_add_additional_relays_inner(), then deletes one of the transports.
@@ -158,11 +149,8 @@ async fn test_maybe_add_additional_relays_does_nothing_after_finishing_once() ->
     let transports_count = t.count_transports().await?;
     assert_eq!(transports_count, NUM_TRANSPORTS_TARGET - 1);
 
-    assert!(
-        t.get_config_bool(Config::AutomaticRelayManagementFinished)
-            .await?
-    );
-    assert_automatic_relay_management_does_nothing(t).await;
+    assert!(t.get_config_bool(Config::AutorelayFinished).await?);
+    assert_autorelay_does_nothing(t).await;
 
     Ok(())
 }
@@ -187,9 +175,7 @@ async fn test_maybe_add_additional_relays_add_one() -> Result<()> {
     let relay_added = maybe_add_additional_relays_inner(t, skip_network).await?;
     assert!(relay_added);
 
-    let config_after = t
-        .get_config_i64(Config::LastAutomaticRelayManagement)
-        .await?;
+    let config_after = t.get_config_i64(Config::LastAutorelay).await?;
     assert!(config_after >= now);
 
     let transports_after = t.count_transports().await?;
@@ -218,9 +204,7 @@ async fn test_maybe_add_additional_relays_add_multiple() -> Result<()> {
     let relay_added = maybe_add_additional_relays_inner(t, skip_network).await?;
     assert!(relay_added);
 
-    let config_after = t
-        .get_config_i64(Config::LastAutomaticRelayManagement)
-        .await?;
+    let config_after = t.get_config_i64(Config::LastAutorelay).await?;
     assert!(config_after >= now);
 
     let transports_after = t.count_transports().await?;
@@ -253,9 +237,7 @@ async fn test_maybe_add_additional_relays_failure() -> Result<()> {
     assert_eq!(relay_added, false);
 
     // The config is still updated:
-    let config_after = t
-        .get_config_i64(Config::LastAutomaticRelayManagement)
-        .await?;
+    let config_after = t.get_config_i64(Config::LastAutorelay).await?;
     assert!(config_after >= now);
 
     let transports_after = t.count_transports().await?;
@@ -286,7 +268,7 @@ async fn test_maybe_add_additional_relays_failure() -> Result<()> {
 
 async fn enable_config(context: &Context) {
     context
-        .set_config_bool(Config::AutomaticRelayManagement, true)
+        .set_config_bool(Config::Autorelay, true)
         .await
         .unwrap();
 }
