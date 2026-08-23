@@ -2610,6 +2610,42 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 164)?;
+    if dbversion < migration_version {
+        // https://github.com/deltachat/deltachat-desktop/issues/6683.
+        // Desktop 2.59.0 had a bug where it would always set `team_profile=1`
+        // when creating a new profile.
+        // Unfortunately we can't tell where it was intentional and where not,
+        // so let's just reset the `team_profile` value for all profiles,
+        // except for ones created before the Desktop version was released
+        // (based on whether we have messages older than the release date).
+        // This also affects accounts on non-Desktop clients,
+        // because they could have been _created_ on Desktop
+        // and added as a second device, and `team_profile` is not synced.
+
+        let desktop_2_59_0_release_timestamp: i64 = chrono::NaiveDate::from_ymd_opt(2026, 8, 14)
+            .and_then(|d| d.and_hms_opt(17, 39, 8))
+            .map(|d| d.and_utc().timestamp())
+            .unwrap_or(1786729148);
+
+        sql.execute_migration_transaction(
+            |transaction| {
+                transaction.execute(
+                    "DELETE FROM config WHERE keyname='team_profile'
+                    AND NOT EXISTS (
+                        SELECT *
+                        FROM msgs
+                        WHERE id>9 AND timestamp<? AND timestamp>0
+                    )",
+                    (desktop_2_59_0_release_timestamp,),
+                )?;
+                Ok(())
+            },
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?

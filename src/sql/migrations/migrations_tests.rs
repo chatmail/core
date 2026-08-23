@@ -176,3 +176,21 @@ async fn test_key_contacts_migration_verified() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_team_profile_desktop_2_59_0() -> Result<()> {
+    let t = STOP_MIGRATIONS_AT
+        .scope(163, async move { TestContext::new_alice().await })
+        .await;
+    assert!(t.get_config_bool_opt(Config::TeamProfile).await?.is_none());
+
+    // What Desktop used to do unconditionally.
+    t.set_config_bool(Config::TeamProfile, true).await?;
+    assert!(t.get_config_bool(Config::TeamProfile).await?);
+
+    t.sql.run_migrations(&t).await?;
+
+    assert!(t.get_config_bool_opt(Config::TeamProfile).await?.is_none());
+
+    Ok(())
+}
