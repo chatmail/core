@@ -55,7 +55,7 @@ pub use events::*;
 
 mod aheader;
 pub mod appversions;
-mod automatic_relay_management;
+mod autorelay;
 pub mod blob;
 pub mod calls;
 pub mod chat;

@@ -749,7 +749,7 @@ mod tests {
     use crate::tools::SystemTime;
 
     use super::*;
-    use crate::automatic_relay_management::login_param_from_host;
+    use crate::autorelay::login_param_from_host;
     use crate::config::Config;
     use crate::login_param::EnteredImapLoginParam;
     use crate::sql::update_transport_last_rcvd_timestamp;
