@@ -343,11 +343,6 @@ pub enum Config {
     #[strum(props(default = "0"))]
     SkipStartMessages,
 
-    /// Whether we send a warning if the password is wrong (set to false when we send a warning
-    /// because we do not want to send a second warning)
-    #[strum(props(default = "0"))]
-    NotifyAboutWrongPw,
-
     /// Timestamp of the last time housekeeping was run
     LastHousekeeping,
 
@@ -663,7 +658,6 @@ impl Context {
             | Config::MdnsEnabled
             | Config::Configured
             | Config::Bot
-            | Config::NotifyAboutWrongPw
             | Config::SyncMsgs
             | Config::DisableIdle => {
                 ensure!(

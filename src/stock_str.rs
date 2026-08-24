@@ -75,11 +75,6 @@ pub enum StockMessage {
     #[strum(props(fallback = "Archived chats"))]
     ArchivedChats = 40,
 
-    #[strum(props(
-        fallback = "Cannot login as \"%1$s\". Please check if the email address and the password are correct."
-    ))]
-    CannotLogin = 60,
-
     #[strum(props(fallback = "Location streaming enabled."))]
     MsgLocationEnabled = 64,
 
@@ -901,11 +896,6 @@ pub(crate) fn sync_msg_subject(context: &Context) -> String {
 /// Stock string: `This message is used to synchronize data between your devices.`.
 pub(crate) fn sync_msg_body(context: &Context) -> String {
     translated(context, StockMessage::SyncMsgBody)
-}
-
-/// Stock string: `Cannot login as \"%1$s\". Please check...`.
-pub(crate) fn cannot_login(context: &Context, user: &str) -> String {
-    translated(context, StockMessage::CannotLogin).replace1(user)
 }
 
 /// Stock string: `Location streaming enabled.`.

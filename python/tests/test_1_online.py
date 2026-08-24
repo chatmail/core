@@ -1133,8 +1133,9 @@ def test_configure_error_msgs_wrong_pw(acfactory):
         print(f"Configuration progress: {ev.data1}")
         if ev.data1 == 0:
             break
-    # Password is wrong so it definitely has to say something about "password"
-    assert "password" in ev.data2
+    # Password is wrong so the error should be about authentication
+    # and not e.g. connection failure.
+    assert "Authentication" in ev.data2
 
     ac1.stop_io()
     ac1.set_config("mail_pw", "abc")  # Wrong mail pw
@@ -1144,10 +1145,7 @@ def test_configure_error_msgs_wrong_pw(acfactory):
         print(f"Configuration progress: {ev.data1}")
         if ev.data1 == 0:
             break
-    assert "password" in ev.data2
-    # Account will continue to work with the old password, so if it becomes wrong, a notification
-    # must be shown.
-    assert ac1.get_config("notify_about_wrong_pw") == "1"
+    assert "Authentication" in ev.data2
 
 
 def test_configure_error_msgs_invalid_server(acfactory):
