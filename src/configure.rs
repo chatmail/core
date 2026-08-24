@@ -341,8 +341,6 @@ impl Context {
             );
             return Err(error);
         };
-        self.set_config_internal(Config::NotifyAboutWrongPw, Some("1"))
-            .await?;
         if provider::legacy_settings_for_addr(&param.addr)?.worse_media_quality
             && !self.config_exists(Config::MediaQuality).await?
         {
@@ -567,8 +565,7 @@ pub(crate) async fn configure(
         let transport_id = 0;
         let (_s, r) = async_channel::bounded(1);
         let mut imap = Imap::new(ctx, transport_id, configured_param.clone(), r).await?;
-        let configuring = true;
-        let imap_session = match imap.connect(ctx, configuring).await {
+        let imap_session = match imap.connect(ctx).await {
             Ok(imap_session) => imap_session,
             Err(err) => {
                 bail!("{}", nicer_configuration_error(ctx, format!("{err:#}")));

@@ -231,8 +231,6 @@ pub struct InnerContext {
     /// This is a global mutex-like state for operations which should be modal in the
     /// clients.
     running_state: RwLock<RunningState>,
-    /// Mutex to prevent a race condition when a "your pw is wrong" warning is sent, resulting in multiple messages being sent.
-    pub(crate) wrong_pw_warning_mutex: Mutex<()>,
     /// Mutex to prevent running housekeeping or relay management from multiple threads at once.
     pub(crate) background_task_mutex: Mutex<()>,
 
@@ -486,7 +484,6 @@ impl Context {
             blobdir,
             running_state: RwLock::new(Default::default()),
             sql: Sql::new(dbfile),
-            wrong_pw_warning_mutex: Mutex::new(()),
             background_task_mutex: Mutex::new(()),
             fetch_msgs_mutex: Mutex::new(()),
             translated_stockstrings: stockstrings,

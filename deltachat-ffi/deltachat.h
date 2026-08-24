@@ -6672,10 +6672,7 @@ void dc_event_unref(dc_event_t* event);
 /// Used as the name for the corresponding chatlist entry.
 #define DC_STR_ARCHIVEDCHATS              40
 
-/// "Cannot login as %1$s."
-///
-/// Used in error strings.
-/// - %1$s will be replaced by the failing login name
+/// @deprecated 2026-08-24
 #define DC_STR_CANNOT_LOGIN               60
 
 /// "Location streaming enabled."
