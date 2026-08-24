@@ -121,6 +121,23 @@ impl Context {
     }
 
     pub(crate) async fn add_transport_inner(&self, param: &mut EnteredLoginParam) -> Result<()> {
+        match self.add_transport_unreported(param).await {
+            Ok(()) => {
+                progress!(self, 1000);
+                Ok(())
+            }
+            Err(err) => {
+                // We are using Anyhow's .context() and to show the
+                // inner error, too, we need the {:#}:
+                let error_msg = stock_str::configuration_failed(self, &format!("{err:#}"));
+                progress!(self, 0, Some(error_msg.clone()));
+                bail!(error_msg);
+            }
+        }
+    }
+
+    /// Adds a transport without reporting the outcome.
+    async fn add_transport_unreported(&self, param: &mut EnteredLoginParam) -> Result<()> {
         ensure!(
             !self.scheduler.is_running().await,
             "cannot configure, already running"
@@ -138,19 +155,9 @@ impl Context {
             .await;
 
         self.free_ongoing().await;
+        res?;
 
-        if let Err(err) = res.as_ref() {
-            // We are using Anyhow's .context() and to show the
-            // inner error, too, we need the {:#}:
-            let error_msg = stock_str::configuration_failed(self, &format!("{err:#}"));
-            progress!(self, 0, Some(error_msg.clone()));
-            bail!(error_msg);
-        } else {
-            param.save_legacy(self).await?;
-            progress!(self, 1000);
-        }
-
-        res
+        param.save_legacy(self).await
     }
 
     /// Adds a new email account as a transport
@@ -745,6 +752,7 @@ mod tests {
     use crate::tools::SystemTime;
 
     use super::*;
+    use crate::automatic_relay_management::login_param_from_host;
     use crate::config::Config;
     use crate::login_param::EnteredImapLoginParam;
     use crate::sql::update_transport_last_rcvd_timestamp;
@@ -761,6 +769,30 @@ mod tests {
         assert!(t.configure().await.is_err());
 
         t.assert_warns_or_errors(&["DNS resolution"]).await;
+    }
+
+    /// Tests that a configuration failing
+    /// before the first login attempt is still reported as a failure.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_early_configure_failure_is_reported() -> Result<()> {
+        let t = TestContext::new().await;
+        let mut param = login_param_from_host("example.org");
+
+        // An ongoing process, e.g. a backup import,
+        // makes configuration fail without ever contacting a relay.
+        let _ongoing = t.alloc_ongoing().await?;
+        assert!(t.add_or_update_transport(&mut param).await.is_err());
+
+        let event = t
+            .evtracker
+            .get_matching(|evt| matches!(evt, EventType::ConfigureProgress { .. }))
+            .await;
+        assert!(matches!(
+            event,
+            EventType::ConfigureProgress { progress: 0, .. }
+        ));
+
+        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
