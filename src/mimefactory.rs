@@ -96,6 +96,16 @@ enum Encryption {
     Symmetric { shared_secret: String },
 }
 
+impl Encryption {
+    pub fn is_encrypted(&self) -> bool {
+        match self {
+            Self::No => false,
+            Self::Asymmetric { .. } => true,
+            Self::Symmetric { .. } => true,
+        }
+    }
+}
+
 /// Helper to construct mime messages.
 #[derive(Debug, Clone)]
 pub struct MimeFactory {
@@ -281,7 +291,7 @@ pub(crate) fn render_queued_mail(
     let mut inner_headers: Vec<u8> = Vec::new();
     let mut outer_headers: Vec<u8> = Vec::new();
 
-    let is_encrypted = !matches!(encryption, Encryption::No);
+    let is_encrypted = encryption.is_encrypted();
 
     fn add_header(
         name: &[u8],
@@ -848,8 +858,8 @@ impl MimeFactory {
         // We don't display avatars for address-contacts, so sending avatars w/o encryption is not
         // useful and causes e.g. Outlook to reject a message with a big header, see
         // https://support.delta.chat/t/invalid-mime-content-single-text-value-size-32822-exceeded-allowed-maximum-32768-for-the-chat-user-avatar-header/4067.
-        let attach_selfavatar = Self::should_attach_selfavatar(context, &msg).await
-            && !matches!(encryption, Encryption::No);
+        let attach_selfavatar =
+            Self::should_attach_selfavatar(context, &msg).await && encryption.is_encrypted();
 
         ensure_and_debug_assert!(
             member_timestamps.is_empty()
@@ -2277,10 +2287,7 @@ impl MimeFactory {
     }
 
     pub fn will_be_encrypted(&self) -> bool {
-        match self.encryption {
-            Encryption::No => false,
-            Encryption::Asymmetric { .. } | Encryption::Symmetric { .. } => true,
-        }
+        self.encryption.is_encrypted()
     }
 
     pub fn set_as_post_message(&mut self) {
