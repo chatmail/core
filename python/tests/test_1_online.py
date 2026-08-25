@@ -291,6 +291,32 @@ def test_forward_own_message(acfactory, lp):
     assert msg_in.is_forwarded()
 
 
+def test_send_msg_sync(acfactory, lp):
+    ac1, ac2 = acfactory.get_online_accounts(2)
+    chat1 = acfactory.get_accepted_chat(ac1, ac2)
+
+    # Send some message from ac1
+    # so we are testing not the first message
+    # being sent synchronously.
+    lp.sec("ac1: send message to ac2")
+    chat1.send_text("message")
+
+    lp.sec("ac2: receive message")
+    msg_in = ac2._evtracker.wait_next_incoming_message()
+    assert msg_in.text == "message"
+
+    # Stop I/O and send message synchronously.
+    ac1.stop_io()
+    msg1 = Message.new_empty(ac1, "text")
+    msg1.set_text("message1")
+    chat1.send_msg_sync(msg1)
+    msg1.is_out_delivered()
+
+    lp.sec("ac2: receive message")
+    msg_in = ac2._evtracker.wait_next_incoming_message()
+    assert msg_in.text == "message1"
+
+
 def test_resend_message(acfactory, lp):
     ac1, ac2 = acfactory.get_online_accounts(2)
     chat1 = acfactory.get_accepted_chat(ac1, ac2)
