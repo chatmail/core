@@ -42,7 +42,7 @@ use crate::param::{Param, Params};
 use crate::pgp::addresses_from_public_key;
 use crate::reaction::broadcast_reactions;
 use crate::receive_imf::ReceivedMsg;
-use crate::smtp::{self, send_msg_to_smtp};
+use crate::smtp::send_msg_to_smtp;
 use crate::stock_str;
 use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::{
@@ -2772,6 +2772,7 @@ async fn render_mime_message_and_pre_message(
     context: &Context,
     msg: &mut Message,
     mimefactory: MimeFactory,
+    bcc_self: bool,
 ) -> Result<(
     Option<(QueuedMail, RenderSideEffects)>,
     (QueuedMail, RenderSideEffects),
@@ -2792,14 +2793,15 @@ async fn render_mime_message_and_pre_message(
 
         let mut mimefactory_post_msg = mimefactory.clone();
         mimefactory_post_msg.set_as_post_message();
-        let (queued_msg, side_effects) = Box::pin(mimefactory_post_msg.into_queued_mail(context))
-            .await
-            .context("Failed to render post-message")?;
+        let (queued_msg, side_effects) =
+            Box::pin(mimefactory_post_msg.into_queued_mail(context, bcc_self))
+                .await
+                .context("Failed to render post-message")?;
 
         let mut mimefactory_pre_msg = mimefactory;
         mimefactory_pre_msg.set_as_pre_message_for(&queued_msg.rfc724_mid);
         let (queued_pre_msg, pre_side_effects) =
-            Box::pin(mimefactory_pre_msg.into_queued_mail(context))
+            Box::pin(mimefactory_pre_msg.into_queued_mail(context, bcc_self))
                 .await
                 .context("pre-message failed to render")?;
 
@@ -2808,7 +2810,8 @@ async fn render_mime_message_and_pre_message(
             (queued_msg, side_effects),
         ))
     } else {
-        let (queued_msg, side_effects) = Box::pin(mimefactory.into_queued_mail(context)).await?;
+        let (queued_msg, side_effects) =
+            Box::pin(mimefactory.into_queued_mail(context, bcc_self)).await?;
 
         Ok((None, (queued_msg, side_effects)))
     }
@@ -2864,12 +2867,13 @@ INSERT INTO smtp2 (
   should_sign,
   msg_id,
   recipients,
+  bcc_self,
   is_encrypted,
   shared_secret,
   encryption_fingerprints
 )
 VALUES (
-  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 )
 ",
             (
@@ -2881,6 +2885,7 @@ VALUES (
                 queued_mail.should_sign,
                 msg_id,
                 &all_recipients,
+                queued_mail.bcc_self,
                 is_encrypted,
                 if let mimefactory::Encryption::Symmetric { ref shared_secret } =
                     queued_mail.encryption
@@ -2952,11 +2957,13 @@ async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -> Result<Ve
         }
     };
     let recipients = mimefactory.recipients();
+    debug_assert!(!recipients.iter().any(|s| s.is_empty()));
+    let bcc_self = context.get_config_bool(Config::BccSelf).await?;
 
     // Default Webxdc integrations are hidden messages and must not be sent out:
     if (msg.param.get_int(Param::WebxdcIntegration).is_some() && msg.hidden)
         // This may happen eg. for groups with only SELF and bcc_self disabled:
-        || (!context.get_config_bool(Config::BccSelf).await? && recipients.is_empty())
+        || (!bcc_self && recipients.is_empty())
     {
         info!(
             context,
@@ -2970,8 +2977,8 @@ async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -> Result<Ve
     }
 
     let is_encrypted = mimefactory.will_be_encrypted();
-    let (mut queued_pre_msg_pair, queued_msg_pair) =
-        match render_mime_message_and_pre_message(context, msg, mimefactory).await {
+    let (queued_pre_msg_pair, queued_msg_pair) =
+        match render_mime_message_and_pre_message(context, msg, mimefactory, bcc_self).await {
             Ok(res) => Ok(res),
             Err(err) => {
                 message::set_msg_failed(context, msg, &err.to_string()).await?;
@@ -2983,15 +2990,7 @@ async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -> Result<Ve
         msg.pre_rfc724_mid = pre_msg.rfc724_mid.clone();
     }
 
-    let (mut queued_msg, side_effects) = queued_msg_pair;
-
-    if context.get_config_bool(Config::BccSelf).await? {
-        smtp::add_self_recipients(context, &mut queued_msg.recipients, is_encrypted).await?;
-        if let Some((ref mut queued_pre_msg, _)) = queued_pre_msg_pair {
-            smtp::add_self_recipients(context, &mut queued_pre_msg.recipients, is_encrypted)
-                .await?;
-        }
-    }
+    let (queued_msg, side_effects) = queued_msg_pair;
 
     if needs_encryption && !is_encrypted {
         let addr = context.get_config(Config::ConfiguredAddr).await?;

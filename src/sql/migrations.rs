@@ -2656,6 +2656,7 @@ CREATE TABLE smtp2 (
     should_sign INTEGER NOT NULL,
     msg_id INTEGER NOT NULL,
     recipients TEXT NOT NULL,
+    bcc_self INTEGER NOT NULL,
     is_encrypted INTEGER NOT NULL,
     shared_secret TEXT NOT NULL DEFAULT '',
     encryption_fingerprints TEXT NOT NULL DEFAULT '',

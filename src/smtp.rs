@@ -379,7 +379,16 @@ pub(crate) async fn send_msg_to_smtp(
         .sql
         .transaction_ext(true, |transaction| load_queued_mail(transaction, rowid))
         .await?;
-    let recipients = queued_mail.recipients.clone();
+    let mut recipients = queued_mail.recipients.clone();
+    if queued_mail.bcc_self {
+        add_self_recipients(
+            context,
+            &mut recipients,
+            queued_mail.encryption.is_encrypted(),
+        )
+        .await
+        .expect("Failed to add self recipients");
+    }
     let public_key = key::load_self_public_key(context).await?;
     let secret_key = key::load_self_secret_key(context).await?;
 
@@ -771,7 +780,8 @@ SELECT display_name,
        is_encrypted,
        shared_secret,
        encryption_fingerprints,
-       recipients
+       recipients,
+       bcc_self
 FROM smtp2 WHERE id = ?
 ",
             (row_id,),
@@ -803,6 +813,7 @@ FROM smtp2 WHERE id = ?
                     recipients.split(' ').map(|s| s.to_string()).collect()
                 };
                 debug_assert!(!recipients.iter().any(|s| s.is_empty()));
+                let bcc_self: bool = row.get(10)?;
 
                 let encryption = match (
                     is_encrypted,
@@ -827,6 +838,7 @@ FROM smtp2 WHERE id = ?
                         should_compress,
                         should_sign,
                         recipients,
+                        bcc_self,
                     },
                     encryption_fingerprints,
                 ))

@@ -423,6 +423,12 @@ CREATE TABLE smtp2 (
     -- List of recipients separated by space
     recipients TEXT NOT NULL,
 
+    -- If true, copy should be sent to self in addition to the recipient list.
+    --
+    -- For encrypted messages copy is sent to all addresses.
+    -- For unencrypted messages, copy is sent to the From address only.
+    bcc_self INTEGER NOT NULL,
+
     -- True if the message is encrypted.
     -- If true, exactly one of the shared_secret or encryption_fingerprints should be non-empty.
     -- If false, both must be empty.

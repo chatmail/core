@@ -622,7 +622,7 @@ ORDER BY id"
             .await
             .expect("query_row_optional failed")?;
         let query_only = true;
-        let queued_mail = self
+        let mut queued_mail = self
             .ctx
             .sql
             .transaction_ext(query_only, |transaction| {
@@ -630,7 +630,17 @@ ORDER BY id"
             })
             .await
             .expect("Failed to load queued mail");
+        if queued_mail.bcc_self {
+            smtp::add_self_recipients(
+                &self.ctx,
+                &mut queued_mail.recipients,
+                queued_mail.encryption.is_encrypted(),
+            )
+            .await
+            .expect("Failed to add self recipients");
+        }
         let recipients = queued_mail.recipients.join(" ");
+        debug_assert!(!recipients.starts_with(" "));
         self.ctx
             .sql
             .execute("DELETE FROM smtp2 WHERE id=?;", (rowid,))
@@ -733,7 +743,7 @@ ORDER BY id"
             .unwrap()
         {
             let query_only = true;
-            let queued_mail = self
+            let mut queued_mail = self
                 .ctx
                 .sql
                 .transaction_ext(query_only, |transaction| {
@@ -741,6 +751,15 @@ ORDER BY id"
                 })
                 .await
                 .expect("Failed to load queued mail");
+            if queued_mail.bcc_self {
+                smtp::add_self_recipients(
+                    &self.ctx,
+                    &mut queued_mail.recipients,
+                    queued_mail.encryption.is_encrypted(),
+                )
+                .await
+                .expect("Failed to add self recipients");
+            }
             let recipients = queued_mail.recipients.join(" ");
             let rendered_mail = mimefactory::render_queued_mail(
                 queued_mail,
@@ -751,6 +770,7 @@ ORDER BY id"
             .expect("Failed to render queued mail");
             let payload = rendered_mail.message;
 
+            debug_assert!(!recipients.starts_with(" "));
             let sent_message = SentMessage {
                 payload,
                 sender_msg_id: msg_id,

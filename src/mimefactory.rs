@@ -233,6 +233,12 @@ pub(crate) struct QueuedMail {
 
     /// Recipient addresses.
     pub(crate) recipients: Vec<String>,
+
+    /// If true, own addresses should be added to the list of recipients.
+    ///
+    /// For unencrypted messages, only the sending addresses should be added.
+    /// For encrypted messages, all published addresses should be added.
+    pub(crate) bcc_self: bool,
 }
 
 /// Side effects that should be applied at the same time
@@ -280,6 +286,7 @@ pub(crate) fn render_queued_mail(
         should_compress,
         should_sign,
         recipients: _,
+        bcc_self: _,
     } = queued_mail;
 
     let mut inner_headers: Vec<u8> = Vec::new();
@@ -1342,7 +1349,11 @@ impl MimeFactory {
         let from_addr = context.get_primary_self_addr().await?;
         let public_key = key::load_self_public_key(context).await?;
         let secret_key = key::load_self_secret_key(context).await?;
-        let (queued_mail, _side_effects) = Box::pin(self.into_queued_mail(context)).await?;
+
+        // Does not matter, we are not going to return the QueuedMail.
+        let bcc_self = false;
+        let (queued_mail, _side_effects) =
+            Box::pin(self.into_queued_mail(context, bcc_self)).await?;
         let rendered_mail = render_queued_mail(queued_mail, &public_key, &secret_key, from_addr)?;
         Ok(rendered_mail)
     }
@@ -1353,6 +1364,7 @@ impl MimeFactory {
     pub(crate) async fn into_queued_mail(
         mut self,
         context: &Context,
+        bcc_self: bool,
     ) -> Result<(QueuedMail, RenderSideEffects)> {
         let rfc724_mid = match &self.loaded {
             Loaded::Message { msg, .. } => match &self.pre_message_mode {
@@ -1593,6 +1605,7 @@ impl MimeFactory {
             should_sign,
             should_compress,
             recipients,
+            bcc_self,
         };
         Ok((queued_email, side_effects))
     }
@@ -2493,6 +2506,8 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
         // leaking information about the tokens.
         should_compress: false,
         recipients,
+        // Never send a copy of SecureJoin message to self.
+        bcc_self: false,
     };
 
     Ok(queued_mail)
@@ -2564,6 +2579,7 @@ pub(crate) async fn render_keyupdate_message(
         // Disable compression to avoid side channels, message body is small anyway.
         should_compress: false,
         recipients,
+        bcc_self: false,
     };
     Ok(queued_mail)
 }
