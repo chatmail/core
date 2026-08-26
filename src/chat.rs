@@ -2856,7 +2856,7 @@ async fn render_mime_message_and_pre_message(
 /// Returns row ids if `smtp` table jobs were created or an empty `Vec` otherwise.
 ///
 /// The caller has to interrupt SMTP loop or otherwise process new rows.
-pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -> Result<Vec<i64>> {
+async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -> Result<Vec<i64>> {
     let cmd = msg.param.get_cmd();
     if cmd == SystemMessage::GroupNameChanged || cmd == SystemMessage::GroupDescriptionChanged {
         msg.chat_id
