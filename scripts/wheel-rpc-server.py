@@ -20,6 +20,16 @@ Description-Content-Type: text/markdown
 """
 
 
+def wheel_contents(tag):
+    """Render the WHEEL metadata for a filename tag."""
+    interpreter, abi, platforms = tag.split("-")
+    lines = ["Wheel-Version: 1.0", "Root-Is-Purelib: false"]
+    lines += [
+        f"Tag: {interpreter}-{abi}-{platform}" for platform in platforms.split(".")
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def build_wheel(version, binary, tag, windows=False):
     filename = f"deltachat_rpc_server-{version}-{tag}.whl"
 
@@ -60,7 +70,7 @@ def main():
         )
         wheel.writestr(
             f"deltachat_rpc_server-{version}.dist-info/WHEEL",
-            "Wheel-Version: 1.0\nRoot-Is-Purelib: false\nTag: {tag}",
+            wheel_contents(tag),
         )
         wheel.writestr(
             f"deltachat_rpc_server-{version}.dist-info/entry_points.txt",
@@ -87,7 +97,11 @@ arch2tags = {
 def main():
     with Path("Cargo.toml").open("rb") as fp:
         cargo_manifest = tomllib.load(fp)
-    version = cargo_manifest["package"]["version"]
+
+    # Cargo's SEMVER "-dev" suffix is not a PEP 440 version,
+    # so translate to make wheel tooling and metadata writing happy.
+    version = cargo_manifest["package"]["version"].replace("-dev", ".dev0")
+
     arch = sys.argv[1]
     executable = sys.argv[2]
     tags = arch2tags[arch]
