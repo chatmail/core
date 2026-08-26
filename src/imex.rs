@@ -18,7 +18,7 @@ use crate::chat::delete_and_reset_all_device_msgs;
 use crate::config::Config;
 use crate::context::Context;
 use crate::events::EventType;
-use crate::key::{self, DcKey, SignedSecretKey};
+use crate::key::{self, DcKey, SignedSecretKey, self_fingerprint};
 use crate::log::{LogExt, warn};
 use crate::qr::DCBACKUP_VERSION;
 use crate::sql;
@@ -413,7 +413,7 @@ async fn import_backup_stream_inner<R: tokio::io::AsyncRead + Unpin>(
 /// it can be renamed to dest_path. This guarantees that the backup is complete.
 fn get_next_backup_path(
     folder: &Path,
-    addr: &str,
+    fingerprint: &str,
     backup_time: i64,
 ) -> Result<(PathBuf, PathBuf, PathBuf)> {
     let folder = PathBuf::from(folder);
@@ -426,13 +426,13 @@ fn get_next_backup_path(
     // 64 backup files per day should be enough for everyone
     for i in 0..64 {
         let mut tempdbfile = folder.clone();
-        tempdbfile.push(format!("{stem}-{i:02}-{addr}.db"));
+        tempdbfile.push(format!("{stem}-{i:02}-{fingerprint}.db"));
 
         let mut tempfile = folder.clone();
-        tempfile.push(format!("{stem}-{i:02}-{addr}.tar.part"));
+        tempfile.push(format!("{stem}-{i:02}-{fingerprint}.tar.part"));
 
         let mut destfile = folder.clone();
-        destfile.push(format!("{stem}-{i:02}-{addr}.tar"));
+        destfile.push(format!("{stem}-{i:02}-{fingerprint}.tar"));
 
         if !tempdbfile.exists() && !tempfile.exists() && !destfile.exists() {
             return Ok((tempdbfile, tempfile, destfile));
@@ -448,8 +448,8 @@ fn get_next_backup_path(
 async fn export_backup(context: &Context, dir: &Path, passphrase: String) -> Result<()> {
     // get a fine backup file name (the name includes the date so that multiple backup instances are possible)
     let now = time();
-    let self_addr = context.get_primary_self_addr().await?;
-    let (temp_db_path, temp_path, dest_path) = get_next_backup_path(dir, &self_addr, now)?;
+    let fingerprint = self_fingerprint(context).await?;
+    let (temp_db_path, temp_path, dest_path) = get_next_backup_path(dir, fingerprint, now)?;
     let temp_db_path = TempPathGuard::new(temp_db_path);
     let temp_path = TempPathGuard::new(temp_path);
 
@@ -671,7 +671,6 @@ async fn export_self_keys(context: &Context, dir: &Path) -> Result<()> {
             },
         )
         .await?;
-    let self_addr = context.get_primary_self_addr().await?;
     for (id, private_key, is_default) in keys {
         let id = (is_default == 0).then_some(id);
 
@@ -680,14 +679,14 @@ async fn export_self_keys(context: &Context, dir: &Path) -> Result<()> {
             continue;
         };
 
-        if let Err(err) = export_key_to_asc_file(context, dir, &self_addr, id, &private_key).await {
+        if let Err(err) = export_key_to_asc_file(context, dir, id, &private_key).await {
             error!(context, "Failed to export private key: {:#}.", err);
             export_errors += 1;
         }
 
         let public_key = private_key.to_public_key();
 
-        if let Err(err) = export_key_to_asc_file(context, dir, &self_addr, id, &public_key).await {
+        if let Err(err) = export_key_to_asc_file(context, dir, id, &public_key).await {
             error!(context, "Failed to export public key: {:#}.", err);
             export_errors += 1;
         }
@@ -701,7 +700,6 @@ async fn export_self_keys(context: &Context, dir: &Path) -> Result<()> {
 async fn export_key_to_asc_file<T>(
     context: &Context,
     dir: &Path,
-    addr: &str,
     id: Option<i64>,
     key: &T,
 ) -> Result<String>
@@ -715,7 +713,7 @@ where
         };
         let id = id.map_or("default".into(), |i| i.to_string());
         let fp = key.dc_fingerprint().hex();
-        format!("{kind}-key-{addr}-{id}-{fp}.asc")
+        format!("{kind}-key-{id}-{fp}.asc")
     };
     let path = dir.join(&file_name);
     info!(context, "Exporting key to {}.", path.display());
@@ -802,10 +800,10 @@ mod tests {
         let context = TestContext::new().await;
         let key = alice_keypair().to_public_key();
         let blobdir = Path::new("$BLOBDIR");
-        let filename = export_key_to_asc_file(&context.ctx, blobdir, "a@b", None, &key)
+        let filename = export_key_to_asc_file(&context.ctx, blobdir, None, &key)
             .await
             .unwrap();
-        assert!(filename.starts_with("public-key-a@b-default-"));
+        assert!(filename.starts_with("public-key-default-"));
         assert!(filename.ends_with(".asc"));
         let blobdir = context.ctx.get_blobdir().to_str().unwrap();
         let filename = format!("{blobdir}/{filename}");
@@ -819,11 +817,11 @@ mod tests {
         let context = TestContext::new().await;
         let key = alice_keypair();
         let blobdir = Path::new("$BLOBDIR");
-        let filename = export_key_to_asc_file(&context.ctx, blobdir, "a@b", None, &key)
+        let filename = export_key_to_asc_file(&context.ctx, blobdir, None, &key)
             .await
             .unwrap();
         let fingerprint = filename
-            .strip_prefix("private-key-a@b-default-")
+            .strip_prefix("private-key-default-")
             .unwrap()
             .strip_suffix(".asc")
             .unwrap();
