@@ -1002,10 +1002,17 @@ pub async fn remove_unused_files(context: &Context) -> Result<()> {
         Param::ProfileImage,
     )
     .await?;
+
+    // Only non-special contacts are selected
+    // because special contacts don't store profile image in parameters.
+    // ContactId::DEVICE has a hardcoded profile image
+    // and ContactId::SELF has the avatar stored in Config::Selfavatar.
+    // If some special contact has a profile image set
+    // e.g due to a bug, the file can be safely deleted.
     maybe_add_from_param(
         &context.sql,
         &mut files_in_use,
-        "SELECT param FROM contacts;",
+        "SELECT param FROM contacts WHERE id > 9;",
         Param::ProfileImage,
     )
     .await?;
