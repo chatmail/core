@@ -2,7 +2,7 @@ use super::*;
 use crate::chat::forward_msgs;
 use crate::config::Config;
 use crate::contact::Contact;
-use crate::message::MessageState;
+use crate::message::{MessageState, markseen_msgs};
 use crate::receive_imf::receive_imf;
 use crate::test_utils;
 use crate::test_utils::{
@@ -117,20 +117,18 @@ async fn accept_call() -> Result<CallSetup> {
         bob2_call,
     } = setup_call().await?;
 
-    // Bob accepts the incoming call
+    // Bob accepts the incoming call.
+    // Accepting the call marks the message as noticed, but does not send MDN.
+    // Otherwise second device of Bob will assume Bob has opened the chat
+    // and mark all messages above the call as noticed.
     bob.accept_incoming_call(bob_call.id, ACCEPT_INFO.to_string())
         .await?;
-    assert_eq!(bob_call.id.get_state(&bob).await?, MessageState::InSeen);
-    // Bob sends an MDN to Alice.
+    assert_eq!(bob_call.id.get_state(&bob).await?, MessageState::InNoticed);
     assert_eq!(
-        bob.sql
-            .count(
-                "SELECT COUNT(*) FROM smtp_mdns WHERE msg_id=? AND from_id=?",
-                (bob_call.id, bob_call.from_id)
-            )
-            .await?,
-        1
+        bob.sql.count("SELECT COUNT(*) FROM smtp_mdns", ()).await?,
+        0
     );
+
     assert_text(&bob, bob_call.id, "Incoming video call").await?;
     bob.evtracker
         .get_matching(|evt| {
@@ -232,19 +230,14 @@ async fn test_accept_call_callee_ends() -> Result<()> {
         bob2_call,
         ..
     } = accept_call().await?;
-    assert_eq!(bob_call.id.get_state(&bob).await?, MessageState::InSeen);
+    assert_eq!(bob_call.id.get_state(&bob).await?, MessageState::InNoticed);
 
     // Bob has accepted the call and also ends it
     bob.end_call(bob_call.id).await?;
-    // Bob sends an MDN to Alice.
+    assert_eq!(bob_call.id.get_state(&bob).await?, MessageState::InNoticed);
     assert_eq!(
-        bob.sql
-            .count(
-                "SELECT COUNT(*) FROM smtp_mdns WHERE msg_id=? AND from_id=?",
-                (bob_call.id, bob_call.from_id)
-            )
-            .await?,
-        1
+        bob.sql.count("SELECT COUNT(*) FROM smtp_mdns", ()).await?,
+        0
     );
     assert_text(&bob, bob_call.id, "Incoming video call\n<1 minute").await?;
     bob.evtracker
@@ -372,16 +365,14 @@ async fn test_callee_rejects_call() -> Result<()> {
 
     // Bob has accepted Alice before, but does not want to talk with Alice
     bob.end_call(bob_call.id).await?;
-    assert_eq!(bob_call.id.get_state(&bob).await?, MessageState::InSeen);
-    // Bob sends an MDN to Alice.
+
+    // The call may be declined from a notification.
+    // Declining the call does not mean that Bob has seen the
+    // call message in the chat or opened the chat.
+    assert_eq!(bob_call.id.get_state(&bob).await?, MessageState::InNoticed);
     assert_eq!(
-        bob.sql
-            .count(
-                "SELECT COUNT(*) FROM smtp_mdns WHERE msg_id=? AND from_id=?",
-                (bob_call.id, bob_call.from_id)
-            )
-            .await?,
-        1
+        bob.sql.count("SELECT COUNT(*) FROM smtp_mdns", ()).await?,
+        0
     );
     assert_text(&bob, bob_call.id, "Declined call").await?;
     bob.evtracker
@@ -389,6 +380,8 @@ async fn test_callee_rejects_call() -> Result<()> {
         .await;
     let sent3 = bob.pop_sent_msg().await;
     assert_eq!(call_state(&bob, bob_call.id).await?, CallState::Declined);
+    let bob_call = Message::load_from_db(&bob, bob_call.id).await?;
+    assert_eq!(bob_call.state, MessageState::InNoticed);
 
     bob2.recv_msg_trash(&sent3).await;
     assert_text(&bob2, bob2_call.id, "Declined call").await?;
@@ -396,6 +389,8 @@ async fn test_callee_rejects_call() -> Result<()> {
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
     assert_eq!(call_state(&bob2, bob2_call.id).await?, CallState::Declined);
+    let bob2_call = Message::load_from_db(&bob2, bob2_call.id).await?;
+    assert_eq!(bob2_call.state, MessageState::InNoticed);
 
     // Alice receives decline message
     alice.recv_msg_trash(&sent3).await;
