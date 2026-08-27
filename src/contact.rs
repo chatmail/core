@@ -1639,7 +1639,10 @@ WHERE addr=?
             }
         } else if self.id == ContactId::DEVICE {
             Ok(Some(chat::get_device_icon(context).await?))
-        } else if show_fallback_icon && !self.id.is_special() && !self.is_key_contact() {
+        } else if self.id.is_special() {
+            // All special contacts are handled above.
+            Ok(None)
+        } else if show_fallback_icon && !self.is_key_contact() {
             Ok(Some(chat::get_unencrypted_icon(context).await?))
         } else if let Some(image_rel) = self.param.get(Param::ProfileImage)
             && !image_rel.is_empty()
