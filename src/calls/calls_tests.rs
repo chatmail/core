@@ -1,10 +1,14 @@
 use super::*;
 use crate::chat::forward_msgs;
 use crate::config::Config;
+use crate::contact::Contact;
 use crate::message::MessageState;
 use crate::receive_imf::receive_imf;
 use crate::test_utils;
-use crate::test_utils::{TestContext, TestContextManager};
+use crate::test_utils::{
+    ExpectedEvents, TestContext, TestContextManager, TimeShiftFalsePositiveNote,
+};
+use crate::tools::SystemTime;
 
 struct CallSetup {
     pub alice: TestContext,
@@ -445,6 +449,99 @@ async fn test_callee_sees_contact_request_call() -> Result<()> {
             .await?,
         1
     );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_get_call_from_blocked_chat_normal() -> Result<()> {
+    let stale = false;
+    test_get_call_from_blocked_chat(stale).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_get_call_from_blocked_chat_stale() -> Result<()> {
+    let stale = true;
+    test_get_call_from_blocked_chat(stale).await
+}
+
+async fn test_get_call_from_blocked_chat(stale: bool) -> Result<()> {
+    let _n = TimeShiftFalsePositiveNote;
+
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_chat = alice.create_chat(bob).await;
+    let bob_chat = bob.create_chat(alice).await;
+
+    assert!(!bob_chat.is_contact_request());
+    Contact::block(bob, bob.add_or_lookup_contact_id(alice).await).await?;
+
+    let alice_msg_id = alice
+        .place_outgoing_call(alice_chat.id, PLACE_INFO.to_string(), true)
+        .await?;
+    let sent_start_call = alice.pop_sent_msg().await;
+    alice.end_call(alice_msg_id).await?;
+    let sent_end_call = alice.pop_sent_msg().await;
+
+    if stale {
+        SystemTime::shift(Duration::from_secs(5 * 60));
+    }
+
+    let bob_call = bob.recv_msg(&sent_start_call).await;
+    assert_eq!(
+        call_state(bob, bob_call.id).await?,
+        if stale {
+            CallState::Missed
+        } else {
+            CallState::Alerting
+        }
+    );
+    // Messages from blocked contacts are immediately marked as "seen".
+    assert_eq!(bob_call.id.get_state(bob).await?, MessageState::InSeen);
+    bob.evtracker
+        .get_matching_ext(
+            bob,
+            ExpectedEvents {
+                expected: |evt| matches!(evt, EventType::MsgsChanged { .. }),
+                unexpected: |evt| {
+                    matches!(
+                        evt,
+                        EventType::IncomingMsg { .. }
+                            | EventType::IncomingCall { .. }
+                            | EventType::IncomingCallAccepted { .. }
+                            | EventType::OutgoingCallAccepted { .. }
+                    )
+                },
+            },
+        )
+        .await
+        .unwrap();
+
+    bob.recv_msg_trash(&sent_end_call).await;
+    assert_eq!(call_state(bob, bob_call.id).await?, CallState::Missed);
+    assert_eq!(bob_call.id.get_state(bob).await?, MessageState::InSeen);
+
+    bob.evtracker
+        .get_matching_ext(
+            bob,
+            ExpectedEvents {
+                expected: |evt| matches!(evt, EventType::CallEnded { .. }),
+                // No "missed call" notification or any other stuff.
+                unexpected: |evt| {
+                    matches!(
+                        evt,
+                        EventType::IncomingMsg { .. }
+                            | EventType::IncomingCall { .. }
+                            | EventType::IncomingCallAccepted { .. }
+                            | EventType::OutgoingCallAccepted { .. }
+                    )
+                },
+            },
+        )
+        .await
+        .unwrap();
+
     Ok(())
 }
 
