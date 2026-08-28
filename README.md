@@ -21,8 +21,8 @@ The following protocols are handled without requiring API users to know much abo
 
 - secure TLS setup with DNS caching and shadowsocks/proxy support 
 
-- robust [SMTP](https://github.com/chatmail/async-imap) 
-  and [IMAP](https://github.com/chatmail/async-smtp) handling
+- robust [SMTP](https://github.com/chatmail/async-smtp) 
+  and [IMAP](https://github.com/chatmail/async-imap) handling
 
 - safe and interoperable [MIME parsing](https://github.com/staktrace/mailparse) 
   and [MIME building](https://github.com/stalwartlabs/mail-builder). 
