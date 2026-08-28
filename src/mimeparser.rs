@@ -555,8 +555,7 @@ impl MimeMessage {
                 // but only if the mail was correctly signed. Probably it's ok to not require
                 // encryption here, but let's follow the standard.
                 let gossip_headers = mail.headers.get_all_values("Autocrypt-Gossip");
-                gossiped_keys =
-                    parse_gossip_headers(context, &from.addr, &recipients, gossip_headers).await?;
+                gossiped_keys = parse_gossip_headers(context, gossip_headers).await?;
             }
 
             if let Some(inner_from) = inner_from {
@@ -2135,12 +2134,8 @@ fn remove_header(
 /// Parses `Autocrypt-Gossip` headers from the email,
 /// saves the keys into the `public_keys` table,
 /// and returns them in a HashMap<address, public key>.
-///
-/// * `from`: The address which sent the message currently being parsed
 async fn parse_gossip_headers(
     context: &Context,
-    from: &str,
-    recipients: &[SingleInfo],
     gossip_headers: Vec<String>,
 ) -> Result<BTreeMap<String, GossipedKey>> {
     // XXX split the parsing from the modification part
@@ -2154,25 +2149,6 @@ async fn parse_gossip_headers(
                 continue;
             }
         };
-
-        if !recipients
-            .iter()
-            .any(|info| addr_cmp(&info.addr, &header.addr))
-        {
-            warn!(
-                context,
-                "Ignoring gossiped \"{}\" as the address is not in To/Cc list.", &header.addr,
-            );
-            continue;
-        }
-        if addr_cmp(from, &header.addr) {
-            // Non-standard, might not be necessary to have this check here
-            warn!(
-                context,
-                "Ignoring gossiped \"{}\" as it equals the From address", &header.addr,
-            );
-            continue;
-        }
 
         import_public_key(context, &header.public_key)
             .await
