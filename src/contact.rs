@@ -38,7 +38,9 @@ use crate::param::{Param, Params};
 use crate::pgp::{addresses_from_public_key, merge_openpgp_certificates};
 use crate::sync::{self, Sync::*};
 use crate::tools::{SystemTime, duration_to_str, get_abs_path, normalize_text, time, to_lowercase};
-use crate::{chat, chatlist_events, ensure_and_debug_assert_ne, stock_str};
+use crate::{
+    chat, chatlist_events, ensure_and_debug_assert, ensure_and_debug_assert_ne, stock_str,
+};
 
 /// Time during which a contact is considered as seen recently.
 const SEEN_RECENTLY_SECONDS: i64 = 600;
@@ -1912,32 +1914,25 @@ WHERE type=? AND id IN (
 /// The given profile image is expected to be already in the blob directory
 /// as profile images can be set only by receiving messages, this should be always the case, however.
 ///
-/// For contact SELF, the image is not saved in the contact-database but as Config::Selfavatar.
+/// Cannot be used to set own profile picture, set [`Config::Selfavatar`] instead.
 pub(crate) async fn set_profile_image(
     context: &Context,
     contact_id: ContactId,
     profile_image: &AvatarAction,
 ) -> Result<()> {
+    ensure_and_debug_assert!(
+        !contact_id.is_special(),
+        "Cannot set avatar for special contacts"
+    );
+
     let mut contact = Contact::get_by_id(context, contact_id).await?;
     let changed = match profile_image {
         AvatarAction::Change(profile_image) => {
-            if contact_id == ContactId::SELF {
-                context
-                    .set_config_ext(Nosync, Config::Selfavatar, Some(profile_image))
-                    .await?;
-            } else {
-                contact.param.set(Param::ProfileImage, profile_image);
-            }
+            contact.param.set(Param::ProfileImage, profile_image);
             true
         }
         AvatarAction::Delete => {
-            if contact_id == ContactId::SELF {
-                context
-                    .set_config_ext(Nosync, Config::Selfavatar, None)
-                    .await?;
-            } else {
-                contact.param.remove(Param::ProfileImage);
-            }
+            contact.param.remove(Param::ProfileImage);
             true
         }
     };
