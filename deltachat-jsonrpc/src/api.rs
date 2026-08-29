@@ -841,20 +841,19 @@ impl CommandApi {
         Ok(qr)
     }
 
-    /// Get QR code (text and SVG) that will offer a Setup-Contact or Verified-Group invitation.
+    /// Get QR code (text and SVG) that will offer a SecureJoin invitation.
     /// The QR code is compatible to the OPENPGP4FPR format
     /// so that a basic fingerprint comparison also works e.g. with OpenKeychain.
     ///
     /// The scanning device will pass the scanned content to `checkQr()` then;
     /// if `checkQr()` returns `askVerifyContact` or `askVerifyGroup`
-    /// an out-of-band-verification can be joined using `secure_join()`
+    /// the securejoin protocol can be started using `secure_join()`
     ///
     /// @deprecated as of 2026-03; use create_qr_svg(get_chat_securejoin_qr_code()) instead.
     ///
     /// chat_id: If set to a group-chat-id,
-    ///     the Verified-Group-Invite protocol is offered in the QR code;
-    ///     works for protected groups as well as for normal groups.
-    ///     If not set, the Setup-Contact protocol is offered in the QR code.
+    ///     the SecureJoin QR code for the group is returned.
+    ///     If not set, the setup contact QR code is returned.
     ///     See https://securejoin.delta.chat/ for details about both protocols.
     ///
     /// return format: `[code, svg]`
@@ -870,7 +869,7 @@ impl CommandApi {
         Ok((qr, svg))
     }
 
-    /// Continue a Setup-Contact or Verified-Group-Invite protocol
+    /// Continue the SecureJoin protocol
     /// started on another device with `get_chat_securejoin_qr_code_svg()`.
     /// This function is typically called when `check_qr()` returns
     /// type=AskVerifyContact or type=AskVerifyGroup.
@@ -952,8 +951,6 @@ impl CommandApi {
     ///
     /// If the group is already _promoted_ (any message was sent to the group),
     /// all group members are informed by a special status message that is sent automatically by this function.
-    ///
-    /// If the group has group protection enabled, only verified contacts can be added to the group.
     ///
     /// Sends out #DC_EVENT_CHAT_MODIFIED and #DC_EVENT_MSGS_CHANGED if a status message was sent.
     async fn add_contact_to_chat(
@@ -1776,7 +1773,7 @@ impl CommandApi {
 
     /// Get encryption info for a contact.
     /// Get a multi-line encryption info, containing your fingerprint and the
-    /// fingerprint of the contact, used e.g. to compare the fingerprints for a simple out-of-band verification.
+    /// fingerprint of the contact, used e.g. to compare the fingerprints out-of-band.
     async fn get_contact_encryption_info(
         &self,
         account_id: u32,
