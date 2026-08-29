@@ -43,13 +43,6 @@ pub struct Aheader {
     pub addr: String,
     pub public_key: SignedPublicKey,
     pub prefer_encrypt: EncryptPreference,
-
-    /// Whether `_verified` attribute is present.
-    ///
-    /// `_verified` attribute is an extension to `Autocrypt-Gossip`
-    /// header that is used to tell that the sender
-    /// marked this key as verified.
-    pub verified: bool,
 }
 
 impl fmt::Display for Aheader {
@@ -58,12 +51,6 @@ impl fmt::Display for Aheader {
         if self.prefer_encrypt == EncryptPreference::Mutual {
             write!(fmt, " prefer-encrypt=mutual;")?;
         }
-        // TODO After we reset all existing verifications,
-        // we want to start sending the _verified attribute
-        // if self.verified {
-        //     write!(fmt, " _verified=1;")?;
-        // }
-
         // adds a whitespace every 78 characters, this allows
         // email crate to wrap the lines according to RFC 5322
         // (which may insert a linebreak before every whitespace)
@@ -114,8 +101,6 @@ impl Aheader {
             .and_then(|raw| EncryptPreference::new(&raw).ok())
             .unwrap_or_default();
 
-        let verified = attributes.remove("_verified").is_some();
-
         // Autocrypt-Level0: unknown attributes starting with an underscore can be safely ignored
         // Autocrypt-Level0: unknown attribute, treat the header as invalid
         if attributes.keys().any(|k| !k.starts_with('_')) {
@@ -126,7 +111,6 @@ impl Aheader {
             addr,
             public_key,
             prefer_encrypt,
-            verified,
         })
     }
 }
@@ -145,7 +129,6 @@ mod tests {
 
         assert_eq!(h.addr, "me@mail.com");
         assert_eq!(h.prefer_encrypt, EncryptPreference::Mutual);
-        assert_eq!(h.verified, false);
         Ok(())
     }
 
@@ -243,7 +226,6 @@ mod tests {
                     addr: "test@example.com".to_string(),
                     public_key: SignedPublicKey::from_base64(RAWKEY).unwrap(),
                     prefer_encrypt: EncryptPreference::Mutual,
-                    verified: false
                 }
             )
             .contains("prefer-encrypt=mutual;")
@@ -259,7 +241,6 @@ mod tests {
                     addr: "test@example.com".to_string(),
                     public_key: SignedPublicKey::from_base64(RAWKEY).unwrap(),
                     prefer_encrypt: EncryptPreference::NoPreference,
-                    verified: false
                 }
             )
             .contains("prefer-encrypt")
@@ -273,24 +254,9 @@ mod tests {
                     addr: "TeSt@eXaMpLe.cOm".to_string(),
                     public_key: SignedPublicKey::from_base64(RAWKEY).unwrap(),
                     prefer_encrypt: EncryptPreference::Mutual,
-                    verified: false
                 }
             )
             .contains("test@example.com")
-        );
-
-        // We don't send the _verified header yet:
-        assert!(
-            !format!(
-                "{}",
-                Aheader {
-                    addr: "test@example.com".to_string(),
-                    public_key: SignedPublicKey::from_base64(RAWKEY).unwrap(),
-                    prefer_encrypt: EncryptPreference::NoPreference,
-                    verified: true
-                }
-            )
-            .contains("_verified")
         );
     }
 }

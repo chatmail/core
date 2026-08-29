@@ -214,7 +214,6 @@ pub enum EventType {
     },
 
     /// Chat changed.  The name or the image of a chat group was changed or members were added or removed.
-    /// Or the verify state of a chat has changed.
     /// See dc_set_chat_name(), dc_set_chat_profile_image(), dc_add_contact_to_chat()
     /// and dc_remove_contact_from_chat().
     ///
@@ -302,8 +301,7 @@ pub enum EventType {
         contact_id: ContactId,
 
         /// Progress as:
-        /// 400=vg-/vc-request-with-auth sent, typically shown as "alice@addr verified, introducing myself."
-        /// (Bob has verified alice and waits until Alice does the same for him)
+        /// 400=vg-/vc-request-with-auth sent, typically shown as "introducing myself."
         /// 1000=vg-member-added/vc-contact-confirm received
         progress: u16,
     },

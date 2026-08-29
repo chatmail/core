@@ -72,8 +72,7 @@ CREATE TABLE contacts (
     -- empty string for "address-contacts".
     fingerprint TEXT NOT NULL DEFAULT '',
 
-    -- ID of the contact that has "introduced" us to this contact
-    -- by sharing the key with a verified attribute or in a "verified" chat.
+    -- Unused. Was the ID of the contact that introduced this contact's key.
     verifier INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX contacts_index1 ON contacts (name COLLATE NOCASE);
@@ -131,9 +130,7 @@ CREATE TABLE chats (
     -- 0 means the timer is disabled.
     ephemeral_timer INTEGER,
 
-    -- Deprecated, but still used to send Chat-Verified headers
-    -- for existing protected chats.
-    -- All new chats are created as "not protected".
+    -- Unused. Was 1 for protected chats.
     protected INTEGER DEFAULT 0,
 
     gossiped_timestamp INTEGER DEFAULT 0, -- deprecated 2025-04-08, replaced with gossip_timestamp table
@@ -693,13 +690,13 @@ CREATE TABLE stats_securejoin_uipaths(
 ) STRICT;
 CREATE TABLE stats_securejoin_invites(
     already_existed INTEGER NOT NULL,
-    already_verified INTEGER NOT NULL,
+    already_verified INTEGER NOT NULL, -- unused, always 0
     type TEXT NOT NULL
 ) STRICT;
 CREATE TABLE stats_msgs(
     chattype INTEGER PRIMARY KEY,
-    verified INTEGER NOT NULL DEFAULT 0,
-    unverified_encrypted INTEGER NOT NULL DEFAULT 0,
+    verified INTEGER NOT NULL DEFAULT 0, -- unused, always 0
+    unverified_encrypted INTEGER NOT NULL DEFAULT 0, -- counts all encrypted messages
     unencrypted INTEGER NOT NULL DEFAULT 0,
     only_to_self INTEGER NOT NULL DEFAULT 0,
     last_counted_msg_id INTEGER NOT NULL DEFAULT 0
