@@ -3759,25 +3759,6 @@ async fn test_broadcast_joining_golden() -> Result<()> {
         )
         .await;
 
-    assert_eq!(
-        alice_bob_contact
-            .get_verifier_id(alice)
-            .await?
-            .unwrap()
-            .unwrap(),
-        ContactId::SELF
-    );
-
-    let bob_alice_contact = bob.add_or_lookup_contact_no_key(alice).await;
-    assert_eq!(
-        bob_alice_contact
-            .get_verifier_id(bob)
-            .await?
-            .unwrap()
-            .unwrap(),
-        ContactId::SELF
-    );
-
     Ok(())
 }
 
@@ -4060,10 +4041,9 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
     bob1.recv_msg(&member_added).await;
 
     // The single chat should not be visible to the user on any of the devices.
-    // The contact should be marked as verified.
-    check_single_chat_is_hidden_and_contact_is_verified(alice, bob0).await;
-    check_single_chat_is_hidden_and_contact_is_verified(bob0, alice).await;
-    check_single_chat_is_hidden_and_contact_is_verified(bob1, alice).await;
+    check_single_chat_is_hidden(alice, bob0).await;
+    check_single_chat_is_hidden(bob0, alice).await;
+    check_single_chat_is_hidden(bob1, alice).await;
 
     tcm.section("Alice sends first message to broadcast.");
     let sent_msg = alice.send_text(alice_chat_id, "Hello!").await;
@@ -4090,10 +4070,7 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
     Ok(())
 }
 
-async fn check_single_chat_is_hidden_and_contact_is_verified(
-    t: &TestContext,
-    contact: &TestContext,
-) {
+async fn check_single_chat_is_hidden(t: &TestContext, contact: &TestContext) {
     let contact = t.add_or_lookup_contact_no_key(contact).await;
     if let Some(single_chat) = ChatIdBlocked::lookup_by_contact(t, contact.id)
         .await
@@ -4101,7 +4078,6 @@ async fn check_single_chat_is_hidden_and_contact_is_verified(
     {
         assert_eq!(single_chat.blocked, Blocked::Yes);
     }
-    assert!(contact.is_verified(t).await.unwrap());
 }
 
 /// Test that only the owner of the broadcast channel

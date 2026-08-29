@@ -30,9 +30,7 @@ use crate::chat::{
 use crate::chatlist::Chatlist;
 use crate::config::Config;
 use crate::constants::{Blocked, Chattype, DC_GCL_NO_SPECIALS};
-use crate::contact::{
-    Contact, ContactId, Modifier, Origin, import_vcard, make_vcard, mark_contact_id_as_verified,
-};
+use crate::contact::{Contact, ContactId, Modifier, Origin, import_vcard, make_vcard};
 use crate::context::Context;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::key::{self, DcKey, self_fingerprint};
@@ -942,27 +940,6 @@ ORDER BY id"
         contact_id
     }
 
-    /// Returns a single [`Chat`] with another account address-contact.
-    /// Panics if it doesn't exist.
-    /// May return a blocked chat.
-    ///
-    /// This first creates a contact using the configured details on the other account, then
-    /// gets the single chat with this contact.
-    pub async fn get_email_chat(&self, other: &TestContext) -> Chat {
-        let contact = self.add_or_lookup_address_contact(other).await;
-
-        let chat_id = ChatIdBlocked::lookup_by_contact(&self.ctx, contact.id)
-            .await
-            .unwrap()
-            .map(|chat_id_blocked| chat_id_blocked.id)
-            .expect(
-                "There is no chat with this contact. \
-                Hint: Use create_email_chat() instead of get_email_chat() if this is expected.",
-            );
-
-        Chat::load_from_db(&self.ctx, chat_id).await.unwrap()
-    }
-
     /// Returns a single [`Chat`] with another account key-contact.
     /// Panics if the chat does not exist.
     ///
@@ -1207,18 +1184,6 @@ ORDER BY id"
         chat_id
     }
 
-    /// Set the legacy `protected` column in the chats table to 1,
-    /// because for now, only these chats that were once protected can be used
-    /// to gossip verifications.
-    // TODO remove the next statement
-    // when we send the _verified header for all verified contacts
-    pub(crate) async fn set_chat_protected(self: &TestContext, chat_id: chat::ChatId) {
-        self.sql
-            .execute("UPDATE chats SET protected=1 WHERE id=?", (chat_id,))
-            .await
-            .unwrap();
-    }
-
     /// Allow reception of unencrypted messages.
     pub async fn allow_unencrypted(&self) -> Result<()> {
         self.set_config_bool(Config::ForceEncryption, false).await?;
@@ -1263,7 +1228,6 @@ pub async fn encrypt_raw_message(
         addr: context.get_primary_self_addr().await?,
         public_key: public_key.clone(),
         prefer_encrypt: EncryptPreference::Mutual,
-        verified: false,
     };
 
     let mut encryption_keyring = vec![public_key.clone()];
@@ -1760,14 +1724,6 @@ pub(crate) async fn get_chat_msg(
         panic!("Wrong item type");
     };
     Message::load_from_db(&t.ctx, msg_id).await.unwrap()
-}
-
-/// Saves the other account's public key as verified
-pub(crate) async fn mark_as_verified(this: &TestContext, other: &TestContext) {
-    let contact_id = this.add_or_lookup_contact_id(other).await;
-    mark_contact_id_as_verified(this, contact_id, Some(ContactId::SELF))
-        .await
-        .unwrap();
 }
 
 /// Pops a sync message from alice0 and receives it on alice1. Should be used after an action on

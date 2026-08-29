@@ -436,7 +436,6 @@ pub(crate) fn render_queued_mail(
             addr: from_addr,
             public_key: public_key.clone(),
             prefer_encrypt: EncryptPreference::Mutual,
-            verified: false,
         };
         let autocrypt_header = mail_builder::headers::raw::Raw::new(aheader.to_string());
         add_header(
@@ -1563,17 +1562,6 @@ impl MimeFactory {
                                             .is_none_or(|ts| now >= ts + gossip_period || now < ts)
                                 };
 
-                            let verifier_id: Option<u32> = context
-                                .sql
-                                .query_get_value(
-                                    "SELECT verifier FROM contacts WHERE fingerprint=?",
-                                    (&fingerprint,),
-                                )
-                                .await?;
-
-                            let is_verified =
-                                verifier_id.is_some_and(|verifier_id| verifier_id != 0);
-
                             if !should_do_gossip {
                                 continue;
                             }
@@ -1584,7 +1572,6 @@ impl MimeFactory {
                                 // Autocrypt 1.1.0 specification says that
                                 // `prefer-encrypt` attribute SHOULD NOT be included.
                                 prefer_encrypt: EncryptPreference::NoPreference,
-                                verified: is_verified,
                             }
                             .to_string();
 
@@ -1727,43 +1714,6 @@ impl MimeFactory {
         let msg = msg.clone();
         let command = msg.param.get_cmd();
         let mut placeholdertext = None;
-
-        let send_verified_headers = match chat.typ {
-            Chattype::Single => true,
-            Chattype::Group => true,
-            // Mailinglists and broadcast channels can actually never be verified:
-            Chattype::Mailinglist => false,
-            Chattype::OutBroadcast | Chattype::InBroadcast => false,
-        };
-
-        if send_verified_headers {
-            let was_protected: bool = context
-                .sql
-                .query_get_value("SELECT protected FROM chats WHERE id=?", (chat.id,))
-                .await?
-                .unwrap_or_default();
-
-            if was_protected {
-                let unverified_member_exists = context
-                    .sql
-                    .exists(
-                        "SELECT COUNT(*)
-                        FROM contacts, chats_contacts
-                        WHERE chats_contacts.contact_id=contacts.id AND chats_contacts.chat_id=?
-                        AND contacts.id>9
-                        AND contacts.verifier=0",
-                        (chat.id,),
-                    )
-                    .await?;
-
-                if !unverified_member_exists {
-                    headers.push((
-                        "Chat-Verified",
-                        mail_builder::headers::raw::Raw::new("1").into(),
-                    ));
-                }
-            }
-        }
 
         if chat.typ == Chattype::Group {
             // Send group ID unless it is an ad hoc group that has no ID.

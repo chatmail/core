@@ -1172,27 +1172,6 @@ async fn test_lookup_id_by_addr_recent_accepted() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_verified_by_none() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-    let bob = tcm.bob().await;
-
-    let contact_id = Contact::create(&alice, "Bob", "bob@example.net").await?;
-    let contact = Contact::get_by_id(&alice, contact_id).await?;
-    assert!(contact.get_verifier_id(&alice).await?.is_none());
-
-    // Receive a message from Bob to save the public key.
-    let chat = bob.create_chat(&alice).await;
-    let sent_msg = bob.send_text(chat.id, "moin").await;
-    alice.recv_msg(&sent_msg).await;
-
-    let contact = Contact::get_by_id(&alice, contact_id).await?;
-    assert!(contact.get_verifier_id(&alice).await?.is_none());
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_sync_create() -> Result<()> {
     let alice0 = &TestContext::new_alice().await;
     let alice1 = &TestContext::new_alice().await;
@@ -1391,13 +1370,11 @@ async fn test_import_vcard_key_change() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_self_is_verified() -> Result<()> {
+async fn test_self_is_key_contact() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
 
     let contact = Contact::get_by_id(&alice, ContactId::SELF).await?;
-    assert_eq!(contact.is_verified(&alice).await?, true);
-    assert!(contact.get_verifier_id(&alice).await?.is_none());
     assert!(contact.is_key_contact());
 
     Ok(())

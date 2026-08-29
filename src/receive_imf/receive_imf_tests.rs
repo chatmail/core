@@ -19,9 +19,7 @@ use crate::mimefactory;
 use crate::securejoin::get_securejoin_qr;
 use crate::smtp;
 use crate::test_utils;
-use crate::test_utils::{
-    TestContext, TestContextManager, alice_keypair, get_chat_msg, mark_as_verified,
-};
+use crate::test_utils::{TestContext, TestContextManager, alice_keypair, get_chat_msg};
 use crate::tools::{SystemTime, time};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -3166,13 +3164,11 @@ async fn test_auto_accept_group_for_bots() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_auto_accept_protected_group_for_bots() -> Result<()> {
+async fn test_auto_accept_encrypted_group_for_bots() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
     bob.set_config(Config::Bot, Some("1")).await.unwrap();
-    mark_as_verified(alice, bob).await;
-    mark_as_verified(bob, alice).await;
     let group_id = alice.create_group_with_members("Group", &[bob]).await;
     let sent = alice.send_text(group_id, "Hello!").await;
     let msg = bob.recv_msg(&sent).await;
@@ -3182,21 +3178,13 @@ async fn test_auto_accept_protected_group_for_bots() -> Result<()> {
 }
 
 /// Regression test for a bug where receive_imf() failed
-/// if the sender of a verification-gossiping message
+/// if the sender of a gossiping message
 /// also put itself into the To header.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_verification_gossip() -> Result<()> {
+async fn test_gossip_sender_in_to_header() -> Result<()> {
     let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
-    let fiona = &tcm.fiona().await;
 
-    mark_as_verified(alice, bob).await;
-    mark_as_verified(bob, alice).await;
-
-    // This is message sent by Alice with verified encryption
-    // that gossips Fiona's verification,
-    // and for some reason, Alice also put herself into the To: header.
     let imf_raw =
         include_bytes!("../../test-data/message/verification-gossip-also-sent-to-from.eml");
 
@@ -3204,12 +3192,6 @@ async fn test_verification_gossip() -> Result<()> {
     let msg = receive_imf(bob, imf_raw, false).await?.unwrap();
     let msg = Message::load_from_db(bob, msg.msg_ids[0]).await?;
     assert_eq!(msg.text, "Hello!");
-    assert!(
-        bob.add_or_lookup_contact(fiona)
-            .await
-            .is_verified(bob)
-            .await?
-    );
 
     Ok(())
 }
@@ -4628,11 +4610,10 @@ async fn test_pre_msg_group_consistency() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_protected_group_add_remove_member_missing_key() -> Result<()> {
+async fn test_group_add_remove_member_missing_key() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
-    mark_as_verified(alice, bob).await;
     let group_id = create_group(alice, "Group").await?;
     let alice_bob_id = alice.add_or_lookup_contact(bob).await.id;
     add_contact_to_chat(alice, group_id, alice_bob_id).await?;
@@ -4640,7 +4621,6 @@ async fn test_protected_group_add_remove_member_missing_key() -> Result<()> {
     alice.sql.execute("DELETE FROM public_keys", ()).await?;
 
     let fiona = &tcm.fiona().await;
-    mark_as_verified(alice, fiona).await;
     let alice_fiona_id = alice.add_or_lookup_contact(fiona).await.id;
     add_contact_to_chat(alice, group_id, alice_fiona_id).await?;
 
@@ -5133,7 +5113,7 @@ async fn test_rename_chat_after_creating_invite() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_unverified_member_msg() -> Result<()> {
+async fn test_member_msg_downloaded() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
@@ -5148,94 +5128,9 @@ async fn test_unverified_member_msg() -> Result<()> {
     let fiona_chat_id = fiona.get_last_msg().await.chat_id;
     let fiona_sent_msg = fiona.send_text(fiona_chat_id, "Hi").await;
 
-    // The message is by non-verified member,
-    // but the checks have been removed
-    // and the message should be downloaded as usual.
     let bob_msg = bob.recv_msg(&fiona_sent_msg).await;
     assert_eq!(bob_msg.download_state, DownloadState::Done);
     assert_eq!(bob_msg.text, "Hi");
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_dont_reverify_by_self_on_outgoing_msg() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let a0 = &tcm.alice().await;
-    let a1 = &tcm.alice().await;
-    let bob = &tcm.bob().await;
-    let fiona = &tcm.fiona().await;
-
-    let bob_chat_id = chat::create_group(bob, "Group").await?;
-    bob.set_chat_protected(bob_chat_id).await;
-    let qr = get_securejoin_qr(bob, Some(bob_chat_id)).await?;
-    tcm.exec_securejoin_qr(fiona, bob, &qr).await;
-    tcm.exec_securejoin_qr(a0, bob, &qr).await;
-    tcm.exec_securejoin_qr(a1, bob, &qr).await;
-
-    // Shift time by one week to trigger gossip.
-    SystemTime::shift(Duration::from_secs(7 * 24 * 3600));
-
-    let a0_chat_id = a0.get_last_msg().await.chat_id;
-    let a0_sent_msg = a0.send_text(a0_chat_id, "Hi").await;
-    a1.recv_msg(&a0_sent_msg).await;
-    let a1_bob_id = a1.add_or_lookup_contact_id(bob).await;
-    let a1_fiona = a1.add_or_lookup_contact(fiona).await;
-    assert_eq!(
-        a1_fiona.get_verifier_id(a1).await?.unwrap().unwrap(),
-        a1_bob_id
-    );
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_dont_verify_by_verified_by_unknown() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let a0 = &tcm.alice().await;
-    let a1 = &tcm.alice().await;
-    let bob = &tcm.bob().await;
-    let fiona = &tcm.fiona().await;
-
-    let bob_chat_id = chat::create_group(bob, "Group").await?;
-    bob.set_chat_protected(bob_chat_id).await;
-    let qr = get_securejoin_qr(bob, Some(bob_chat_id)).await?;
-    tcm.exec_securejoin_qr(a0, bob, &qr).await;
-
-    let qr = get_securejoin_qr(bob, None).await?;
-    tcm.exec_securejoin_qr(fiona, bob, &qr).await;
-
-    // Bob verifies Fiona for Alice#0.
-    let bob_fiona_id = bob.add_or_lookup_contact_id(fiona).await;
-    add_contact_to_chat(bob, bob_chat_id, bob_fiona_id).await?;
-    let sent_msg = bob.pop_sent_msg().await;
-    a0.recv_msg(&sent_msg).await;
-    fiona.recv_msg(&sent_msg).await;
-    let a0_bob = a0.add_or_lookup_contact(bob).await;
-    let a0_fiona = a0.add_or_lookup_contact(fiona).await;
-    assert_eq!(a0_fiona.get_verifier_id(a0).await?, Some(Some(a0_bob.id)));
-
-    let chat_id = a0.create_group_with_members("group", &[fiona]).await;
-    a0.set_chat_protected(chat_id).await;
-    a1.recv_msg(&a0.send_text(chat_id, "Hi").await).await;
-    let a1_fiona = a1.add_or_lookup_contact(fiona).await;
-    assert_eq!(a1_fiona.get_verifier_id(a1).await?, Some(None));
-
-    let some_time_to_regossip = Duration::from_secs(20 * 24 * 3600);
-    SystemTime::shift(some_time_to_regossip);
-    let fiona_chat_id = fiona.get_last_msg().await.chat_id;
-    fiona.set_chat_protected(fiona_chat_id).await;
-    a1.recv_msg(&fiona.send_text(fiona_chat_id, "Hi").await)
-        .await;
-    let a1_bob = a1.add_or_lookup_contact(bob).await;
-    // There was a bug that Bob is verified by Fiona on Alice's other device.
-    assert_eq!(a1_bob.get_verifier_id(a1).await?, Some(None));
-
-    SystemTime::shift(some_time_to_regossip);
-    tcm.execute_securejoin(a1, fiona).await;
-    a1.recv_msg(&fiona.send_text(fiona_chat_id, "Hi").await)
-        .await;
-    // But now Bob's verifier id must be updated because Fiona is verified by a known verifier
-    // (moreover, directly), so Alice has reverse verification chains on her devices.
-    assert_eq!(a1_bob.get_verifier_id(a1).await?, Some(Some(a1_fiona.id)));
     Ok(())
 }
 

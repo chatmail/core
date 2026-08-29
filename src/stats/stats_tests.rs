@@ -30,9 +30,6 @@ async fn test_maybe_send_stats() -> Result<()> {
     assert!(chat.is_encrypted(alice).await?);
     let contacts = get_chat_contacts(alice, chat_id).await?;
     assert_eq!(contacts.len(), 1);
-    let contact = Contact::get_by_id(alice, contacts[0]).await?;
-    assert!(contact.is_verified(alice).await?);
-
     let msg = get_chat_msg(alice, chat_id, 1, 2).await;
     assert_eq!(msg.get_filename().unwrap(), "statistics.txt");
 
@@ -113,10 +110,9 @@ async fn test_stats_one_contact() -> Result<()> {
         contact_info.get("direct_chat").unwrap(),
         &serde_json::Value::Bool(true)
     );
-    assert!(contact_info.get("transitive_chain").is_none(),);
     assert_eq!(
-        contact_info.get("verified").unwrap(),
-        &serde_json::Value::String("Opportunistic".to_string())
+        contact_info.get("encrypted").unwrap(),
+        &serde_json::Value::Bool(true)
     );
     assert_eq!(
         contact_info.get("new").unwrap(),
@@ -168,25 +164,16 @@ async fn test_message_stats() -> Result<()> {
     check_stats(&update_get_stats(alice).await, &expected);
 
     alice.send_text(encrypted_chat.id, "foo").await;
-    expected
-        .get_mut(&Chattype::Single)
-        .unwrap()
-        .unverified_encrypted += 1;
+    expected.get_mut(&Chattype::Single).unwrap().encrypted += 1;
     check_stats(&update_get_stats(alice).await, &expected);
 
     alice.send_text(encrypted_chat.id, "foo").await;
-    expected
-        .get_mut(&Chattype::Single)
-        .unwrap()
-        .unverified_encrypted += 1;
+    expected.get_mut(&Chattype::Single).unwrap().encrypted += 1;
     check_stats(&update_get_stats(alice).await, &expected);
 
     let group = alice.create_group_with_members("Pizza", &[bob]).await;
     alice.send_text(group, "foo").await;
-    expected
-        .get_mut(&Chattype::Group)
-        .unwrap()
-        .unverified_encrypted += 1;
+    expected.get_mut(&Chattype::Group).unwrap().encrypted += 1;
     check_stats(&update_get_stats(alice).await, &expected);
 
     tcm.execute_securejoin(alice, bob).await;
@@ -208,7 +195,7 @@ async fn test_message_stats() -> Result<()> {
 
     let group = alice.create_group_with_members("Pizza 2", &[bob]).await;
     alice.send_text(group, "foo").await;
-    expected.get_mut(&Chattype::Group).unwrap().verified += 1;
+    expected.get_mut(&Chattype::Group).unwrap().encrypted += 1;
     check_stats(&update_get_stats(alice).await, &expected);
 
     let empty_broadcast = create_broadcast(alice, "Channel".to_string()).await?;
@@ -245,13 +232,13 @@ async fn test_message_stats() -> Result<()> {
 
     SystemTime::shift(Duration::from_secs(8 * 24 * 3600));
     tcm.send_recv(alice, bob, "Hi").await;
-    expected.get_mut(&Chattype::Single).unwrap().verified += 1;
+    expected.get_mut(&Chattype::Single).unwrap().encrypted += 1;
     update_message_stats(alice).await?;
     update_message_stats(alice).await?;
     tcm.send_recv(alice, bob, "Hi").await;
-    expected.get_mut(&Chattype::Single).unwrap().verified += 1;
+    expected.get_mut(&Chattype::Single).unwrap().encrypted += 1;
     tcm.send_recv(alice, bob, "Hi").await;
-    expected.get_mut(&Chattype::Single).unwrap().verified += 1;
+    expected.get_mut(&Chattype::Single).unwrap().encrypted += 1;
 
     check_stats(&send_and_read_stats(alice).await, &expected);
     alice.assert_warn("Missing securejoin source").await;
@@ -428,7 +415,6 @@ async fn test_stats_securejoin_invites() -> Result<()> {
     tcm.exec_securejoin_qr(alice, bob, &qr).await;
     expected.push(JoinedInvite {
         already_existed: false,
-        already_verified: false,
         typ: "contact".to_string(),
     });
     check_stats(alice, &expected).await;
@@ -437,7 +423,6 @@ async fn test_stats_securejoin_invites() -> Result<()> {
     tcm.exec_securejoin_qr(alice, bob, &qr).await;
     expected.push(JoinedInvite {
         already_existed: true,
-        already_verified: true,
         typ: "contact".to_string(),
     });
     check_stats(alice, &expected).await;
@@ -449,7 +434,6 @@ async fn test_stats_securejoin_invites() -> Result<()> {
     tcm.exec_securejoin_qr(alice, bob, &qr).await;
     expected.push(JoinedInvite {
         already_existed: true,
-        already_verified: true,
         typ: "group".to_string(),
     });
     check_stats(alice, &expected).await;
@@ -463,7 +447,6 @@ async fn test_stats_securejoin_invites() -> Result<()> {
     tcm.exec_securejoin_qr(alice, bob, &qr).await;
     expected.push(JoinedInvite {
         already_existed: true,
-        already_verified: false,
         typ: "group".to_string(),
     });
     check_stats(alice, &expected).await;

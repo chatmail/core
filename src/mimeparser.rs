@@ -34,17 +34,6 @@ use crate::sync::SyncItems;
 use crate::tools::{get_filemeta, parse_receive_headers, time, truncate_msg_text, validate_id};
 use crate::{chatlist_events, location, tools};
 
-/// Public key extracted from `Autocrypt-Gossip`
-/// header with associated information.
-#[derive(Debug)]
-pub struct GossipedKey {
-    /// Public key extracted from `keydata` attribute.
-    pub public_key: SignedPublicKey,
-
-    /// True if `Autocrypt-Gossip` has a `_verified` attribute.
-    pub verified: bool,
-}
-
 /// A parsed MIME message.
 ///
 /// This represents the relevant information of a parsed MIME message
@@ -99,7 +88,7 @@ pub(crate) struct MimeMessage {
 
     /// The addresses for which there was a gossip header
     /// and their respective gossiped keys.
-    pub gossiped_keys: BTreeMap<String, GossipedKey>,
+    pub gossiped_keys: BTreeMap<String, SignedPublicKey>,
 
     /// Fingerprint of the key in the Autocrypt header.
     ///
@@ -1048,7 +1037,7 @@ impl MimeMessage {
         };
         self.gossiped_keys
             .values()
-            .map(|gossiped_key| gossiped_key.public_key.dc_fingerprint().hex())
+            .map(|gossiped_key| gossiped_key.dc_fingerprint().hex())
             .chain(sender_fingerprint)
             .collect()
     }
@@ -2118,9 +2107,9 @@ fn remove_header(
 async fn parse_gossip_headers(
     context: &Context,
     gossip_headers: Vec<String>,
-) -> Result<BTreeMap<String, GossipedKey>> {
+) -> Result<BTreeMap<String, SignedPublicKey>> {
     // XXX split the parsing from the modification part
-    let mut gossiped_keys: BTreeMap<String, GossipedKey> = Default::default();
+    let mut gossiped_keys: BTreeMap<String, SignedPublicKey> = Default::default();
 
     for value in &gossip_headers {
         let header = match Aheader::from_str(value) {
@@ -2135,12 +2124,7 @@ async fn parse_gossip_headers(
             .await
             .context("Failed to import Autocrypt-Gossip key")?;
 
-        let gossiped_key = GossipedKey {
-            public_key: header.public_key,
-
-            verified: header.verified,
-        };
-        gossiped_keys.insert(header.addr.to_lowercase(), gossiped_key);
+        gossiped_keys.insert(header.addr.to_lowercase(), header.public_key);
     }
 
     Ok(gossiped_keys)
