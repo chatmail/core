@@ -23,7 +23,7 @@
 //!    (scoped per WebXDC app instance/message-id). The other peers can then join the gossip with `joinRealtimeChannel().setListener()`
 //!    and `joinRealtimeChannel().send()` just like the other peers.
 
-use anyhow::{Context as _, Result, anyhow, bail};
+use anyhow::{Context as _, Result, anyhow, bail, ensure};
 use data_encoding::BASE32_NOPAD;
 use futures_lite::StreamExt;
 use iroh::{Endpoint, NodeAddr, NodeId, PublicKey, RelayMode, RelayUrl, SecretKey};
@@ -112,6 +112,10 @@ impl Iroh {
         // after we check that it does not exist and before we create a new one.
         // Otherwise we would receive every message twice or more times.
         let mut iroh_channels = self.iroh_channels.write().await;
+        ensure!(
+            !ctx.left_topics.lock().contains(&topic),
+            "Realtime channel for {msg_id} was left"
+        );
 
         if iroh_channels.contains_key(&topic) {
             return Ok(None);
@@ -568,6 +572,9 @@ pub async fn send_webxdc_realtime_advertisement(
         return Ok(None);
     }
 
+    if let Some(topic) = get_iroh_topic_for_msg(ctx, msg_id).await? {
+        ctx.left_topics.lock().remove(&topic);
+    }
     let iroh = ctx.get_active_or_init_iroh().await?;
     let conn = iroh.join_and_subscribe_gossip(ctx, msg_id).await?;
     if iroh.working_relay_url.is_none() {
@@ -605,10 +612,11 @@ pub async fn send_webxdc_realtime_data(ctx: &Context, msg_id: MsgId, data: Vec<u
 /// `send_webxdc_realtime_*()` functions aren't called for the given `msg_id` anymore until the app
 /// is open again.
 pub async fn leave_webxdc_realtime(ctx: &Context, msg_id: MsgId) -> Result<()> {
-    let Some(iroh) = ctx.get_active_iroh().await else {
+    let Some(topic) = get_iroh_topic_for_msg(ctx, msg_id).await? else {
         return Ok(());
     };
-    let Some(topic) = get_iroh_topic_for_msg(ctx, msg_id).await? else {
+    ctx.left_topics.lock().insert(topic);
+    let Some(iroh) = ctx.get_active_iroh().await else {
         return Ok(());
     };
     iroh.leave_realtime(topic).await?;

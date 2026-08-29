@@ -1,6 +1,6 @@
 //! Context module.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ffi::OsString;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use anyhow::{Result, bail, ensure};
 use async_channel::{self as channel, Receiver, Sender};
+use iroh_gossip::proto::TopicId;
 use pgp::composed::SignedPublicKey;
 use ratelimit::Ratelimit;
 use tokio::sync::{Mutex, Notify, RwLock};
@@ -321,6 +322,9 @@ pub struct InnerContext {
     /// Incremented on every [`Context::stop_io`] call to detect racing iroh initialization.
     pub(crate) io_stop_count: AtomicUsize,
 
+    /// Topics left so that a racing join does not re-open their channel.
+    pub(crate) left_topics: parking_lot::Mutex<HashSet<TopicId>>,
+
     /// The own fingerprint, if it was computed already.
     /// tokio::sync::OnceCell would be possible to use, but overkill for our usecase;
     /// the standard library's OnceLock is enough, and it's a lot smaller in memory.
@@ -511,6 +515,7 @@ impl Context {
             iroh: RwLock::new(None),
             iroh_init_mutex: Mutex::new(()),
             io_stop_count: AtomicUsize::new(0),
+            left_topics: parking_lot::Mutex::new(HashSet::new()),
             self_fingerprint: OnceLock::new(),
             self_public_key: Mutex::new(None),
             published_connectivities: parking_lot::Mutex::new(Vec::new()),

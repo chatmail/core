@@ -168,6 +168,39 @@ async fn test_stop_io_while_initializing_iroh() -> Result<()> {
     Ok(())
 }
 
+/// A join that was pending while its channel was left does not register it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_leave_cancels_pending_join() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await.with_working_iroh_relay().await;
+    let bob = &tcm.bob().await;
+    let alice_webxdc = send_webxdc(alice, bob).await?;
+    let topic = get_iroh_topic_for_msg(alice, alice_webxdc.id)
+        .await?
+        .unwrap();
+
+    // Marks the topic although iroh is not even initialized yet.
+    leave_webxdc_realtime(alice, alice_webxdc.id).await?;
+
+    // A join that passed its unmark before the leave must not register the channel.
+    let iroh = alice.get_active_or_init_iroh().await?;
+    assert!(
+        iroh.join_and_subscribe_gossip(alice, alice_webxdc.id)
+            .await
+            .is_err()
+    );
+    assert!(!iroh.iroh_channels.read().await.contains_key(&topic));
+
+    assert!(
+        send_webxdc_realtime_advertisement(alice, alice_webxdc.id)
+            .await?
+            .is_some()
+    );
+    alice.pop_sent_msg().await;
+    assert!(iroh.iroh_channels.read().await.contains_key(&topic));
+    Ok(())
+}
+
 /// Iroh without a working relay joins channels
 /// but sends no advertisement.
 /// It is kept while in use and replaced afterwards.
@@ -574,6 +607,8 @@ async fn test_can_reconnect() {
     // Check that sequence number is persisted when leaving the channel.
     assert_eq!(bob_sequence_number, bob_sequence_number_after);
 
+    // Unmark the leave like a fresh advertisement would.
+    bob.left_topics.lock().remove(&bob_topic);
     bob.get_active_or_init_iroh()
         .await
         .unwrap()
