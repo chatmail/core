@@ -6474,9 +6474,10 @@ void dc_event_unref(dc_event_t* event);
  * Transport relay added/deleted or default has changed.
  * UI should update the list.
  *
- * The event is emitted when the transports are modified on another device
- * using the JSON-RPC calls `add_or_update_transport`, `add_transport_from_qr`, `delete_transport`,
- * `set_transport_unpublished` or `set_config(configured_addr)`.
+ * The event is emitted on the device modifying the transports
+ * as well as on other devices applying the synced change,
+ * for the JSON-RPC calls `add_or_update_transport`, `add_transport_from_qr`,
+ * `delete_transport` or `set_config(configured_addr)`.
  */
 #define DC_EVENT_TRANSPORTS_MODIFIED           2600
 
@@ -7282,11 +7283,7 @@ void dc_event_unref(dc_event_t* event);
 /// "Message pinned by %1$s."
 #define DC_STR_MESSAGE_PINNED_BY_OTHER 244
 
-/// "Phasing out"
-///
-/// Used in connectivity view to flag unpublished relays.
-/// This should match the wording used for relay deletion confirmation,
-/// saying "Before deletion, it will be gradually phased out so your contacts can switch over smoothly"
+/// @deprecated 2026-08-31
 #define DC_STR_PHASING_OUT 245
 
 /**

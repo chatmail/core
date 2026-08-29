@@ -567,7 +567,7 @@ impl TestContext {
         }
     }
 
-    /// Adds a published transport for `addr` without any network activity.
+    /// Adds a transport for `addr` without any network activity.
     pub async fn add_transport(&self, addr: &str) {
         add_pseudo_transport(self, addr).await.unwrap();
         // A fresh `add_timestamp` makes the re-signed self key newer than the copies

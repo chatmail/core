@@ -19,7 +19,7 @@ use crate::log::LogExt;
 use crate::mimefactory::RECOMMENDED_FILE_SIZE;
 use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::{get_abs_path, time};
-use crate::transport::{add_pseudo_transport, send_sync_transports};
+use crate::transport::{add_pseudo_transport, send_sync_transports, transport_addrs};
 use crate::{constants, stats};
 
 /// The available configuration keys.
@@ -794,10 +794,6 @@ impl Context {
                                 (addr,),
                             )?;
 
-                            // `is_published=1`: an unpublished primary would be missing
-                            // from the relay list in the public key, so contacts would
-                            // never send to it.
-                            //
                             // The timestamp must strictly increase because
                             // other devices ignore the row update otherwise,
                             // and contacts only adopt the re-signed key
@@ -805,7 +801,7 @@ impl Context {
                             transaction
                                 .execute(
                                     "UPDATE transports
-                                     SET add_timestamp=MAX(?, add_timestamp+1), is_published=1
+                                     SET add_timestamp=MAX(?, add_timestamp+1)
                                      WHERE addr=?",
                                     (time(), addr),
                                 )
@@ -915,7 +911,7 @@ impl Context {
             return Ok(true);
         }
         Ok(self
-            .get_all_self_addrs()
+            .get_self_addrs()
             .await?
             .iter()
             .any(|a| addr_cmp(addr, a)))
@@ -937,49 +933,10 @@ impl Context {
     }
 
     /// Returns all self addresses, newest first.
-    pub(crate) async fn get_all_self_addrs(&self) -> Result<Vec<String>> {
+    pub(crate) async fn get_self_addrs(&self) -> Result<Vec<String>> {
+        let query_only = true;
         self.sql
-            .query_map_vec(
-                "SELECT addr FROM transports ORDER BY add_timestamp DESC, id DESC",
-                (),
-                |row| {
-                    let addr: String = row.get(0)?;
-                    Ok(addr)
-                },
-            )
-            .await
-    }
-
-    /// Returns all published self addresses, newest first.
-    /// See `[Context::set_transport_unpublished]`
-    pub(crate) async fn get_published_self_addrs(&self) -> Result<Vec<String>> {
-        self.sql
-            .query_map_vec(
-                "SELECT addr FROM transports WHERE is_published=1 ORDER BY add_timestamp DESC, id DESC",
-                (),
-                |row| {
-                    let addr: String = row.get(0)?;
-                    Ok(addr)
-                },
-            )
-            .await
-    }
-
-    /// Returns all published secondary self addresses.
-    /// See `[Context::set_transport_unpublished]`
-    pub(crate) async fn get_published_secondary_self_addrs(&self) -> Result<Vec<String>> {
-        self.sql
-            .query_map_vec(
-                "SELECT addr FROM transports
-                WHERE is_published
-                AND addr NOT IN (SELECT value FROM config WHERE keyname='configured_addr')
-                ORDER BY add_timestamp DESC, id DESC",
-                (),
-                |row| {
-                    let addr: String = row.get(0)?;
-                    Ok(addr)
-                },
-            )
+            .transaction_ext(query_only, |transaction| transport_addrs(transaction))
             .await
     }
 

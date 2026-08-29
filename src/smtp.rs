@@ -733,9 +733,12 @@ pub(crate) async fn add_self_recipients(
     // Avoid sending unencrypted messages to all transports, chatmail relays won't accept
     // them. Normally the user should have a non-chatmail primary transport to send unencrypted
     // messages.
+    let from = context.get_primary_self_addr().await?;
     if encrypted {
-        for addr in context.get_published_secondary_self_addrs().await? {
-            recipients.push(addr);
+        for addr in context.get_self_addrs().await? {
+            if addr != from {
+                recipients.push(addr);
+            }
         }
     }
     // `from` must be the last addr
@@ -744,7 +747,6 @@ pub(crate) async fn add_self_recipients(
     // This helps with marking messages as delivered
     // if the server is slow and we never get an `OK` response
     // before the connection times out.
-    let from = context.get_primary_self_addr().await?;
     recipients.push(from);
 
     Ok(())

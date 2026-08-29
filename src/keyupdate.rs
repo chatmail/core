@@ -155,9 +155,9 @@ fn envelope_recipients(chunk: &[KeyupdateRecipient]) -> String {
     Vec::from_iter(addrs).join(" ")
 }
 
-/// Returns the published relay list in the format stored in [`Config::KeyupdateBaseline`].
-async fn published_relays_joined(context: &Context) -> Result<String> {
-    let mut relays = context.get_published_self_addrs().await?;
+/// Returns the relay list in the format stored in [`Config::KeyupdateBaseline`].
+async fn relays_joined(context: &Context) -> Result<String> {
+    let mut relays = context.get_self_addrs().await?;
     relays.sort();
     Ok(relays.join(" "))
 }
@@ -171,17 +171,17 @@ pub(crate) async fn schedule_keyupdate_check(context: &Context) -> Result<()> {
     Ok(())
 }
 
-/// Records the currently published relay list as not needing a keyupdate, see the module docs.
+/// Records the current relay list as not needing a keyupdate, see the module docs.
 pub(crate) async fn set_current_relays_as_keyupdate_baseline(context: &Context) -> Result<()> {
-    let current = published_relays_joined(context).await?;
+    let current = relays_joined(context).await?;
     context
         .set_config_internal(Config::KeyupdateBaseline, Some(&current))
         .await
 }
 
-/// Sends a keyupdate message if the published relay list differs from the recorded baseline.
+/// Sends a keyupdate message if the relay list differs from the recorded baseline.
 pub(crate) async fn maybe_send_keyupdate_message(context: &Context) -> Result<()> {
-    let current = published_relays_joined(context).await?;
+    let current = relays_joined(context).await?;
     let last = context.get_config(Config::KeyupdateBaseline).await?;
     if last.unwrap_or_default() == current {
         return Ok(());

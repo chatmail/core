@@ -327,9 +327,9 @@ pub struct InnerContext {
     /// Mutex is also held while generating the key to avoid generating the key twice.
     pub(crate) self_public_key: Mutex<Option<SignedPublicKey>>,
 
-    /// `Connectivity` values for published relays, unordered. Used to compute the aggregate connectivity,
+    /// `Connectivity` values for the relays, unordered. Used to compute the aggregate connectivity,
     /// see [`Context::get_connectivity()`].
-    pub(crate) published_connectivities: parking_lot::Mutex<Vec<ConnectivityStore>>,
+    pub(crate) connectivities: parking_lot::Mutex<Vec<ConnectivityStore>>,
 
     /// Timestamp after which the SMTP loop checks for a keyupdate to send, or 0 if none is due.
     pub(crate) next_keyupdate_check: AtomicI64,
@@ -508,7 +508,7 @@ impl Context {
             iroh: Arc::new(RwLock::new(None)),
             self_fingerprint: OnceLock::new(),
             self_public_key: Mutex::new(None),
-            published_connectivities: parking_lot::Mutex::new(Vec::new()),
+            connectivities: parking_lot::Mutex::new(Vec::new()),
             next_keyupdate_check: AtomicI64::new(0),
         };
 
@@ -841,7 +841,7 @@ impl Context {
         let all_transports: Vec<String> = ConfiguredLoginParam::load_all(self)
             .await?
             .into_iter()
-            .map(|(transport_id, param, _)| format!("{transport_id}: {param}"))
+            .map(|(transport_id, param)| format!("{transport_id}: {param}"))
             .collect();
         let all_transports = if all_transports.is_empty() {
             "Not configured".to_string()

@@ -13,6 +13,7 @@ use std::sync::atomic::Ordering;
 
 use anyhow::{Context as _, Result, bail, format_err};
 use deltachat_contact_tools::{EmailAddress, addr_normalize};
+use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
@@ -290,21 +291,16 @@ impl ConfiguredLoginParam {
     /// Loads configured login parameters for all transports.
     ///
     /// Returns a vector of all transport IDs
-    /// paired with the configured parameters for the transports and the published state.
-    pub(crate) async fn load_all(context: &Context) -> Result<Vec<(u32, Self, bool)>> {
+    /// paired with the configured parameters for the transports.
+    pub(crate) async fn load_all(context: &Context) -> Result<Vec<(u32, Self)>> {
         context
             .sql
-            .query_map_vec(
-                "SELECT id, configured_param, is_published FROM transports",
-                (),
-                |row| {
-                    let id: u32 = row.get(0)?;
-                    let json: String = row.get(1)?;
-                    let param = Self::from_json(&json)?;
-                    let is_published: bool = row.get(2)?;
-                    Ok((id, param, is_published))
-                },
-            )
+            .query_map_vec("SELECT id, configured_param FROM transports", (), |row| {
+                let id: u32 = row.get(0)?;
+                let json: String = row.get(1)?;
+                let param = Self::from_json(&json)?;
+                Ok((id, param))
+            })
             .await
     }
 
@@ -430,15 +426,7 @@ impl ConfiguredLoginParam {
         entered_param: &EnteredLoginParam,
         timestamp: i64,
     ) -> Result<()> {
-        let is_published = true;
-        save_transport(
-            context,
-            entered_param,
-            &self.into(),
-            timestamp,
-            is_published,
-        )
-        .await?;
+        save_transport(context, entered_param, &self.into(), timestamp).await?;
         Ok(())
     }
 
@@ -510,7 +498,6 @@ pub(crate) async fn save_transport(
     entered_param: &EnteredLoginParam,
     configured: &ConfiguredLoginParamJson,
     add_timestamp: i64,
-    is_published: bool,
 ) -> Result<bool> {
     ensure_and_debug_assert!(
         configured
@@ -525,23 +512,20 @@ pub(crate) async fn save_transport(
     let mut modified = context
         .sql
         .execute(
-            "INSERT INTO transports (addr, entered_param, configured_param, add_timestamp, is_published)
-             VALUES (?, ?, ?, ?, ?)
+            "INSERT INTO transports (addr, entered_param, configured_param, add_timestamp)
+             VALUES (?, ?, ?, ?)
              ON CONFLICT (addr)
              DO UPDATE SET entered_param=excluded.entered_param,
                            configured_param=excluded.configured_param,
-                           add_timestamp=excluded.add_timestamp,
-                           is_published=excluded.is_published
+                           add_timestamp=excluded.add_timestamp
              WHERE entered_param != excluded.entered_param
                  OR configured_param != excluded.configured_param
-                 OR add_timestamp < excluded.add_timestamp
-                 OR is_published != excluded.is_published",
+                 OR add_timestamp < excluded.add_timestamp",
             (
                 &addr,
                 serde_json::to_string(entered_param)?,
                 serde_json::to_string(configured)?,
                 add_timestamp,
-                is_published,
             ),
         )
         .await?
@@ -558,7 +542,8 @@ pub(crate) async fn save_transport(
     Ok(modified)
 }
 
-/// Sends a sync message to synchronize transports across devices.
+/// Sends a sync message to synchronize transports across devices
+/// and emits [`EventType::TransportsModified`].
 pub(crate) async fn send_sync_transports(context: &Context) -> Result<()> {
     info!(context, "Sending transport synchronization message.");
 
@@ -578,7 +563,7 @@ pub(crate) async fn send_sync_transports(context: &Context) -> Result<()> {
     let transports = context
         .sql
         .query_map_vec(
-            "SELECT entered_param, configured_param, add_timestamp, is_published
+            "SELECT entered_param, configured_param, add_timestamp
              FROM transports WHERE id>1",
             (),
             |row| {
@@ -587,12 +572,11 @@ pub(crate) async fn send_sync_transports(context: &Context) -> Result<()> {
                 let configured_json: String = row.get(1)?;
                 let configured: ConfiguredLoginParamJson = serde_json::from_str(&configured_json)?;
                 let timestamp: i64 = row.get(2)?;
-                let is_published: bool = row.get(3)?;
                 Ok(TransportData {
                     configured,
                     entered,
                     timestamp,
-                    is_published,
+                    is_published: true,
                 })
             },
         )
@@ -618,11 +602,15 @@ pub(crate) async fn send_sync_transports(context: &Context) -> Result<()> {
     // Schedule the check before interrupting, so the woken SMTP loop sees it.
     schedule_keyupdate_check(context).await?;
     context.scheduler.interrupt_smtp().await;
+    context.emit_event(EventType::TransportsModified);
 
     Ok(())
 }
 
 /// Process received data for transport synchronization.
+///
+/// A transport that an older core unpublished
+/// arrives with `is_published: false` and is removed.
 pub(crate) async fn sync_transports(
     context: &Context,
     transports: &[TransportData],
@@ -636,38 +624,56 @@ pub(crate) async fn sync_transports(
         is_published,
     } in transports
     {
-        modified |= save_transport(context, entered, configured, *timestamp, *is_published).await?;
+        if !is_published {
+            continue;
+        }
+        let removed_later = context
+            .sql
+            .exists(
+                "SELECT COUNT(*) FROM removed_transports WHERE addr=? AND remove_timestamp>=?",
+                (&addr_normalize(&configured.addr), timestamp),
+            )
+            .await?;
+        if removed_later {
+            // Only a legacy core keeps syncing a transport that was removed here;
+            // it must not be resurrected, and removal wins a timestamp tie.
+            continue;
+        }
+        modified |= save_transport(context, entered, configured, *timestamp).await?;
     }
 
-    let reelected = context
+    let removals: Vec<(String, i64)> = removed_transports
+        .iter()
+        .map(|removed| (removed.addr.clone(), removed.timestamp))
+        .chain(
+            transports
+                .iter()
+                .filter(|data| !data.is_published)
+                .map(|data| (addr_normalize(&data.configured.addr), data.timestamp)),
+        )
+        .collect();
+
+    let (deleted_ids, reelected) = context
         .sql
         .transaction(|transaction| {
-            for RemovedTransportData { addr, timestamp } in removed_transports {
-                let count: i64 =
-                    transaction
-                        .query_row("SELECT COUNT(*) FROM transports", (), |row| row.get(0))?;
-                if count <= 1 {
+            let mut deleted_ids = Vec::new();
+            for (addr, timestamp) in &removals {
+                if transport_addrs(transaction)?.len() <= 1 {
                     // Removing the last transport would unconfigure the account.
                     break;
                 }
-                modified |= transaction.execute(
-                    "DELETE FROM transports
-                     WHERE addr=? AND add_timestamp<=?",
-                    (addr, timestamp),
-                )? > 0;
-                transaction.execute(
-                    "INSERT INTO removed_transports (addr, remove_timestamp)
-                     VALUES (?, ?)
-                     ON CONFLICT (addr) DO
-                     UPDATE SET remove_timestamp = excluded.remove_timestamp
-                     WHERE excluded.remove_timestamp > remove_timestamp",
-                    (addr, timestamp),
-                )?;
+                deleted_ids.extend(delete_transport_row(transaction, addr, *timestamp)?);
             }
+            modified |= !deleted_ids.is_empty();
 
-            maybe_reelect_local_primary(transaction)
+            let reelected = maybe_update_sending_transport(transaction)?;
+            Ok((deleted_ids, reelected))
         })
         .await?;
+
+    for transport_id in &deleted_ids {
+        purge_transport_caches(context, *transport_id).await;
+    }
 
     if let Some(new_addr) = reelected {
         info!(context, "Re-elected primary transport {new_addr:?}.");
@@ -691,46 +697,71 @@ pub(crate) async fn sync_transports(
     Ok(())
 }
 
-/// Elects a new primary transport for the device if the current one
-/// is not published or vanished, and there is a better candidate.
-///
-/// Returns the newly elected address if the primary transport changed.
-fn maybe_reelect_local_primary(transaction: &mut rusqlite::Transaction) -> Result<Option<String>> {
+/// Returns the addresses of all transports, newest first.
+pub(crate) fn transport_addrs(transaction: &rusqlite::Transaction) -> Result<Vec<String>> {
+    let addrs = transaction
+        .prepare("SELECT addr FROM transports ORDER BY add_timestamp DESC, id DESC")?
+        .query_map((), |row| row.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(addrs)
+}
+
+/// Deletes the transport row unless it is newer than `remove_timestamp`,
+/// records the tombstone, and returns the deleted row's id.
+pub(crate) fn delete_transport_row(
+    transaction: &mut rusqlite::Transaction,
+    addr: &str,
+    remove_timestamp: i64,
+) -> Result<Option<u32>> {
+    let deleted_id: Option<u32> = transaction
+        .query_row(
+            "DELETE FROM transports
+             WHERE addr=? AND add_timestamp<=?
+             RETURNING id",
+            (addr, remove_timestamp),
+            |row| row.get(0),
+        )
+        .optional()?;
+    transaction.execute(
+        "INSERT INTO removed_transports (addr, remove_timestamp)
+         VALUES (?, ?)
+         ON CONFLICT (addr) DO
+         UPDATE SET remove_timestamp = excluded.remove_timestamp
+         WHERE excluded.remove_timestamp > remove_timestamp",
+        (addr, remove_timestamp),
+    )?;
+    Ok(deleted_id)
+}
+
+/// Drops the per-process caches of a removed transport.
+pub(crate) async fn purge_transport_caches(context: &Context, transport_id: u32) {
+    context.quota.write().await.remove(&transport_id);
+    context.metadata.write().await.remove(&transport_id);
+}
+
+/// Elects another transport for sending if the current one vanished.
+/// Any remaining transport works and selection is anyway moving
+/// to the authority of the SMTP loop, see <https://github.com/chatmail/core/pull/8619>
+pub(crate) fn maybe_update_sending_transport(
+    transaction: &mut rusqlite::Transaction,
+) -> Result<Option<String>> {
     let configured_addr: String = transaction.query_row(
         "SELECT value FROM config WHERE keyname='configured_addr'",
         (),
         |row| row.get(0),
     )?;
-    // Newest transports first, they are the most likely to work.
-    let transports: Vec<(String, bool)> = transaction
-        .prepare(
-            "SELECT addr, is_published FROM transports
-             ORDER BY add_timestamp DESC, id DESC",
-        )?
-        .query_map((), |row| Ok((row.get(0)?, row.get(1)?)))?
-        .collect::<rusqlite::Result<_>>()?;
-
-    // Nothing to do if the current primary is still there and published.
-    if transports
-        .iter()
-        .any(|(addr, is_published)| *is_published && *addr == configured_addr)
-    {
+    let addrs = transport_addrs(transaction)?;
+    if addrs.contains(&configured_addr) {
         return Ok(None);
     }
-    // Take an unpublished transport only if nothing is published.
-    let published = transports.iter().find(|(_, is_published)| *is_published);
-    let Some((new_addr, _)) = published.or_else(|| transports.first()) else {
+    let Some(new_addr) = addrs.into_iter().next() else {
         return Ok(None);
     };
-    if *new_addr == configured_addr {
-        // The primary transport may be the only remaining one.
-        return Ok(None);
-    }
     transaction.execute(
         "UPDATE config SET value=? WHERE keyname='configured_addr'",
-        (new_addr,),
+        (&new_addr,),
     )?;
-    Ok(Some(new_addr.clone()))
+    Ok(Some(new_addr))
 }
 
 /// Adds transport entry to the `transports` table with empty configuration.

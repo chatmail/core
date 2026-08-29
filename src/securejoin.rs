@@ -141,9 +141,10 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
     let self_addr_urlencoded = utf8_percent_encode(&self_addr, DISALLOWED_CHARACTERS).to_string();
 
     let r_param = context
-        .get_published_secondary_self_addrs()
+        .get_self_addrs()
         .await?
         .into_iter()
+        .filter(|addr| *addr != self_addr)
         .reduce(|acc, addr| {
             format!(
                 "{acc},{}",

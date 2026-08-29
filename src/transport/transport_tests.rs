@@ -4,6 +4,7 @@ use std::time::Duration;
 use crate::tools::SystemTime;
 
 use super::*;
+use crate::imap::ServerMetadata;
 use crate::test_utils::TestContext;
 use crate::test_utils::TestContextManager;
 use crate::tools::time;
@@ -115,7 +116,7 @@ fn dummy_configured_login_param(addr: &str) -> ConfiguredLoginParam {
     }
 }
 
-fn dummy_transport_data(addr: &str, is_published: bool) -> TransportData {
+fn dummy_transport_data(addr: &str) -> TransportData {
     TransportData {
         configured: dummy_configured_login_param(addr).into(),
         entered: EnteredLoginParam {
@@ -123,7 +124,7 @@ fn dummy_transport_data(addr: &str, is_published: bool) -> TransportData {
             ..Default::default()
         },
         timestamp: time(),
-        is_published,
+        is_published: true,
     }
 }
 
@@ -141,7 +142,7 @@ async fn add_dummy_transport(t: &TestContext, addr: &str) -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_is_published_flag() -> Result<()> {
+async fn test_delete_transport() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let alice2 = &tcm.alice().await;
@@ -157,8 +158,7 @@ async fn test_is_published_flag() -> Result<()> {
         bob,
         Addresses {
             primary: "alice@example.org",
-            secondary_published: &[],
-            secondary_unpublished: &[],
+            secondary: &[],
         },
     )
     .await;
@@ -173,49 +173,35 @@ async fn test_is_published_flag() -> Result<()> {
         bob,
         Addresses {
             primary: "alice@example.org",
-            secondary_published: &["alice@otherprovider.com"],
-            secondary_unpublished: &[],
+            secondary: &["alice@otherprovider.com"],
         },
     )
     .await;
 
     assert_eq!(
         alice
-            .set_transport_unpublished("alice@example.org", true)
+            .delete_transport("unknown@example.org")
             .await
             .unwrap_err()
             .to_string(),
-        "Can't set primary relay as unpublished"
+        "Transport does not exist"
     );
 
     // Make sure that the newly generated key has a newer timestamp,
     // so that it is recognized by Bob:
     SystemTime::shift(Duration::from_secs(2));
 
+    alice.evtracker.clear_events();
+    alice.delete_transport("alice@example.org").await?;
     alice
-        .set_transport_unpublished("alice@otherprovider.com", true)
-        .await?;
-    sync_and_check_recipients(alice, alice2, "alice@example.org").await;
-
-    check_addrs(
-        alice,
-        alice2,
-        bob,
-        Addresses {
-            primary: "alice@example.org",
-            secondary_published: &[],
-            secondary_unpublished: &["alice@otherprovider.com"],
-        },
-    )
-    .await;
-
-    SystemTime::shift(Duration::from_secs(2));
-
-    promote_transport_and_sync(alice, alice2, "alice@otherprovider.com").await?;
-
-    alice2
-        .set_config(Config::ConfiguredAddr, Some("alice@otherprovider.com"))
-        .await?;
+        .evtracker
+        .get_matching(|e| matches!(e, EventType::TransportsModified))
+        .await;
+    assert_eq!(
+        alice.get_config(Config::ConfiguredAddr).await?.as_deref(),
+        Some("alice@otherprovider.com")
+    );
+    sync_and_check_recipients(alice, alice2, "alice@otherprovider.com").await;
 
     check_addrs(
         alice,
@@ -223,11 +209,19 @@ async fn test_is_published_flag() -> Result<()> {
         bob,
         Addresses {
             primary: "alice@otherprovider.com",
-            secondary_published: &["alice@example.org"],
-            secondary_unpublished: &[],
+            secondary: &[],
         },
     )
     .await;
+
+    assert_eq!(
+        alice
+            .delete_transport("alice@otherprovider.com")
+            .await
+            .unwrap_err()
+            .to_string(),
+        "Cannot remove the last transport"
+    );
 
     Ok(())
 }
@@ -257,7 +251,7 @@ async fn test_promote_transport_same_second() -> Result<()> {
 async fn test_sync_transports_requests_io_restart() -> Result<()> {
     let alice = &TestContext::new_alice().await;
 
-    let data = dummy_transport_data("alice@otherprovider.com", true);
+    let data = dummy_transport_data("alice@otherprovider.com");
     let data = std::slice::from_ref(&data);
     sync_transports(alice, data, &[]).await?;
     assert!(alice.restart_io_after_fetch.swap(false, Ordering::Relaxed));
@@ -307,75 +301,127 @@ async fn add_timestamp(t: &TestContext, addr: &str) -> i64 {
         .unwrap()
 }
 
-/// Tests that the local primary transport is re-elected
-/// if a synced change unpublished or removed it.
+/// Tests that removing the last transport keeps it.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_reelect_local_primary() -> Result<()> {
+async fn test_removing_last_transport() -> Result<()> {
     let alice = &TestContext::new_alice().await;
     add_dummy_transport(alice, "alice@otherprovider.com").await?;
 
-    // Another device unpublished the primary transport.
-    let unpublished = dummy_transport_data("alice@example.org", false);
-    sync_transports(alice, std::slice::from_ref(&unpublished), &[]).await?;
+    let removed = RemovedTransportData {
+        addr: "alice@example.org".to_string(),
+        timestamp: time(),
+    };
+    sync_transports(alice, &[], std::slice::from_ref(&removed)).await?;
+    assert_eq!(alice.count_transports().await?, 1);
     assert_eq!(
         alice.get_config(Config::ConfiguredAddr).await?.as_deref(),
         Some("alice@otherprovider.com")
     );
 
-    // Another device removed the new primary transport.
     let removed = RemovedTransportData {
         addr: "alice@otherprovider.com".to_string(),
         timestamp: time(),
     };
     sync_transports(alice, &[], std::slice::from_ref(&removed)).await?;
+    assert_eq!(alice.count_transports().await?, 1);
     assert_eq!(
         alice.get_config(Config::ConfiguredAddr).await?.as_deref(),
-        Some("alice@example.org")
+        Some("alice@otherprovider.com")
     );
     Ok(())
 }
 
-/// Tests which transport is elected as the local primary one.
+/// Tests which transport is elected for sending.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_maybe_reelect_local_primary() -> Result<()> {
+async fn test_maybe_update_sending_transport() -> Result<()> {
     let t = &TestContext::new_alice().await;
 
-    // The only transport is kept even if it is unpublished.
-    t.sql
-        .execute("UPDATE transports SET is_published=0", ())
-        .await?;
-    assert_eq!(t.sql.transaction(maybe_reelect_local_primary).await?, None);
-
-    // A published primary transport is kept even if newer transports exist.
-    t.sql
-        .execute("UPDATE transports SET is_published=1", ())
-        .await?;
     add_dummy_transport(t, "alice@one.com").await?;
-    assert_eq!(t.sql.transaction(maybe_reelect_local_primary).await?, None);
+    assert_eq!(
+        t.sql.transaction(maybe_update_sending_transport).await?,
+        None
+    );
 
-    // The most recently added published transport is elected.
-    SystemTime::shift(Duration::from_secs(2));
-    add_dummy_transport(t, "alice@two.com").await?;
     t.sql
         .execute(
-            "UPDATE transports SET is_published=0 WHERE addr=?",
+            "DELETE FROM transports WHERE addr=?",
             ("alice@example.org",),
         )
         .await?;
     assert_eq!(
         t.sql
-            .transaction(maybe_reelect_local_primary)
+            .transaction(maybe_update_sending_transport)
             .await?
             .as_deref(),
-        Some("alice@two.com")
+        Some("alice@one.com")
     );
+    Ok(())
+}
+
+/// Tests that a transport an older core unpublished is removed.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_sync_unpublished_transport_removes_it() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    add_dummy_transport(alice, "alice@otherprovider.com").await?;
+    let mut data = dummy_transport_data("alice@otherprovider.com");
+    data.is_published = false;
+
+    let transport_id: u32 = alice
+        .sql
+        .query_get_value(
+            "SELECT id FROM transports WHERE addr=?",
+            ("alice@otherprovider.com",),
+        )
+        .await?
+        .unwrap();
+    alice
+        .metadata
+        .write()
+        .await
+        .insert(transport_id, ServerMetadata::default());
+
+    sync_transports(alice, std::slice::from_ref(&data), &[]).await?;
+
+    assert_eq!(alice.count_transports().await?, 1);
+    let tombstone: i64 = alice
+        .sql
+        .query_get_value(
+            "SELECT remove_timestamp FROM removed_transports WHERE addr=?",
+            ("alice@otherprovider.com",),
+        )
+        .await?
+        .unwrap();
+    assert_eq!(tombstone, data.timestamp);
+    assert!(!alice.metadata.read().await.contains_key(&transport_id));
+    Ok(())
+}
+
+/// Tests that a stale full-list sync does not resurrect a removed transport.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_sync_does_not_resurrect_removed_transport() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    add_dummy_transport(alice, "alice@otherprovider.com").await?;
+    let stale = dummy_transport_data("alice@otherprovider.com");
+
+    SystemTime::shift(Duration::from_secs(2));
+    alice.delete_transport("alice@otherprovider.com").await?;
+    assert_eq!(alice.count_transports().await?, 1);
+
+    sync_transports(alice, std::slice::from_ref(&stale), &[]).await?;
+    assert_eq!(alice.count_transports().await?, 1);
+
+    SystemTime::shift(Duration::from_secs(2));
+    let readded = dummy_transport_data("alice@otherprovider.com");
+    sync_transports(alice, std::slice::from_ref(&readded), &[]).await?;
+    assert_eq!(alice.count_transports().await?, 2);
     Ok(())
 }
 
 struct Addresses {
     primary: &'static str,
-    secondary_published: &'static [&'static str],
-    secondary_unpublished: &'static [&'static str],
+    secondary: &'static [&'static str],
 }
 
 async fn check_addrs(
@@ -391,37 +437,11 @@ async fn check_addrs(
         )
     }
 
-    let published_self_addrs = concat(&[addresses.secondary_published, &[addresses.primary]]);
+    let self_addrs = concat(&[addresses.secondary, &[addresses.primary]]);
     for a in [alice2, alice] {
-        assert_eq(
-            a.get_all_self_addrs().await.unwrap(),
-            concat(&[
-                addresses.secondary_published,
-                addresses.secondary_unpublished,
-                &[addresses.primary],
-            ]),
-        );
-        assert_eq(
-            a.get_published_self_addrs().await.unwrap(),
-            published_self_addrs.clone(),
-        );
-        assert_eq(
-            a.get_published_secondary_self_addrs().await.unwrap(),
-            concat(&[addresses.secondary_published]),
-        );
+        assert_eq(a.get_self_addrs().await.unwrap(), self_addrs.clone());
         for transport in a.list_transports().await.unwrap() {
-            if addresses.primary == transport.param.addr
-                || addresses
-                    .secondary_published
-                    .contains(&transport.param.addr.as_str())
-            {
-                assert_eq!(transport.is_unpublished, false);
-            } else if addresses
-                .secondary_unpublished
-                .contains(&transport.param.addr.as_str())
-            {
-                assert_eq!(transport.is_unpublished, true);
-            } else {
+            if !self_addrs.contains(&transport.addr.as_str()) {
                 panic!("Unexpected transport {transport:?}");
             }
         }
@@ -430,7 +450,7 @@ async fn check_addrs(
         let sent = a.send_text(alice_bob_chat_id, "hi").await;
         assert_eq!(
             sent.recipients,
-            format!("bob@example.net {}", published_self_addrs.join(" ")),
+            format!("bob@example.net {}", self_addrs.join(" ")),
             "{} is sending to the wrong set of recipients",
             a.name()
         );
@@ -439,7 +459,7 @@ async fn check_addrs(
         let answer = bob.send_text(bob_alice_chat_id, "hi back").await;
         assert_eq(
             answer.recipients.split(' ').map(Into::into).collect(),
-            concat(&[&published_self_addrs, &["bob@example.net"]]),
+            concat(&[&self_addrs, &["bob@example.net"]]),
         );
     }
 }

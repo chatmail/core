@@ -66,8 +66,8 @@ pub(crate) struct TransportData {
     /// Timestamp of when the transport was last time (re)configured.
     pub(crate) timestamp: i64,
 
-    /// Whether the transport is published.
-    /// See [`Context::set_transport_unpublished`] for details.
+    /// Whether the transport is advertised to contacts.
+    /// Always `true` from this core; an older core's `false` is applied as a removal.
     pub(crate) is_published: bool,
 }
 

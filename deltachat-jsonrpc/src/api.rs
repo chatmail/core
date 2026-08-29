@@ -65,7 +65,6 @@ use self::types::{
 };
 use crate::api::types::appversions::JsonrpcAppSource;
 use crate::api::types::chat_list::{ChatListItemFetchResult, get_chat_list_item_by_id};
-use crate::api::types::login_param::TransportListEntry;
 use crate::api::types::qr::{QrObject, SecurejoinSource, SecurejoinUiPath};
 
 #[derive(Debug)]
@@ -502,8 +501,7 @@ impl CommandApi {
     /// - [Self::add_transport_from_qr()] to add a transport
     ///   from a server encoded in a QR code.
     /// - [Self::list_transports()] to get a list of all configured transports.
-    /// - [Self::set_transport_unpublished()] to remove a transport.
-    /// - [Self::set_transport_unpublished()] to set whether contacts see this transport.
+    /// - [Self::delete_transport()] to remove a transport.
     async fn add_or_update_transport(
         &self,
         account_id: u32,
@@ -528,32 +526,8 @@ impl CommandApi {
 
     /// Returns the list of all email accounts that are used as a transport in the current profile.
     /// Use [Self::add_or_update_transport()] to add or change a transport
-    /// and [Self::set_transport_unpublished()] to remove a transport.
+    /// and [Self::delete_transport()] to remove a transport.
     async fn list_transports(&self, account_id: u32) -> Result<Vec<EnteredLoginParam>> {
-        let ctx = self.get_context(account_id).await?;
-        let res = ctx
-            .list_transports()
-            .await?
-            .into_iter()
-            .filter(|t| !t.is_unpublished)
-            .map(|t| t.param.into())
-            .collect();
-        Ok(res)
-    }
-
-    /// Deprecated 2026-06: This is not needed by UI implementations anymore,
-    /// because unpublished relays now count as removed from the user point of view,
-    /// and must not be shown in the list of relays.
-    /// This means that UIs should use `list_transports()` instead of this function.
-    ///
-    /// Returns the list of all email accounts that are used as a transport in the current profile.
-    ///
-    /// As opposed to `list_transports()`, this function also returns unpublished transports,
-    /// and for each returned transport it returns the information whether or not is `unpublished`.
-    ///
-    /// Use [Self::add_or_update_transport()] to add or change a transport
-    /// and [Self::set_transport_unpublished()] to change whether a transport is 'published'.
-    async fn list_transports_ex(&self, account_id: u32) -> Result<Vec<TransportListEntry>> {
         let ctx = self.get_context(account_id).await?;
         let res = ctx
             .list_transports()
@@ -564,39 +538,15 @@ impl CommandApi {
         Ok(res)
     }
 
-    /// Immediately deletes a transport, potentially causing messages not to arrive.
-    /// This must ONLY be used by the automated tests.
-    /// UI implementations must use [`Self::set_transport_unpublished`] instead.
+    /// Removes a transport.
+    /// UIs should call this function when the user removes a relay.
+    ///
+    /// The last transport cannot be removed.
+    /// If the removed transport was the one used for sending,
+    /// another one is chosen automatically.
     async fn delete_transport(&self, account_id: u32, addr: String) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
         ctx.delete_transport(&addr).await
-    }
-
-    /// Change whether the transport is unpublished.
-    /// UIs should call this function when the user clicks on "Remove".
-    /// Core will keep listening on this transport for some time,
-    /// and automatically remove it once it is no longer needed.
-    ///
-    /// Unpublished transports are not advertised to contacts,
-    /// and self-sent messages are not sent there,
-    /// so that we don't cause extra messages to the corresponding inbox,
-    /// but can still receive messages from contacts who don't know our new transport addresses yet.
-    ///
-    /// When more transports are added by [`Self::add_or_update_transport()`] or [`Self::add_transport_from_qr`],
-    /// the least recently needed unpublished transport is automatically removed
-    /// if this is necessary in order to stay below the maximum number of allowed relays.
-    /// Also, unpublished transports that are not used to receive any new messages for a time defined by
-    /// [`UNPUBLISHED_TRANSPORT_KEEP_TIME`] are automatically removed.
-    ///
-    /// [`UNPUBLISHED_TRANSPORT_KEEP_TIME`]: deltachat::sql::UNPUBLISHED_TRANSPORT_KEEP_TIME
-    async fn set_transport_unpublished(
-        &self,
-        account_id: u32,
-        addr: String,
-        unpublished: bool,
-    ) -> Result<()> {
-        let ctx = self.get_context(account_id).await?;
-        ctx.set_transport_unpublished(&addr, unpublished).await
     }
 
     /// Signal an ongoing process to stop.

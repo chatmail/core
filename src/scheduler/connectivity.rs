@@ -255,7 +255,7 @@ impl Context {
     ///
     /// If the connectivity changes, a DC_EVENT_CONNECTIVITY_CHANGED will be emitted.
     pub fn get_connectivity(&self) -> Connectivity {
-        let stores: Vec<ConnectivityStore> = self.published_connectivities.lock().clone();
+        let stores: Vec<ConnectivityStore> = self.connectivities.lock().clone();
         let connectivities: Vec<Connectivity> = stores.into_iter().map(|s| s.get_basic()).collect();
         combine_connectivities(&connectivities)
     }
@@ -264,12 +264,11 @@ impl Context {
         let stores: Vec<_> = match sched {
             InnerSchedulerState::Started(sched) => sched
                 .boxes()
-                .filter(|b| b.is_published)
                 .map(|b| b.conn_state.state.connectivity.clone())
                 .collect(),
             _ => Vec::new(),
         };
-        *self.published_connectivities.lock() = stores;
+        *self.connectivities.lock() = stores;
     }
 
     /// Get an overview of the current connectivity, and possibly more statistics.
@@ -330,9 +329,6 @@ impl Context {
                     }
                     .transport {
                         margin-bottom: 1em;
-                    }
-                    .unpublished {
-                        opacity: 0.5;
                     }
                     .quota-list {
                         padding-left: 0;
@@ -397,28 +393,19 @@ impl Context {
 
         let transports = self
             .sql
-            .query_map_vec(
-                "SELECT id, addr, is_published FROM transports ORDER BY is_published DESC, id",
-                (),
-                |row| {
-                    let transport_id: u32 = row.get(0)?;
-                    let addr: String = row.get(1)?;
-                    let is_published: bool = row.get(2)?;
-                    Ok((transport_id, addr, is_published))
-                },
-            )
+            .query_map_vec("SELECT id, addr FROM transports ORDER BY id", (), |row| {
+                let transport_id: u32 = row.get(0)?;
+                let addr: String = row.get(1)?;
+                Ok((transport_id, addr))
+            })
             .await?;
         let quota = self.quota.read().await;
-        for (transport_id, transport_addr, is_published) in transports {
+        for (transport_id, transport_addr) in transports {
             let domain = &deltachat_contact_tools::EmailAddress::new(&transport_addr)
                 .map_or(transport_addr.clone(), |email| email.domain);
             let domain_escaped = escaper::encode_minimal(domain);
 
-            ret += if is_published {
-                "<li class=\"transport\">"
-            } else {
-                "<li class=\"transport unpublished\">"
-            };
+            ret += "<li class=\"transport\">";
             let folders = folders_states
                 .iter()
                 .filter(|(folder_addr, ..)| *folder_addr == transport_addr);
@@ -428,18 +415,10 @@ impl Context {
                 ret += " <b>";
                 ret += &*domain_escaped;
                 ret += ":</b> ";
-                if is_published {
-                    ret += &*escaper::encode_minimal(&detailed.to_string_imap(self));
-                } else {
-                    ret += &*escaper::encode_minimal(&stock_str::phasing_out(self));
-                }
+                ret += &*escaper::encode_minimal(&detailed.to_string_imap(self));
                 ret += "<br />";
             }
 
-            if !is_published {
-                ret += "</li>"; // quota is of no big interest for unpublished relays
-                continue;
-            };
             let Some(quota) = quota.get(&transport_id) else {
                 ret += "</li>";
                 continue;

@@ -234,18 +234,43 @@ async fn test_send_and_receive_keyupdate() -> Result<()> {
     let bob_message = bob.send_text(bob_chat_id, "hi").await;
     assert!(bob_message.recipients.contains("alice@relay.example.net"));
 
-    // The removal direction: unpublishing the relay sends a keyupdate
+    // The removal direction: deleting the relay sends a keyupdate
     // whose list no longer contains it, so Bob stops sending there.
     // The time shift gives the re-signed key a later signature timestamp,
     // so that certificate merging prefers the removal.
     SystemTime::shift(Duration::from_secs(2));
-    alice
-        .set_transport_unpublished("alice@relay.example.net", true)
-        .await?;
+    alice.delete_transport("alice@relay.example.net").await?;
     maybe_send_keyupdate_message(alice).await?;
     bob.recv_msg_trash(&alice.pop_sent_msg().await).await;
     let bob_message = bob.send_text(bob_chat_id, "hi again").await;
     assert!(!bob_message.recipients.contains("alice@relay.example.net"));
+
+    Ok(())
+}
+
+/// Tests the keyupdate sent when the only relay is replaced.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_keyupdate_on_replacement() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    send_text_message(alice, bob).await;
+
+    alice.add_transport("alice@relay.example.net").await;
+    SystemTime::shift(Duration::from_secs(2));
+    alice.delete_transport("alice@example.org").await?;
+    assert_eq!(
+        alice.get_config(Config::ConfiguredAddr).await?.as_deref(),
+        Some("alice@relay.example.net")
+    );
+
+    maybe_send_keyupdate_message(alice).await?;
+    let keyupdate = alice.pop_sent_msg().await;
+    assert_eq!(keyupdate.recipients, "bob@example.net");
+    let self_key = crate::key::load_self_public_key(alice).await?;
+    let addrs = addresses_from_public_key(&self_key);
+    assert_eq!(addrs, Some(vec!["alice@relay.example.net".to_string()]));
 
     Ok(())
 }
@@ -303,8 +328,8 @@ async fn test_keyupdate_not_sent_by_synced_device() -> Result<()> {
     alice.send_sync_msg().await?;
     alice2.recv_msg_trash(&alice.pop_sent_msg().await).await;
     // The sync was applied, so silence below is meaningful.
-    let published = alice2.get_published_self_addrs().await?;
-    assert!(published.contains(&"alice@relay.example.net".to_string()));
+    let addrs = alice2.get_self_addrs().await?;
+    assert!(addrs.contains(&"alice@relay.example.net".to_string()));
 
     maybe_send_keyupdate_message(alice2).await?;
     assert!(alice2.pop_sent_msg_opt().await.is_none());
