@@ -173,7 +173,7 @@ const DB_COMMANDS: [&str; 10] = [
     "housekeeping",
 ];
 
-const CHAT_COMMANDS: [&str; 39] = [
+const CHAT_COMMANDS: [&str; 38] = [
     "listchats",
     "listarchived",
     "start-realtime",
@@ -182,7 +182,6 @@ const CHAT_COMMANDS: [&str; 39] = [
     "createchat",
     "creategroup",
     "createbroadcast",
-    "createprotected",
     "addmember",
     "removemember",
     "groupname",

@@ -3,7 +3,7 @@
 //! If this is enabled, a JSON file with some anonymous statistics
 //! will be sent to a bot once a week.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use anyhow::{Context as _, Result};
 use deltachat_derive::FromSql;
@@ -16,7 +16,7 @@ use serde::Serialize;
 use crate::chat::{self, ChatId, MuteDuration};
 use crate::config::Config;
 use crate::constants::{Chattype, DC_VERSION_STR};
-use crate::contact::{Contact, ContactId, Origin, import_vcard, mark_contact_id_as_verified};
+use crate::contact::{Contact, ContactId, Origin, import_vcard};
 use crate::context::Context;
 use crate::key::{DcKey, load_self_public_key};
 use crate::log::LogExt;
@@ -52,21 +52,12 @@ struct Statistics {
     sending_disabled_timestamps: Vec<i64>,
 }
 
-#[derive(Serialize, PartialEq)]
-enum VerifiedStatus {
-    Direct,
-    Transitive,
-    TransitiveViaBot,
-    Opportunistic,
-    Unencrypted,
-}
-
 #[derive(Serialize)]
 struct ContactStat {
     #[serde(skip_serializing)]
     id: ContactId,
 
-    verified: VerifiedStatus,
+    encrypted: bool,
 
     // If one of the boolean properties is false,
     // we leave them away.
@@ -79,9 +70,6 @@ struct ContactStat {
 
     last_seen: u64,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    transitive_chain: Option<u32>,
-
     /// Whether the contact was established after stats-sending was enabled
     #[serde(skip_serializing_if = "is_false")]
     new: bool,
@@ -93,8 +81,7 @@ fn is_false(b: &bool) -> bool {
 
 #[derive(Serialize, Default)]
 struct MessageStats {
-    verified: u32,
-    unverified_encrypted: u32,
+    encrypted: u32,
     unencrypted: u32,
     only_to_self: u32,
 }
@@ -159,14 +146,10 @@ struct JoinedInvite {
     /// Whether the contact already existed before.
     /// If this is false, then a contact was newly created.
     already_existed: bool,
-    /// If a contact already existed,
-    /// this tells us whether the contact was verified already.
-    already_verified: bool,
     /// The type of the invite:
-    /// "contact" for single chat invites that setup a verified contact,
+    /// "contact" for single chat invites,
     /// "group" for invites that invite to a group,
     /// "broadcast" for invites that invite to a broadcast channel.
-    /// The invite also performs the contact verification 'along the way'.
     typ: String,
 }
 
@@ -423,7 +406,6 @@ async fn get_stats_chat_id(context: &Context) -> Result<ChatId, anyhow::Error> {
         .await?
         .first()
         .context("Statistics bot vCard does not contain a contact")?;
-    mark_contact_id_as_verified(context, contact_id, Some(ContactId::SELF)).await?;
 
     let chat_id = if let Some(res) = ChatId::lookup_by_contact(context, contact_id).await? {
         // Already exists, no need to create.
@@ -438,83 +420,29 @@ async fn get_stats_chat_id(context: &Context) -> Result<ChatId, anyhow::Error> {
 }
 
 async fn get_contact_stats(context: &Context, last_old_contact: u32) -> Result<Vec<ContactStat>> {
-    let mut verified_by_map: BTreeMap<ContactId, ContactId> = BTreeMap::new();
-    let mut bot_ids: BTreeSet<ContactId> = BTreeSet::new();
-
     let mut contacts = context
         .sql
         .query_map_vec(
-            "SELECT id, fingerprint<>'', verifier, last_seen, is_bot FROM contacts c
+            "SELECT id, fingerprint<>'', last_seen, is_bot FROM contacts c
             WHERE id>9 AND origin>? AND addr<>?",
             (Origin::Hidden, STATISTICS_BOT_EMAIL),
             |row| {
                 let id = row.get(0)?;
-                let is_encrypted: bool = row.get(1)?;
-                let verifier: ContactId = row.get(2)?;
-                let last_seen: u64 = row.get(3)?;
-                let bot: bool = row.get(4)?;
-
-                let verified = match (is_encrypted, verifier) {
-                    (true, ContactId::SELF) => VerifiedStatus::Direct,
-                    (true, ContactId::UNDEFINED) => VerifiedStatus::Opportunistic,
-                    (true, _) => VerifiedStatus::Transitive, // TransitiveViaBot will be filled later
-                    (false, _) => VerifiedStatus::Unencrypted,
-                };
-
-                if verifier != ContactId::UNDEFINED {
-                    verified_by_map.insert(id, verifier);
-                }
-
-                if bot {
-                    bot_ids.insert(id);
-                }
+                let encrypted: bool = row.get(1)?;
+                let last_seen: u64 = row.get(2)?;
+                let bot: bool = row.get(3)?;
 
                 Ok(ContactStat {
                     id,
-                    verified,
+                    encrypted,
                     bot,
                     single_chat: false, // will be filled later
                     last_seen,
-                    transitive_chain: None, // will be filled later
                     new: id.to_u32() > last_old_contact,
                 })
             },
         )
         .await?;
-
-    // Fill TransitiveViaBot and transitive_chain
-    for contact in &mut contacts {
-        if contact.verified == VerifiedStatus::Transitive {
-            let mut transitive_chain: u32 = 0;
-            let mut has_bot = false;
-            let mut current_verifier_id = contact.id;
-
-            while current_verifier_id != ContactId::SELF && transitive_chain < 100 {
-                current_verifier_id = match verified_by_map.get(&current_verifier_id) {
-                    Some(id) => *id,
-                    None => {
-                        // The chain ends here, probably because some verification was done
-                        // before we started recording verifiers.
-                        // It's unclear how long the chain really is.
-                        transitive_chain = 0;
-                        break;
-                    }
-                };
-                if bot_ids.contains(&current_verifier_id) {
-                    has_bot = true;
-                }
-                transitive_chain = transitive_chain.saturating_add(1);
-            }
-
-            if transitive_chain > 0 {
-                contact.transitive_chain = Some(transitive_chain);
-            }
-
-            if has_bot {
-                contact.verified = VerifiedStatus::TransitiveViaBot;
-            }
-        }
-    }
 
     // Fill single_chat
     for contact in &mut contacts {
@@ -537,18 +465,16 @@ async fn get_message_stats(context: &Context) -> Result<BTreeMap<Chattype, Messa
     let mut map: BTreeMap<Chattype, MessageStats> = context
         .sql
         .query_map_collect(
-            "SELECT chattype, verified, unverified_encrypted, unencrypted, only_to_self
+            "SELECT chattype, unverified_encrypted, unencrypted, only_to_self
             FROM stats_msgs",
             (),
             |row| {
                 let chattype: Chattype = row.get(0)?;
-                let verified: u32 = row.get(1)?;
-                let unverified_encrypted: u32 = row.get(2)?;
-                let unencrypted: u32 = row.get(3)?;
-                let only_to_self: u32 = row.get(4)?;
+                let encrypted: u32 = row.get(1)?;
+                let unencrypted: u32 = row.get(2)?;
+                let only_to_self: u32 = row.get(3)?;
                 let message_stats = MessageStats {
-                    verified,
-                    unverified_encrypted,
+                    encrypted,
                     unencrypted,
                     only_to_self,
                 };
@@ -620,32 +546,6 @@ async fn update_message_stats_inner(context: &Context, chattype: Chattype) -> Re
             (),
         )?;
 
-        // This table will hold all verified chats,
-        // i.e. all chats that only contain verified contacts.
-        t.execute(
-            "CREATE TEMP TABLE temp.verified_chats (
-                id INTEGER PRIMARY KEY
-            ) STRICT",
-            (),
-        )?;
-
-        // Verified chats are chats that are not empty,
-        // and do not contain any unverified contacts
-        t.execute(
-            "INSERT INTO temp.verified_chats
-            SELECT id FROM chats
-            WHERE id>9
-            AND id NOT IN (SELECT id FROM temp.empty_chats)
-            AND NOT EXISTS(
-                SELECT *
-                FROM contacts, chats_contacts
-                WHERE chats_contacts.contact_id=contacts.id AND chats_contacts.chat_id=chats.id
-				AND contacts.id>9
-				AND contacts.verifier=0
-            )",
-            (),
-        )?;
-
         // This table will hold all single chats.
         t.execute(
             "CREATE TEMP TABLE temp.chat_with_correct_type (
@@ -672,21 +572,11 @@ async fn update_message_stats_inner(context: &Context, chattype: Chattype) -> Re
             .to_string();
         let params = (last_counted_msg_id, ContactId::SELF, stats_bot_chat_id);
 
-        let verified: u32 = t.query_row(
-            &format!(
-                "SELECT COUNT(*) FROM msgs
-                WHERE chat_id IN temp.verified_chats
-                AND {general_requirements}"
-            ),
-            params,
-            |row| row.get(0),
-        )?;
-
-        let unverified_encrypted: u32 = t.query_row(
+        let encrypted: u32 = t.query_row(
             &format!(
                 // (param GLOB '*\nc=1*' OR param GLOB 'c=1*') matches all messages that are end-to-end encrypted
                 "SELECT COUNT(*) FROM msgs
-                WHERE chat_id NOT IN temp.verified_chats AND chat_id NOT IN temp.empty_chats
+                WHERE chat_id NOT IN temp.empty_chats
                 AND (param GLOB '*\nc=1*' OR param GLOB 'c=1*')
                 AND {general_requirements}"
             ),
@@ -697,7 +587,7 @@ async fn update_message_stats_inner(context: &Context, chattype: Chattype) -> Re
         let unencrypted: u32 = t.query_row(
             &format!(
                 "SELECT COUNT(*) FROM msgs
-                WHERE chat_id NOT IN temp.verified_chats AND chat_id NOT IN temp.empty_chats
+                WHERE chat_id NOT IN temp.empty_chats
                 AND NOT (param GLOB '*\nc=1*' OR param GLOB 'c=1*')
                 AND {general_requirements}"
             ),
@@ -715,7 +605,6 @@ async fn update_message_stats_inner(context: &Context, chattype: Chattype) -> Re
             |row| row.get(0),
         )?;
 
-        t.execute("DROP TABLE temp.verified_chats", ())?;
         t.execute("DROP TABLE temp.empty_chats", ())?;
         t.execute("DROP TABLE temp.chat_with_correct_type", ())?;
 
@@ -726,18 +615,11 @@ async fn update_message_stats_inner(context: &Context, chattype: Chattype) -> Re
         )?;
         t.execute(
             "UPDATE stats_msgs SET
-            verified=verified+?,
             unverified_encrypted=unverified_encrypted+?,
             unencrypted=unencrypted+?,
             only_to_self=only_to_self+?
             WHERE chattype=?",
-            (
-                verified,
-                unverified_encrypted,
-                unencrypted,
-                only_to_self,
-                chattype,
-            ),
+            (encrypted, unencrypted, only_to_self, chattype),
         )?;
 
         Ok(())
@@ -851,9 +733,6 @@ pub(crate) async fn count_securejoin_invite(context: &Context, invite: &QrInvite
     // then its origin is UnhandledSecurejoinQrScan.
     let already_existed = contact.origin > Origin::UnhandledSecurejoinQrScan;
 
-    // Check whether the contact was verified already before the QR scan.
-    let already_verified = contact.is_verified(context).await?;
-
     let typ = match invite {
         QrInvite::Contact { .. } => "contact",
         QrInvite::Group { .. } => "group",
@@ -863,9 +742,10 @@ pub(crate) async fn count_securejoin_invite(context: &Context, invite: &QrInvite
     context
         .sql
         .execute(
+            // already_verified is unused but NOT NULL without a default.
             "INSERT INTO stats_securejoin_invites (already_existed, already_verified, type)
-            VALUES (?, ?, ?)",
-            (already_existed, already_verified, typ),
+            VALUES (?, 0, ?)",
+            (already_existed, typ),
         )
         .await?;
 
@@ -876,16 +756,14 @@ async fn get_securejoin_invite_stats(context: &Context) -> Result<Vec<JoinedInvi
     context
         .sql
         .query_map_vec(
-            "SELECT already_existed, already_verified, type FROM stats_securejoin_invites",
+            "SELECT already_existed, type FROM stats_securejoin_invites",
             (),
             |row| {
                 let already_existed: bool = row.get(0)?;
-                let already_verified: bool = row.get(1)?;
-                let typ: String = row.get(2)?;
+                let typ: String = row.get(1)?;
 
                 Ok(JoinedInvite {
                     already_existed,
-                    already_verified,
                     typ,
                 })
             },

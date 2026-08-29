@@ -25,13 +25,12 @@ def test_qr_setup_contact(acf, alice_and_remote_bob, version) -> None:
     remote_eval(f"bob.secure_join({qr_code!r})")
     alice.wait_for_securejoin_inviter_success()
 
-    # Test that Alice verified Bob's profile.
     alice_contact_bob_snapshot = alice_contact_bob.get_snapshot()
-    assert alice_contact_bob_snapshot.is_verified
+    assert alice_contact_bob_snapshot.e2ee_avail
 
     remote_eval("bob.wait_for_securejoin_joiner_success()")
 
-    # Test that Bob verified Alice's profile.
+    # The old core still marks Alice as verified, so the handshake is unchanged on the wire.
     assert remote_eval("bob_contact_alice.get_snapshot().is_verified")
 
     # Test that Bob can also scan a QR code
@@ -56,13 +55,12 @@ def test_qr_setup_contact_multitransport(acf, alice_and_remote_bob, version) -> 
     remote_eval(f"bob.secure_join({qr_code!r})")
     alice.wait_for_securejoin_inviter_success()
 
-    # Test that Alice verified Bob's profile.
     alice_contact_bob_snapshot = alice_contact_bob.get_snapshot()
-    assert alice_contact_bob_snapshot.is_verified
+    assert alice_contact_bob_snapshot.e2ee_avail
 
     remote_eval("bob.wait_for_securejoin_joiner_success()")
 
-    # Test that Bob verified Alice's profile.
+    # The old core still marks Alice as verified, so the handshake is unchanged on the wire.
     assert remote_eval("bob_contact_alice.get_snapshot().is_verified")
 
 

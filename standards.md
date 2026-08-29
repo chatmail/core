@@ -15,7 +15,7 @@ Push                             | IMAP IDLE ([RFC 2177][])
 Quota                            | IMAP QUOTA extension ([RFC 2087][])
 Client/server identification     | IMAP ID extension ([RFC 2971][])
 End-to-end encryption            | [Autocrypt Level 1][], OpenPGP ([RFC 4880][]), Security Multiparts for MIME ([RFC 1847][]) and [“Mixed Up” Encryption repairing](https://datatracker.ietf.org/doc/html/draft-dkg-openpgp-pgpmime-message-mangling-00)
-Detect/prevent active attacks    | [securejoin][] protocols
+Invite links for chats           | [securejoin][] protocols
 Compare public keys              | [openpgp4fpr][] URI Scheme
 Metadata minimization            | Header Protection for Cryptographically Protected Email ([RFC 9788][])
 Configuration assistance         | [Autoconfigure](https://web.archive.org/web/20210402044801/https://developer.mozilla.org/en-US/docs/Mozilla/Thunderbird/Autoconfiguration) and [Autodiscover][]

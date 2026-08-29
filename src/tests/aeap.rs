@@ -16,7 +16,6 @@ use crate::receive_imf::receive_imf;
 use crate::securejoin::get_securejoin_qr;
 use crate::test_utils::TestContext;
 use crate::test_utils::TestContextManager;
-use crate::test_utils::mark_as_verified;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_change_primary_self_addr() -> Result<()> {
@@ -46,35 +45,21 @@ async fn test_change_primary_self_addr() -> Result<()> {
 enum ChatForTransition {
     Single,
     GroupChat,
-    VerifiedGroup,
 }
 use ChatForTransition::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_aeap_transition_0() {
-    check_aeap_transition(Single, false).await;
+    check_aeap_transition(Single).await;
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_aeap_transition_1() {
-    check_aeap_transition(GroupChat, false).await;
-}
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_aeap_transition_0_verified() {
-    check_aeap_transition(Single, true).await;
-}
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_aeap_transition_1_verified() {
-    check_aeap_transition(GroupChat, true).await;
-}
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_aeap_transition_2_verified() {
-    check_aeap_transition(VerifiedGroup, true).await;
+    check_aeap_transition(GroupChat).await;
 }
 
 /// Happy path test for AEAP.
 /// - `chat_for_transition`: Which chat the transition message should be sent in
-/// - `verified`: Whether Alice and Bob verified each other
-async fn check_aeap_transition(chat_for_transition: ChatForTransition, verified: bool) {
+async fn check_aeap_transition(chat_for_transition: ChatForTransition) {
     const ALICE_NEW_ADDR: &str = "alice2@example.net";
 
     let mut tcm = TestContextManager::new();
@@ -84,19 +69,10 @@ async fn check_aeap_transition(chat_for_transition: ChatForTransition, verified:
     tcm.send_recv_accept(alice, bob, "Hi").await;
     tcm.send_recv(bob, alice, "Hi back").await;
 
-    if verified {
-        mark_as_verified(alice, bob).await;
-        mark_as_verified(bob, alice).await;
-    }
-
-    let mut groups = vec![
+    let groups = vec![
         chat::create_group(bob, "Group 0").await.unwrap(),
         chat::create_group(bob, "Group 1").await.unwrap(),
     ];
-    if verified {
-        groups.push(chat::create_group(bob, "Group 2").await.unwrap());
-        groups.push(chat::create_group(bob, "Group 3").await.unwrap());
-    }
 
     let alice_contact = bob.add_or_lookup_contact_id(alice).await;
     for group in &groups {
@@ -111,13 +87,6 @@ async fn check_aeap_transition(chat_for_transition: ChatForTransition, verified:
     let sent = bob.send_text(groups[1], "group created").await;
     let group1_alice = alice.recv_msg(&sent).await.chat_id;
 
-    let mut group3_alice = None;
-    if verified {
-        tcm.section("Promoting group 3");
-        let sent = bob.send_text(groups[3], "group created").await;
-        group3_alice = Some(alice.recv_msg(&sent).await.chat_id);
-    }
-
     tcm.change_addr(alice, ALICE_NEW_ADDR).await;
 
     tcm.section("Alice sends another message to Bob, this time from her new addr");
@@ -125,7 +94,6 @@ async fn check_aeap_transition(chat_for_transition: ChatForTransition, verified:
     let chat_to_send = match chat_for_transition {
         Single => alice.create_chat(bob).await.id,
         GroupChat => group1_alice,
-        VerifiedGroup => group3_alice.expect("No verified group"),
     };
     let sent = alice
         .send_text(chat_to_send, "Hello from my new addr!")
@@ -240,16 +208,13 @@ async fn test_write_to_alice_after_aeap() -> Result<()> {
     let alice_grp_id = chat::create_group(alice, "Group").await?;
     let qr = get_securejoin_qr(alice, Some(alice_grp_id)).await?;
     tcm.exec_securejoin_qr(bob, alice, &qr).await;
-    let bob_alice_contact = bob.add_or_lookup_contact(alice).await;
-    assert!(bob_alice_contact.is_verified(bob).await?);
+    let _bob_alice_contact = bob.add_or_lookup_contact(alice).await;
     let bob_alice_chat = bob.create_chat(alice).await;
     let bob_unprotected_grp_id = bob.create_group_with_members("Group", &[alice]).await;
 
     tcm.change_addr(alice, "alice@someotherdomain.xyz").await;
     let sent = alice.send_text(alice_grp_id, "Hello!").await;
     bob.recv_msg(&sent).await;
-
-    assert!(bob_alice_contact.is_verified(bob).await?);
     let bob_alice_chat = Chat::load_from_db(bob, bob_alice_chat.id).await?;
     let mut msg = Message::new_text("hi".to_string());
     chat::send_msg(bob, bob_alice_chat.id, &mut msg).await?;

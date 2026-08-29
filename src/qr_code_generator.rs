@@ -85,15 +85,15 @@ pub fn create_qr_svg(qrcode_content: &str) -> Result<String> {
     Ok(svg)
 }
 
-/// Returns SVG of the QR code to join the group or verify contact.
+/// Returns SVG of the QR code to join the group or set up a contact.
 ///
-/// If `chat_id` is `None`, returns verification QR code.
+/// If `chat_id` is `None`, returns setup contact QR code.
 /// Otherwise, returns secure join QR code.
 pub async fn get_securejoin_qr_svg(context: &Context, chat_id: Option<ChatId>) -> Result<String> {
     if let Some(chat_id) = chat_id {
         generate_join_group_qr_code(context, chat_id).await
     } else {
-        generate_verification_qr(context).await
+        generate_setup_contact_qr(context).await
     }
 }
 
@@ -127,7 +127,7 @@ async fn generate_join_group_qr_code(context: &Context, chat_id: ChatId) -> Resu
     )
 }
 
-async fn generate_verification_qr(context: &Context) -> Result<String> {
+async fn generate_setup_contact_qr(context: &Context) -> Result<String> {
     let (avatar, displayname, addr, color) = self_info(context).await?;
 
     inner_generate_secure_join_qr_code(

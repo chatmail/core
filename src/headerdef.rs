@@ -63,7 +63,6 @@ pub enum HeaderDef {
     ChatGroupDescription,
     ChatGroupDescriptionChanged,
     ChatGroupDescriptionTimestamp,
-    ChatVerified,
     ChatGroupAvatar,
     ChatUserAvatar,
     ChatVoiceMessage,
