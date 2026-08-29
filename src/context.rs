@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::ffi::OsString;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicI64};
 use std::sync::{Arc, OnceLock, Weak};
 use std::time::Duration;
 
@@ -330,6 +330,9 @@ pub struct InnerContext {
     /// `Connectivity` values for published relays, unordered. Used to compute the aggregate connectivity,
     /// see [`Context::get_connectivity()`].
     pub(crate) published_connectivities: parking_lot::Mutex<Vec<ConnectivityStore>>,
+
+    /// Timestamp after which the SMTP loop checks for a keyupdate to send, or 0 if none is due.
+    pub(crate) next_keyupdate_check: AtomicI64,
 }
 
 /// The state of ongoing process.
@@ -506,6 +509,7 @@ impl Context {
             self_fingerprint: OnceLock::new(),
             self_public_key: Mutex::new(None),
             published_connectivities: parking_lot::Mutex::new(Vec::new()),
+            next_keyupdate_check: AtomicI64::new(0),
         };
 
         let ctx = Context {
@@ -1059,6 +1063,12 @@ impl Context {
         res.insert(
             "autorelay_finished",
             self.get_config_bool(Config::AutorelayFinished)
+                .await?
+                .to_string(),
+        );
+        res.insert(
+            "keyupdate_debounce",
+            self.get_config_int(Config::KeyupdateDebounce)
                 .await?
                 .to_string(),
         );

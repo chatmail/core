@@ -8,6 +8,7 @@ use crate::contact::ContactId;
 use crate::contact::Origin;
 use crate::test_utils::TestContext;
 use crate::tools;
+use crate::transport::add_pseudo_transport;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_clear_config_cache() -> anyhow::Result<()> {
@@ -25,6 +26,29 @@ async fn test_clear_config_cache() -> anyhow::Result<()> {
         .await?;
     assert_eq!(t.get_config_bool(Config::IsChatmail).await?, true);
     assert_eq!(t.sql.get_raw_config_int(VERSION_CFG).await?.unwrap(), 1000);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_keyupdate_baseline_migration() -> Result<()> {
+    let configured = STOP_MIGRATIONS_AT
+        .scope(163, async move { TestContext::new_alice().await })
+        .await;
+    // An address sorting before the primary pins the seed's ORDER BY,
+    // an unpublished transport pins its filter.
+    add_pseudo_transport(&configured, "aa@example.org").await?;
+    add_pseudo_transport(&configured, "unpublished@example.org").await?;
+    configured
+        .sql
+        .execute(
+            "UPDATE transports SET is_published=0 WHERE addr='unpublished@example.org'",
+            (),
+        )
+        .await?;
+    configured.sql.run_migrations(&configured).await?;
+    let relays = configured.get_config(Config::KeyupdateBaseline).await?;
+    assert_eq!(relays.as_deref(), Some("aa@example.org alice@example.org"));
 
     Ok(())
 }

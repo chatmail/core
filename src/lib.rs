@@ -72,6 +72,7 @@ pub mod ephemeral;
 mod imap;
 pub mod imex;
 pub mod key;
+mod keyupdate;
 pub mod location;
 pub mod login_param;
 pub mod message;

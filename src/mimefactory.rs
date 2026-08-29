@@ -2437,7 +2437,7 @@ fn b_encode(value: &str) -> String {
 
 /// Returns the headers to place into the encrypted part
 /// of messages that are not part of a chat.
-async fn non_chat_protected_headers(
+async fn non_chat_headers(
     context: &Context,
     subject: &str,
 ) -> Result<Vec<(&'static str, HeaderType<'static>)>> {
@@ -2483,7 +2483,7 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
 
     let message: MimePart<'static> = MimePart::new("text/plain", "Secure-Join");
 
-    let mut headers = non_chat_protected_headers(context, "Secure-Join").await?;
+    let mut headers = non_chat_headers(context, "Secure-Join").await?;
     headers.push(("Secure-Join", Raw::new(step.to_string()).into()));
     headers.push(("Secure-Join-Auth", Text::new(auth.to_string()).into()));
 
@@ -2502,6 +2502,75 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
         // Disable compression for SecureJoin to ensure
         // there are no compression side channels
         // leaking information about the tokens.
+        should_compress: false,
+    };
+
+    render_with_self_key(context, queued_mail).await
+}
+
+/// Returns the body of a keyupdate message, shaped like a receipt notification.
+///
+/// The shape is what every core goes by, as a keyupdate carries no marker:
+/// a `multipart/report` is trashed as an MDN even where unencrypted mail is accepted,
+/// while a plain text body would end up in a contact request.
+/// The report deliberately names no original message, see [`crate::keyupdate`].
+fn keyupdate_body(from_addr: &str) -> MimePart<'static> {
+    // Human-readable first part as RFC 6522 requires, untranslated like in `render_mdn`.
+    let text_part = MimePart::new(
+        "text/plain",
+        "This message updates the sender's encryption key and relay list.",
+    );
+    let mut message = MimePart::new(
+        "multipart/report; report-type=disposition-notification",
+        vec![text_part],
+    );
+    message.add_part(MimePart::new(
+        "message/disposition-notification",
+        format!(
+            "Original-Recipient: rfc822;{from_addr}\r\n\
+             Final-Recipient: rfc822;{from_addr}\r\n\
+             Disposition: automatic-action/MDN-sent-automatically; processed\r\n"
+        ),
+    ));
+    message
+}
+
+/// Renders a keyupdate message informing the owners of `recipient_keys`
+/// about the current key and relay list, see [`crate::keyupdate`].
+pub(crate) async fn render_keyupdate_message(
+    context: &Context,
+    rfc724_mid: &str,
+    recipient_keys: Vec<SignedPublicKey>,
+) -> Result<String> {
+    info!(
+        context,
+        "Sending keyupdate message to {} recipients.",
+        recipient_keys.len()
+    );
+    let message = keyupdate_body(&context.get_primary_self_addr().await?);
+
+    let headers = non_chat_headers(context, "Keyupdate").await?;
+    let message = add_headers_to_encrypted_part(message, headers);
+
+    let queued_mail = QueuedMail {
+        raw_message: part_to_bytes(message),
+        display_name: String::new(),
+        rfc724_mid: rfc724_mid.to_string(),
+        encryption: Encryption::Asymmetric {
+            encryption_pubkeys: recipient_keys
+                .into_iter()
+                .map(|key| (String::new(), key))
+                .collect(),
+        },
+
+        // Attached key with its relay list notation is the actual payload.
+        should_attach_pubkey: true,
+
+        // Unsigned, so that no intended recipient fingerprint subpacket
+        // reveals the chunk's recipients to each other.
+        should_sign: false,
+
+        // Disable compression to avoid side channels, message body is small anyway.
         should_compress: false,
     };
 

@@ -327,14 +327,15 @@ pub(crate) async fn smtp_send(
     status
 }
 
-/// Inserts a rendered message into the `smtp` table for sending.
+/// Inserts a tombstone for `rfc724_mid`
+/// and queues the rendered message for SMTP sending.
 pub(crate) async fn insert_into_smtp(
     context: &Context,
     rfc724_mid: &str,
     recipients: &str,
     rendered_message: String,
-    msg_id: MsgId,
-) -> Result<(), Error> {
+) -> Result<()> {
+    let msg_id = message::insert_tombstone(context, rfc724_mid).await?;
     context
         .sql
         .execute(

@@ -514,6 +514,7 @@ pub(crate) async fn receive_imf_inner(
         // A report naming no message can never be applied to one,
         // and nothing else should come out of it: no contact, no chat,
         // and no `last_seen` update lighting up an online dot.
+        // This is also how keyupdates are trashed, see `crate::keyupdate`.
         info!(context, "Report without message reference (TRASH).");
         return trash().await;
     }

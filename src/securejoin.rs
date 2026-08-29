@@ -16,7 +16,7 @@ use crate::key;
 use crate::key::{DcKey, Fingerprint, load_self_public_key, self_fingerprint};
 use crate::log::LogExt as _;
 use crate::log::warn;
-use crate::message::{self, Message, Viewtype};
+use crate::message::{Message, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;
 use crate::qr::check_qr;
@@ -567,8 +567,7 @@ pub(crate) async fn handle_securejoin_handshake(
             )
             .await?;
 
-            let msg_id = message::insert_tombstone(context, &rfc724_mid).await?;
-            insert_into_smtp(context, &rfc724_mid, &addr, rendered_message, msg_id).await?;
+            insert_into_smtp(context, &rfc724_mid, &addr, rendered_message).await?;
             context.scheduler.interrupt_smtp().await;
 
             Ok(HandshakeMessage::Done)
