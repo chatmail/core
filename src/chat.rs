@@ -3436,9 +3436,10 @@ pub async fn get_chat_media(
     msg_type2: Viewtype,
     msg_type3: Viewtype,
 ) -> Result<Vec<MsgId>> {
-    fn row_to_msg_id(row: &rusqlite::Row) -> Result<MsgId> {
-        let msg_id: MsgId = row.get(0)?;
-        Ok(msg_id)
+    fn row_to_sorted_msg_id(row: &rusqlite::Row) -> Result<(i64, MsgId)> {
+        let msg_id: MsgId = row.get("id")?;
+        let sort_timestamp: i64 = row.get("sort_timestamp")?;
+        Ok((sort_timestamp, msg_id))
     }
 
     // Don't use `(1=? OR chat_id=?)` here: the `OR` makes
@@ -3449,18 +3450,37 @@ pub async fn get_chat_media(
         None => "",
     };
 
-    let list = if msg_type == Viewtype::Webxdc
+    // Redundant for every viewtype this function is asked for, but needed to
+    // make the partial index `msgs_index12` usable: SQLite only uses a partial
+    // index when the query repeats the index's `WHERE` clause.
+    let not_text_filter = if [msg_type, msg_type2, msg_type3].contains(&Viewtype::Text) {
+        ""
+    } else {
+        "type != 10 AND"
+    };
+
+    // For a single chat, sorting is done in this function: an `ORDER BY` makes
+    // SQLite pick `msgs_index11 (chat_id, timestamp)` instead of `msgs_index12`
+    // and walk all of the chat's messages instead of just the media ones. For
+    // all chats the index is not usable anyway, so the ordering stays in SQL.
+    let order_by = match chat_id {
+        Some(_) => "",
+        None => "ORDER BY sort_timestamp, id",
+    };
+
+    let mut list = if msg_type == Viewtype::Webxdc
         && msg_type2 == Viewtype::Unknown
         && msg_type3 == Viewtype::Unknown
     {
         let query = format!(
-            "SELECT id
+            "SELECT id, max(timestamp, timestamp_rcvd) AS sort_timestamp
                FROM msgs
               WHERE {chat_filter}
+                    {not_text_filter}
                     chat_id != ?
                 AND type = ?
                 AND hidden=0
-              ORDER BY max(timestamp, timestamp_rcvd), id;"
+              {order_by};"
         );
         match chat_id {
             Some(chat_id) => {
@@ -3469,26 +3489,31 @@ pub async fn get_chat_media(
                     .query_map_vec(
                         &query,
                         (chat_id, ChatId::TRASH, Viewtype::Webxdc),
-                        row_to_msg_id,
+                        row_to_sorted_msg_id,
                     )
                     .await?
             }
             None => {
                 context
                     .sql
-                    .query_map_vec(&query, (ChatId::TRASH, Viewtype::Webxdc), row_to_msg_id)
+                    .query_map_vec(
+                        &query,
+                        (ChatId::TRASH, Viewtype::Webxdc),
+                        row_to_sorted_msg_id,
+                    )
                     .await?
             }
         }
     } else {
         let query = format!(
-            "SELECT id
+            "SELECT id, timestamp AS sort_timestamp
                FROM msgs
               WHERE {chat_filter}
+                    {not_text_filter}
                     chat_id != ?
                 AND type IN (?, ?, ?)
                 AND hidden=0
-              ORDER BY timestamp, id;"
+              {order_by};"
         );
         let msg_type2 = if msg_type2 != Viewtype::Unknown {
             msg_type2
@@ -3507,7 +3532,7 @@ pub async fn get_chat_media(
                     .query_map_vec(
                         &query,
                         (chat_id, ChatId::TRASH, msg_type, msg_type2, msg_type3),
-                        row_to_msg_id,
+                        row_to_sorted_msg_id,
                     )
                     .await?
             }
@@ -3517,13 +3542,17 @@ pub async fn get_chat_media(
                     .query_map_vec(
                         &query,
                         (ChatId::TRASH, msg_type, msg_type2, msg_type3),
-                        row_to_msg_id,
+                        row_to_sorted_msg_id,
                     )
                     .await?
             }
         }
     };
-    Ok(list)
+
+    if chat_id.is_some() {
+        list.sort_unstable();
+    }
+    Ok(list.into_iter().map(|(_, msg_id)| msg_id).collect())
 }
 
 /// Returns a vector of contact IDs for given chat ID.

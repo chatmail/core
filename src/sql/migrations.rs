@@ -2730,6 +2730,19 @@ CREATE TABLE smtp_failure (
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 172)?;
+    if dbversion < migration_version {
+        // Partial index for `get_chat_media()`, which looks up messages of one
+        // chat by viewtype; without it SQLite reads every message of the chat.
+        // Excluding `Viewtype::Text` (10) keeps it small, as most messages are text;
+        // queries must repeat `type != 10` for SQLite to use it.
+        sql.execute_migration(
+            "CREATE INDEX msgs_index12 ON msgs (chat_id, type) WHERE type != 10;",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
