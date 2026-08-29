@@ -12,7 +12,7 @@ use crate::context::Context;
 use crate::events::EventType;
 use crate::key::{DcKey as _, self_fingerprint};
 use crate::log::LogExt;
-use crate::message::{self, Message, MsgId, Viewtype};
+use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::{Param, Params};
 use crate::pgp::addresses_from_public_key;
@@ -340,8 +340,7 @@ pub(crate) async fn send_handshake_message(
         )
         .await?;
 
-        let msg_id = message::insert_tombstone(context, &rfc724_mid).await?;
-        insert_into_smtp(context, &rfc724_mid, &recipients, rendered_message, msg_id).await?;
+        insert_into_smtp(context, &rfc724_mid, &recipients, rendered_message).await?;
         context.scheduler.interrupt_smtp().await;
     } else {
         let mut msg = Message {

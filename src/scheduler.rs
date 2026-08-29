@@ -21,6 +21,7 @@ use crate::download::{download_known_post_messages_without_pre_message, download
 use crate::ephemeral;
 use crate::events::EventType;
 use crate::imap::{Imap, session::Session};
+use crate::keyupdate::{maybe_send_keyupdate_message, schedule_keyupdate_check};
 use crate::location;
 use crate::log::{LogExt, warn};
 use crate::reaction::broadcast_reactions::maybe_broadcast_reactions;
@@ -573,6 +574,9 @@ async fn smtp_loop(
             return;
         }
 
+        // Reschedule the check to catch changes lost to a restart.
+        schedule_keyupdate_check(&ctx).await.log_err(&ctx).ok();
+
         let mut timeout = None;
         loop {
             if let Err(err) = send_smtp_messages(&ctx, &mut connection).await {
@@ -626,8 +630,29 @@ async fn smtp_loop(
                     slept.saturating_add(rand::random_range((slept / 2)..=slept)),
                 ));
             } else {
+                // Queue is drained: send a due keyupdate without delaying real messages.
+                let next_check = ctx.next_keyupdate_check.load(Ordering::Relaxed);
+                let wait = u64::try_from(next_check.saturating_sub(time())).unwrap_or_default();
+                if next_check != 0 && wait == 0 {
+                    // Clear first so that an intervening transport change schedules a new check.
+                    ctx.next_keyupdate_check.store(0, Ordering::Relaxed);
+                    maybe_send_keyupdate_message(&ctx)
+                        .await
+                        .context("Failed to send keyupdate message")
+                        .log_err(&ctx)
+                        .ok();
+                    continue;
+                }
+
                 info!(ctx, "SMTP has no messages to retry, waiting for interrupt.");
-                idle_interrupt_receiver.recv().await.unwrap_or_default();
+                let interrupt = idle_interrupt_receiver.recv();
+                if next_check != 0 {
+                    tokio::time::timeout(std::time::Duration::from_secs(wait), interrupt)
+                        .await
+                        .ok();
+                } else {
+                    interrupt.await.ok();
+                }
             };
 
             info!(ctx, "SMTP fake idle interrupted.")

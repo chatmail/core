@@ -19,6 +19,7 @@ use crate::config::Config;
 use crate::context::Context;
 use crate::ensure_and_debug_assert;
 use crate::events::EventType;
+use crate::keyupdate::{schedule_keyupdate_check, set_current_relays_as_keyupdate_baseline};
 use crate::login_param::EnteredLoginParam;
 use crate::net::load_connection_timestamp;
 use crate::provider::Socket;
@@ -614,6 +615,8 @@ pub(crate) async fn send_sync_transports(context: &Context) -> Result<()> {
             removed_transports,
         })
         .await?;
+    // Schedule the check before interrupting, so the woken SMTP loop sees it.
+    schedule_keyupdate_check(context).await?;
     context.scheduler.interrupt_smtp().await;
 
     Ok(())
@@ -678,6 +681,12 @@ pub(crate) async fn sync_transports(
             .restart_io_after_fetch
             .store(true, Ordering::Relaxed);
         context.emit_event(EventType::TransportsModified);
+
+        // Without setting the baseline a restarting SMTP loop
+        // would send duplicate keyupdates on every second device.
+        // Acceptable gap: a user changing relay setup on two devices concurrently
+        // will not trigger a message with the "merged" set of the concurrent changes.
+        set_current_relays_as_keyupdate_baseline(context).await?;
     }
     Ok(())
 }
@@ -728,7 +737,7 @@ fn maybe_reelect_local_primary(transaction: &mut rusqlite::Transaction) -> Resul
 pub(crate) async fn add_pseudo_transport(context: &Context, addr: &str) -> Result<()> {
     context.sql
         .execute(
-            "INSERT INTO transports (addr, entered_param, configured_param) VALUES (?, ?, ?)",
+            "INSERT OR IGNORE INTO transports (addr, entered_param, configured_param) VALUES (?, ?, ?)",
             (
                 addr,
                 serde_json::to_string(&EnteredLoginParam{addr: addr.to_string(), ..Default::default()})?,

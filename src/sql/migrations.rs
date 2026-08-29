@@ -2610,6 +2610,19 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 164)?;
+    if dbversion < migration_version {
+        // Seed the keyupdate baseline so that upgrading alone sends nothing,
+        // see `keyupdate.rs`.
+        sql.execute_migration(
+            "INSERT OR REPLACE INTO config (keyname, value)
+             SELECT 'keyupdate_baseline', IFNULL(group_concat(addr, ' ' ORDER BY addr), '')
+             FROM transports WHERE is_published=1",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
