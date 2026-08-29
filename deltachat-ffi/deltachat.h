@@ -1778,8 +1778,6 @@ int             dc_is_contact_in_chat        (dc_context_t* context, uint32_t ch
  * If the group is already _promoted_ (any message was sent to the group),
  * all group members are informed by a special status message that is sent automatically by this function.
  *
- * If the group has group protection enabled, only verified contacts can be added to the group.
- *
  * Sends out #DC_EVENT_CHAT_MODIFIED and #DC_EVENT_MSGS_CHANGED if a status message was sent.
  *
  * @memberof dc_context_t
@@ -2278,7 +2276,7 @@ void            dc_block_contact             (dc_context_t* context, uint32_t co
 /**
  * Get encryption info for a contact.
  * Get a multi-line encryption info, containing your fingerprint and the
- * fingerprint of the contact, used e.g. to compare the fingerprints for a simple out-of-band verification.
+ * fingerprint of the contact, used e.g. to compare the fingerprints out-of-band.
  *
  * @memberof dc_context_t
  * @param context The context object.
@@ -2445,7 +2443,7 @@ char*           dc_imex_has_backup           (dc_context_t* context, const char*
 void            dc_stop_ongoing_process      (dc_context_t* context);
 
 
-// out-of-band verification
+// securejoin
 
 #define         DC_QR_ASK_VERIFYCONTACT      200 // id=contact
 #define         DC_QR_ASK_VERIFYGROUP        202 // text1=groupname
@@ -2480,7 +2478,7 @@ void            dc_stop_ongoing_process      (dc_context_t* context);
  * The QR code state is returned in dc_lot_t::state as:
  *
  * - DC_QR_ASK_VERIFYCONTACT with dc_lot_t::id=Contact ID:
- *   ask whether to verify the contact;
+ *   ask whether to start chatting with the contact;
  *   if so, start the protocol with dc_join_securejoin().
  *
  * - DC_QR_ASK_VERIFYGROUP or DC_QR_ASK_VERIFYBROADCAST
@@ -2489,7 +2487,7 @@ void            dc_stop_ongoing_process      (dc_context_t* context);
  *   if so, start the protocol with dc_join_securejoin().
  *
  * - DC_QR_FPR_OK with dc_lot_t::id=Contact ID:
- *   contact fingerprint verified,
+ *   contact fingerprint matches,
  *   ask the user if they want to start chatting;
  *   if so, call dc_create_chat_by_contact_id().
  *
@@ -2565,12 +2563,12 @@ dc_lot_t*       dc_check_qr                  (dc_context_t* context, const char*
 
 
 /**
- * Get QR code text that will offer an Setup-Contact or Verified-Group invitation.
+ * Get QR code text that will offer a SecureJoin invitation.
  *
  * The scanning device will pass the scanned content to dc_check_qr() then;
  * if dc_check_qr() returns
  * DC_QR_ASK_VERIFYCONTACT, DC_QR_ASK_VERIFYGROUP or DC_QR_ASK_VERIFYBROADCAST
- * an out-of-band-verification can be joined using dc_join_securejoin()
+ * the SecureJoin protocol can be started using dc_join_securejoin()
  *
  * The returned text will also work as a normal https:-link,
  * so that the QR code is useful also without Delta Chat being installed
@@ -2579,9 +2577,8 @@ dc_lot_t*       dc_check_qr                  (dc_context_t* context, const char*
  * @memberof dc_context_t
  * @param context The context object.
  * @param chat_id If set to a group-chat-id,
- *     the Verified-Group-Invite protocol is offered in the QR code;
- *     works for protected groups as well as for normal groups.
- *     If set to 0, the Setup-Contact protocol is offered in the QR code.
+ *     the SecureJoin QR code for the group is returned.
+ *     If set to 0, the setup contact QR code is returned.
  *     See https://securejoin.delta.chat/
  *     for details about both protocols.
  * @return The text that should go to the QR code,
@@ -2607,7 +2604,7 @@ char*           dc_get_securejoin_qr         (dc_context_t* context, uint32_t ch
 char*           dc_get_securejoin_qr_svg         (dc_context_t* context, uint32_t chat_id);
 
 /**
- * Continue a Setup-Contact or Verified-Group-Invite protocol
+ * Continue the SecureJoin protocol
  * started on another device with dc_get_securejoin_qr().
  * This function is typically called when dc_check_qr() returns
  * lot.state=DC_QR_ASK_VERIFYCONTACT, lot.state=DC_QR_ASK_VERIFYGROUP or lot.state=DC_QR_ASK_VERIFYBROADCAST
@@ -3573,7 +3570,6 @@ dc_lot_t*        dc_chatlist_get_summary2    (dc_context_t* context, uint32_t ch
  * last-message-state: @ref DC_STATE constant
  * last-message-date:
  * avatar-path: path-to-blobfile
- * is_verified: yes/no
  * @return a UTF8-encoded JSON string containing all requested info. Must be freed using dc_str_unref(). NULL is never returned.
  */
 char*            dc_chat_get_info_json       (dc_context_t* context, size_t chat_id);
@@ -5114,19 +5110,6 @@ int             dc_contact_is_blocked        (const dc_contact_t* contact);
 
 
 /**
- * Check if the contact
- * can be added to protected chats.
- *
- * See dc_contact_get_verifier_id() for a guidance how to display these information.
- *
- * @memberof dc_contact_t
- * @param contact The contact object.
- * @return 0: contact is not verified.
- *    2: SELF and contact have verified their fingerprints in both directions.
- */
-int             dc_contact_is_verified       (dc_contact_t* contact);
-
-/**
  * Returns whether contact is a bot.
  *
  * @memberof dc_contact_t
@@ -5148,36 +5131,6 @@ int             dc_contact_is_bot            (dc_contact_t* contact);
  * @return 1 if the contact is a key-contact, 0 if it is an address-contact.
  */
 int             dc_contact_is_key_contact    (dc_contact_t* contact);
-
-
-/**
- * Return the contact ID that verified a contact.
- *
- * As verifier may be unknown,
- * use dc_contact_is_verified() to check if a contact can be added to a protected chat.
- *
- * UI should display the information in the contact's profile as follows:
- *
- * - If dc_contact_get_verifier_id() != 0,
- *   display text "Introduced by ..."
- *   with the name of the contact
- *   formatted by dc_contact_get_name().
- *   Prefix the text by a green checkmark.
- *
- * - If dc_contact_get_verifier_id() == 0 and dc_contact_is_verified() != 0,
- *   display "Introduced" prefixed by a green checkmark.
- *
- * - if dc_contact_get_verifier_id() == 0 and dc_contact_is_verified() == 0,
- *   display nothing
- *
- * @memberof dc_contact_t
- * @param contact The contact object.
- * @return 
- *    The contact ID of the verifier. If it is DC_CONTACT_ID_SELF,
- *    we verified the contact ourself. If it is 0, we don't have verifier information or 
- *    the contact is not verified.
- */
-uint32_t       dc_contact_get_verifier_id      (dc_contact_t* contact);
 
 
 /**
@@ -6210,7 +6163,7 @@ void dc_event_unref(dc_event_t* event);
 
 
 /**
- * Contact(s) created, renamed, verified, blocked or deleted.
+ * Contact(s) created, renamed, blocked or deleted.
  *
  * @param data1 (int) contact_id of the changed contact or 0 on batch-changes or deletion.
  * @param data2 0
@@ -6282,8 +6235,7 @@ void dc_event_unref(dc_event_t* event);
  *
  * @param data1 (int) The ID of the inviting contact.
  * @param data2 (int) The progress as:
- *     400=vg-/vc-request-with-auth sent, typically shown as "alice@addr verified, introducing myself."
- *     (Bob has verified alice and waits until Alice does the same for him)
+ *     400=vg-/vc-request-with-auth sent, typically shown as "introducing myself."
  *     1000=vg-member-added/vc-contact-confirm received
  */
 #define DC_EVENT_SECUREJOIN_JOINER_PROGRESS       2061
@@ -6669,12 +6621,6 @@ void dc_event_unref(dc_event_t* event);
 /// Used to build the string returned by dc_get_contact_encrinfo().
 #define DC_STR_FINGERPRINTS               30
 
-/// "%1$s verified"
-///
-/// Used in status messages.
-/// - %1$s will be replaced by the name of the verified contact
-#define DC_STR_CONTACT_VERIFIED           35
-
 /// "Archived chats"
 ///
 /// Used as the name for the corresponding chatlist entry.
@@ -6853,7 +6799,7 @@ void dc_event_unref(dc_event_t* event);
 ///
 /// Added as an info-message directly after scanning a QR code for joining a group.
 /// May be followed by the info-messages
-/// #DC_STR_SECURE_JOIN_REPLIES, #DC_STR_CONTACT_VERIFIED and #DC_STR_MSGADDMEMBER.
+/// #DC_STR_SECURE_JOIN_REPLIES and #DC_STR_MSGADDMEMBER.
 ///
 /// `%1$s` and `%2$s` will be replaced by name of the inviter.
 #define DC_STR_SECURE_JOIN_STARTED        117
@@ -6862,15 +6808,13 @@ void dc_event_unref(dc_event_t* event);
 ///
 /// Info-message on scanning a QR code for joining a group.
 /// Added after #DC_STR_SECURE_JOIN_STARTED.
-/// If the handshake allows to skip a step and go for #DC_STR_CONTACT_VERIFIED directly,
-/// this info-message is skipped.
 ///
 /// `%1$s` will be replaced by the name of the inviter.
 #define DC_STR_SECURE_JOIN_REPLIES        118
 
 /// "Scan to chat with %1$s"
 ///
-/// Subtitle for verification qrcode svg image generated by the core.
+/// Subtitle for the invite qrcode svg image generated by the core.
 ///
 /// `%1$s` will be replaced by name of the inviter.
 #define DC_STR_SETUP_CONTACT_QR_DESC      119

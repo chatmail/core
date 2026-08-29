@@ -69,10 +69,6 @@ pub enum StockMessage {
     #[strum(props(fallback = "Fingerprints"))]
     FingerPrints = 30,
 
-    /// Unused. Was used in status messages.
-    #[strum(props(fallback = "%1$s verified."))]
-    ContactVerified = 35,
-
     #[strum(props(fallback = "Archived chats"))]
     ArchivedChats = 40,
 
