@@ -23,30 +23,40 @@
 //!    (scoped per WebXDC app instance/message-id). The other peers can then join the gossip with `joinRealtimeChannel().setListener()`
 //!    and `joinRealtimeChannel().send()` just like the other peers.
 
-use anyhow::{Context as _, Result, anyhow, bail};
+use anyhow::{Context as _, Result, anyhow, bail, ensure};
 use data_encoding::BASE32_NOPAD;
 use futures_lite::StreamExt;
 use iroh::{Endpoint, NodeAddr, NodeId, PublicKey, RelayMode, RelayUrl, SecretKey};
 use iroh_gossip::net::{Event, GOSSIP_ALPN, Gossip, GossipEvent, JoinOptions};
 use iroh_gossip::proto::TopicId;
 use parking_lot::Mutex;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::env;
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
 use tokio::sync::{RwLock, oneshot};
 use tokio::task::JoinHandle;
+use tokio::time::timeout;
 use url::Url;
 
 use crate::EventType;
 use crate::chat::send_msg;
 use crate::config::Config;
 use crate::context::Context;
-use crate::log::warn;
+use crate::log::{LogExt, warn};
 use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::SystemMessage;
+use crate::net::http::probe_iroh_url;
+use crate::net::run_connection_attempts;
+use crate::transport::published_transports;
 
 /// The length of an ed25519 `PublicKey`, in bytes.
 const PUBLIC_KEY_LENGTH: usize = 32;
 const PUBLIC_KEY_STUB: &[u8] = "static_string".as_bytes();
+
+/// Timeout for probing an iroh relay candidate.
+const RELAY_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Store Iroh peer channels for the context.
 #[derive(Debug)]
@@ -67,6 +77,9 @@ pub struct Iroh {
     ///
     /// This is attached to every message to work around `iroh_gossip` deduplication.
     pub(crate) public_key: PublicKey,
+
+    /// Home relay URL probed successfully when Iroh was created.
+    working_relay_url: Option<RelayUrl>,
 }
 
 impl Iroh {
@@ -76,7 +89,7 @@ impl Iroh {
     }
 
     /// Closes the QUIC endpoint.
-    pub(crate) async fn close(self) -> Result<()> {
+    pub(crate) async fn close(&self) -> Result<()> {
         self.router.shutdown().await.context("Closing iroh failed")
     }
 
@@ -99,6 +112,10 @@ impl Iroh {
         // after we check that it does not exist and before we create a new one.
         // Otherwise we would receive every message twice or more times.
         let mut iroh_channels = self.iroh_channels.write().await;
+        ensure!(
+            !ctx.left_topics.lock().contains(&topic),
+            "Realtime channel for {msg_id} was left"
+        );
 
         if iroh_channels.contains_key(&topic) {
             return Ok(None);
@@ -184,16 +201,14 @@ impl Iroh {
         *entry
     }
 
-    /// Get the iroh [NodeAddr] without direct IP addresses.
-    ///
-    /// The address is guaranteed to have home relay URL set
-    /// as it is the only way to reach the node
-    /// without global discovery mechanisms.
-    pub(crate) async fn get_node_addr(&self) -> Result<NodeAddr> {
-        let mut addr = self.router.endpoint().node_addr().await?;
-        addr.direct_addresses = BTreeSet::new();
-        debug_assert!(addr.relay_url().is_some());
-        Ok(addr)
+    /// Returns the iroh [NodeAddr] with the working relay URL
+    /// and without direct IP addresses.
+    pub(crate) fn get_relay_node_addr(&self) -> Result<NodeAddr> {
+        let relay_url = self
+            .working_relay_url
+            .clone()
+            .context("No working iroh relay, peers cannot reach us")?;
+        Ok(NodeAddr::new(self.public_key).with_relay_url(relay_url))
     }
 
     /// Leave the realtime channel for a given topic.
@@ -231,28 +246,88 @@ impl ChannelState {
     }
 }
 
+/// Returns the URL to probe for the given iroh relay.
+///
+/// The probe path is appended to any path of the relay URL
+/// so that relays served under a path prefix can be probed too.
+fn relay_probe_url(relay_url: &Url) -> Result<Url> {
+    let mut probe_url = relay_url.clone();
+    probe_url
+        .path_segments_mut()
+        .map_err(|()| anyhow!("Relay URL {relay_url} cannot be a base"))?
+        .pop_if_empty()
+        .push("generate_204");
+    Ok(probe_url)
+}
+
+/// Selects a working iroh relay among the candidates.
+async fn select_iroh_relay(context: &Context, candidates: &[Url]) -> Result<Url> {
+    let probes = candidates.iter().cloned().map(|candidate| {
+        let context = context.clone();
+        async move {
+            let probe_target = relay_probe_url(&candidate)?;
+            timeout(
+                RELAY_PROBE_TIMEOUT,
+                probe_iroh_url(&context, probe_target.as_str()),
+            )
+            .await
+            .with_context(|| format!("Timeout probing iroh relay {candidate}"))?
+            .with_context(|| format!("Failed to probe iroh relay {candidate}"))?;
+            Ok(candidate)
+        }
+    });
+    let selected = run_connection_attempts(probes).await?;
+    info!(context, "Selected iroh relay {selected}.");
+    Ok(selected)
+}
+
+/// Returns the deduplicated iroh relay URLs announced by the published transports.
+async fn published_iroh_relays(context: &Context) -> Result<Vec<Url>> {
+    let published = published_transports(context).await?;
+    let metadata = context.metadata.read().await;
+    let mut relays: Vec<Url> = Vec::new();
+    for (_, transport_id) in published {
+        if let Some(url) = metadata
+            .get(&transport_id)
+            .and_then(|conf| conf.iroh_relay.clone())
+            && !relays.contains(&url)
+        {
+            relays.push(url);
+        }
+    }
+    Ok(relays)
+}
+
 impl Context {
-    /// Create iroh endpoint and gossip.
-    async fn init_peer_channels(&self) -> Result<Iroh> {
-        info!(self, "Initializing peer channels.");
+    /// Creates the iroh endpoint, gossip and router.
+    ///
+    /// Iroh is created even in the rare case
+    /// that no relay candidate works;
+    /// peers cannot reach us then,
+    /// but we can still dial out through their relays.
+    async fn init_iroh(&self) -> Result<Iroh> {
+        if !self.get_config_bool(Config::WebxdcRealtimeEnabled).await? {
+            bail!("Attempt to initialize Iroh when realtime is disabled");
+        }
+        info!(self, "Initializing Iroh for realtime channels.");
+        let relay_candidates = published_iroh_relays(self).await?;
+        let working_relay_url = if relay_candidates.is_empty() {
+            warn!(self, "No iroh relay, peers cannot reach us.");
+            None
+        } else {
+            select_iroh_relay(self, &relay_candidates)
+                .await
+                .context("No working iroh relay")
+                .log_err(self)
+                .ok()
+                .map(RelayUrl::from)
+        };
+        let relay_mode = match &working_relay_url {
+            Some(relay_url) => RelayMode::Custom(relay_url.clone().into()),
+            None => RelayMode::Disabled,
+        };
         let secret_key = SecretKey::generate(rand_old::rngs::OsRng);
         let public_key = secret_key.public();
-
-        let relay_mode = if let Some(relay_url) = self
-            .metadata
-            .read()
-            .await
-            .values()
-            .next()
-            .and_then(|conf| conf.iroh_relay.clone())
-        {
-            RelayMode::Custom(RelayUrl::from(relay_url).into())
-        } else {
-            // FIXME: this should be RelayMode::Disabled instead.
-            // Currently using default relays because otherwise Rust tests fail.
-            RelayMode::Default
-        };
-
         let endpoint = Box::pin(
             Endpoint::builder()
                 .tls_x509() // For compatibility with iroh <0.34.0
@@ -283,50 +358,75 @@ impl Context {
             sequence_numbers: Mutex::new(HashMap::new()),
             iroh_channels: RwLock::new(HashMap::new()),
             public_key,
+            working_relay_url,
         })
     }
 
-    /// Returns [`None`] if the peer channels has not been initialized.
-    pub async fn get_peer_channels(&self) -> Option<tokio::sync::RwLockReadGuard<'_, Iroh>> {
-        tokio::sync::RwLockReadGuard::<'_, std::option::Option<Iroh>>::try_map(
-            self.iroh.read().await,
-            |opt_iroh| opt_iroh.as_ref(),
-        )
-        .ok()
+    /// Returns iroh while it has a working relay
+    /// or channels through which peers may have been dialed.
+    async fn get_active_iroh(&self) -> Option<Arc<Iroh>> {
+        let iroh = self.iroh.read().await.clone()?;
+        if iroh.working_relay_url.is_some() || !iroh.iroh_channels.read().await.is_empty() {
+            Some(iroh)
+        } else {
+            None
+        }
     }
 
-    /// Get or initialize the iroh peer channel.
-    pub async fn get_or_try_init_peer_channel(
-        &self,
-    ) -> Result<tokio::sync::RwLockReadGuard<'_, Iroh>> {
-        if !self.get_config_bool(Config::WebxdcRealtimeEnabled).await? {
-            bail!("Attempt to initialize Iroh when realtime is disabled");
+    /// Returns active iroh, initializing it if necessary.
+    ///
+    /// Concurrent calls are serialized, and a call racing [`Context::stop_io`] fails
+    /// rather than leaving iroh running after the stop.
+    /// Inactive iroh is replaced, probing the relay candidates again.
+    pub(crate) async fn get_active_or_init_iroh(&self) -> Result<Arc<Iroh>> {
+        if let Some(iroh) = self.get_active_iroh().await {
+            return Ok(iroh);
         }
 
-        if let Some(lock) = self.get_peer_channels().await {
-            return Ok(lock);
+        let io_stop_count = self.io_stop_count.load(Ordering::Relaxed);
+        let _guard = self.iroh_init_mutex.lock().await;
+
+        if let Some(iroh) = self.get_active_iroh().await {
+            return Ok(iroh);
+        }
+        if self.io_stop_count.load(Ordering::Relaxed) != io_stop_count {
+            bail!("Io was stopped");
         }
 
-        let lock = self.iroh.write().await;
-        match tokio::sync::RwLockWriteGuard::<'_, std::option::Option<Iroh>>::try_downgrade_map(
-            lock,
-            |opt_iroh| opt_iroh.as_ref(),
-        ) {
-            Ok(lock) => Ok(lock),
-            Err(mut lock) => {
-                let iroh = self.init_peer_channels().await?;
-                *lock = Some(iroh);
-                tokio::sync::RwLockWriteGuard::<'_, std::option::Option<Iroh>>::try_downgrade_map(
-                    lock,
-                    |opt_iroh| opt_iroh.as_ref(),
-                )
-                .map_err(|_| anyhow!("Downgrade should succeed as we just stored `Some` value"))
-            }
+        // Close the inactive instance to probe the relay candidates anew,
+        // unless a concurrent task still uses it; share it with them then.
+        if let Some(iroh) = self.close_unused_iroh().await {
+            return Ok(iroh);
         }
+
+        let iroh = Arc::new(self.init_iroh().await?);
+        *self.iroh.write().await = Some(iroh.clone());
+        Ok(iroh)
+    }
+
+    /// Closes iroh if no channel and no concurrent task uses it,
+    /// so that it stops using the network until realtime is used again.
+    /// Returns the instance kept because it is still in use, if any.
+    ///
+    /// The next use initializes iroh again and probes the relay candidates,
+    /// so a relay that stopped working meanwhile is not used again.
+    pub(crate) async fn close_unused_iroh(&self) -> Option<Arc<Iroh>> {
+        let mut slot = self.iroh.write().await;
+        let iroh = slot.take()?;
+        // A reference besides ours means somebody is about to use iroh.
+        if Arc::strong_count(&iroh) > 1 || !iroh.iroh_channels.read().await.is_empty() {
+            *slot = Some(iroh.clone());
+            return Some(iroh);
+        }
+        drop(slot);
+
+        info!(self, "Closing iroh, no realtime channel uses it.");
+        iroh.close().await.log_err(self).ok();
+        None
     }
 
     pub(crate) async fn maybe_add_gossip_peer(&self, topic: TopicId, peer: NodeAddr) -> Result<()> {
-        if let Some(iroh) = &*self.iroh.read().await {
+        if let Some(iroh) = self.get_active_iroh().await {
             info!(
                 self,
                 "Adding (maybe existing) peer with id {} to {topic}.", peer.node_id
@@ -460,6 +560,10 @@ pub(crate) async fn get_iroh_topic_for_msg(
 
 /// Send a gossip advertisement to the chat that [MsgId] belongs to.
 /// This method should be called from the frontend when `joinRealtimeChannel` is called.
+///
+/// The channel is joined even without a working relay,
+/// but no advertisement is sent then
+/// because peers could not reach us anyway.
 pub async fn send_webxdc_realtime_advertisement(
     ctx: &Context,
     msg_id: MsgId,
@@ -468,8 +572,15 @@ pub async fn send_webxdc_realtime_advertisement(
         return Ok(None);
     }
 
-    let iroh = ctx.get_or_try_init_peer_channel().await?;
+    if let Some(topic) = get_iroh_topic_for_msg(ctx, msg_id).await? {
+        ctx.left_topics.lock().remove(&topic);
+    }
+    let iroh = ctx.get_active_or_init_iroh().await?;
     let conn = iroh.join_and_subscribe_gossip(ctx, msg_id).await?;
+    if iroh.working_relay_url.is_none() {
+        warn!(ctx, "Not sending realtime advertisement without a relay.");
+        return Ok(conn);
+    }
 
     let webxdc = Message::load_from_db(ctx, msg_id).await?;
     let mut msg = Message::new(Viewtype::Text);
@@ -482,12 +593,15 @@ pub async fn send_webxdc_realtime_advertisement(
 }
 
 /// Send realtime data to other peers using iroh.
+///
+/// This works even without a working relay of our own
+/// because joined peers are dialed through their advertised relays.
 pub async fn send_webxdc_realtime_data(ctx: &Context, msg_id: MsgId, data: Vec<u8>) -> Result<()> {
     if !ctx.get_config_bool(Config::WebxdcRealtimeEnabled).await? {
         return Ok(());
     }
 
-    let iroh = ctx.get_or_try_init_peer_channel().await?;
+    let iroh = ctx.get_active_or_init_iroh().await?;
     iroh.send_webxdc_realtime_data(ctx, msg_id, data).await?;
     Ok(())
 }
@@ -498,10 +612,11 @@ pub async fn send_webxdc_realtime_data(ctx: &Context, msg_id: MsgId, data: Vec<u
 /// `send_webxdc_realtime_*()` functions aren't called for the given `msg_id` anymore until the app
 /// is open again.
 pub async fn leave_webxdc_realtime(ctx: &Context, msg_id: MsgId) -> Result<()> {
-    let Some(iroh) = ctx.get_peer_channels().await else {
+    let Some(topic) = get_iroh_topic_for_msg(ctx, msg_id).await? else {
         return Ok(());
     };
-    let Some(topic) = get_iroh_topic_for_msg(ctx, msg_id).await? else {
+    ctx.left_topics.lock().insert(topic);
+    let Some(iroh) = ctx.get_active_iroh().await else {
         return Ok(());
     };
     iroh.leave_realtime(topic).await?;

@@ -2,16 +2,267 @@ use super::*;
 use crate::{
     EventType,
     chat::{self, ChatId, add_contact_to_chat, resend_msgs, send_msg},
+    imap::ServerMetadata,
     message::{Message, Viewtype},
     receive_imf::receive_imf,
     test_utils::{TestContext, TestContextManager},
+    transport::add_pseudo_transport,
 };
+
+/// CI chatmail relay is used as a known-working candidate because
+/// mocking out the serving of https requests is not worth it, and,
+/// besides, it's also useful to exercise production code paths
+/// which the core Python tests do a lot already.
+const WORKING_RELAY: &str = "https://ci-chatmail.testrun.org";
+
+/// Sets the iroh relay a transport announces via IMAP METADATA.
+async fn set_iroh_relay(ctx: &TestContext, transport_id: u32, url: &str) -> Result<()> {
+    ctx.metadata.write().await.insert(
+        transport_id,
+        ServerMetadata {
+            iroh_relay: Some(Url::parse(url)?),
+            ..Default::default()
+        },
+    );
+    Ok(())
+}
+
+/// Adds a transport announcing an iroh relay,
+/// like a chatmail server does via IMAP METADATA.
+async fn announce_relay(ctx: &TestContext, addr: &str, url: &str) -> Result<()> {
+    add_pseudo_transport(ctx, addr).await?;
+    let (_, transport_id) = published_transports(ctx)
+        .await?
+        .into_iter()
+        .find(|(a, _)| a == addr)
+        .context("Transport not found")?;
+    set_iroh_relay(ctx, transport_id, url).await
+}
+
+impl TestContext {
+    /// Announces the working relay for the transport this context has.
+    async fn with_working_iroh_relay(self) -> Self {
+        let (_, transport_id) = published_transports(&self)
+            .await
+            .expect("Transports should be readable")
+            .into_iter()
+            .next()
+            .expect("Context should have a published transport");
+        set_iroh_relay(&self, transport_id, WORKING_RELAY)
+            .await
+            .expect("Relay should be announced");
+        self
+    }
+}
+
+#[test]
+fn test_relay_probe_url() {
+    let probe = |url| relay_probe_url(&Url::parse(url).unwrap()).unwrap();
+    assert_eq!(
+        probe("https://relay.example.org").as_str(),
+        "https://relay.example.org/generate_204"
+    );
+    assert_eq!(
+        probe("https://relay.example.org/some/path").as_str(),
+        "https://relay.example.org/some/path/generate_204"
+    );
+}
+
+/// Sends a webxdc instance and returns it.
+async fn send_webxdc(ctx: &TestContext, peer: &TestContext) -> Result<Message> {
+    let chat = ctx.create_chat(peer).await;
+    let mut instance = Message::new(Viewtype::File);
+    instance.set_file_from_bytes(
+        ctx,
+        "minimal.xdc",
+        include_bytes!("../../test-data/webxdc/minimal.xdc"),
+        None,
+    )?;
+    send_msg(ctx, chat.id, &mut instance).await?;
+    let webxdc = ctx.get_last_msg().await;
+    ctx.pop_sent_msg().await;
+    Ok(webxdc)
+}
+
+/// Returns the relay of the node address to advertise, if any.
+async fn selected_iroh_relay(ctx: &TestContext) -> Result<Option<RelayUrl>> {
+    let iroh = ctx.get_active_or_init_iroh().await?;
+    Ok(iroh
+        .get_relay_node_addr()
+        .ok()
+        .and_then(|addr| addr.relay_url().cloned()))
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_select_working_iroh_relay() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &mut tcm.alice().await;
+
+    announce_relay(alice, "one@example.net", "https://127.0.0.1:9").await?;
+    assert_eq!(selected_iroh_relay(alice).await?, None);
+    alice.assert_warn("No working iroh relay").await;
+
+    // Relays announced by unpublished transports are not used
+    announce_relay(alice, "two@example.net", WORKING_RELAY).await?;
+    alice
+        .set_transport_unpublished("two@example.net", true)
+        .await?;
+    assert_eq!(selected_iroh_relay(alice).await?, None);
+    alice.assert_warn("No working iroh relay").await;
+
+    // The endpoint is initialized again on the next use
+    // because it has no working relay and is not in use yet.
+    announce_relay(alice, "three@example.net", "https://192.0.2.1").await?;
+    announce_relay(alice, "four@example.net", WORKING_RELAY).await?;
+    announce_relay(alice, "five@example.net", "https://192.0.2.2").await?;
+    assert_eq!(
+        selected_iroh_relay(alice).await?,
+        Some(RelayUrl::from(Url::parse(WORKING_RELAY)?))
+    );
+    Ok(())
+}
+
+/// Iroh is closed once no channel uses it,
+/// but kept while a channel is joined.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_close_unused_iroh() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &mut tcm.alice().await.with_working_iroh_relay().await;
+    let bob = &tcm.bob().await;
+    let alice_webxdc = send_webxdc(alice, bob).await?;
+
+    // A joined channel keeps iroh.
+    send_webxdc_realtime_advertisement(alice, alice_webxdc.id).await?;
+    alice.pop_sent_msg().await;
+    alice.close_unused_iroh().await;
+    assert!(alice.iroh.read().await.is_some());
+
+    // Without a channel iroh is closed and initialized again on demand.
+    leave_webxdc_realtime(alice, alice_webxdc.id).await?;
+    alice.close_unused_iroh().await;
+    assert!(alice.iroh.read().await.is_none());
+    assert!(alice.get_active_or_init_iroh().await.is_ok());
+    Ok(())
+}
+
+/// An io stop racing an iroh initialization wins,
+/// so no iroh survives it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_stop_io_while_initializing_iroh() -> Result<()> {
+    let alice = &TestContext::new_alice().await;
+
+    // Hold the mutex so that both tasks below wait for it,
+    // the initialization first and the io stop behind it.
+    let guard = alice.iroh_init_mutex.lock().await;
+    let init_ctx = alice.ctx.clone();
+    let init = tokio::spawn(async move { init_ctx.get_active_or_init_iroh().await });
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let stop_ctx = alice.ctx.clone();
+    let stop = tokio::spawn(async move { stop_ctx.stop_io().await });
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    drop(guard);
+
+    assert!(init.await?.is_err());
+    stop.await?;
+    assert!(alice.iroh.read().await.is_none());
+    Ok(())
+}
+
+/// A join that was pending while its channel was left does not register it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_leave_cancels_pending_join() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await.with_working_iroh_relay().await;
+    let bob = &tcm.bob().await;
+    let alice_webxdc = send_webxdc(alice, bob).await?;
+    let topic = get_iroh_topic_for_msg(alice, alice_webxdc.id)
+        .await?
+        .unwrap();
+
+    // Marks the topic although iroh is not even initialized yet.
+    leave_webxdc_realtime(alice, alice_webxdc.id).await?;
+
+    // A join that passed its unmark before the leave must not register the channel.
+    let iroh = alice.get_active_or_init_iroh().await?;
+    assert!(
+        iroh.join_and_subscribe_gossip(alice, alice_webxdc.id)
+            .await
+            .is_err()
+    );
+    assert!(!iroh.iroh_channels.read().await.contains_key(&topic));
+
+    assert!(
+        send_webxdc_realtime_advertisement(alice, alice_webxdc.id)
+            .await?
+            .is_some()
+    );
+    alice.pop_sent_msg().await;
+    assert!(iroh.iroh_channels.read().await.contains_key(&topic));
+    Ok(())
+}
+
+/// Iroh without a working relay joins channels
+/// but sends no advertisement.
+/// It is kept while in use and replaced afterwards.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_relayless_endpoint() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &mut tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_webxdc = send_webxdc(alice, bob).await?;
+
+    // An instance a concurrent task still references is shared,
+    // not closed underneath them.
+    announce_relay(alice, "broken@example.net", "https://127.0.0.1:9").await?;
+    let held = alice.get_active_or_init_iroh().await?;
+    assert!(Arc::ptr_eq(&held, &alice.get_active_or_init_iroh().await?));
+    drop(held);
+    alice.assert_warn("No working iroh relay").await;
+
+    // Without a working relay the channel is joined
+    // but no advertisement is sent.
+    assert!(
+        send_webxdc_realtime_advertisement(alice, alice_webxdc.id)
+            .await?
+            .is_some()
+    );
+    alice.assert_warn("No working iroh relay").await;
+    alice
+        .assert_warn("Not sending realtime advertisement without a relay")
+        .await;
+    assert_eq!(selected_iroh_relay(alice).await?, None);
+
+    // Iroh is kept while its channel is in use,
+    // so a relay announced later is not picked up yet.
+    let working_relay = Some(RelayUrl::from(Url::parse(WORKING_RELAY)?));
+    announce_relay(alice, "working@example.net", WORKING_RELAY).await?;
+    assert_eq!(selected_iroh_relay(alice).await?, None);
+
+    // The unused iroh is replaced on the next use.
+    leave_webxdc_realtime(alice, alice_webxdc.id).await?;
+    assert_eq!(selected_iroh_relay(alice).await?, working_relay);
+
+    // Disabling realtime does not tear down iroh,
+    // but sending and advertising become no-ops.
+    alice
+        .set_config_bool(Config::WebxdcRealtimeEnabled, false)
+        .await?;
+    send_webxdc_realtime_data(alice, alice_webxdc.id, b"ignored".to_vec()).await?;
+    assert!(
+        send_webxdc_realtime_advertisement(alice, alice_webxdc.id)
+            .await?
+            .is_none()
+    );
+    assert!(alice.iroh.read().await.is_some());
+    Ok(())
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_can_communicate() {
     let mut tcm = TestContextManager::new();
-    let alice = &mut tcm.alice().await;
-    let bob = &mut tcm.bob().await;
+    let alice = &mut tcm.alice().await.with_working_iroh_relay().await;
+    let bob = &mut tcm.bob().await.with_working_iroh_relay().await;
 
     // Alice sends webxdc to bob
     let alice_chat = alice.create_chat(bob).await;
@@ -61,17 +312,16 @@ async fn test_can_communicate() {
         members,
         vec![
             alice
-                .get_or_try_init_peer_channel()
+                .get_active_or_init_iroh()
                 .await
                 .unwrap()
-                .get_node_addr()
-                .await
+                .get_relay_node_addr()
                 .unwrap()
                 .node_id
         ]
     );
 
-    bob.get_or_try_init_peer_channel()
+    bob.get_active_or_init_iroh()
         .await
         .unwrap()
         .join_and_subscribe_gossip(bob, bob_webxdc.id)
@@ -83,7 +333,7 @@ async fn test_can_communicate() {
 
     // Alice sends ephemeral message
     alice
-        .get_or_try_init_peer_channel()
+        .get_active_or_init_iroh()
         .await
         .unwrap()
         .send_webxdc_realtime_data(alice, alice_webxdc.id, "alice -> bob".as_bytes().to_vec())
@@ -104,7 +354,7 @@ async fn test_can_communicate() {
         }
     }
     // Bob sends ephemeral message
-    bob.get_or_try_init_peer_channel()
+    bob.get_active_or_init_iroh()
         .await
         .unwrap()
         .send_webxdc_realtime_data(bob, bob_webxdc.id, "bob -> alice".as_bytes().to_vec())
@@ -136,17 +386,16 @@ async fn test_can_communicate() {
     assert_eq!(
         members,
         vec![
-            bob.get_or_try_init_peer_channel()
+            bob.get_active_or_init_iroh()
                 .await
                 .unwrap()
-                .get_node_addr()
-                .await
+                .get_relay_node_addr()
                 .unwrap()
                 .node_id
         ]
     );
 
-    bob.get_or_try_init_peer_channel()
+    bob.get_active_or_init_iroh()
         .await
         .unwrap()
         .send_webxdc_realtime_data(bob, bob_webxdc.id, "bob -> alice 2".as_bytes().to_vec())
@@ -177,8 +426,8 @@ async fn test_can_communicate() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_duplicated_out_of_order_advertisement() -> Result<()> {
     let mut tcm = TestContextManager::new();
-    let alice = &mut tcm.alice().await;
-    let bob = &mut tcm.bob().await;
+    let alice = &mut tcm.alice().await.with_working_iroh_relay().await;
+    let bob = &mut tcm.bob().await.with_working_iroh_relay().await;
 
     let alice_chat = alice.create_chat(bob).await;
     let mut instance = Message::new(Viewtype::File);
@@ -223,11 +472,10 @@ async fn test_duplicated_out_of_order_advertisement() -> Result<()> {
         members,
         vec![
             alice
-                .get_or_try_init_peer_channel()
+                .get_active_or_init_iroh()
                 .await
                 .unwrap()
-                .get_node_addr()
-                .await
+                .get_relay_node_addr()
                 .unwrap()
                 .node_id
         ]
@@ -239,8 +487,8 @@ async fn test_duplicated_out_of_order_advertisement() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_can_reconnect() {
     let mut tcm = TestContextManager::new();
-    let alice = &mut tcm.alice().await;
-    let bob = &mut tcm.bob().await;
+    let alice = &mut tcm.alice().await.with_working_iroh_relay().await;
+    let bob = &mut tcm.bob().await.with_working_iroh_relay().await;
 
     assert!(
         alice
@@ -289,17 +537,16 @@ async fn test_can_reconnect() {
         members,
         vec![
             alice
-                .get_or_try_init_peer_channel()
+                .get_active_or_init_iroh()
                 .await
                 .unwrap()
-                .get_node_addr()
-                .await
+                .get_relay_node_addr()
                 .unwrap()
                 .node_id
         ]
     );
 
-    bob.get_or_try_init_peer_channel()
+    bob.get_active_or_init_iroh()
         .await
         .unwrap()
         .join_and_subscribe_gossip(bob, bob_webxdc.id)
@@ -311,7 +558,7 @@ async fn test_can_reconnect() {
 
     // Alice sends ephemeral message
     alice
-        .get_or_try_init_peer_channel()
+        .get_active_or_init_iroh()
         .await
         .unwrap()
         .send_webxdc_realtime_data(alice, alice_webxdc.id, "alice -> bob".as_bytes().to_vec())
@@ -360,7 +607,9 @@ async fn test_can_reconnect() {
     // Check that sequence number is persisted when leaving the channel.
     assert_eq!(bob_sequence_number, bob_sequence_number_after);
 
-    bob.get_or_try_init_peer_channel()
+    // Unmark the leave like a fresh advertisement would.
+    bob.left_topics.lock().remove(&bob_topic);
+    bob.get_active_or_init_iroh()
         .await
         .unwrap()
         .join_and_subscribe_gossip(bob, bob_webxdc.id)
@@ -370,7 +619,7 @@ async fn test_can_reconnect() {
         .await
         .unwrap();
 
-    bob.get_or_try_init_peer_channel()
+    bob.get_active_or_init_iroh()
         .await
         .unwrap()
         .send_webxdc_realtime_data(bob, bob_webxdc.id, "bob -> alice".as_bytes().to_vec())
@@ -430,8 +679,8 @@ async fn test_can_reconnect() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_parallel_connect() {
     let mut tcm = TestContextManager::new();
-    let alice = &mut tcm.alice().await;
-    let bob = &mut tcm.bob().await;
+    let alice = &mut tcm.alice().await.with_working_iroh_relay().await;
+    let bob = &mut tcm.bob().await.with_working_iroh_relay().await;
 
     let chat = alice.create_chat(bob).await.id;
 
@@ -450,8 +699,8 @@ async fn test_parallel_connect() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_webxdc_resend() {
     let mut tcm = TestContextManager::new();
-    let alice = &mut tcm.alice().await;
-    let bob = &mut tcm.bob().await;
+    let alice = &mut tcm.alice().await.with_working_iroh_relay().await;
+    let bob = &mut tcm.bob().await.with_working_iroh_relay().await;
     let group = chat::create_group(alice, "group chat").await.unwrap();
 
     // Alice sends webxdc to bob
@@ -472,7 +721,7 @@ async fn test_webxdc_resend() {
     connect_alice_bob(alice, group, &mut instance, bob).await;
 
     // fiona joins late
-    let fiona = &mut tcm.fiona().await;
+    let fiona = &mut tcm.fiona().await.with_working_iroh_relay().await;
 
     add_contact_to_chat(alice, group, alice.add_or_lookup_contact_id(fiona).await)
         .await
@@ -618,7 +867,7 @@ async fn test_peer_channels_disabled() {
 
     // This internal function should return error
     // if accidentally called with the setting disabled.
-    assert!(alice.ctx.get_or_try_init_peer_channel().await.is_err());
+    assert!(alice.ctx.get_active_or_init_iroh().await.is_err());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

@@ -1914,14 +1914,9 @@ impl MimeFactory {
             }
             SystemMessage::IrohNodeAddr => {
                 let node_addr = context
-                    .get_or_try_init_peer_channel()
+                    .get_active_or_init_iroh()
                     .await?
-                    .get_node_addr()
-                    .await?;
-
-                // We should not send `null` as relay URL
-                // as this is the only way to reach the node.
-                debug_assert!(node_addr.relay_url().is_some());
+                    .get_relay_node_addr()?;
                 headers.push((
                     HeaderDef::IrohNodeAddr.into(),
                     mail_builder::headers::text::Text::new(serde_json::to_string(&node_addr)?)

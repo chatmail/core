@@ -445,6 +445,8 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
 
     maybe_add_time_based_warnings(ctx).await;
 
+    ctx.close_unused_iroh().await;
+
     match ctx.get_config_i64(Config::LastHousekeeping).await {
         Ok(last_housekeeping_time) => {
             let next_housekeeping_time =
