@@ -474,7 +474,18 @@ pub(crate) fn addresses_from_public_key(public_key: &SignedPublicKey) -> Option<
 /// Returns the addresses to reach the owner of `public_key`,
 /// falling back to `addr` if the key carries no relay list.
 pub(crate) fn relay_addrs(public_key: &SignedPublicKey, addr: &str) -> Vec<String> {
-    addresses_from_public_key(public_key).unwrap_or_else(|| vec![addr.to_string()])
+    addresses_from_public_key(public_key).unwrap_or_else(|| {
+        if addr.is_empty() {
+            vec![]
+        } else {
+            vec![addr.to_string()]
+        }
+    })
+}
+
+/// Returns true if the key can be encrypted to, i.e. has an encryption subkey.
+pub(crate) fn pubkey_can_encrypt(public_key: &SignedPublicKey) -> bool {
+    select_pk_for_encryption(public_key).is_some()
 }
 
 /// Returns true if public key advertises SEIPDv2 feature.
