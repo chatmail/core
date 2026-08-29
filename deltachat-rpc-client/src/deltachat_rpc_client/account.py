@@ -360,7 +360,7 @@ class Account:
         return Chat(self, chat_id)
 
     def secure_join(self, qrdata: str) -> Chat:
-        """Continue a Setup-Contact or Verified-Group-Invite protocol started on another device.
+        """Continue the SecureJoin protocol started on another device.
 
         The function returns immediately and the handshake runs in background, sending
         and receiving several messages.

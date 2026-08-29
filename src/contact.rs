@@ -560,10 +560,10 @@ pub enum Origin {
     /// To: of incoming messages of unknown sender
     IncomingUnknownTo = 0x40,
 
-    /// Address scanned but not verified.
+    /// Address scanned from a QR code.
     UnhandledQrScan = 0x80,
 
-    /// Address scanned from a SecureJoin QR code, but not verified yet.
+    /// Address scanned from a SecureJoin QR code.
     UnhandledSecurejoinQrScan = 0x81,
 
     /// Reply-To: of incoming message of known sender
@@ -594,14 +594,14 @@ pub enum Origin {
     /// address is in our address book
     AddressBook = 0x80000,
 
-    /// set on Alice's side for contacts like Bob that have scanned the QR code offered by her. Only means the contact has once been established using the "securejoin" procedure in the past, getting the current key verification status requires calling contact_is_verified() !
+    /// Set on Alice's side for contacts like Bob that have scanned the QR code offered by her.
+    /// Only means the contact has once been established using the "securejoin" procedure.
     SecurejoinInvited = 0x0100_0000,
 
     /// Set on Bob's side for contacts scanned from a QR code.
     /// Only means the contact has been scanned from the QR code,
     /// but does not mean that securejoin succeeded
     /// or the key has not changed since the last scan.
-    /// Getting the current key verification status requires calling contact_is_verified() !
     SecurejoinJoined = 0x0200_0000,
 
     /// contact added manually by create_contact(), this should be the largest origin as otherwise the user cannot modify the names
@@ -1686,50 +1686,6 @@ WHERE addr=?
             return Ok(true);
         }
         Ok(self.public_key(context).await?.is_some())
-    }
-
-    /// Returns true if the contact
-    /// can be added to verified chats.
-    ///
-    /// If contact is verified
-    /// UI should display green checkmark after the contact name
-    /// in contact list items and
-    /// in chat member list items.
-    ///
-    /// Use [Self::get_verifier_id] to display the verifier contact
-    /// in the info section of the contact profile.
-    pub async fn is_verified(&self, context: &Context) -> Result<bool> {
-        // We're always sort of secured-verified as we could verify the key on this device any time with the key
-        // on this device
-        if self.id == ContactId::SELF {
-            return Ok(true);
-        }
-
-        Ok(self.get_verifier_id(context).await?.is_some())
-    }
-
-    /// Returns the `ContactId` that verified the contact.
-    ///
-    /// If this returns Some(_),
-    /// display green checkmark in the profile and "Introduced by ..." line
-    /// with the name of the contact.
-    ///
-    /// If this returns `Some(None)`, then the contact is verified,
-    /// but it's unclear by whom.
-    pub async fn get_verifier_id(&self, context: &Context) -> Result<Option<Option<ContactId>>> {
-        let verifier_id: u32 = context
-            .sql
-            .query_get_value("SELECT verifier FROM contacts WHERE id=?", (self.id,))
-            .await?
-            .with_context(|| format!("Contact {} does not exist", self.id))?;
-
-        if verifier_id == 0 {
-            Ok(None)
-        } else if verifier_id == self.id.to_u32() {
-            Ok(Some(None))
-        } else {
-            Ok(Some(Some(ContactId::new(verifier_id))))
-        }
     }
 
     /// Returns the number of real (i.e. non-special) contacts in the database.

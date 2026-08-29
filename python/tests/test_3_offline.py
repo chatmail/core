@@ -115,7 +115,6 @@ class TestOfflineContact:
         assert contact1.addr == "some1@example.org"
         assert contact1.display_name == "some1"
         assert not contact1.is_blocked()
-        assert not contact1.is_verified()
 
     def test_get_blocked(self, acfactory):
         ac1 = acfactory.get_pseudo_configured_account()
