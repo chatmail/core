@@ -56,7 +56,7 @@ const PUBLIC_KEY_LENGTH: usize = 32;
 const PUBLIC_KEY_STUB: &[u8] = "static_string".as_bytes();
 
 /// Timeout for probing an iroh relay candidate.
-const RELAY_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
+const RELAY_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Store Iroh peer channels for the context.
 #[derive(Debug)]
