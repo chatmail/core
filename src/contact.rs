@@ -1926,17 +1926,15 @@ pub(crate) async fn set_profile_image(
     );
 
     let mut contact = Contact::get_by_id(context, contact_id).await?;
-    let changed = match profile_image {
-        AvatarAction::Change(profile_image) => {
-            contact.param.set(Param::ProfileImage, profile_image);
-            true
-        }
-        AvatarAction::Delete => {
-            contact.param.remove(Param::ProfileImage);
-            true
-        }
+    let profile_image_opt = match profile_image {
+        AvatarAction::Change(profile_image) => Some(profile_image),
+        AvatarAction::Delete => None,
     };
+    let changed = contact.param.get(Param::ProfileImage) != profile_image_opt.map(|s| s.as_str());
     if changed {
+        contact
+            .param
+            .set_optional(Param::ProfileImage, profile_image_opt);
         contact.update_param(context).await?;
         context.emit_event(EventType::ContactsChanged(Some(contact_id)));
         chatlist_events::emit_chatlist_item_changed_for_contact_chat(context, contact_id).await;
