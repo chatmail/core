@@ -89,8 +89,9 @@ def test_second_device(acf, alice_and_remote_bob) -> None:
     assert new_account.get_config("addr") == remote_eval("bob.get_config('addr')")
 
 
-def test_keyupdate_against_core_2_48_march_2026(acf, alice_and_remote_bob):
-    """Test 2.48 Bob learns a new relay of Alice from a keyupdate, and is shown nothing."""
+@pytest.mark.parametrize("replace_relay", [False, True], ids=["add", "replace"])
+def test_keyupdate_against_core_2_48_march_2026(acf, alice_and_remote_bob, replace_relay):
+    """Test 2.48 Bob learns a relay change of Alice from a keyupdate, and is shown nothing."""
     alice, alice_contact_bob, remote_eval = alice_and_remote_bob("2.48.0")
 
     def bob_sees():
@@ -115,8 +116,10 @@ def test_keyupdate_against_core_2_48_march_2026(acf, alice_and_remote_bob):
     # without waiting, the re-signed key can tie with the copy Bob holds, keeping his.
     time.sleep(2)
     alice.add_transport_from_qr(acf.get_account_qr())
-    alice.bring_online()
     (new_addr,) = [t["addr"] for t in alice.list_transports() if t["addr"] != old_addr]
+    if replace_relay:
+        alice.delete_transport(old_addr)
+    alice.bring_online()
 
     # The 2.48 core has no encryption enforcement, but the keyupdate MDN without
     # referenced message keeps it invisible; merging happens before the trashing.
@@ -130,3 +133,7 @@ def test_keyupdate_against_core_2_48_march_2026(acf, alice_and_remote_bob):
     # It also leaves no trace: no chat with Alice, no message anywhere,
     # and no address-contact for the address it was sent from.
     assert bob_sees() == before
+
+    if replace_relay:
+        remote_eval("bob_contact_alice.create_chat().send_text('hello after replacement')")
+        assert alice.wait_for_incoming_msg().get_snapshot().text == "hello after replacement"

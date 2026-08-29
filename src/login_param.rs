@@ -115,16 +115,6 @@ pub struct EnteredSmtpLoginParam {
     pub password: String,
 }
 
-/// A transport, as shown in the "relays" list in the UI.
-#[derive(Debug)]
-pub struct TransportListEntry {
-    /// The login data entered by the user.
-    pub param: EnteredLoginParam,
-    /// Whether this transport is set to 'unpublished'.
-    /// See [`Context::set_transport_unpublished`] for details.
-    pub is_unpublished: bool,
-}
-
 /// Login parameters entered by the user.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EnteredLoginParam {

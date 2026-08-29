@@ -139,8 +139,7 @@ async fn test_maybe_add_additional_relays_does_nothing_after_finishing_once() ->
     assert!(relay_added);
 
     let transports = t.list_transports().await?;
-    t.delete_transport(&transports.last().unwrap().param.addr)
-        .await?;
+    t.delete_transport(&transports.last().unwrap().addr).await?;
 
     SystemTime::shift(Duration::from_secs(
         AUTOMATIC_ADDITION_DEBOUNCE_SECONDS as u64 + 1,

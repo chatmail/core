@@ -433,9 +433,9 @@ pub enum EventType {
     ///
     /// UI should update the list.
     ///
-    /// This event is emitted when a transport
-    /// synchronization message modifies transports,
-    /// but not when the UI modifies the transport list by itself.
+    /// The event is emitted on the device modifying
+    /// the transports as well as on other devices
+    /// applying the synced change.
     TransportsModified,
 
     /// Event for using in tests, e.g. as a fence between normally generated events.

@@ -439,7 +439,7 @@ pub fn merge_openpgp_certificates(
 /// Returns relays addresses from the public key signature.
 ///
 /// Not more than [`MAX_RELAYS`] relays are returned for each key.
-/// This is the same constant as the maximum number of published relays
+/// This is the same constant as the maximum number of relays
 /// the user is allowed to have in the key.
 /// If the constant is changed in the future,
 /// the client with the lower constant value

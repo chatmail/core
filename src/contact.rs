@@ -1174,7 +1174,7 @@ VALUES (?, ?, ?, ?, ?, ?)
         query: Option<&str>,
     ) -> Result<Vec<ContactId>> {
         let self_addrs = context
-            .get_all_self_addrs()
+            .get_self_addrs()
             .await?
             .into_iter()
             .collect::<HashSet<_>>();

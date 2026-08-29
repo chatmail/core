@@ -626,13 +626,10 @@ CREATE TABLE transports (
     -- over this table and `removed_transports`, and contacts keep the newest one.
     add_timestamp INTEGER NOT NULL DEFAULT 0,
 
-    -- True if the transport address is published
-    -- by sending it in the public key signature.
+    -- Unused since migration 165, which removed unpublished transports.
     is_published INTEGER DEFAULT 1 NOT NULL,
 
     -- Time when the transport was last used to receive a message.
-    -- Used to remove the least recently used transport
-    -- when a new transport is added and there are too many relays already.
     last_rcvd_timestamp INTEGER NOT NULL DEFAULT 0,
     UNIQUE(addr)
 );

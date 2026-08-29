@@ -20,13 +20,18 @@ def test_add_second_address(acf) -> None:
 
     first_addr = account.list_transports()[0]["addr"]
     second_addr = account.list_transports()[1]["addr"]
+    third_addr = account.list_transports()[2]["addr"]
 
-    # Cannot delete the first address.
-    with pytest.raises(JsonRpcError):
-        account.delete_transport(first_addr)
+    assert account.get_config("configured_addr") == first_addr
+    account.delete_transport(first_addr)
+    assert len(account.list_transports()) == 2
+    assert account.get_config("configured_addr") != first_addr
 
     account.delete_transport(second_addr)
-    assert len(account.list_transports()) == 2
+    assert len(account.list_transports()) == 1
+
+    with pytest.raises(JsonRpcError):
+        account.delete_transport(third_addr)
 
 
 def test_change_address(acf) -> None:
@@ -63,8 +68,6 @@ def test_change_address(acf) -> None:
     alice_vcard = alice.self_contact.make_vcard()
     assert old_alice_addr not in alice_vcard
     assert new_alice_addr in alice_vcard
-    with pytest.raises(JsonRpcError):
-        alice.delete_transport(new_alice_addr)
     alice.start_io()
 
     alice_chat_bob.send_text("Hello again!")
@@ -122,6 +125,10 @@ def test_transport_synchronization(acf, log) -> None:
             if "scheduler is running" in ev.msg:
                 return
 
+    def wait_transports(ac, n):
+        while len(ac.list_transports()) != n:
+            ac.wait_for_event(EventType.TRANSPORTS_MODIFIED)
+
     ac1, ac2 = acf.get_online_accounts(2)
     ac1_clone = ac1.clone()
     ac1_clone.bring_online()
@@ -129,15 +136,13 @@ def test_transport_synchronization(acf, log) -> None:
     qr = acf.get_account_qr()
 
     ac1.add_transport_from_qr(qr)
-    ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
+    wait_transports(ac1_clone, 2)
     wait_for_io_started(ac1_clone)
     assert len(ac1.list_transports()) == 2
-    assert len(ac1_clone.list_transports()) == 2
 
     ac1_clone.add_transport_from_qr(qr)
-    ac1.wait_for_event(EventType.TRANSPORTS_MODIFIED)
+    wait_transports(ac1, 3)
     wait_for_io_started(ac1)
-    assert len(ac1.list_transports()) == 3
     assert len(ac1_clone.list_transports()) == 3
 
     log.section("ac1 clone removes second transport")
@@ -145,21 +150,17 @@ def test_transport_synchronization(acf, log) -> None:
     addr3 = transport3["addr"]
     ac1_clone.delete_transport(transport2["addr"])
 
-    ac1.wait_for_event(EventType.TRANSPORTS_MODIFIED)
+    wait_transports(ac1, 2)
     wait_for_io_started(ac1)
     [transport1, transport3] = ac1.list_transports()
 
-    log.section("ac1 changes the primary transport")
+    log.section("ac1 changes the sending transport")
     ac1.set_config("configured_addr", transport3["addr"])
-
-    ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
-    [transport1, transport3] = ac1_clone.list_transports()
-    assert ac1_clone.get_config("configured_addr") == transport1["addr"]
 
     log.section("ac1 removes the first transport")
     ac1.delete_transport(transport1["addr"])
 
-    ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
+    wait_transports(ac1_clone, 1)
     wait_for_io_started(ac1_clone)
     [transport3] = ac1_clone.list_transports()
     assert transport3["addr"] == addr3
@@ -181,6 +182,7 @@ def test_transport_sync_new_as_primary(acf, log) -> None:
     qr = acf.get_account_qr()
 
     ac1.add_transport_from_qr(qr)
+    ac1.wait_for_event(EventType.TRANSPORTS_MODIFIED)
     ac1_transports = ac1.list_transports()
     assert len(ac1_transports) == 2
     [transport1, transport2] = ac1_transports
@@ -190,6 +192,7 @@ def test_transport_sync_new_as_primary(acf, log) -> None:
 
     log.section("ac1 changes the primary transport")
     ac1.set_config("configured_addr", transport2["addr"])
+    ac1.wait_for_event(EventType.TRANSPORTS_MODIFIED)
 
     ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
     assert ac1_clone.get_config("configured_addr") == transport1["addr"]
@@ -236,18 +239,8 @@ def test_transport_limit(acf) -> None:
         account.add_transport_from_qr(qr)
 
     second_addr = account.list_transports()[1]["addr"]
-    third_addr = account.list_transports()[2]["addr"]
 
-    # test that adding a transport after unpublishing one works again
-    account.set_transport_unpublished(second_addr)
-    account.add_transport_from_qr(qr)
-    with pytest.raises(JsonRpcError):
-        account.add_transport_from_qr(qr)
-
-    # UIs are not expected to delete transports directly,
-    # but we still test that adding a transport
-    # after deleting one instead of unpublishing works.
-    account.delete_transport(third_addr)
+    account.delete_transport(second_addr)
     account.add_transport_from_qr(qr)
     with pytest.raises(JsonRpcError):
         account.add_transport_from_qr(qr)
@@ -305,7 +298,6 @@ def test_remove_primary_transport(acf, log) -> None:
 
     log.section("Alice sets up second transport")
     [transport1, transport2] = alice.list_transports()
-    alice.set_config("configured_addr", transport2["addr"])
 
     bob_chat.send_text("Hello!")
     msg1 = alice.wait_for_incoming_msg().get_snapshot()
@@ -313,6 +305,7 @@ def test_remove_primary_transport(acf, log) -> None:
 
     log.section("Alice removes the primary relay")
     alice.delete_transport(transport1["addr"])
+    assert alice.get_config("configured_addr") == transport2["addr"]
     alice.stop_io()
     alice.start_io()
 
