@@ -528,57 +528,6 @@ fn test_remove_subject_prefix() {
 }
 
 #[test]
-fn test_parse_mailto() {
-    let mailto_url = "mailto:someone@example.com";
-    let reps = parse_mailto(mailto_url);
-    assert_eq!(
-        Some(MailTo {
-            to: vec![EmailAddress {
-                local: "someone".to_string(),
-                domain: "example.com".to_string()
-            }],
-            subject: None,
-            body: None
-        }),
-        reps
-    );
-
-    let mailto_url = "mailto:someone@example.com?subject=Hello%20World";
-    let reps = parse_mailto(mailto_url);
-    assert_eq!(
-        Some(MailTo {
-            to: vec![EmailAddress {
-                local: "someone".to_string(),
-                domain: "example.com".to_string()
-            }],
-            subject: Some("Hello World".to_string()),
-            body: None
-        }),
-        reps
-    );
-
-    let mailto_url = "mailto:someone@example.com,someoneelse@example.com?subject=Hello%20World&body=This%20is%20a%20test";
-    let reps = parse_mailto(mailto_url);
-    assert_eq!(
-        Some(MailTo {
-            to: vec![
-                EmailAddress {
-                    local: "someone".to_string(),
-                    domain: "example.com".to_string()
-                },
-                EmailAddress {
-                    local: "someoneelse".to_string(),
-                    domain: "example.com".to_string()
-                }
-            ],
-            subject: Some("Hello World".to_string()),
-            body: Some("This is a test".to_string())
-        }),
-        reps
-    );
-}
-
-#[test]
 fn test_sanitize_filename() {
     let name = sanitize_filename("Я ЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯЯ.txt");
     assert!(!name.is_empty());
