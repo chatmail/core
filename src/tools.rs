@@ -24,16 +24,13 @@ pub use std::time::SystemTime;
 use anyhow::{Context as _, Result, bail, ensure};
 use base64::Engine as _;
 use chrono::{Local, NaiveDateTime, NaiveTime, TimeZone};
-use deltachat_contact_tools::EmailAddress;
 #[cfg(test)]
 pub use deltachat_time::SystemTimeTools as SystemTime;
-use futures::TryStreamExt;
 use mailparse::MailHeaderMap;
 use mailparse::dateparse;
 use mailparse::headers::Headers;
 use num_traits::PrimInt;
 use tokio::{fs, io};
-use url::Url;
 use uuid::Uuid;
 
 use crate::chat::{add_device_msg, add_device_msg_with_importance};
@@ -165,7 +162,7 @@ pub fn timestamp_to_str(wanted: i64) -> String {
 }
 
 /// Converts duration to string representation suitable for logs.
-pub fn duration_to_str(duration: Duration) -> String {
+pub(crate) fn duration_to_str(duration: Duration) -> String {
     let secs = duration.as_secs();
     let h = secs / 3600;
     let m = (secs % 3600) / 60;
@@ -182,7 +179,7 @@ pub(crate) fn gm2local_offset() -> i64 {
 
 /// Returns the last release timestamp as a unix timestamp compatible for comparison with time() and
 /// database times.
-pub fn get_release_timestamp() -> i64 {
+pub(crate) fn get_release_timestamp() -> i64 {
     NaiveDateTime::new(
         *crate::release::DATE,
         NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
@@ -498,48 +495,6 @@ pub async fn read_file(context: &Context, path: &Path) -> Result<Vec<u8>> {
     }
 }
 
-pub async fn open_file(context: &Context, path: &Path) -> Result<fs::File> {
-    let path_abs = get_abs_path(context, path);
-
-    match fs::File::open(&path_abs).await {
-        Ok(bytes) => Ok(bytes),
-        Err(err) => {
-            warn!(
-                context,
-                "Cannot read \"{}\" or file is empty: {}",
-                path.display(),
-                err
-            );
-            Err(err.into())
-        }
-    }
-}
-
-pub fn open_file_std(context: &Context, path: impl AsRef<Path>) -> Result<std::fs::File> {
-    let path_abs = get_abs_path(context, path.as_ref());
-
-    match std::fs::File::open(path_abs) {
-        Ok(bytes) => Ok(bytes),
-        Err(err) => {
-            warn!(
-                context,
-                "Cannot read \"{}\" or file is empty: {}",
-                path.as_ref().display(),
-                err
-            );
-            Err(err.into())
-        }
-    }
-}
-
-/// Reads directory and returns a vector of directory entries.
-pub async fn read_dir(path: &Path) -> Result<Vec<fs::DirEntry>> {
-    let res = tokio_stream::wrappers::ReadDirStream::new(fs::read_dir(path).await?)
-        .try_collect()
-        .await?;
-    Ok(res)
-}
-
 pub(crate) fn time() -> i64 {
     SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
@@ -549,43 +504,6 @@ pub(crate) fn time() -> i64 {
 
 pub(crate) fn time_elapsed(time: &Time) -> Duration {
     time.elapsed().unwrap_or_default()
-}
-
-/// Struct containing all mailto information
-#[derive(Debug, Default, Eq, PartialEq)]
-pub struct MailTo {
-    pub to: Vec<EmailAddress>,
-    pub subject: Option<String>,
-    pub body: Option<String>,
-}
-
-/// Parse mailto urls
-pub fn parse_mailto(mailto_url: &str) -> Option<MailTo> {
-    if let Ok(url) = Url::parse(mailto_url) {
-        if url.scheme() == "mailto" {
-            let mut mailto: MailTo = Default::default();
-            // Extract the email address
-            url.path().split(',').for_each(|email| {
-                if let Ok(email) = EmailAddress::new(email) {
-                    mailto.to.push(email);
-                }
-            });
-
-            // Extract query parameters
-            for (key, value) in url.query_pairs() {
-                if key == "subject" {
-                    mailto.subject = Some(value.to_string());
-                } else if key == "body" {
-                    mailto.body = Some(value.to_string());
-                }
-            }
-            Some(mailto)
-        } else {
-            None
-        }
-    } else {
-        None
-    }
 }
 
 pub(crate) trait IsNoneOrEmpty<T> {
@@ -629,7 +547,7 @@ impl ToOption<String> for Option<i32> {
 }
 
 #[expect(clippy::arithmetic_side_effects)]
-pub fn remove_subject_prefix(last_subject: &str) -> String {
+pub(crate) fn remove_subject_prefix(last_subject: &str) -> String {
     let subject_start = if last_subject.starts_with("Chat:") {
         0
     } else {
