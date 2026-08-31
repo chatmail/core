@@ -104,6 +104,22 @@ impl Encryption {
             Self::Symmetric { .. } => true,
         }
     }
+
+    /// Converts into [`QueuedEncryption`] by dropping email addresses corresponding to the keys.
+    fn into_queued_encryption(self) -> QueuedEncryption {
+        match self {
+            Encryption::No => QueuedEncryption::No,
+            Encryption::Asymmetric { encryption_pubkeys } => QueuedEncryption::Asymmetric {
+                encryption_pubkeys: encryption_pubkeys
+                    .into_iter()
+                    .map(|(_addr, key)| key)
+                    .collect(),
+            },
+            Encryption::Symmetric { shared_secret } => {
+                QueuedEncryption::Symmetric { shared_secret }
+            }
+        }
+    }
 }
 
 /// Helper to construct mime messages.
@@ -205,6 +221,34 @@ pub struct RenderedMessage {
     sync_ids_to_delete: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) enum QueuedEncryption {
+    /// Unencrypted message.
+    No,
+
+    /// The message is encrypted asymmetrically to public keys.
+    Asymmetric {
+        /// OpenPGP keys to use for encryption.
+        ///
+        /// The message is always encrypted to self,
+        /// no need to include own key here.
+        encryption_pubkeys: Vec<SignedPublicKey>,
+    },
+
+    /// Symmetrically encrypted message with a shared secret.
+    Symmetric { shared_secret: String },
+}
+
+impl QueuedEncryption {
+    pub(crate) fn is_encrypted(&self) -> bool {
+        match self {
+            Self::No => false,
+            Self::Asymmetric { .. } => true,
+            Self::Symmetric { .. } => true,
+        }
+    }
+}
+
 /// Email message queued, but not sent yet.
 ///
 /// It is stored unencrypted to
@@ -229,7 +273,7 @@ pub(crate) struct QueuedMail {
     rfc724_mid: String,
 
     /// Whether the message is encrypted and encryption keys.
-    encryption: Encryption,
+    encryption: QueuedEncryption,
 
     /// If true, Autocrypt header should be added before sending.
     should_attach_pubkey: bool,
@@ -429,18 +473,15 @@ pub(crate) fn render_queued_mail(
     let sign_key = if should_sign { Some(secret_key) } else { None };
 
     let message = match encryption {
-        Encryption::No => raw_message,
-        Encryption::Asymmetric { encryption_pubkeys } => {
+        QueuedEncryption::No => raw_message,
+        QueuedEncryption::Asymmetric { encryption_pubkeys } => {
             let mut full_raw_message = inner_headers.clone();
             full_raw_message.extend(raw_message);
 
             // Asymmetric encryption
 
             // Use SEIPDv2 if all recipients support it.
-            let seipd_version = if encryption_pubkeys
-                .iter()
-                .all(|(_addr, pubkey)| pubkey_supports_seipdv2(pubkey))
-            {
+            let seipd_version = if encryption_pubkeys.iter().all(pubkey_supports_seipdv2) {
                 SeipdVersion::V2
             } else {
                 SeipdVersion::V1
@@ -450,7 +491,7 @@ pub(crate) fn render_queued_mail(
             // even for a single-device setup,
             // to not reveal if we have a multi-device setup to contacts.
             let mut encryption_keyring = vec![public_key.clone()];
-            encryption_keyring.extend(encryption_pubkeys.iter().map(|(_addr, key)| (*key).clone()));
+            encryption_keyring.extend(encryption_pubkeys);
 
             let encrypted = crate::pgp::pk_encrypt(
                 full_raw_message,
@@ -463,7 +504,7 @@ pub(crate) fn render_queued_mail(
             let message = wrap_encrypted_part(encrypted);
             part_to_bytes(message)
         }
-        Encryption::Symmetric { shared_secret } => {
+        QueuedEncryption::Symmetric { shared_secret } => {
             let mut full_raw_message = inner_headers.clone();
             full_raw_message.extend(raw_message);
 
@@ -1605,7 +1646,7 @@ impl MimeFactory {
             raw_message,
             rfc724_mid,
             display_name,
-            encryption: self.encryption,
+            encryption: self.encryption.into_queued_encryption(),
             should_attach_pubkey,
             should_sign,
             should_compress,
@@ -2511,7 +2552,7 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
         raw_message: part_to_bytes(message),
         display_name: String::new(),
         rfc724_mid: rfc724_mid.to_string(),
-        encryption: Encryption::Symmetric {
+        encryption: QueuedEncryption::Symmetric {
             shared_secret: shared_secret.to_string(),
         },
         should_attach_pubkey,
@@ -2573,11 +2614,8 @@ pub(crate) async fn render_keyupdate_message(
         raw_message: part_to_bytes(message),
         display_name: String::new(),
         rfc724_mid: rfc724_mid.to_string(),
-        encryption: Encryption::Asymmetric {
-            encryption_pubkeys: recipient_keys
-                .into_iter()
-                .map(|key| (String::new(), key))
-                .collect(),
+        encryption: QueuedEncryption::Asymmetric {
+            encryption_pubkeys: recipient_keys,
         },
 
         // Attached key with its relay list notation is the actual payload.
