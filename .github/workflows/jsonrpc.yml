@@ -25,7 +25,7 @@ jobs:
         with:
           node-version: 24
       - name: Add Rust cache
-        uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+        uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-bin: false

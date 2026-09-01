@@ -40,7 +40,7 @@ jobs:
       - run: rustup override set $RUST_VERSION
         shell: bash
       - name: Cache rust cargo artifacts
-        uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+        uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-bin: false
@@ -80,7 +80,7 @@ jobs:
           show-progress: false
           persist-credentials: false
       - name: Cache rust cargo artifacts
-        uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+        uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-bin: false
@@ -126,7 +126,7 @@ jobs:
         shell: bash
 
       - name: Cache rust cargo artifacts
-        uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+        uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-bin: false
@@ -163,7 +163,7 @@ jobs:
           persist-credentials: false
 
       - name: Cache rust cargo artifacts
-        uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+        uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-bin: false
@@ -192,7 +192,7 @@ jobs:
           persist-credentials: false
 
       - name: Cache rust cargo artifacts
-        uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+        uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-bin: false
