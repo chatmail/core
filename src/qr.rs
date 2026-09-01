@@ -837,6 +837,9 @@ pub(crate) async fn login_param_from_account_qr(
         .get(DCACCOUNT_SCHEME.len()..)
         .context("Invalid DCACCOUNT scheme")?;
 
+    // Handle `dcaccount://...` URLs, the same way `decode_account()` does.
+    let payload = payload.strip_prefix("//").unwrap_or(payload);
+
     if !payload.starts_with(HTTPS_SCHEME) {
         let param = login_param_from_host(payload);
         return Ok(param);

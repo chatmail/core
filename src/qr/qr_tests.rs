@@ -743,6 +743,29 @@ async fn test_decode_account() -> Result<()> {
     Ok(())
 }
 
+/// `check_qr()` and `login_param_from_account_qr()` parse the same QR string,
+/// so they have to agree on the optional `//` after the scheme.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_login_param_from_account_qr() -> Result<()> {
+    let ctx = TestContext::new().await;
+
+    for text in [
+        "DCACCOUNT:example.org",
+        "DCACCOUNT://example.org",
+        "dcaccount:example.org",
+        "dcaccount://example.org",
+    ] {
+        let param = login_param_from_account_qr(&ctx.ctx, text).await?;
+        assert!(
+            param.addr.ends_with("@example.org"),
+            "{text:?} produced address {:?}",
+            param.addr
+        );
+    }
+
+    Ok(())
+}
+
 /// Tests that decoding empty `dcaccount://` URL results in an error.
 /// We should not suggest trying to configure an account in this case.
 /// Such links may be created by copy-paste error or because of incorrect parsing.
