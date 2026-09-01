@@ -15,7 +15,6 @@ Read receipts do not guarantee sth. was read.
 --SNIPP
 Content-Type: message/disposition-notification
 
-Original-Recipient: rfc822;bob@example.net
 Final-Recipient: rfc822;bob@example.net
 Disposition: automatic-action/MDN-sent-automatically; processed
 

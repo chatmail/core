@@ -2238,11 +2238,10 @@ impl MimeFactory {
 
         // second body part: machine-readable, always REQUIRED by RFC 6522
         let message_text2 = format!(
-            "Original-Recipient: rfc822;{}\r\n\
-             Final-Recipient: rfc822;{}\r\n\
+            "Final-Recipient: rfc822;{}\r\n\
              Original-Message-ID: <{}>\r\n\
              Disposition: manual-action/MDN-sent-automatically; displayed\r\n",
-            self.from_addr, self.from_addr, rfc724_mid
+            self.from_addr, rfc724_mid
         );
 
         let extension_fields = if additional_msg_ids.is_empty() {
@@ -2527,8 +2526,7 @@ fn keyupdate_body(from_addr: &str) -> MimePart<'static> {
     message.add_part(MimePart::new(
         "message/disposition-notification",
         format!(
-            "Original-Recipient: rfc822;{from_addr}\r\n\
-             Final-Recipient: rfc822;{from_addr}\r\n\
+            "Final-Recipient: rfc822;{from_addr}\r\n\
              Disposition: automatic-action/MDN-sent-automatically; processed\r\n"
         ),
     ));

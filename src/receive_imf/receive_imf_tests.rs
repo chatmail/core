@@ -251,8 +251,6 @@ async fn test_mdn_and_alias() -> Result<()> {
              --SNIPP\n\
              Content-Type: message/disposition-notification\n\
              \n\
-             Reporting-UA: Delta Chat 1.28.0\n\
-             Original-Recipient: rfc822;bob@example.com\n\
              Final-Recipient: rfc822;bob@example.com\n\
              Original-Message-ID: <{msg_id}>\n\
              Disposition: manual-action/MDN-sent-automatically; displayed\n\

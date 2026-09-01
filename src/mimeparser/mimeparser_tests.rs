@@ -570,8 +570,6 @@ This is no guarantee the content was read.\n\
 --kJBbU58X1xeWNHgBtTbMk80M5qnV4N\n\
 Content-Type: message/disposition-notification\n\
 \n\
-Reporting-UA: Delta Chat 1.0.0-beta.22\n\
-Original-Recipient: rfc822;bob@example.org\n\
 Final-Recipient: rfc822;bob@example.org\n\
 Original-Message-ID: <foo@example.org>\n\
 Disposition: manual-action/MDN-sent-automatically; displayed\n\
@@ -626,8 +624,6 @@ This is no guarantee the content was read.\n\
 --kJBbU58X1xeWNHgBtTbMk80M5qnV4N\n\
 Content-Type: message/disposition-notification\n\
 \n\
-Reporting-UA: Delta Chat 1.0.0-beta.22\n\
-Original-Recipient: rfc822;bob@example.org\n\
 Final-Recipient: rfc822;bob@example.org\n\
 Original-Message-ID: <bar@example.org>\n\
 Disposition: manual-action/MDN-sent-automatically; displayed\n\
@@ -650,8 +646,6 @@ This is no guarantee the content was read.\n\
 --zuOJlsTfZAukyawEPVdIgqWjaM9w2W\n\
 Content-Type: message/disposition-notification\n\
 \n\
-Reporting-UA: Delta Chat 1.0.0-beta.22\n\
-Original-Recipient: rfc822;bob@example.org\n\
 Final-Recipient: rfc822;bob@example.org\n\
 Original-Message-ID: <baz@example.org>\n\
 Disposition: manual-action/MDN-sent-automatically; displayed\n\
@@ -697,8 +691,6 @@ This is no guarantee the content was read.\n\
 --kJBbU58X1xeWNHgBtTbMk80M5qnV4N\n\
 Content-Type: message/disposition-notification\n\
 \n\
-Reporting-UA: Delta Chat 1.0.0-beta.22\n\
-Original-Recipient: rfc822;bob@example.org\n\
 Final-Recipient: rfc822;bob@example.org\n\
 Original-Message-ID: <foo@example.org>\n\
 Disposition: manual-action/MDN-sent-automatically; displayed\n\
@@ -1574,7 +1566,6 @@ async fn test_ignore_read_receipt_to_self() -> Result<()> {
                  --SNIPP\r\n\
                  Content-Type: message/disposition-notification\r\n\
                  \r\n\
-                 Original-Recipient: rfc822;bob@example.com\r\n\
                  Final-Recipient: rfc822;bob@example.com\r\n\
                  Original-Message-ID: <first@example.com>\r\n\
                  Disposition: manual-action/MDN-sent-automatically; displayed\r\n\
