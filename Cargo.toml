@@ -179,7 +179,7 @@ harness = false
 [workspace.dependencies]
 anyhow = "1"
 async-channel = "2.5.0"
-base64 = "0.22"
+base64 = "0.23"
 chrono = { version = "0.4.44", default-features = false }
 deltachat-contact-tools = { path = "deltachat-contact-tools" }
 deltachat-jsonrpc = { path = "deltachat-jsonrpc", default-features = false }
