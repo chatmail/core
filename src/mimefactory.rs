@@ -2237,11 +2237,14 @@ impl MimeFactory {
         );
 
         // second body part: machine-readable, always REQUIRED by RFC 6522
+        //
+        // We do not include the Final-Recipient field.
+        // According to <https://datatracker.ietf.org/doc/html/rfc8098#section-3.2.4>
+        // it MUST be present and be the address on which original message was received,
+        // but practically it is not going to be used.
         let message_text2 = format!(
-            "Final-Recipient: rfc822;{}\r\n\
-             Original-Message-ID: <{}>\r\n\
+            "Original-Message-ID: <{rfc724_mid}>\r\n\
              Disposition: manual-action/MDN-sent-automatically; displayed\r\n",
-            self.from_addr, rfc724_mid
         );
 
         let extension_fields = if additional_msg_ids.is_empty() {
@@ -2513,24 +2516,24 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
 /// a `multipart/report` is trashed as an MDN even where unencrypted mail is accepted,
 /// while a plain text body would end up in a contact request.
 /// The report deliberately names no original message, see [`crate::keyupdate`].
-fn keyupdate_body(from_addr: &str) -> MimePart<'static> {
+fn keyupdate_body() -> MimePart<'static> {
     // Human-readable first part as RFC 6522 requires, untranslated like in `render_mdn`.
     let text_part = MimePart::new(
         "text/plain",
         "This message updates the sender's encryption key and relay list.",
     );
-    let mut message = MimePart::new(
-        "multipart/report; report-type=disposition-notification",
-        vec![text_part],
-    );
-    message.add_part(MimePart::new(
+    // We do not include the Final-Recipient field.
+    // Technically it is required for MDNs, but keyupdates
+    // are sent not in response to any message,
+    // so we don't have the address on which we received the message either.
+    let machine_part = MimePart::new(
         "message/disposition-notification",
-        format!(
-            "Final-Recipient: rfc822;{from_addr}\r\n\
-             Disposition: automatic-action/MDN-sent-automatically; processed\r\n"
-        ),
-    ));
-    message
+        "Disposition: automatic-action/MDN-sent-automatically; processed\r\n",
+    );
+    MimePart::new(
+        "multipart/report; report-type=disposition-notification",
+        vec![text_part, machine_part],
+    )
 }
 
 /// Renders a keyupdate message informing the owners of `recipient_keys`
@@ -2545,7 +2548,7 @@ pub(crate) async fn render_keyupdate_message(
         "Sending keyupdate message to {} recipients.",
         recipient_keys.len()
     );
-    let message = keyupdate_body(&context.get_primary_self_addr().await?);
+    let message = keyupdate_body();
 
     let headers = non_chat_headers(context, "Keyupdate").await?;
     let message = add_headers_to_encrypted_part(message, headers);
