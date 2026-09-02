@@ -52,7 +52,7 @@ fn test_render_email_address() {
 
     println!("{s}");
 
-    assert_eq!(s, r#""=?utf-8?B?w6Qgc3BhY2U=?=" <x@y.org>"#);
+    assert_eq!(s, "=?utf-8?B?w6Qgc3BhY2U=?= <x@y.org>");
 }
 
 #[test]
