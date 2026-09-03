@@ -169,6 +169,10 @@ async fn accept_call() -> Result<CallSetup> {
         .expect("bob2_call should be a call message");
     assert!(info.is_accepted());
     assert_eq!(call_state(&bob2, bob2_call.id).await?, CallState::Active);
+    assert_eq!(
+        bob2_call.id.get_state(&bob2).await?,
+        MessageState::InNoticed
+    );
 
     // Alice receives the acceptance message
     alice.recv_msg_trash(&sent2).await;

@@ -437,6 +437,10 @@ impl Context {
                     call.mark_as_accepted(self).await?;
                     self.emit_msgs_changed(call.msg.chat_id, call_id);
                     if call.is_incoming() {
+                        call_id
+                            .mark_as_noticed(self)
+                            .await
+                            .context("Failed to mark incoming call as noticed")?;
                         self.emit_event(EventType::IncomingCallAccepted {
                             msg_id: call.msg.id,
                             chat_id: call.msg.chat_id,
