@@ -4771,12 +4771,17 @@ pub unsafe extern "C" fn dc_accounts_background_fetch(
     accounts: *const dc_accounts_t,
     timeout_in_seconds: u64,
 ) -> libc::c_int {
-    if accounts.is_null() || timeout_in_seconds <= 2 {
+    if accounts.is_null() {
         eprintln!("ignoring careless call to dc_accounts_background_fetch()");
         return 0;
     }
 
     let accounts = unsafe { &*accounts };
+    if timeout_in_seconds <= 2 {
+        eprintln!("ignoring careless call to dc_accounts_background_fetch(): timeout too small");
+        block_on(accounts.read()).emit_event(EventType::AccountsBackgroundFetchDone);
+        return 0;
+    }
     let background_fetch_future = {
         let lock = block_on(accounts.read());
         lock.background_fetch(Duration::from_secs(timeout_in_seconds))

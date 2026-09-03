@@ -3192,15 +3192,17 @@ void           dc_accounts_maybe_network_lost    (dc_accounts_t* accounts);
  *
  * dc_accounts_background_fetch() was created for the iOS Background fetch.
  *
- * The `DC_EVENT_ACCOUNTS_BACKGROUND_FETCH_DONE` event is emitted at the end
- * even in case of timeout, unless the function fails and returns 0.
+ * The `DC_EVENT_ACCOUNTS_BACKGROUND_FETCH_DONE` event is emitted at the end,
+ * also on timeout, when another background fetch is already running
+ * and when the call is ignored because the timeout is too small,
+ * so it is safe to wait for the event whenever `accounts` is not NULL.
  * Process all events until you get this one and you can safely return to the background
  * without forgetting to create notifications caused by timing race conditions.
  *
  * @memberof dc_accounts_t
  * @param accounts The account manager as created by dc_accounts_new().
  * @param timeout The timeout in seconds
- * @return Return 1 if DC_EVENT_ACCOUNTS_BACKGROUND_FETCH_DONE was emitted and 0 otherwise.
+ * @return Return 0 if the call was ignored because `accounts` is NULL or the timeout is too small, 1 otherwise.
  */
 int            dc_accounts_background_fetch    (dc_accounts_t* accounts, uint64_t timeout);
 
@@ -6363,11 +6365,14 @@ void dc_event_unref(dc_event_t* event);
 #define DC_EVENT_WEBXDC_REALTIME_ADVERTISEMENT    2151
 
 /**
- * Tells that the Background fetch was completed (or timed out).
+ * Tells that a call to dc_accounts_background_fetch() is done:
+ * the fetch completed, timed out, was stopped or was not started.
  *
- * This event acts as a marker, when you reach this event you can be sure
- * that all events emitted during the background fetch were processed.
- * 
+ * For the call that started the fetch, this event acts as a marker:
+ * when you reach it, all events emitted during the fetch were processed.
+ * A call made while another background fetch is running gets the event immediately,
+ * and the running fetch keeps emitting events until its own marker.
+ *
  * This event is only emitted by the account manager
  */
 
