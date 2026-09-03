@@ -3187,7 +3187,8 @@ void           dc_accounts_maybe_network_lost    (dc_accounts_t* accounts);
 
 /**
  * Perform a background fetch for all accounts in parallel with a timeout.
- * Pauses the scheduler, fetches messages from imap and then resumes the scheduler.
+ * Pauses the scheduler, fetches from all transports at once and then resumes the scheduler.
+ * The fetch for an account ends as soon as one of its transports received messages.
  *
  * dc_accounts_background_fetch() was created for the iOS Background fetch.
  *
