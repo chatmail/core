@@ -9,8 +9,6 @@ repository = "https://github.com/chatmail/core"
 [build-dependencies]
 deltachat-jsonrpc = { workspace = true }
 
-[dependencies]
-
 [features]
 default = ["vendored"]
 vendored = ["deltachat-jsonrpc/vendored"]
