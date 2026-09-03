@@ -1080,6 +1080,60 @@ async fn test_get_webxdc_blob() -> Result<()> {
     Ok(())
 }
 
+/// Tests that valid webxdc icon can be loaded.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_get_webxdc_blob_icon() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let chat_id = create_group(alice, "chat").await?;
+
+    {
+        let mut instance = create_webxdc_instance(
+            alice,
+            "with-png-icon.xdc",
+            include_bytes!("../../test-data/webxdc/with-png-icon.xdc"),
+        )?;
+        send_msg(alice, chat_id, &mut instance).await?;
+        let buf = instance.get_webxdc_blob(alice, "icon.png").await?;
+        assert_eq!(buf.len(), 103);
+    }
+
+    {
+        let mut instance = create_webxdc_instance(
+            alice,
+            "with-jpg-icon.xdc",
+            include_bytes!("../../test-data/webxdc/with-jpg-icon.xdc"),
+        )?;
+        send_msg(alice, chat_id, &mut instance).await?;
+        let buf = instance.get_webxdc_blob(alice, "icon.jpg").await?;
+        assert_eq!(buf.len(), 286);
+    }
+
+    {
+        // Webxdc with icon.png than is in fact a text file.
+        let mut instance = create_webxdc_instance(
+            alice,
+            "with-broken-png-icon.xdc",
+            include_bytes!("../../test-data/webxdc/with-broken-png-icon.xdc"),
+        )?;
+        send_msg(alice, chat_id, &mut instance).await?;
+        assert!(instance.get_webxdc_blob(alice, "icon.png").await.is_err());
+    }
+
+    {
+        // Webxdc with icon.png than is a 9999x9999 PNG image.
+        let mut instance = create_webxdc_instance(
+            alice,
+            "with-too-large-png-icon.xdc",
+            include_bytes!("../../test-data/webxdc/with-too-large-png-icon.xdc"),
+        )?;
+        send_msg(alice, chat_id, &mut instance).await?;
+        assert!(instance.get_webxdc_blob(alice, "icon.png").await.is_err());
+    }
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_webxdc_blob_default_icon() -> Result<()> {
     let t = TestContext::new_alice().await;

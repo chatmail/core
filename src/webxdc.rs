@@ -20,6 +20,7 @@ mod maps_integration;
 
 use std::cmp::max;
 use std::collections::HashMap;
+use std::io::Cursor;
 use std::path::Path;
 
 use anyhow::{Context as _, Result, anyhow, bail, ensure, format_err};
@@ -27,6 +28,7 @@ use anyhow::{Context as _, Result, anyhow, bail, ensure, format_err};
 use async_zip::tokio::read::seek::ZipFileReader as SeekZipFileReader;
 use deltachat_contact_tools::sanitize_bidi_characters;
 use deltachat_derive::FromSql;
+use image::{ImageFormat, ImageReader};
 use mail_builder::mime::MimePart;
 use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
@@ -875,6 +877,9 @@ impl Message {
     /// Currently, this works only if the message is an webxdc instance.
     ///
     /// `name` is the filename within the archive, e.g. `index.html`.
+    ///
+    /// If the file is `icon.png` or `icon.jpg`,
+    /// loading it may fail if dimensions are unexpectedly large.
     pub async fn get_webxdc_blob(&self, context: &Context, name: &str) -> Result<Vec<u8>> {
         ensure!(self.viewtype == Viewtype::Webxdc, "No webxdc instance.");
 
@@ -903,7 +908,25 @@ impl Message {
             ));
         }
 
-        get_blob(&mut archive, name).await
+        let blob = get_blob(&mut archive, name).await?;
+        if name == "icon.png" || name == "icon.jpg" {
+            let image_reader = ImageReader::new(Cursor::new(&blob))
+                .with_guessed_format()
+                .context("Reading from Cursor must never fail")?;
+            match image_reader.format() {
+                None => bail!("Unable to determine image format"),
+                Some(ImageFormat::Png) | Some(ImageFormat::Jpeg) => {
+                    // We accept PNG named icon.jpg and JPEG named icon.png
+                    // to avoid incompatibilities, but no unexpected formats like GIF.
+                }
+                Some(format) => bail!("Unexpected icon format {format:?}"),
+            }
+            let (width, height) = image_reader
+                .into_dimensions()
+                .context("Failed to determine icon dimensions")?;
+            ensure!(width <= 4096 && height <= 4096, "Icon is too large");
+        }
+        Ok(blob)
     }
 
     /// Return info from manifest.toml or from fallbacks.

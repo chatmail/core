@@ -2227,6 +2227,9 @@ impl CommandApi {
     /// Get blob encoded as base64 from a webxdc message
     ///
     /// path is the path of the file within webxdc archive
+    ///
+    /// If the file is `icon.png` or `icon.jpg`,
+    /// loading it may fail if dimensions are unexpectedly large.
     async fn get_webxdc_blob(
         &self,
         account_id: u32,
