@@ -357,11 +357,15 @@ pub enum EventType {
         msg_id: MsgId,
     },
 
-    /// Tells that the Background fetch was completed (or timed out).
-    /// This event acts as a marker, when you reach this event you can be sure
-    /// that all events emitted during the background fetch were processed.
+    /// Tells that a background fetch call is done:
+    /// the fetch completed, timed out, was stopped or was not started.
     ///
-    /// This event is only emitted by the account manager
+    /// For the call that started the fetch, this event acts as a marker:
+    /// all events emitted during the fetch were processed once it is reached.
+    /// A call made while another background fetch is running gets the event immediately,
+    /// and the running fetch keeps emitting events until its own marker.
+    ///
+    /// This event is only emitted by the account manager.
     AccountsBackgroundFetchDone,
     /// Inform that set of chats or the order of the chats in the chatlist has changed.
     ///
