@@ -7,6 +7,7 @@ use std::sync::atomic::Ordering;
 use anyhow::{Context as _, Error, Result, bail};
 use async_channel::{self as channel, Receiver, Sender};
 use futures::future::try_join_all;
+use futures::stream::{FuturesUnordered, StreamExt};
 use futures_lite::FutureExt;
 use tokio::sync::{RwLock, oneshot};
 use tokio::task;
@@ -282,6 +283,53 @@ impl SchedulerState {
             scheduler.interrupt_recently_seen(contact_id, timestamp);
         }
     }
+
+    /// Fetches from all transports at once, each on a dedicated connection,
+    /// with I/O paused so that the scheduler does not connect as well.
+    ///
+    /// Returns as soon as one transport fetched messages and drops the fetches
+    /// still in flight, so that a caller woken up by a push notification
+    /// does not wait for a transport that may never answer.
+    pub(crate) async fn fetch_from_all_transports(&self, context: &Context) -> Result<()> {
+        let _pause_guard = self.pause(context).await?;
+
+        let mut futures: FuturesUnordered<_> = ConfiguredLoginParam::load_all(context)
+            .await?
+            .into_iter()
+            .map(|(transport_id, param)| async move {
+                match fetch_from_transport(context, transport_id, param).await {
+                    Ok(fetched) => fetched,
+                    Err(err) => {
+                        warn!(context, "Transport {transport_id}: fetch failed: {err:#}.");
+                        false
+                    }
+                }
+            })
+            .collect();
+
+        while let Some(fetched) = futures.next().await {
+            if fetched {
+                break;
+            }
+        }
+        Ok(())
+    }
+}
+
+async fn fetch_from_transport(
+    context: &Context,
+    transport_id: u32,
+    param: ConfiguredLoginParam,
+) -> Result<bool> {
+    // A single fetch has nothing to interrupt.
+    let (_, idle_interrupt_receiver) = channel::bounded(1);
+    let mut connection = Imap::new(context, transport_id, param, idle_interrupt_receiver).await?;
+    let mut session = connection.prepare(context).await?;
+
+    let folder = connection.folder.clone();
+    connection
+        .fetch_move_delete(context, &mut session, &folder)
+        .await
 }
 
 #[derive(Debug, Default)]

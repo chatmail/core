@@ -1,3 +1,4 @@
+import time
 import urllib.parse
 
 import pytest
@@ -5,6 +6,24 @@ import pytest
 from deltachat_rpc_client import EventType
 from deltachat_rpc_client.const import ChatType, DownloadState
 from deltachat_rpc_client.rpc import JsonRpcError
+
+
+def alice_with_two_transports_and_bob(acf):
+    alice, bob = acf.get_online_accounts(2)
+    alice.add_transport_from_qr(acf.get_account_qr())
+    alice.bring_online()
+    return alice, alice.create_chat(bob), bob.create_chat(alice)
+
+
+def messages_with_text(chat, text):
+    return [msg for msg in chat.get_messages() if msg.get_snapshot().text == text]
+
+
+def wait_for_imap_message(imap, timeout=60):
+    deadline = time.time() + timeout
+    while not imap.get_all_messages():
+        assert time.time() < deadline, f"no message arrived in {imap.addr}"
+        time.sleep(1)
 
 
 def test_add_second_address(acf) -> None:
@@ -251,11 +270,10 @@ def test_message_info_imap_urls(acf) -> None:
     alice, bob = acf.get_online_accounts(2)
 
     qr = acf.get_account_qr()
-    for i in range(3):
+    for _ in range(3):
         alice.add_transport_from_qr(qr)
         # Wait for all transports to go IDLE after adding each one.
-        for _ in range(i + 1):
-            alice.bring_online()
+        alice.bring_online()
 
     # Enable multi-device mode so messages are not deleted immediately.
     alice.set_config("bcc_self", "1")
@@ -287,14 +305,7 @@ def test_message_info_imap_urls(acf) -> None:
 
 def test_remove_primary_transport(acf, log) -> None:
     """Test that after removing the primary relay, Alice can still receive messages."""
-    alice, bob = acf.get_online_accounts(2)
-    qr = acf.get_account_qr()
-
-    alice.add_transport_from_qr(qr)
-    alice.bring_online()
-
-    bob_chat = bob.create_chat(alice)
-    alice.create_chat(bob)
+    alice, alice_chat, bob_chat = alice_with_two_transports_and_bob(acf)
 
     log.section("Alice sets up second transport")
     [transport1, transport2] = alice.list_transports()
@@ -313,7 +324,7 @@ def test_remove_primary_transport(acf, log) -> None:
     msg2 = alice.wait_for_incoming_msg().get_snapshot()
     assert msg2.text == "Hello again!"
     assert msg2.chat.get_basic_snapshot().chat_type == ChatType.SINGLE
-    assert msg2.chat == alice.create_chat(bob)
+    assert msg2.chat == alice_chat
 
 
 def test_qr_works_after_removing_primary_transport(acf, log) -> None:
@@ -344,3 +355,33 @@ def test_qr_works_after_removing_primary_transport(acf, log) -> None:
     bob.secure_join(chat_qr)
     alice.wait_for_securejoin_inviter_success()
     bob.wait_for_securejoin_joiner_success()
+
+
+def test_background_fetch_from_second_transport(acf, direct_imap, dc):
+    alice, alice_chat, bob_chat = alice_with_two_transports_and_bob(acf)
+    [transport1, transport2] = alice.list_transports()
+    assert alice.get_config("configured_addr") == transport1["addr"]
+
+    alice.stop_io()
+    bob_chat.send_text("hello")
+    imap1 = direct_imap(alice, transport1["addr"], transport1["password"])
+    wait_for_imap_message(direct_imap(alice, transport2["addr"], transport2["password"]))
+    wait_for_imap_message(imap1)
+
+    # Leave the message on the second transport only.
+    imap1.delete("1:*")
+
+    dc.background_fetch(30)
+    assert len(messages_with_text(alice_chat, "hello")) == 1
+
+
+def test_background_fetch_no_duplicates(acf, direct_imap, dc):
+    alice, alice_chat, bob_chat = alice_with_two_transports_and_bob(acf)
+
+    alice.stop_io()
+    bob_chat.send_text("hello")
+    for transport in alice.list_transports():
+        wait_for_imap_message(direct_imap(alice, transport["addr"], transport["password"]))
+
+    dc.background_fetch(30)
+    assert len(messages_with_text(alice_chat, "hello")) == 1
