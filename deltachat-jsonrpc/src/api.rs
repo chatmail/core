@@ -278,7 +278,8 @@ impl CommandApi {
 
     /// Performs a background fetch for all accounts in parallel with a timeout.
     ///
-    /// The `AccountsBackgroundFetchDone` event is emitted at the end even in case of timeout.
+    /// The `AccountsBackgroundFetchDone` event is emitted at the end even in case of timeout,
+    /// and immediately if another background fetch is already running.
     /// Process all events until you get this one and you can safely return to the background
     /// without forgetting to create notifications caused by timing race conditions.
     async fn background_fetch(&self, timeout_in_seconds: f64) -> Result<()> {
@@ -2035,6 +2036,14 @@ impl CommandApi {
     /// or just that the network conditions might have changed
     async fn maybe_network(&self) -> Result<()> {
         self.accounts.read().await.maybe_network().await;
+        Ok(())
+    }
+
+    /// Waits until all transports are idle or failed and no background work is left.
+    /// Never returns unless I/O is started. Must ONLY be used by tests.
+    async fn wait_for_all_work_done(&self, account_id: u32) -> Result<()> {
+        let ctx = self.get_context(account_id).await?;
+        ctx.wait_for_all_work_done().await;
         Ok(())
     }
 

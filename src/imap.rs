@@ -240,18 +240,6 @@ impl Imap {
         })
     }
 
-    /// Creates new disconnected IMAP client using configured parameters.
-    pub async fn new_configured(
-        context: &Context,
-        idle_interrupt_receiver: Receiver<()>,
-    ) -> Result<Self> {
-        let (transport_id, param) = ConfiguredLoginParam::load(context)
-            .await?
-            .context("Not configured")?;
-        let imap = Self::new(context, transport_id, param, idle_interrupt_receiver).await?;
-        Ok(imap)
-    }
-
     /// Returns transport ID of the IMAP client.
     pub fn transport_id(&self) -> u32 {
         self.transport_id
@@ -428,12 +416,14 @@ impl Imap {
     ///
     /// Prefetches headers and downloads new message from the folder, moves messages away from the
     /// folder and deletes messages in the folder.
+    ///
+    /// Returns true if at least one message was fetched.
     pub async fn fetch_move_delete(
         &mut self,
         context: &Context,
         session: &mut Session,
         watch_folder: &str,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         ensure_and_debug_assert!(!watch_folder.is_empty(), "Watched folder cannot be empty");
         if !context.sql.is_open().await {
             // probably shutdown
@@ -463,7 +453,7 @@ impl Imap {
             .await
             .context("move_delete_messages")?;
 
-        Ok(())
+        Ok(msgs_fetched)
     }
 
     /// Fetches new messages.
