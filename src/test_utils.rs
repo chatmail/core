@@ -1377,9 +1377,9 @@ impl InnerLogSink {
             }
         }
         if is_error {
-            panic!("Expected an error log.")
+            panic!("Expected an error log {pat:?}.")
         } else {
-            panic!("Expected a warning log.")
+            panic!("Expected a warning log {pat:?}.")
         }
     }
 
