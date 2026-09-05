@@ -90,7 +90,6 @@ async fn test_send_webxdc_instance() -> Result<()> {
     let mut instance = Message::new(Viewtype::Webxdc);
     instance.set_file_from_bytes(&t, "index.html", b"<html>ola!</html>", None)?;
     assert!(send_msg(&t, chat_id, &mut instance).await.is_err());
-    t.assert_warn("cannot be opened as zip-file").await;
     Ok(())
 }
 
@@ -119,8 +118,6 @@ async fn test_send_invalid_webxdc() -> Result<()> {
         None,
     )?;
     assert!(send_msg(&t, chat_id, &mut instance).await.is_err());
-    t.assert_warn("cannot be opened as zip-file").await;
-    t.assert_warn("cannot be opened as zip-file").await;
     Ok(())
 }
 

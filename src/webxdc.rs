@@ -20,14 +20,14 @@ mod maps_integration;
 
 use std::cmp::max;
 use std::collections::HashMap;
-use std::io::Cursor;
 use std::path::Path;
 
-use anyhow::{Context as _, Result, anyhow, bail, ensure, format_err};
+use anyhow::{Context as _, Result, bail, ensure, format_err};
 
-use async_zip::tokio::read::seek::ZipFileReader as SeekZipFileReader;
+use async_zip::base::read1::seek::ZipArchiveReader;
 use deltachat_contact_tools::sanitize_bidi_characters;
 use deltachat_derive::FromSql;
+use futures::AsyncReadExt as _;
 use image::{ImageFormat, ImageReader};
 use mail_builder::mime::MimePart;
 use rusqlite::OptionalExtension;
@@ -35,6 +35,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tokio::{fs::File, io::BufReader};
+use tokio_util::compat::{Compat, TokioAsyncReadCompatExt};
 
 use crate::chat::{self, Chat};
 use crate::constants::Chattype;
@@ -227,19 +228,6 @@ pub(crate) struct StatusUpdateItemAndSerial {
     max_serial: StatusUpdateSerial,
 }
 
-/// Returns an entry index and a reference.
-fn find_zip_entry<'a>(
-    file: &'a async_zip::ZipFile,
-    name: &str,
-) -> Option<(usize, &'a async_zip::StoredZipEntry)> {
-    for (i, ent) in file.entries().iter().enumerate() {
-        if ent.filename().as_bytes() == name.as_bytes() {
-            return Some((i, ent));
-        }
-    }
-    None
-}
-
 /// Status update JSON size soft limit.
 const STATUS_UPDATE_SIZE_MAX: usize = 100 << 10;
 
@@ -250,18 +238,18 @@ impl Context {
             return Ok(false);
         }
 
-        let archive = match async_zip::base::read::mem::ZipFileReader::new(file.to_vec()).await {
+        let archive = match ZipArchiveReader::open(futures_lite::io::Cursor::new(file)).await {
             Ok(archive) => archive,
             Err(_) => {
-                info!(self, "{} cannot be opened as zip-file", &filename);
+                info!(self, "{filename} cannot be opened as zip-file.");
                 return Ok(false);
             }
         };
 
-        if find_zip_entry(archive.file(), "index.html").is_none() {
-            info!(self, "{} misses index.html", &filename);
+        if archive.find(b"index.html")?.next().is_none() {
+            info!(self, "{filename} misses index.html.");
             return Ok(false);
-        }
+        };
 
         Ok(true)
     }
@@ -271,23 +259,11 @@ impl Context {
         let filename = path.to_str().unwrap_or_default();
 
         let file = BufReader::new(File::open(path).await?);
-        let valid = match SeekZipFileReader::with_tokio(file).await {
-            Ok(archive) => {
-                if find_zip_entry(archive.file(), "index.html").is_none() {
-                    warn!(self, "{} misses index.html", filename);
-                    false
-                } else {
-                    true
-                }
-            }
-            Err(_) => {
-                warn!(self, "{} cannot be opened as zip-file", filename);
-                false
-            }
-        };
-
-        if !valid {
-            bail!("{filename} is not a valid webxdc file");
+        let archive = ZipArchiveReader::open(file.compat())
+            .await
+            .with_context(|| format!("{filename} cannot be opened as zip-file"))?;
+        if archive.find(b"index.html")?.next().is_none() {
+            bail!("{filename} misses index.html.");
         }
 
         Ok(())
@@ -848,12 +824,16 @@ fn parse_webxdc_manifest(bytes: &[u8]) -> Result<WebxdcManifest> {
     Ok(manifest)
 }
 
-async fn get_blob(archive: &mut SeekZipFileReader<BufReader<File>>, name: &str) -> Result<Vec<u8>> {
-    let (i, _) =
-        find_zip_entry(archive.file(), name).ok_or_else(|| anyhow!("no entry found for {name}"))?;
-    let mut reader = archive.reader_with_entry(i).await?;
+async fn get_blob(
+    archive: &mut ZipArchiveReader<Compat<BufReader<File>>>,
+    name: &str,
+) -> Result<Vec<u8>> {
+    let Some(i) = archive.find(name.as_bytes())?.next() else {
+        bail!("No entry found for {name}");
+    };
+    let mut file_reader = archive.file(i).await?;
     let mut buf = Vec::new();
-    reader.read_to_end_checked(&mut buf).await?;
+    file_reader.read_to_end(&mut buf).await?;
     Ok(buf)
 }
 
@@ -863,13 +843,13 @@ impl Message {
     async fn get_webxdc_archive(
         &self,
         context: &Context,
-    ) -> Result<SeekZipFileReader<BufReader<File>>> {
+    ) -> Result<ZipArchiveReader<Compat<BufReader<File>>>> {
         let path = self
             .get_file(context)
             .ok_or_else(|| format_err!("No webxdc instance file."))?;
         let path_abs = get_abs_path(context, &path);
         let file = BufReader::new(File::open(path_abs).await?);
-        let archive = SeekZipFileReader::with_tokio(file).await?;
+        let archive = ZipArchiveReader::open(file.compat()).await?;
         Ok(archive)
     }
 
@@ -910,7 +890,7 @@ impl Message {
 
         let blob = get_blob(&mut archive, name).await?;
         if name == "icon.png" || name == "icon.jpg" {
-            let image_reader = ImageReader::new(Cursor::new(&blob))
+            let image_reader = ImageReader::new(std::io::Cursor::new(&blob))
                 .with_guessed_format()
                 .context("Reading from Cursor must never fail")?;
             match image_reader.format() {
@@ -964,9 +944,9 @@ impl Message {
             } else {
                 self.get_filename().unwrap_or_default()
             },
-            icon: if find_zip_entry(archive.file(), "icon.png").is_some() {
+            icon: if archive.find(b"icon.png")?.next().is_some() {
                 "icon.png".to_string()
-            } else if find_zip_entry(archive.file(), "icon.jpg").is_some() {
+            } else if archive.find(b"icon.jpg")?.next().is_some() {
                 "icon.jpg".to_string()
             } else {
                 WEBXDC_DEFAULT_ICON.to_string()
