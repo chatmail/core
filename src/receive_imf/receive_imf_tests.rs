@@ -15,7 +15,9 @@ use crate::headerdef::HeaderDefMap as _;
 use crate::imap::prefetch_should_download;
 use crate::imex::{ImexMode, imex};
 use crate::key;
+use crate::mimefactory;
 use crate::securejoin::get_securejoin_qr;
+use crate::smtp;
 use crate::test_utils;
 use crate::test_utils::{
     TestContext, TestContextManager, alice_keypair, get_chat_msg, mark_as_verified,
@@ -5847,15 +5849,34 @@ async fn test_mark_message_as_delivered_only_after_sent_out_fully() -> Result<()
 /// This simulates the case that a message is successfully sent out,
 /// but the 'OK' answer from the server doesn't arrive,
 /// so that the SMTP row stays in the database.
-pub(crate) async fn first_row_in_smtp_queue(alice: &TestContext) -> (MsgId, String) {
-    alice
+pub(crate) async fn first_row_in_smtp_queue(context: &TestContext) -> (MsgId, String) {
+    let (rowid, msg_id) = context
         .sql
-        .query_row_optional("SELECT msg_id, mime FROM smtp ORDER BY id", (), |row| {
-            let msg_id: MsgId = row.get(0)?;
-            let mime: String = row.get(1)?;
-            Ok((msg_id, mime))
-        })
+        .query_row_optional(
+            "SELECT id, msg_id FROM smtp2 ORDER BY id LIMIT 1",
+            (),
+            |row| {
+                let rowid: i64 = row.get(0)?;
+                let msg_id: MsgId = row.get(1)?;
+                Ok((rowid, msg_id))
+            },
+        )
         .await
         .expect("query_row_optional failed")
-        .expect("No SMTP row found")
+        .expect("No SMTP row found");
+    let public_key = key::load_self_public_key(context).await.unwrap();
+    let secret_key = key::load_self_secret_key(context).await.unwrap();
+    let from_addr = context.get_primary_self_addr().await.unwrap();
+    let query_only = true;
+    let queued_mail = context
+        .sql
+        .transaction_ext(query_only, |transaction| {
+            smtp::load_queued_mail(transaction, rowid)
+        })
+        .await
+        .unwrap();
+    let rendered_mail =
+        mimefactory::render_queued_mail(queued_mail, &public_key, &secret_key, from_addr).unwrap();
+
+    (msg_id, rendered_mail.message)
 }

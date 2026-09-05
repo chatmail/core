@@ -37,10 +37,12 @@ use crate::context::Context;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::key::{self, DcKey, self_fingerprint};
 use crate::message::{Message, MessageState, MsgId};
+use crate::mimefactory;
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::pgp::SeipdVersion;
 use crate::receive_imf::{ReceivedMsg, receive_imf};
 use crate::securejoin::{get_securejoin_qr, join_securejoin};
+use crate::smtp;
 use crate::smtp::msg_has_pending_smtp_job;
 use crate::stock_str::StockStrings;
 use crate::tools::time;
@@ -602,28 +604,46 @@ impl TestContext {
 
     pub async fn pop_sent_msg_ext(&self, rev_order: bool) -> Option<SentMessage<'_>> {
         let mut query = "
-SELECT id, msg_id, mime, recipients
-FROM smtp
+SELECT id, msg_id
+FROM smtp2
 ORDER BY id"
             .to_string();
         if rev_order {
             query += " DESC";
         }
-        let (rowid, msg_id, payload, recipients) = self
+        let (rowid, msg_id) = self
             .ctx
             .sql
             .query_row_optional(&query, (), |row| {
                 let rowid: i64 = row.get(0)?;
                 let msg_id: MsgId = row.get(1)?;
-                let mime: String = row.get(2)?;
-                let recipients: String = row.get(3)?;
-                Ok((rowid, msg_id, mime, recipients))
+                Ok((rowid, msg_id))
             })
             .await
             .expect("query_row_optional failed")?;
+        let query_only = true;
+        let mut queued_mail = self
+            .ctx
+            .sql
+            .transaction_ext(query_only, |transaction| {
+                smtp::load_queued_mail(transaction, rowid)
+            })
+            .await
+            .expect("Failed to load queued mail");
+        if queued_mail.bcc_self {
+            smtp::add_self_recipients(
+                &self.ctx,
+                &mut queued_mail.recipients,
+                queued_mail.encryption.is_encrypted(),
+            )
+            .await
+            .expect("Failed to add self recipients");
+        }
+        let recipients = queued_mail.recipients.join(" ");
+        debug_assert!(!recipients.starts_with(" "));
         self.ctx
             .sql
-            .execute("DELETE FROM smtp WHERE id=?;", (rowid,))
+            .execute("DELETE FROM smtp2 WHERE id=?;", (rowid,))
             .await
             .expect("failed to remove job");
         if !msg_has_pending_smtp_job(self, msg_id)
@@ -642,6 +662,24 @@ ORDER BY id"
                 .await
                 .expect("Failed to update timestamp_sent");
         }
+
+        let public_key = key::load_self_public_key(self)
+            .await
+            .expect("Failed to load own public key");
+        let secret_key = key::load_self_secret_key(self)
+            .await
+            .expect("Failed to load own secret key");
+
+        // FIXME: does not matter much for tests,
+        // can probably take the first transport address later
+        let from_addr = self
+            .get_primary_self_addr()
+            .await
+            .expect("Failed to get the From address");
+        let rendered_mail =
+            mimefactory::render_queued_mail(queued_mail, &public_key, &secret_key, from_addr)
+                .expect("Failed to render queued mail");
+        let payload = rendered_mail.message;
 
         let payload_headers = payload.split("\r\n\r\n").next().unwrap().lines();
         let payload_header_names: Vec<_> = payload_headers
@@ -681,33 +719,70 @@ ORDER BY id"
     }
 
     pub async fn get_smtp_rows_for_msg<'a>(&'a self, msg_id: MsgId) -> Vec<SentMessage<'a>> {
-        let sent_msgs = self
+        let public_key = key::load_self_public_key(self)
+            .await
+            .expect("Failed to load own public key");
+        let secret_key = key::load_self_secret_key(self)
+            .await
+            .expect("Failed to load own secret key");
+        let from_addr = self
+            .get_primary_self_addr()
+            .await
+            .expect("Failed to get the From address");
+
+        let mut sent_msgs = Vec::new();
+
+        for rowid in self
             .ctx
             .sql
-            .query_map_vec(
-                "SELECT id, msg_id, mime, recipients FROM smtp WHERE msg_id=?",
-                (msg_id,),
-                |row| {
-                    let _id: MsgId = row.get(0)?;
-                    let msg_id: MsgId = row.get(1)?;
-                    let mime: String = row.get(2)?;
-                    let recipients: String = row.get(3)?;
-                    Ok((msg_id, mime, recipients))
-                },
-            )
+            .query_map_vec("SELECT id FROM smtp2 WHERE msg_id=?", (msg_id,), |row| {
+                let rowid: i64 = row.get(0)?;
+                Ok(rowid)
+            })
             .await
             .unwrap()
-            .into_iter()
-            .map(|(msg_id, mime, recipients)| SentMessage {
-                payload: mime,
+        {
+            let query_only = true;
+            let mut queued_mail = self
+                .ctx
+                .sql
+                .transaction_ext(query_only, |transaction| {
+                    smtp::load_queued_mail(transaction, rowid)
+                })
+                .await
+                .expect("Failed to load queued mail");
+            if queued_mail.bcc_self {
+                smtp::add_self_recipients(
+                    &self.ctx,
+                    &mut queued_mail.recipients,
+                    queued_mail.encryption.is_encrypted(),
+                )
+                .await
+                .expect("Failed to add self recipients");
+            }
+            let recipients = queued_mail.recipients.join(" ");
+            let rendered_mail = mimefactory::render_queued_mail(
+                queued_mail,
+                &public_key,
+                &secret_key,
+                from_addr.clone(),
+            )
+            .expect("Failed to render queued mail");
+            let payload = rendered_mail.message;
+
+            debug_assert!(!recipients.starts_with(" "));
+            let sent_message = SentMessage {
+                payload,
                 sender_msg_id: msg_id,
                 sender_context: &self.ctx,
                 recipients,
-            })
-            .collect();
+            };
+            sent_msgs.push(sent_message)
+        }
+
         self.ctx
             .sql
-            .execute("DELETE FROM smtp WHERE msg_id=?", (msg_id,))
+            .execute("DELETE FROM smtp2 WHERE msg_id=?", (msg_id,))
             .await
             .expect("Delete smtp jobs");
         if msg_id

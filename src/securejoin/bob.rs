@@ -12,12 +12,11 @@ use crate::context::Context;
 use crate::events::EventType;
 use crate::key::{DcKey as _, self_fingerprint};
 use crate::log::LogExt;
-use crate::message::{Message, MsgId, Viewtype};
+use crate::message::{self, Message, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::{Param, Params};
 use crate::pgp::addresses_from_public_key;
 use crate::securejoin::{ContactId, encrypted_and_signed, verify_sender_by_fingerprint};
-use crate::smtp::insert_into_smtp;
 use crate::stock_str;
 use crate::sync::Sync::*;
 use crate::tools::{create_outgoing_rfc724_mid, time};
@@ -325,22 +324,33 @@ pub(crate) async fn send_handshake_message(
     if invite.is_v3() && matches!(step, BobHandshakeMsg::Request) {
         // Send a minimal symmetrically-encrypted vc-request-pubkey message
         let rfc724_mid = create_outgoing_rfc724_mid();
-        let recipients = invite.addrs().join(" ");
+        let recipients = invite.addrs();
         let alice_fp = invite.fingerprint().hex();
         let auth = invite.authcode();
         let shared_secret = format!("securejoin/{alice_fp}/{auth}");
         let attach_self_pubkey = false;
-        let rendered_message = mimefactory::render_symm_encrypted_securejoin_message(
+        let queued_msg = mimefactory::render_symm_encrypted_securejoin_message(
             context,
             "vc-request-pubkey",
             &rfc724_mid,
             attach_self_pubkey,
             auth,
             &shared_secret,
+            recipients.clone(),
+        )
+        .await?;
+        let now = time();
+        let msg_id = message::insert_tombstone(context, &rfc724_mid).await?;
+        chat::enqueue_mail(
+            context,
+            now,
+            msg_id,
+            chat_id,
+            &queued_msg,
+            &Default::default(),
         )
         .await?;
 
-        insert_into_smtp(context, &rfc724_mid, &recipients, rendered_message).await?;
         context.scheduler.interrupt_smtp().await;
     } else {
         let mut msg = Message {

@@ -568,16 +568,12 @@ pub(crate) async fn receive_imf_inner(
         //
         // Note that messages with long recipient lists are sent out in chunks,
         // removing already sent recipients from the job after each chunk.
-        // Self recipients are added at the end so removing the job
-        // removes the last chunk which apparently went out fine.
-        let self_addr = context.get_primary_self_addr().await?;
+        // Self recipients are sent in the end,
+        // so if we received a copy, the message has been sent out
+        // to all recipients.
         context
             .sql
-            .execute(
-                "DELETE FROM smtp \
-                WHERE rfc724_mid=?1 AND (recipients LIKE ?2 OR recipients LIKE ('% ' || ?2))",
-                (rfc724_mid_orig, &self_addr),
-            )
+            .execute("DELETE FROM smtp2 WHERE rfc724_mid=?", (rfc724_mid_orig,))
             .await?;
         if !msg_has_pending_smtp_job(context, msg_id).await? {
             msg_id.set_delivered(context).await?;
