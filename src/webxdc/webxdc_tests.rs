@@ -1200,6 +1200,22 @@ async fn test_get_webxdc_blob_with_subdirs() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_1g_index_blob() -> Result<()> {
+    let t = TestContext::new_alice().await;
+    let chat_id = create_group(&t, "foo").await?;
+    let mut instance = create_webxdc_instance(
+        &t,
+        "1gb-index-file.xdc",
+        include_bytes!("../../test-data/webxdc/1g-index-file.xdc"),
+    )?;
+    chat_id.set_draft(&t, Some(&mut instance)).await?;
+
+    assert!(instance.get_webxdc_blob(&t, "index.html").await.is_err());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_parse_webxdc_manifest() -> Result<()> {
     let result = parse_webxdc_manifest(r#"key = syntax error"#.as_bytes());
     assert!(result.is_err());
