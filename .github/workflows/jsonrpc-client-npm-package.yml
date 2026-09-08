@@ -35,7 +35,7 @@ jobs:
         run: npm install --ignore-scripts
 
       - name: Package
-        working-directory: deltachat-jsonrpc/typescript
+        working-directory: deltachat-jsonrpc-bindings/typescript
         run: |
           npm run build
           npm pack .
