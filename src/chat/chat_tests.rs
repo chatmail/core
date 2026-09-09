@@ -1702,7 +1702,10 @@ async fn test_shall_attach_selfavatar() -> Result<()> {
     add_contact_to_chat(alice, chat_id, contact_id).await?;
     assert!(shall_attach_selfavatar(alice, chat_id).await?);
 
-    chat_id.set_selfavatar_timestamp(alice, time()).await?;
+    alice
+        .sql
+        .transaction(|transaction| chat_id.set_selfavatar_timestamp(transaction, time()))
+        .await?;
     assert!(!shall_attach_selfavatar(alice, chat_id).await?);
 
     alice.set_config(Config::Selfavatar, None).await?; // setting to None also forces re-sending

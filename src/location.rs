@@ -601,22 +601,6 @@ pub fn get_message_kml(timestamp: i64, latitude: f64, longitude: f64) -> String 
     )
 }
 
-/// Sets the timestamp of the last time location was sent in the chat.
-pub async fn set_kml_sent_timestamp(
-    context: &Context,
-    chat_id: ChatId,
-    timestamp: i64,
-) -> Result<()> {
-    context
-        .sql
-        .execute(
-            "UPDATE chats SET locations_last_sent=? WHERE id=?;",
-            (timestamp, chat_id),
-        )
-        .await?;
-    Ok(())
-}
-
 /// Sets the location of the message.
 pub async fn set_msg_location_id(context: &Context, msg_id: MsgId, location_id: u32) -> Result<()> {
     context

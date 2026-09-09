@@ -554,21 +554,23 @@ pub(crate) async fn handle_securejoin_handshake(
             }
 
             let rfc724_mid = create_outgoing_rfc724_mid();
-            let addr = ContactAddress::new(&mime_message.from.addr)?;
+            let addr = mime_message.from.addr.clone();
             let attach_self_pubkey = true;
             let self_fp = self_fingerprint(context).await?;
             let shared_secret = format!("securejoin/{self_fp}/{auth}");
-            let rendered_message = mimefactory::render_symm_encrypted_securejoin_message(
+            let recipients = vec![addr];
+            let queued_message = mimefactory::symm_encrypted_securejoin_message(
                 context,
                 "vc-pubkey",
                 &rfc724_mid,
                 attach_self_pubkey,
                 auth,
                 &shared_secret,
+                recipients,
             )
             .await?;
 
-            insert_into_smtp(context, &rfc724_mid, &addr, rendered_message).await?;
+            insert_into_smtp(context, &rfc724_mid, &queued_message).await?;
             context.scheduler.interrupt_smtp().await;
 
             Ok(HandshakeMessage::Done)
