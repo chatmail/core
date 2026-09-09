@@ -1697,7 +1697,7 @@ pub async fn delete_msgs_ext(
             if !msg.pre_rfc724_mid.is_empty() {
                 stmt.execute((&msg.pre_rfc724_mid,))?;
             }
-            trans.execute("DELETE FROM smtp WHERE msg_id=?", (msg_id,))?;
+            trans.execute("DELETE FROM smtp2 WHERE msg_id=?", (msg_id,))?;
             trans.execute(
                 "DELETE FROM download WHERE rfc724_mid=?",
                 (&msg.rfc724_mid,),

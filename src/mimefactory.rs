@@ -17,7 +17,7 @@ use tokio::fs;
 
 use crate::aheader::{Aheader, EncryptPreference};
 use crate::blob::BlobObject;
-use crate::chat::{self, Chat, PARAM_BROADCAST_SECRET, load_broadcast_secret};
+use crate::chat::{self, Chat, ChatId, PARAM_BROADCAST_SECRET, load_broadcast_secret};
 use crate::config::Config;
 use crate::constants::{Chattype, DC_FROM_HANDSHAKE};
 use crate::contact::{Contact, ContactId, Origin};
@@ -262,33 +262,45 @@ pub(crate) struct QueuedMail {
     /// but without the From, Autocrypt and Message-ID headers.
     ///
     /// For encrypted messages this is the OpenPGP payload.
-    raw_message: Vec<u8>,
+    pub(crate) raw_message: Vec<u8>,
 
     /// Display name to put in the `From:` field.
     ///
     /// Email address is not determined yet here.
-    display_name: String,
+    pub(crate) display_name: String,
 
     /// Message-ID.
-    rfc724_mid: String,
+    pub(crate) rfc724_mid: String,
 
     /// Whether the message is encrypted and encryption keys.
-    encryption: QueuedEncryption,
+    pub(crate) encryption: QueuedEncryption,
 
     /// If true, Autocrypt header should be added before sending.
-    should_attach_pubkey: bool,
+    pub(crate) should_attach_pubkey: bool,
 
     /// If true, OpenPGP compression may be used.
-    should_compress: bool,
+    pub(crate) should_compress: bool,
 
     /// If true, encrypted message should be signed as well.
-    should_sign: bool,
+    pub(crate) should_sign: bool,
+
+    /// Recipient addresses.
+    pub(crate) recipients: Vec<String>,
+
+    /// If true, own addresses should be added to the list of recipients.
+    ///
+    /// For unencrypted messages, only the sending addresses should be added.
+    /// For encrypted messages, all published addresses should be added.
+    pub(crate) bcc_self: bool,
 }
 
 /// Side effects that should be applied at the same time
 /// as the message is persisted in the queue.
 #[derive(Debug, Clone, Default)]
-pub struct RenderSideEffects {
+pub struct QueueSideEffects {
+    /// ID of the chat side effects should be applied to.
+    pub chat_id: ChatId,
+
     /// Largest timestamp of the location sent in `location.kml` in this message.
     pub last_added_location_timestamp: Option<i64>,
 
@@ -320,7 +332,6 @@ pub(crate) fn render_queued_mail(
     public_key: &SignedPublicKey,
     secret_key: &SignedSecretKey,
     from_addr: String,
-    side_effects: RenderSideEffects,
 ) -> Result<RenderedEmail> {
     let QueuedMail {
         rfc724_mid,
@@ -330,6 +341,8 @@ pub(crate) fn render_queued_mail(
         should_attach_pubkey,
         should_compress,
         should_sign,
+        recipients: _,
+        bcc_self: _,
     } = queued_mail;
 
     let mut inner_headers: Vec<u8> = Vec::new();
@@ -524,9 +537,7 @@ pub(crate) fn render_queued_mail(
     full_message.extend(message);
     Ok(RenderedEmail {
         message: String::from_utf8_lossy(&full_message).to_string(),
-        is_encrypted,
         rfc724_mid,
-        side_effects,
     })
 }
 
@@ -535,12 +546,8 @@ pub(crate) fn render_queued_mail(
 pub struct RenderedEmail {
     pub message: String,
 
-    pub is_encrypted: bool,
-
     /// Message ID (Message in the sense of Email)
     pub rfc724_mid: String,
-
-    pub side_effects: RenderSideEffects,
 }
 
 fn new_address_with_name(name: &str, address: String) -> Address<'static> {
@@ -1395,14 +1402,12 @@ impl MimeFactory {
         let from_addr = context.get_primary_self_addr().await?;
         let public_key = key::load_self_public_key(context).await?;
         let secret_key = key::load_self_secret_key(context).await?;
-        let (queued_mail, side_effects) = Box::pin(self.into_queued_mail(context)).await?;
-        let rendered_mail = render_queued_mail(
-            queued_mail,
-            &public_key,
-            &secret_key,
-            from_addr,
-            side_effects,
-        )?;
+
+        // Does not matter, we are not going to return the QueuedMail.
+        let bcc_self = false;
+        let (queued_mail, _side_effects) =
+            Box::pin(self.into_queued_mail(context, bcc_self)).await?;
+        let rendered_mail = render_queued_mail(queued_mail, &public_key, &secret_key, from_addr)?;
         Ok(rendered_mail)
     }
 
@@ -1412,7 +1417,8 @@ impl MimeFactory {
     pub(crate) async fn into_queued_mail(
         mut self,
         context: &Context,
-    ) -> Result<(QueuedMail, RenderSideEffects)> {
+        bcc_self: bool,
+    ) -> Result<(QueuedMail, Option<QueueSideEffects>)> {
         let rfc724_mid = match &self.loaded {
             Loaded::Message { msg, .. } => match &self.pre_message_mode {
                 PreMessageMode::Pre { .. } => {
@@ -1434,9 +1440,7 @@ impl MimeFactory {
 
         let is_encrypted = self.will_be_encrypted();
 
-        let last_added_location_timestamp;
-        let avatar_is_attached;
-        let sync_ids_to_delete;
+        let side_effects: Option<QueueSideEffects>;
 
         let message: MimePart<'static> = match &self.loaded {
             Loaded::Message { msg, .. } => {
@@ -1444,15 +1448,21 @@ impl MimeFactory {
                 let RenderedMessage {
                     main_part,
                     mut parts,
-                    last_added_location_timestamp: tmp_last_added_location_timestamp,
-                    avatar_is_attached: tmp_avatar_is_attached,
-                    sync_ids_to_delete: tmp_sync_ids_to_delete,
+                    last_added_location_timestamp,
+                    avatar_is_attached,
+                    sync_ids_to_delete,
                 } = self
                     .render_message(context, &mut headers, &grpimage, is_encrypted)
                     .await?;
-                last_added_location_timestamp = tmp_last_added_location_timestamp;
-                avatar_is_attached = tmp_avatar_is_attached;
-                sync_ids_to_delete = tmp_sync_ids_to_delete;
+
+                side_effects = Some(QueueSideEffects {
+                    chat_id: msg.chat_id,
+                    avatar_is_attached,
+                    sync_ids_to_delete,
+                    last_added_location_timestamp,
+                    subject: subject_str,
+                });
+
                 if parts.is_empty() {
                     // Single part, render as regular message.
                     main_part
@@ -1470,9 +1480,7 @@ impl MimeFactory {
                 }
             }
             Loaded::Mdn { .. } => {
-                last_added_location_timestamp = None;
-                avatar_is_attached = false;
-                sync_ids_to_delete = None;
+                side_effects = None;
                 self.render_mdn()?
             }
         };
@@ -1482,12 +1490,6 @@ impl MimeFactory {
             Loaded::Mdn { .. } => self.update_mdn_pubkey_attachment(context).await?,
         };
         let is_post_message = self.pre_message_mode == PreMessageMode::Post;
-        let side_effects = RenderSideEffects {
-            avatar_is_attached,
-            sync_ids_to_delete,
-            last_added_location_timestamp,
-            subject: subject_str,
-        };
 
         let is_securejoin_message = match &self.loaded {
             Loaded::Message { msg, .. } => msg.param.get_cmd() == SystemMessage::SecurejoinMessage,
@@ -1605,7 +1607,7 @@ impl MimeFactory {
         let is_mdn = matches!(self.loaded, Loaded::Mdn { .. });
         let should_sign = true;
 
-        let message = if self.will_be_encrypted() {
+        let message = if is_encrypted {
             add_headers_to_encrypted_part(message, headers)
         } else if is_mdn {
             // Never add outer multipart/mixed wrapper to MDN
@@ -1641,6 +1643,7 @@ impl MimeFactory {
             })
         };
         let raw_message = part_to_bytes(message);
+        let recipients = self.recipients();
 
         let queued_email = QueuedMail {
             raw_message,
@@ -1650,6 +1653,8 @@ impl MimeFactory {
             should_attach_pubkey,
             should_sign,
             should_compress,
+            recipients,
+            bcc_self,
         };
         Ok((queued_email, side_effects))
     }
@@ -2335,9 +2340,9 @@ impl MimeFactory {
         self.pre_message_mode = PreMessageMode::Post;
     }
 
-    pub fn set_as_pre_message_for(&mut self, post_message: &RenderedEmail) {
+    pub fn set_as_pre_message_for(&mut self, rfc724_mid: &str) {
         self.pre_message_mode = PreMessageMode::Pre {
-            post_msg_rfc724_mid: post_message.rfc724_mid.clone(),
+            post_msg_rfc724_mid: rfc724_mid.to_string(),
         };
     }
 }
@@ -2515,29 +2520,15 @@ async fn non_chat_headers(
     Ok(headers)
 }
 
-/// Renders `queued_mail` for SMTP with the own key pair and primary address.
-async fn render_with_self_key(context: &Context, queued_mail: QueuedMail) -> Result<String> {
-    let public_key = key::load_self_public_key(context).await?;
-    let secret_key = key::load_self_secret_key(context).await?;
-    let from_addr = context.get_primary_self_addr().await?;
-    let rendered_mail = render_queued_mail(
-        queued_mail,
-        &public_key,
-        &secret_key,
-        from_addr,
-        RenderSideEffects::default(),
-    )?;
-    Ok(rendered_mail.message)
-}
-
-pub(crate) async fn render_symm_encrypted_securejoin_message(
+pub(crate) async fn symm_encrypted_securejoin_message(
     context: &Context,
     step: &str,
     rfc724_mid: &str,
     should_attach_pubkey: bool,
     auth: &str,
     shared_secret: &str,
-) -> Result<String> {
+    recipients: Vec<String>,
+) -> Result<QueuedMail> {
     info!(context, "Sending secure-join message {step:?}.");
 
     let message: MimePart<'static> = MimePart::new("text/plain", "Secure-Join");
@@ -2562,9 +2553,12 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
         // there are no compression side channels
         // leaking information about the tokens.
         should_compress: false,
+        recipients,
+        // Never send a copy of SecureJoin message to self.
+        bcc_self: false,
     };
 
-    render_with_self_key(context, queued_mail).await
+    Ok(queued_mail)
 }
 
 /// Returns the body of a keyupdate message, shaped like a receipt notification.
@@ -2593,13 +2587,14 @@ fn keyupdate_body() -> MimePart<'static> {
     )
 }
 
-/// Renders a keyupdate message informing the owners of `recipient_keys`
+/// Returns a keyupdate message informing the owners of `recipient_keys`
 /// about the current key and relay list, see [`crate::keyupdate`].
-pub(crate) async fn render_keyupdate_message(
+pub(crate) async fn keyupdate_message(
     context: &Context,
     rfc724_mid: &str,
     recipient_keys: Vec<SignedPublicKey>,
-) -> Result<String> {
+    recipients: Vec<String>,
+) -> Result<QueuedMail> {
     info!(
         context,
         "Sending keyupdate message to {} recipients.",
@@ -2627,9 +2622,10 @@ pub(crate) async fn render_keyupdate_message(
 
         // Disable compression to avoid side channels, message body is small anyway.
         should_compress: false,
+        recipients,
+        bcc_self: false,
     };
-
-    render_with_self_key(context, queued_mail).await
+    Ok(queued_mail)
 }
 
 /// Renders MIME part into a vector of bytes.

@@ -81,6 +81,25 @@ def test_change_address(acf) -> None:
     assert sender_addr2 == new_alice_addr
 
 
+def test_remove_transport_keep_messages(acf) -> None:
+    """Test that deleting current sending transport keeps queued messages."""
+    alice, bob = acf.get_online_accounts(2)
+
+    qr = acf.get_account_qr()
+    alice.add_transport_from_qr(qr)
+
+    alice.stop_io()
+    alice_chat_bob = alice.create_chat(bob)
+    alice_chat_bob.send_text("Hello!")
+
+    new_alice_addr = alice.list_transports()[1]["addr"]
+    alice.delete_transport(alice.list_transports()[0]["addr"])
+    alice.start_io()
+
+    bob_msg = bob.wait_for_incoming_msg().get_snapshot()
+    assert bob_msg.sender.get_snapshot().address == new_alice_addr
+
+
 def test_download_on_demand(acf, rpcdata) -> None:
     alice, bob = acf.get_online_accounts(2)
     alice.set_config("download_limit", "1")
