@@ -157,7 +157,8 @@ pub(crate) async fn connect_tls_inner(
 /// and runs them until one of them succeeds
 /// or all of them fail.
 ///
-/// If all connection attempts fail, returns the first error.
+/// If all connection attempts fail, returns an error
+/// that includes the reasons for all failures.
 ///
 /// This functions starts with one connection attempt and maintains
 /// up to five parallel connection attempts if connecting takes time.
@@ -209,6 +210,9 @@ where
                         }
                     }
                     None => {
+                        // We should never return an error with connection attempts left to try.
+                        debug_assert!(futures.next().is_none());
+
                         // Out of connection attempts.
                         //
                         // Break out of the loop and return error.
@@ -260,4 +264,44 @@ pub(crate) async fn connect_tcp(
         .into_iter()
         .map(connect_tcp_inner);
     run_connection_attempts(connection_futures).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_run_connection_attempts() {
+        let futures: Vec<Pin<Box<dyn Future<Output = Result<u32>> + Send>>> =
+            vec![Box::pin(async { Ok(1) }), Box::pin(async { Ok(2) })];
+        assert_eq!(
+            run_connection_attempts(futures.into_iter()).await.unwrap(),
+            1
+        );
+
+        let futures: Vec<Pin<Box<dyn Future<Output = Result<u32>> + Send>>> = vec![
+            Box::pin(async { Err(format_err!("fail")) }),
+            Box::pin(async { Ok(2) }),
+        ];
+        assert_eq!(
+            run_connection_attempts(futures.into_iter()).await.unwrap(),
+            2
+        );
+
+        let futures: Vec<Pin<Box<dyn Future<Output = Result<u32>> + Send>>> = vec![
+            Box::pin(async { Err(format_err!("fail")) }),
+            Box::pin(async { Err(format_err!("fail")) }),
+            Box::pin(async { Err(format_err!("fail")) }),
+            Box::pin(async { Err(format_err!("fail")) }),
+            Box::pin(async { Err(format_err!("fail")) }),
+            Box::pin(async { Err(format_err!("last")) }),
+        ];
+        assert!(
+            run_connection_attempts(futures.into_iter())
+                .await
+                .unwrap_err()
+                .to_string()
+                .contains("last"),
+        );
+    }
 }
