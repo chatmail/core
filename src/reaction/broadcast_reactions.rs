@@ -253,7 +253,7 @@ pub(crate) async fn load_broadcast_reactions(
 pub(crate) async fn save_broadcast_reactions(
     context: &Context,
     msg_id: MsgId,
-    frequencies: &Vec<ReactionFrequency>,
+    frequencies: &[ReactionFrequency],
 ) -> Result<()> {
     context
         .sql
