@@ -99,7 +99,7 @@ impl QrInvite {
         }
     }
 
-    pub(crate) fn addrs(&self) -> &Vec<String> {
+    pub(crate) fn addrs(&self) -> &[String] {
         match self {
             QrInvite::Contact { addrs, .. } => addrs,
             QrInvite::Group { addrs, .. } => addrs,

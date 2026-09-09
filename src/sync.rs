@@ -382,7 +382,7 @@ impl Context {
         Ok(())
     }
 
-    async fn sync_message_deletion(&self, msgs: &Vec<String>) -> Result<()> {
+    async fn sync_message_deletion(&self, msgs: &[String]) -> Result<()> {
         let mut modified_chat_ids = BTreeSet::new();
         let mut msg_ids = Vec::new();
         for rfc724_mid in msgs {
