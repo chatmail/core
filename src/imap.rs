@@ -19,6 +19,7 @@ use async_imap::types::{Fetch, Flag, UnsolicitedResponse};
 use futures::{FutureExt as _, TryStreamExt};
 use futures_lite::FutureExt;
 use ratelimit::Ratelimit;
+use tokio_util::sync::CancellationToken;
 use url::Url;
 
 use crate::chat::{self, add_device_msg};
@@ -104,6 +105,9 @@ pub(crate) struct Imap {
 
     /// IMAP UID resync request receiver.
     pub(crate) resync_request_receiver: async_channel::Receiver<()>,
+
+    /// Cancelled once a batch found messages, later batches fetch nothing.
+    pub(crate) background_fetch_stop_token: Option<CancellationToken>,
 }
 
 #[derive(Debug, Default)]
@@ -237,6 +241,7 @@ impl Imap {
             ratelimit: Ratelimit::new(Duration::new(120, 0), 2.0),
             resync_request_sender,
             resync_request_receiver,
+            background_fetch_stop_token: None,
         })
     }
 
@@ -522,6 +527,14 @@ impl Imap {
             .context("prefetch")?;
         let read_cnt = msgs.len();
         let _fetch_msgs_lock_guard = context.fetch_msgs_mutex.lock().await;
+        if let Some(stop_token) = &self.background_fetch_stop_token {
+            if stop_token.is_cancelled() {
+                return Ok((0, false));
+            }
+            if read_cnt > 0 {
+                stop_token.cancel();
+            }
+        }
 
         let mut uids_fetch: Vec<u32> = Vec::new();
         let mut available_post_msgs: Vec<String> = Vec::new();

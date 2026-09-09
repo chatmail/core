@@ -616,7 +616,7 @@ impl Context {
             self.scheduler.maybe_network().await;
             self.wait_for_all_work_done().await;
         } else {
-            self.scheduler.fetch_from_all_transports(self).await?;
+            self.scheduler.background_fetch_any(self).await?;
         }
 
         info!(

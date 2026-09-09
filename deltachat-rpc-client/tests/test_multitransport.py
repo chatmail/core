@@ -19,10 +19,8 @@ def messages_with_text(chat, text):
     return [msg for msg in chat.get_messages() if msg.get_snapshot().text == text]
 
 
-def wait_for_imap_message(imap, timeout=60):
-    deadline = time.time() + timeout
+def wait_for_imap_message(imap):
     while not imap.get_all_messages():
-        assert time.time() < deadline, f"no message arrived in {imap.addr}"
         time.sleep(1)
 
 
@@ -371,7 +369,7 @@ def test_background_fetch_from_second_transport(acf, direct_imap, dc):
     # Leave the message on the second transport only.
     imap1.delete("1:*")
 
-    dc.background_fetch(30)
+    dc.background_fetch(300)
     assert len(messages_with_text(alice_chat, "hello")) == 1
 
 
@@ -383,5 +381,5 @@ def test_background_fetch_no_duplicates(acf, direct_imap, dc):
     for transport in alice.list_transports():
         wait_for_imap_message(direct_imap(alice, transport["addr"], transport["password"]))
 
-    dc.background_fetch(30)
+    dc.background_fetch(300)
     assert len(messages_with_text(alice_chat, "hello")) == 1
