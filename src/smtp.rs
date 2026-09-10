@@ -385,6 +385,19 @@ pub(crate) async fn send_msg_to_smtp(
     else {
         return Ok(());
     };
+    if retries > 6 {
+        context
+            .sql
+            .execute("DELETE FROM smtp2 WHERE id=?", (rowid,))
+            .await
+            .context("Failed to remove message with exceeded retry limit from smtp table")?;
+        if let Some(mut msg) = Message::load_from_db_optional(context, msg_id).await? {
+            message::set_msg_failed(context, &mut msg, "Number of retries exceeded the limit.")
+                .await?;
+        }
+        return Ok(());
+    }
+
     let mut recipients = queued_mail.recipients.clone();
     if queued_mail.bcc_self {
         add_self_recipients(
@@ -393,7 +406,7 @@ pub(crate) async fn send_msg_to_smtp(
             queued_mail.encryption.is_encrypted(),
         )
         .await
-        .expect("Failed to add self recipients");
+        .context("Failed to add self recipients")?;
     }
     let public_key = key::load_self_public_key(context).await?;
     let secret_key = key::load_self_secret_key(context).await?;
@@ -408,18 +421,6 @@ pub(crate) async fn send_msg_to_smtp(
         mimefactory::render_queued_mail(queued_mail, &public_key, &secret_key, from_addr)?;
     let body = rendered_mail.message;
 
-    if retries > 6 {
-        context
-            .sql
-            .execute("DELETE FROM smtp2 WHERE id=?", (rowid,))
-            .await
-            .context("Failed to remove message with exceeded retry limit from smtp table")?;
-        if let Some(mut msg) = Message::load_from_db_optional(context, msg_id).await? {
-            message::set_msg_failed(context, &mut msg, "Number of retries exceeded the limit.")
-                .await?;
-        }
-        return Ok(());
-    }
     info!(
         context,
         "Try number {retries} to send message {msg_id} (entry {rowid}) over SMTP."
@@ -859,7 +860,6 @@ FROM smtp2 WHERE id = ?
     } = queued_mail.encryption
     {
         for fingerprint in encryption_fingerprints {
-            use crate::rusqlite::OptionalExtension;
             let public_key_bytes: Option<Vec<u8>> = transaction
                 .query_row(
                     "SELECT public_key FROM public_keys WHERE fingerprint=?",

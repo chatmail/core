@@ -281,7 +281,7 @@ pub(crate) struct QueuedMail {
     /// If true, OpenPGP compression may be used.
     pub(crate) should_compress: bool,
 
-    /// If true, encrypted message should be signed as well.
+    /// If true, encrypted message should be signed.
     pub(crate) should_sign: bool,
 
     /// Recipient addresses.

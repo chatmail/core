@@ -414,7 +414,7 @@ CREATE TABLE smtp2 (
     -- True if OpenPGP-encrypted message may use compression.
     should_compress INTEGER NOT NULL,
 
-    -- True if encrypted message should be signed as well.
+    -- True if encrypted message should be signed.
     should_sign INTEGER NOT NULL,
 
     -- ID of the message in `msgs` table
@@ -430,7 +430,7 @@ CREATE TABLE smtp2 (
     bcc_self INTEGER NOT NULL,
 
     -- True if the message is encrypted.
-    -- If true, exactly one of the shared_secret or encryption_fingerprints should be non-empty.
+    -- If true, at most one of the shared_secret or encryption_fingerprints should be non-empty.
     -- If false, both must be empty.
     is_encrypted INTEGER NOT NULL,
 
