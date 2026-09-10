@@ -526,9 +526,10 @@ int             dc_set_config                (dc_context_t* context, const char*
  *
  * - `sys.version` = get the version string e.g. as `1.2.3` or as `1.2.3special4`.
  * - `sys.msgsize_max_recommended` = maximal recommended attachment size in bytes.
- *                    All possible overheads are already subtracted and this value can be used e.g. for direct comparison
- *                    with the size of a file the user wants to attach. If an attachment is larger than this value,
- *                    an error (no warning as it should be shown to the user) is logged but the attachment is sent anyway.
+ *                    All possible overheads are already subtracted and this value can be used
+ *                    e.g. for direct comparison with the size of a file the user wants to attach.
+ *                    If an attachment is larger than this value, the message is sent anyway,
+ *                    but email servers are likely to reject the message when receiving it or before trying to send.
  * - `sys.config_keys` = get a space-separated list of all config-keys available.
  *                    The config-keys are the keys that can be passed to the parameter `key` of this function.
  *
