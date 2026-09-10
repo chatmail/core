@@ -68,6 +68,10 @@ pub enum Param {
     DeprecatedSkipAutocrypt = b'o',
 
     /// For Messages
+    ///
+    /// Set if the message is incoming and requests an MDN.
+    /// Should not be set on outgoing messages,
+    /// we do not want to send MDNs to our own messages.
     WantsMdn = b'r',
 
     /// For Messages: Render message as a RFC 9078 reaction.
