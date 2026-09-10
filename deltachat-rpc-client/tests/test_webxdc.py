@@ -21,7 +21,7 @@ def test_webxdc(acf, rpcdata) -> None:
         "isAppSender": False,
         "isBroadcast": False,
         "sendUpdateInterval": 1000,
-        "sendUpdateMaxSize": 18874368,
+        "sendUpdateMaxSize": 2**20 * (30 - 1) * 3 // 4,
     }
 
     status_updates = message.get_webxdc_status_updates()
