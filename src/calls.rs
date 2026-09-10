@@ -11,7 +11,7 @@ use crate::context::{Context, WeakContext};
 use crate::events::EventType;
 use crate::headerdef::HeaderDef;
 use crate::log::warn;
-use crate::message::{Message, MsgId, Viewtype, markseen_msgs};
+use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::net::dns::lookup_host_with_cache;
 use crate::param::Param;
@@ -247,7 +247,10 @@ impl Context {
         if chat.is_contact_request() {
             chat.id.accept(self).await?;
         }
-        markseen_msgs(self, vec![call_id]).await?;
+        call_id
+            .mark_as_noticed(self)
+            .await
+            .context("Failed to mark incoming call as noticed")?;
 
         // send an acceptance message around: to the caller as well as to the other devices of the callee
         let mut msg = Message {
@@ -283,7 +286,10 @@ impl Context {
         if !call.is_accepted() {
             if call.is_incoming() {
                 call.mark_as_ended(self).await?;
-                markseen_msgs(self, vec![call_id]).await?;
+                call_id
+                    .mark_as_noticed(self)
+                    .await
+                    .context("Failed to mark incoming call as noticed")?;
                 let declined_call_str = stock_str::declined_call(self);
                 call.update_text(self, &declined_call_str).await?;
             } else {
@@ -431,6 +437,10 @@ impl Context {
                     call.mark_as_accepted(self).await?;
                     self.emit_msgs_changed(call.msg.chat_id, call_id);
                     if call.is_incoming() {
+                        call_id
+                            .mark_as_noticed(self)
+                            .await
+                            .context("Failed to mark incoming call as noticed")?;
                         self.emit_event(EventType::IncomingCallAccepted {
                             msg_id: call.msg.id,
                             chat_id: call.msg.chat_id,
@@ -463,6 +473,11 @@ impl Context {
                         if call.is_incoming() {
                             if from_id == ContactId::SELF {
                                 call.mark_as_ended(self).await?;
+                                call.msg
+                                    .id
+                                    .mark_as_noticed(self)
+                                    .await
+                                    .context("Failed to mark incoming call as noticed")?;
                                 let declined_call_str = stock_str::declined_call(self);
                                 call.update_text(self, &declined_call_str).await?;
                             } else {

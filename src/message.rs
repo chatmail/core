@@ -172,6 +172,18 @@ SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ?, ? FROM msgs WHERE id=?1
         Ok(true)
     }
 
+    /// Marks incoming message as noticed if it is fresh.
+    pub(crate) async fn mark_as_noticed(self, context: &Context) -> Result<()> {
+        context
+            .sql
+            .execute(
+                "UPDATE msgs SET state=? WHERE id=? AND state=?",
+                (MessageState::InNoticed, self, MessageState::InFresh),
+            )
+            .await?;
+        Ok(())
+    }
+
     /// Bad evil escape hatch.
     ///
     /// Avoid using this, eventually types should be cleaned up enough
