@@ -40,10 +40,19 @@ use crate::stock_str;
 use crate::tools::{IsNoneOrEmpty, create_outgoing_rfc724_mid, remove_subject_prefix, time};
 use crate::webxdc::StatusUpdateSerial;
 
-// attachments of 25 mb brutto should work on the majority of providers
-// (brutto examples: web.de=50, 1&1=40, t-online.de=32, gmail=25, posteo=50, yahoo=25, all-inkl=100).
-// to get the netto sizes, we subtract 1 mb header-overhead and the base64-overhead.
-pub const RECOMMENDED_FILE_SIZE: u64 = 24 * 1024 * 1024 / 4 * 3;
+/// Maximum attachment file size.
+///
+/// This is used to limit the size of attached webxdc updates.
+/// This constant is also available to UIs via sys.msgsize_max_recommended config
+/// and is used when encoding video files. UIs may refuse to attach files larger than this size.
+///
+/// 30 MiB is the default maximum file size for chatmail relays as of 2026-09-10.
+/// Attachments of 25 mb brutto should work on the majority of providers
+/// (brutto examples: web.de=50, 1&1=40, t-online.de=32, gmail=25, posteo=50, yahoo=25, all-inkl=100).
+///
+/// To get the netto sizes, we subtract 1 MiB overhead for headers
+/// and divide by 4/3 to account for base64 encoding.
+pub const RECOMMENDED_FILE_SIZE: u64 = (30 - 1) * 1024 * 1024 / 4 * 3;
 
 #[derive(Debug, Clone)]
 #[expect(clippy::large_enum_variant)]
