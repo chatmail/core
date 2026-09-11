@@ -5872,11 +5872,9 @@ pub(crate) async fn first_row_in_smtp_queue(context: &TestContext) -> (MsgId, St
         })
         .await
         .unwrap();
-    let public_key = key::load_self_public_key(context).await.unwrap();
-    let secret_key = key::load_self_secret_key(context).await.unwrap();
-    let from_addr = context.get_primary_self_addr().await.unwrap();
-    let rendered_mail =
-        mimefactory::render_queued_mail(queued_mail, &public_key, &secret_key, from_addr).unwrap();
+    let rendered_mail = mimefactory::render_queued_mail_with_context(queued_mail, context)
+        .await
+        .unwrap();
 
     (msg_id, rendered_mail.message)
 }

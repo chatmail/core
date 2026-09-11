@@ -545,6 +545,19 @@ pub(crate) fn render_queued_mail(
     })
 }
 
+/// Renders queued mail with the current sending address.
+pub(crate) async fn render_queued_mail_with_context(
+    queued_mail: QueuedMail,
+    context: &Context,
+) -> Result<RenderedEmail> {
+    let from_addr = context.get_primary_self_addr().await?;
+    let public_key = key::load_self_public_key(context).await?;
+    let secret_key = key::load_self_secret_key(context).await?;
+
+    let rendered_mail = render_queued_mail(queued_mail, &public_key, &secret_key, from_addr)?;
+    Ok(rendered_mail)
+}
+
 /// Result of rendering a message, ready to be submitted to a send job.
 #[derive(Debug, Clone)]
 pub struct RenderedEmail {
@@ -1403,15 +1416,12 @@ impl MimeFactory {
     /// Used for MDNs because they are fully rendered and sent in one go,
     /// rather than first creating a [`QueuedMail`] and sending it later.
     pub async fn render(self, context: &Context) -> Result<RenderedEmail> {
-        let from_addr = context.get_primary_self_addr().await?;
-        let public_key = key::load_self_public_key(context).await?;
-        let secret_key = key::load_self_secret_key(context).await?;
-
         // Does not matter, we are not going to return the QueuedMail.
         let bcc_self = false;
+
         let (queued_mail, _side_effects) =
             Box::pin(self.into_queued_mail(context, bcc_self)).await?;
-        let rendered_mail = render_queued_mail(queued_mail, &public_key, &secret_key, from_addr)?;
+        let rendered_mail = render_queued_mail_with_context(queued_mail, context).await?;
         Ok(rendered_mail)
     }
 

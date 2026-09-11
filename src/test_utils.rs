@@ -663,19 +663,9 @@ ORDER BY id"
                 .expect("Failed to update timestamp_sent");
         }
 
-        let public_key = key::load_self_public_key(self)
+        let rendered_mail = mimefactory::render_queued_mail_with_context(queued_mail, self)
             .await
-            .expect("Failed to load own public key");
-        let secret_key = key::load_self_secret_key(self)
-            .await
-            .expect("Failed to load own secret key");
-        let from_addr = self
-            .get_primary_self_addr()
-            .await
-            .expect("Failed to get the From address");
-        let rendered_mail =
-            mimefactory::render_queued_mail(queued_mail, &public_key, &secret_key, from_addr)
-                .expect("Failed to render queued mail");
+            .expect("Failed to render queued mail");
         let payload = rendered_mail.message;
 
         let payload_headers = payload.split("\r\n\r\n").next().unwrap().lines();
@@ -716,17 +706,6 @@ ORDER BY id"
     }
 
     pub async fn get_smtp_rows_for_msg<'a>(&'a self, msg_id: MsgId) -> Vec<SentMessage<'a>> {
-        let public_key = key::load_self_public_key(self)
-            .await
-            .expect("Failed to load own public key");
-        let secret_key = key::load_self_secret_key(self)
-            .await
-            .expect("Failed to load own secret key");
-        let from_addr = self
-            .get_primary_self_addr()
-            .await
-            .expect("Failed to get the From address");
-
         let mut sent_msgs = Vec::new();
 
         for rowid in self
@@ -758,13 +737,10 @@ ORDER BY id"
                 .expect("Failed to add self recipients");
             }
             let recipients = queued_mail.recipients.join(" ");
-            let rendered_mail = mimefactory::render_queued_mail(
-                queued_mail,
-                &public_key,
-                &secret_key,
-                from_addr.clone(),
-            )
-            .expect("Failed to render queued mail");
+
+            let rendered_mail = mimefactory::render_queued_mail_with_context(queued_mail, self)
+                .await
+                .expect("Failed to render queued mail");
             let payload = rendered_mail.message;
 
             debug_assert!(!recipients.starts_with(" "));
