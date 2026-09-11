@@ -420,10 +420,10 @@ CREATE TABLE smtp2 (
     -- ID of the message in `msgs` table
     msg_id INTEGER NOT NULL,
 
-    -- List of recipients separated by space
+    -- Space-separated recipient addresses.
     recipients TEXT NOT NULL,
 
-    -- Space-separated list of addresses the message was sent to.
+    -- Space-separated addresses the message was sent to.
     sent_to TEXT NOT NULL DEFAULT '',
 
     -- If true, copy should be sent to self in addition to the recipient list.
