@@ -12,6 +12,7 @@ use pgp::composed::SignedPublicKey;
 use rusqlite::OptionalExtension as _;
 use tokio::task;
 
+use crate::chat;
 use crate::chat::{ChatId, add_info_msg_with_cmd};
 use crate::config::Config;
 use crate::contact::{Contact, ContactId};
@@ -333,6 +334,19 @@ pub(crate) async fn smtp_send(
         }
     }
     status
+}
+
+/// Inserts a tombstone for `rfc724_mid`
+/// and queues the message for SMTP sending.
+pub(crate) async fn insert_into_smtp(
+    context: &Context,
+    rfc724_mid: &str,
+    queued_msg: &QueuedMail,
+) -> Result<()> {
+    let now = tools::time();
+    let msg_id = message::insert_tombstone(context, rfc724_mid).await?;
+    chat::enqueue_mail(context, now, msg_id, queued_msg, None).await?;
+    Ok(())
 }
 
 /// Sends message identified by `smtp` table rowid over SMTP connection.

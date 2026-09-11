@@ -12,11 +12,12 @@ use crate::context::Context;
 use crate::events::EventType;
 use crate::key::{DcKey as _, self_fingerprint};
 use crate::log::LogExt;
-use crate::message::{self, Message, MsgId, Viewtype};
+use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::{Param, Params};
 use crate::pgp::addresses_from_public_key;
 use crate::securejoin::{ContactId, encrypted_and_signed, verify_sender_by_fingerprint};
+use crate::smtp::insert_into_smtp;
 use crate::stock_str;
 use crate::sync::Sync::*;
 use crate::tools::{create_outgoing_rfc724_mid, time};
@@ -339,9 +340,7 @@ pub(crate) async fn send_handshake_message(
             recipients.to_vec(),
         )
         .await?;
-        let now = time();
-        let msg_id = message::insert_tombstone(context, &rfc724_mid).await?;
-        chat::enqueue_mail(context, now, msg_id, &queued_msg, None).await?;
+        insert_into_smtp(context, &rfc724_mid, &queued_msg).await?;
 
         context.scheduler.interrupt_smtp().await;
     } else {

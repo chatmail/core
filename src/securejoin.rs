@@ -16,11 +16,12 @@ use crate::key;
 use crate::key::{DcKey, Fingerprint, load_self_public_key, self_fingerprint};
 use crate::log::LogExt as _;
 use crate::log::warn;
-use crate::message::{self, Message, Viewtype};
+use crate::message::{Message, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;
 use crate::qr::check_qr;
 use crate::securejoin::bob::JoinerProgress;
+use crate::smtp::insert_into_smtp;
 use crate::sync::Sync::*;
 use crate::tools::{create_id, create_outgoing_rfc724_mid, time};
 use crate::{SecurejoinSource, mimefactory, stats};
@@ -557,7 +558,6 @@ pub(crate) async fn handle_securejoin_handshake(
             let attach_self_pubkey = true;
             let self_fp = self_fingerprint(context).await?;
             let shared_secret = format!("securejoin/{self_fp}/{auth}");
-            let now = time();
             let recipients = vec![addr];
             let queued_message = mimefactory::symm_encrypted_securejoin_message(
                 context,
@@ -570,8 +570,7 @@ pub(crate) async fn handle_securejoin_handshake(
             )
             .await?;
 
-            let msg_id = message::insert_tombstone(context, &rfc724_mid).await?;
-            chat::enqueue_mail(context, now, msg_id, &queued_message, None).await?;
+            insert_into_smtp(context, &rfc724_mid, &queued_message).await?;
             context.scheduler.interrupt_smtp().await;
 
             Ok(HandshakeMessage::Done)
