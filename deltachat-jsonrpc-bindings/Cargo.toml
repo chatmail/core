@@ -1,6 +1,6 @@
 [package]
 name = "deltachat-jsonrpc-bindings"
-version = "2.60.0-dev"
+version = "2.60.0"
 description = "Autogenerate DeltaChat JSON-RPC API bindings at build time"
 edition = "2024"
 license = "MPL-2.0"
