@@ -287,6 +287,9 @@ pub(crate) struct QueuedMail {
     /// Recipient addresses.
     pub(crate) recipients: Vec<String>,
 
+    /// Addresses the messages was already sent to.
+    pub(crate) sent_to: Vec<String>,
+
     /// If true, own addresses should be added to the list of recipients.
     ///
     /// For unencrypted messages, only the sending addresses should be added.
@@ -342,6 +345,7 @@ pub(crate) fn render_queued_mail(
         should_compress,
         should_sign,
         recipients: _,
+        sent_to: _,
         bcc_self: _,
     } = queued_mail;
 
@@ -1654,6 +1658,7 @@ impl MimeFactory {
             should_sign,
             should_compress,
             recipients,
+            sent_to: Vec::new(),
             bcc_self,
         };
         Ok((queued_email, side_effects))
@@ -2554,6 +2559,7 @@ pub(crate) async fn symm_encrypted_securejoin_message(
         // leaking information about the tokens.
         should_compress: false,
         recipients,
+        sent_to: Vec::new(),
         // Never send a copy of SecureJoin message to self.
         bcc_self: false,
     };
@@ -2623,6 +2629,7 @@ pub(crate) async fn keyupdate_message(
         // Disable compression to avoid side channels, message body is small anyway.
         should_compress: false,
         recipients,
+        sent_to: Vec::new(),
         bcc_self: false,
     };
     Ok(queued_mail)

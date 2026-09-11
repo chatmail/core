@@ -423,6 +423,9 @@ CREATE TABLE smtp2 (
     -- List of recipients separated by space
     recipients TEXT NOT NULL,
 
+    -- Space-separated list of addresses the message was sent to.
+    sent_to TEXT NOT NULL DEFAULT '',
+
     -- If true, copy should be sent to self in addition to the recipient list.
     --
     -- For encrypted messages copy is sent to all addresses.

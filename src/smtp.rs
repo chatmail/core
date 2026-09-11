@@ -3,6 +3,8 @@
 mod connect;
 pub mod send;
 
+use std::collections::BTreeSet;
+
 use anyhow::{Context as _, Error, Result, bail, format_err};
 use async_smtp::response::{Category, Code, Detail};
 use async_smtp::{EmailAddress, SmtpTransport};
@@ -408,6 +410,21 @@ pub(crate) async fn send_msg_to_smtp(
         .await
         .context("Failed to add self recipients")?;
     }
+    let mut sent_to_set: BTreeSet<String> = queued_mail.sent_to.iter().cloned().collect();
+    let recipients_list = recipients
+        .into_iter()
+        .filter(|addr| !sent_to_set.contains(AsRef::<str>::as_ref(addr)))
+        .filter_map(
+            |addr| match async_smtp::EmailAddress::new(addr.to_string()) {
+                Ok(addr) => Some(addr),
+                Err(err) => {
+                    warn!(context, "Invalid recipient: {} {:?}.", addr, err);
+                    None
+                }
+            },
+        )
+        .collect::<Vec<_>>();
+
     let public_key = key::load_self_public_key(context).await?;
     let secret_key = key::load_self_secret_key(context).await?;
 
@@ -426,19 +443,6 @@ pub(crate) async fn send_msg_to_smtp(
         "Try number {retries} to send message {msg_id} (entry {rowid}) over SMTP."
     );
 
-    let recipients_list = recipients
-        .into_iter()
-        .filter_map(
-            |addr| match async_smtp::EmailAddress::new(addr.to_string()) {
-                Ok(addr) => Some(addr),
-                Err(err) => {
-                    warn!(context, "Invalid recipient: {} {:?}.", addr, err);
-                    None
-                }
-            },
-        )
-        .collect::<Vec<_>>();
-
     let chunk_size = context.get_max_smtp_rcpt_to().await?.max(1);
     let mut unsent = recipients_list.as_slice();
     let status = loop {
@@ -450,16 +454,20 @@ pub(crate) async fn send_msg_to_smtp(
         if !matches!(status, SendResult::Success) || rest.is_empty() {
             break status;
         }
-        let rest_str = rest
+        for sent_to_addr in chunk {
+            let sent_to_addr_str: &str = sent_to_addr.as_ref();
+            sent_to_set.remove(sent_to_addr_str);
+        }
+        let sent_to_str = sent_to_set
             .iter()
             .map(|a| a.as_ref())
-            .collect::<Vec<_>>()
+            .collect::<Vec<&str>>()
             .join(" ");
         context
             .sql
             .execute(
-                "UPDATE smtp2 SET recipients=? WHERE id=?",
-                (rest_str, rowid),
+                "UPDATE smtp2 SET sent_to=? WHERE id=?",
+                (sent_to_str, rowid),
             )
             .await?;
         unsent = rest;
@@ -791,6 +799,7 @@ SELECT display_name,
        shared_secret,
        encryption_fingerprints,
        recipients,
+       sent_to,
        bcc_self
 FROM smtp2 WHERE id = ?
 ",
@@ -820,7 +829,13 @@ FROM smtp2 WHERE id = ?
                     recipients.split(' ').map(|s| s.to_string()).collect()
                 };
                 debug_assert!(!recipients.iter().any(|s| s.is_empty()));
-                let bcc_self: bool = row.get(10)?;
+                let sent_to: String = row.get(10)?;
+                let sent_to: Vec<String> = if sent_to.is_empty() {
+                    Vec::new()
+                } else {
+                    sent_to.split(' ').map(|s| s.to_string()).collect()
+                };
+                let bcc_self: bool = row.get(11)?;
 
                 let encryption = match (
                     is_encrypted,
@@ -847,6 +862,7 @@ FROM smtp2 WHERE id = ?
                         should_compress,
                         should_sign,
                         recipients,
+                        sent_to,
                         bcc_self,
                     },
                     encryption_fingerprints,
