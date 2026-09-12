@@ -386,7 +386,7 @@ impl<'a> BlobObject<'a> {
             let exceeds_wh = img.width() > max_wh || img.height() > max_wh;
             let exceeds_max_bytes = nr_bytes > max_bytes as u64;
 
-            let jpeg_quality = 75;
+            let jpeg_quality = 75; // 70-80 is the sweet spot of quality vs. bytes/pixel. if one wants to spend more bytes in quality, better increase resolution
             let ofmt = match fmt {
                 ImageFormat::Png if !exceeds_max_bytes => ImageOutputFormat::Png,
                 ImageFormat::Jpeg => {

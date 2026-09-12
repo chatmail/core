@@ -508,17 +508,17 @@ async fn test_recode_image_rgba_png_to_jpeg() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_recode_image_huge_jpg() {
-    let bytes = include_bytes!("../../test-data/image/screenshot.jpg");
+    let bytes = include_bytes!("../../test-data/image/screenshot-2560x1440.jpg");
     SendImageCheckMediaquality {
         viewtype: Viewtype::Image,
         media_quality_config: "0",
         bytes,
         extension: "jpg",
         has_exif: true,
-        original_width: 1920,
-        original_height: 1080,
-        compressed_width: 1704,
-        compressed_height: 959,
+        original_width: 2560,
+        original_height: 1440,
+        compressed_width: 2344,
+        compressed_height: 1319,
         ..Default::default()
     }
     .test()
