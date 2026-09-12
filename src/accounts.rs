@@ -26,6 +26,7 @@ use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::location;
 use crate::log::warn;
 use crate::push::PushSubscriber;
+use crate::smtp;
 use crate::stock_str::StockStrings;
 
 /// Account manager, that can handle multiple accounts in a single place.
@@ -507,6 +508,20 @@ impl Accounts {
             self.background_fetch_interrupt_sender.clone(),
             receiver,
         )
+    }
+
+    /// Returns true if there are no pending messages for sending.
+    ///
+    /// This is intended to be used by UIs to request not moving the app to background
+    /// when there are messages left in the queue.
+    pub async fn is_sending_finished(&self) -> Result<bool> {
+        let accounts: Vec<Context> = self.accounts.values().cloned().collect();
+        for account in accounts {
+            if !smtp::is_queue_empty(&account).await? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
     }
 
     /// Interrupts ongoing background_fetch() call,

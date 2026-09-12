@@ -1435,3 +1435,35 @@ def test_large_message(acf, rpcdata) -> None:
     assert msg.id == msgs_changed_event.msg_id
     snapshot = msg.get_snapshot()
     assert snapshot.text == "Hello World, this message is bigger than 5 bytes"
+
+
+def test_is_sending_finished(dc, acf) -> None:
+    alice, bob = acf.get_online_accounts(2)
+
+    alice_chat_bob = alice.create_chat(bob)
+    bob_chat_alice = bob.create_chat(alice)
+
+    assert dc.is_sending_finished()
+
+    alice_chat_bob.send_text("Hello!")
+    alice.wait_for_event(EventType.SMTP_MESSAGE_SENT)
+
+    assert dc.is_sending_finished()
+
+    alice.stop_io()
+    bob.stop_io()
+
+    bob_chat_alice.send_text("Hello back!")
+    alice_chat_bob.send_text("Hello again!")
+
+    assert not dc.is_sending_finished()
+
+    alice.start_io()
+    alice.wait_for_event(EventType.SMTP_MESSAGE_SENT)
+
+    assert not dc.is_sending_finished()
+
+    bob.start_io()
+    bob.wait_for_event(EventType.SMTP_MESSAGE_SENT)
+
+    assert dc.is_sending_finished()

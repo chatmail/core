@@ -2775,6 +2775,15 @@ impl CommandApi {
                 .map(JsonrpcAppSource::from_core_type),
         )
     }
+
+    /// Returns true if all accounts have empty outgoing message queue.
+    ///
+    /// This API is intended to be used by UIs
+    /// to request that operating system does not put the application in background
+    /// while there are still outgoing messages that are not sent out.
+    async fn is_sending_finished(&self) -> Result<bool> {
+        self.accounts.read().await.is_sending_finished().await
+    }
 }
 
 // Helper functions (to prevent code duplication)

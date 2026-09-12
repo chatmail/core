@@ -67,3 +67,7 @@ class DeltaChat:
     def stop_sending_locations(self) -> None:
         """Stop sending locations to all chats."""
         return self.rpc.stop_sending_locations()
+
+    def is_sending_finished(self) -> bool:
+        """Return true if sending queues of all accounts are empty."""
+        return self.rpc.is_sending_finished()

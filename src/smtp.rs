@@ -751,3 +751,9 @@ pub(crate) async fn add_self_recipients(
 
     Ok(())
 }
+
+/// Returns true if SMTP queue is empty.
+pub(crate) async fn is_queue_empty(context: &Context) -> Result<bool> {
+    let sending_finished = !context.sql.exists("SELECT COUNT(*) FROM smtp", ()).await?;
+    Ok(sending_finished)
+}
