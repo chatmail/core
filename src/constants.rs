@@ -148,7 +148,7 @@ pub const DC_DESIRED_TEXT_LINE_LEN: usize = 100;
 /// `char`s), not Unicode Grapheme Clusters.
 pub const DC_DESIRED_TEXT_LEN: usize = DC_DESIRED_TEXT_LINE_LEN * DC_DESIRED_TEXT_LINES;
 
-// max. weight of images to send w/o recoding.
+/// max. weight of images to send w/o recoding.
 // this is an estimation to the size we get when recoding high detail images.
 pub const BALANCED_IMAGE_BYTES: usize = 940_000;
 pub const WORSE_IMAGE_BYTES: usize = 130_000;
