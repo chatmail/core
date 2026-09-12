@@ -676,7 +676,7 @@ async fn test_ephemeral_msg_offline() -> Result<()> {
         .await?;
     let mut msg = Message::new_text("hi".to_string());
     assert!(chat::send_msg_sync(alice, chat.id, &mut msg).await.is_err());
-    let stmt = "SELECT COUNT(*) FROM smtp WHERE msg_id=?";
+    let stmt = "SELECT COUNT(*) FROM smtp2 WHERE msg_id=?";
     assert!(alice.sql.exists(stmt, (msg.id,)).await?);
     let now = time();
     check_msg_will_be_deleted(alice, msg.id, &chat, now, now + i64::from(duration) + 1).await?;

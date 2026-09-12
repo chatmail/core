@@ -325,22 +325,23 @@ pub(crate) async fn send_handshake_message(
     if invite.is_v3() && matches!(step, BobHandshakeMsg::Request) {
         // Send a minimal symmetrically-encrypted vc-request-pubkey message
         let rfc724_mid = create_outgoing_rfc724_mid();
-        let recipients = invite.addrs().join(" ");
+        let recipients = invite.addrs();
         let alice_fp = invite.fingerprint().hex();
         let auth = invite.authcode();
         let shared_secret = format!("securejoin/{alice_fp}/{auth}");
         let attach_self_pubkey = false;
-        let rendered_message = mimefactory::render_symm_encrypted_securejoin_message(
+        let queued_msg = mimefactory::symm_encrypted_securejoin_message(
             context,
             "vc-request-pubkey",
             &rfc724_mid,
             attach_self_pubkey,
             auth,
             &shared_secret,
+            recipients.to_vec(),
         )
         .await?;
+        insert_into_smtp(context, &rfc724_mid, &queued_msg).await?;
 
-        insert_into_smtp(context, &rfc724_mid, &recipients, rendered_message).await?;
         context.scheduler.interrupt_smtp().await;
     } else {
         let mut msg = Message {

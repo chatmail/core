@@ -346,7 +346,7 @@ async fn test_render_webxdc_status_update_object_range() -> Result<()> {
     .unwrap();
 
     t.pop_sent_msg().await;
-    assert_eq!(t.sql.count("SELECT COUNT(*) FROM smtp", ()).await?, 0);
+    assert_eq!(t.sql.count("SELECT COUNT(*) FROM smtp2", ()).await?, 0);
 
     let long_text = String::from_utf8(vec![b'a'; 300_000])?;
     assert!(long_text.len() > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD.try_into().unwrap());
@@ -354,6 +354,6 @@ async fn test_render_webxdc_status_update_object_range() -> Result<()> {
         .await?;
     t.flush_status_updates().await?;
 
-    assert_eq!(t.sql.count("SELECT COUNT(*) FROM smtp", ()).await?, 1);
+    assert_eq!(t.sql.count("SELECT COUNT(*) FROM smtp2", ()).await?, 1);
     Ok(())
 }

@@ -23,9 +23,6 @@ pub(crate) use post_msg_metadata::PostMsgMetadata;
 /// KiB).
 pub(crate) const PRE_MSG_ATTACHMENT_SIZE_THRESHOLD: u64 = 140_000;
 
-/// Max size for pre messages. A warning is emitted when this is exceeded.
-pub(crate) const PRE_MSG_SIZE_WARNING_THRESHOLD: usize = 150_000;
-
 /// Download state of the message.
 #[derive(
     Debug,
