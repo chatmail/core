@@ -9,7 +9,7 @@ use async_channel::{self as channel, Receiver, Sender};
 use futures::future::try_join_all;
 use futures_lite::FutureExt;
 use tokio::sync::{RwLock, oneshot};
-use tokio::task;
+use tokio::task::{self, JoinSet};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
@@ -282,6 +282,60 @@ impl SchedulerState {
             scheduler.interrupt_recently_seen(contact_id, timestamp);
         }
     }
+
+    /// Fetches from all transports at once, each on a dedicated connection,
+    /// with I/O paused so that the scheduler does not connect as well.
+    ///
+    /// Returns as soon as one transport fetched messages:
+    /// the others then fetch nothing more and are dropped,
+    /// so that a caller woken up by a push notification
+    /// does not wait for a transport that may never answer.
+    pub(crate) async fn background_fetch_any(&self, context: &Context) -> Result<()> {
+        let _pause_guard = self.pause(context).await?;
+
+        let stop_token = CancellationToken::new();
+        let mut set = JoinSet::new();
+        for (transport_id, param) in ConfiguredLoginParam::load_all(context).await? {
+            let context = context.clone();
+            let stop_token = stop_token.clone();
+            set.spawn(async move {
+                match background_fetch_from_transport(&context, transport_id, param, stop_token)
+                    .await
+                {
+                    Ok(fetched) => fetched,
+                    Err(err) => {
+                        warn!(context, "Transport {transport_id}: fetch failed: {err:#}.");
+                        false
+                    }
+                }
+            });
+        }
+
+        while let Some(fetched) = set.join_next().await {
+            if let Ok(true) = fetched {
+                break;
+            }
+        }
+        Ok(())
+    }
+}
+
+async fn background_fetch_from_transport(
+    context: &Context,
+    transport_id: u32,
+    param: ConfiguredLoginParam,
+    stop_token: CancellationToken,
+) -> Result<bool> {
+    // A single fetch has nothing to interrupt.
+    let (_, idle_interrupt_receiver) = channel::bounded(1);
+    let mut connection = Imap::new(context, transport_id, param, idle_interrupt_receiver).await?;
+    connection.background_fetch_stop_token = Some(stop_token);
+    let mut session = connection.prepare(context).await?;
+
+    let folder = connection.folder.clone();
+    connection
+        .fetch_move_delete(context, &mut session, &folder)
+        .await
 }
 
 #[derive(Debug, Default)]
