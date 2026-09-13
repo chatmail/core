@@ -104,11 +104,11 @@ class DirectImap:
 
     def get_all_messages(self) -> List[MailMessage]:
         assert not self._idling
-        return list(self.conn.fetch())
+        return list(self.conn.fetch(mark_seen=False))
 
     def get_unread_messages(self) -> List[str]:
         assert not self._idling
-        return [msg.uid for msg in self.conn.fetch(AND(seen=False))]
+        return [msg.uid for msg in self.conn.fetch(AND(seen=False), mark_seen=False)]
 
     def mark_all_read(self):
         messages = self.get_unread_messages()
@@ -183,7 +183,7 @@ class DirectImap:
         self.conn.append(bytes(msg, encoding="ascii"), folder)
 
     def get_uid_by_message_id(self, message_id) -> str:
-        msgs = [msg.uid for msg in self.conn.fetch(AND(header=Header("MESSAGE-ID", message_id)))]
+        msgs = [msg.uid for msg in self.conn.fetch(AND(header=Header("MESSAGE-ID", message_id)), mark_seen=False)]
         if len(msgs) == 0:
             raise Exception("Did not find message " + message_id + ", maybe you forgot to select the correct folder?")
         return msgs[0]
