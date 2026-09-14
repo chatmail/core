@@ -195,9 +195,9 @@ pub enum Config {
     #[strum(props(default = "0"))]
     DeleteDeviceAfter,
 
-    /// The primary email address, used for sending and background fetch.
+    /// The address of the transport used for sending.
     ///
-    /// Device-local, other devices keep their own primary transport.
+    /// Device-local, other devices choose their own sending transport.
     ConfiguredAddr,
 
     /// Deprecated(2026-04).
@@ -806,7 +806,7 @@ impl Context {
                                     (time(), addr),
                                 )
                                 .context(
-                                    "Failed to update add_timestamp for the new primary transport",
+                                    "Failed to update add_timestamp for the new sending transport",
                                 )?;
 
                             // Clean up SMTP queue.
@@ -819,7 +819,8 @@ impl Context {
                             Ok(())
                         })
                         .await?;
-                    // Invalidate the cache so the sync message cannot read a stale primary address.
+                    // Invalidate the cache so the sync message
+                    // cannot read a stale sending address.
                     self.sql.uncache_raw_config("configured_addr").await;
                     send_sync_transports(self).await?;
                 }
@@ -917,8 +918,7 @@ impl Context {
             .any(|a| addr_cmp(addr, a)))
     }
 
-    /// Sets `primary_new` as the new primary self address and saves the old
-    /// primary address (if exists) as a secondary address.
+    /// Sets `primary_new` as the address used for sending.
     ///
     /// This should only be used by test code and during configure.
     #[cfg(test)] // AEAP is disabled, but there are still tests for it
@@ -940,7 +940,7 @@ impl Context {
             .await
     }
 
-    /// Returns the primary self address.
+    /// Returns the address of the transport used for sending.
     /// Returns an error if no self addr is configured.
     pub async fn get_primary_self_addr(&self) -> Result<String> {
         self.get_config(Config::ConfiguredAddr)

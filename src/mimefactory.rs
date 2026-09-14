@@ -2467,7 +2467,7 @@ async fn non_chat_headers(
     Ok(headers)
 }
 
-/// Renders `queued_mail` for SMTP with the own key pair and primary address.
+/// Renders `queued_mail` for SMTP with the own key pair and sending address.
 async fn render_with_self_key(context: &Context, queued_mail: QueuedMail) -> Result<String> {
     let public_key = key::load_self_public_key(context).await?;
     let secret_key = key::load_self_secret_key(context).await?;
