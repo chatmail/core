@@ -312,7 +312,7 @@ impl SchedulerState {
         }
 
         while let Some(fetched) = set.join_next().await {
-            if let Ok(true) = fetched {
+            if fetched.context("background_fetch_any: Failed to join a task")? {
                 break;
             }
         }
