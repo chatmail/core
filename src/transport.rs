@@ -263,7 +263,7 @@ impl ConfiguredLoginParam {
     /// Load configured account settings from the database.
     ///
     /// Returns transport ID and configured parameters
-    /// of the current primary transport.
+    /// of the transport currently used for sending.
     /// Returns `None` if account is not configured.
     pub(crate) async fn load(context: &Context) -> Result<Option<(u32, Self)>> {
         let Some(self_addr) = context.get_config(Config::ConfiguredAddr).await? else {
@@ -532,7 +532,7 @@ pub(crate) async fn save_transport(
         > 0;
 
     if configured_addr.is_none() {
-        // If there is no transport yet, set the new transport as the primary one
+        // If there is no transport yet, use the new transport for sending
         context
             .sql
             .set_raw_config(Config::ConfiguredAddr.as_ref(), Some(&addr))
@@ -676,7 +676,7 @@ pub(crate) async fn sync_transports(
     }
 
     if let Some(new_addr) = reelected {
-        info!(context, "Re-elected primary transport {new_addr:?}.");
+        info!(context, "Re-elected sending transport {new_addr:?}.");
         context.sql.uncache_raw_config("configured_addr").await;
         modified = true;
     }

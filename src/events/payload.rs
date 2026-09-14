@@ -433,7 +433,7 @@ pub enum EventType {
         chat_id: ChatId,
     },
 
-    /// One or more transports has changed or another transport is primary now.
+    /// One or more transports has changed or another transport is used for sending now.
     ///
     /// UI should update the list.
     ///
