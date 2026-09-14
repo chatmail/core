@@ -345,7 +345,10 @@ pub(crate) async fn insert_into_smtp(
 ) -> Result<()> {
     let now = tools::time();
     let msg_id = message::insert_tombstone(context, rfc724_mid).await?;
-    chat::enqueue_mail(context, now, msg_id, queued_msg, None).await?;
+    context
+        .sql
+        .transaction(|transaction| chat::enqueue_mail(transaction, now, msg_id, queued_msg, None))
+        .await?;
     Ok(())
 }
 

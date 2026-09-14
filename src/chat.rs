@@ -31,7 +31,6 @@ use crate::ensure_and_debug_assert_eq;
 use crate::ephemeral::{Timer as EphemeralTimer, start_chat_ephemeral_timers};
 use crate::events::EventType;
 use crate::key::{DcKey as _, Fingerprint, self_fingerprint};
-use crate::location;
 use crate::log::{LogExt, warn};
 use crate::logged_debug_assert;
 use crate::message::{self, Message, MessageState, MsgId, Viewtype};
@@ -332,16 +331,18 @@ impl ChatId {
         Ok(chat_id)
     }
 
-    async fn set_selfavatar_timestamp(self, context: &Context, timestamp: i64) -> Result<()> {
-        context
-            .sql
+    fn set_selfavatar_timestamp(
+        self,
+        transaction: &mut rusqlite::Transaction<'_>,
+        timestamp: i64,
+    ) -> Result<()> {
+        transaction
             .execute(
                 "UPDATE contacts
                  SET selfavatar_sent=?
                  WHERE id IN(SELECT contact_id FROM chats_contacts WHERE chat_id=? AND add_timestamp >= remove_timestamp)",
                 (timestamp, self),
-            )
-            .await?;
+            ) ?;
         Ok(())
     }
 
@@ -2815,8 +2816,8 @@ async fn render_mime_message_and_pre_message(
 }
 
 /// Process side effects and store queued mail.
-pub(crate) async fn enqueue_mail(
-    context: &Context,
+pub(crate) fn enqueue_mail(
+    transaction: &mut rusqlite::Transaction<'_>,
     now: i64,
     msg_id: MsgId,
     queued_mail: &QueuedMail,
@@ -2824,30 +2825,24 @@ pub(crate) async fn enqueue_mail(
 ) -> Result<i64> {
     if let Some(side_effects) = side_effects {
         if let Some(last_added_location_timestamp) = side_effects.last_added_location_timestamp {
-            location::set_kml_sent_timestamp(
-                context,
-                side_effects.chat_id,
-                last_added_location_timestamp,
-            )
-            .await?;
+            transaction.execute(
+                "UPDATE chats SET locations_last_sent=? WHERE id=?;",
+                (last_added_location_timestamp, side_effects.chat_id),
+            )?;
         }
 
         if side_effects.avatar_is_attached {
             side_effects
                 .chat_id
-                .set_selfavatar_timestamp(context, now)
-                .await
+                .set_selfavatar_timestamp(transaction, now)
                 .context("Failed to set selfavatar timestamp")?;
         }
 
         if let Some(ref sync_ids) = side_effects.sync_ids_to_delete {
-            context
-                .sql
-                .execute(
-                    &format!("DELETE FROM multi_device_sync WHERE id IN ({sync_ids})"),
-                    (),
-                )
-                .await?;
+            transaction.execute(
+                &format!("DELETE FROM multi_device_sync WHERE id IN ({sync_ids})"),
+                (),
+            )?;
         }
     }
 
@@ -2855,28 +2850,27 @@ pub(crate) async fn enqueue_mail(
     let all_recipients = queued_mail.recipients.join(" ");
     let is_encrypted = queued_mail.encryption.is_encrypted();
 
-    let row_id = context
-        .sql
-        .insert(
+    transaction
+        .execute(
             "
-INSERT INTO smtp2 (
-  display_name,
-  rfc724_mid,
-  mime,
-  should_attach_pubkey,
-  should_compress,
-  should_sign,
-  msg_id,
-  recipients,
-  bcc_self,
-  is_encrypted,
-  shared_secret,
-  encryption_fingerprints
-)
-VALUES (
-  ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-)
-",
+    INSERT INTO smtp2 (
+      display_name,
+      rfc724_mid,
+      mime,
+      should_attach_pubkey,
+      should_compress,
+      should_sign,
+      msg_id,
+      recipients,
+      bcc_self,
+      is_encrypted,
+      shared_secret,
+      encryption_fingerprints
+    )
+    VALUES (
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    )
+    ",
             (
                 &queued_mail.display_name,
                 &queued_mail.rfc724_mid,
@@ -2909,8 +2903,8 @@ VALUES (
                 },
             ),
         )
-        .await
         .context("Failed to insert a row into smtp2 table")?;
+    let row_id = transaction.last_insert_rowid();
     Ok(row_id)
 }
 
@@ -3032,54 +3026,53 @@ async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -> Result<Ve
         msg.param.remove(Param::GuaranteeE2ee);
     }
 
-    // Sort the message to the bottom. Employ `msgs_index7` to compute `timestamp`.
     context
         .sql
-        .execute(
-            "
-UPDATE msgs SET
-    timestamp=(
-        SELECT MAX(timestamp) FROM msgs INDEXED BY msgs_index7 WHERE
-            -- From `InFresh` to `OutDelivered` inclusive, except `OutDraft`.
-            state IN(10,13,16,18,20,24,26) AND
-            hidden IN(0,1) AND
-            chat_id=? AND
-            id<=?
-    ),
-    pre_rfc724_mid=?, subject=?, param=?
-WHERE id=?
-            ",
-            (
-                msg.chat_id,
-                msg.id,
-                &msg.pre_rfc724_mid,
-                &msg.subject,
-                msg.param.to_string(),
-                msg.id,
-            ),
-        )
-        .await?;
+        .transaction(|transaction| {
+            // Sort the message to the bottom. Employ `msgs_index7` to compute `timestamp`.
+            transaction.execute(
+                "
+    UPDATE msgs SET
+        timestamp=(
+            SELECT MAX(timestamp) FROM msgs INDEXED BY msgs_index7 WHERE
+                -- From `InFresh` to `OutDelivered` inclusive, except `OutDraft`.
+                state IN(10,13,16,18,20,24,26) AND
+                hidden IN(0,1) AND
+                chat_id=? AND
+                id<=?
+        ),
+        pre_rfc724_mid=?, subject=?, param=?
+    WHERE id=?
+                ",
+                (
+                    msg.chat_id,
+                    msg.id,
+                    &msg.pre_rfc724_mid,
+                    &msg.subject,
+                    msg.param.to_string(),
+                    msg.id,
+                ),
+            )?;
 
-    let mut row_ids = Vec::new();
-    if let Some((queued_pre_msg, pre_side_effects)) = queued_pre_msg_pair {
-        let row_id = enqueue_mail(
-            context,
-            now,
-            msg.id,
-            &queued_pre_msg,
-            pre_side_effects.as_ref(),
-        )
+            let mut row_ids = Vec::new();
+            if let Some((queued_pre_msg, pre_side_effects)) = queued_pre_msg_pair {
+                let row_id = enqueue_mail(
+                    transaction,
+                    now,
+                    msg.id,
+                    &queued_pre_msg,
+                    pre_side_effects.as_ref(),
+                )
+                .context("Failed to enqueue pre-message")?;
+                row_ids.push(row_id)
+            }
+            row_ids.push(
+                enqueue_mail(transaction, now, msg.id, &queued_msg, side_effects.as_ref())
+                    .context("Failed to enqueue message")?,
+            );
+            Ok(row_ids)
+        })
         .await
-        .context("Failed to enqueue pre-message")?;
-        row_ids.push(row_id)
-    }
-    row_ids.push(
-        enqueue_mail(context, now, msg.id, &queued_msg, side_effects.as_ref())
-            .await
-            .context("Failed to enqueue message")?,
-    );
-
-    Ok(row_ids)
 }
 
 /// Sends a text message to the given chat.
