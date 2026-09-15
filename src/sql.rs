@@ -741,6 +741,11 @@ fn new_connection(path: &Path, passphrase: &str) -> Result<Connection> {
     // Default synchronous=FULL is much slower. NORMAL is sufficient for WAL mode.
     conn.pragma_update(None, "synchronous", "NORMAL".to_string())?;
 
+    // Disable double-quoted string literals misfeature.
+    // <https://sqlite.org/quirks.html#double_quoted_string_literals_are_accepted>
+    conn.set_db_config(DbConfig::SQLITE_DBCONFIG_DQS_DML, false)?;
+    conn.set_db_config(DbConfig::SQLITE_DBCONFIG_DQS_DDL, false)?;
+
     Ok(conn)
 }
 

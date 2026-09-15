@@ -5021,7 +5021,7 @@ pub(crate) async fn delete_and_reset_all_device_msgs(context: &Context) -> Resul
     context
         .sql
         .execute(
-            r#"INSERT INTO devmsglabels (label) VALUES ("core-welcome-image"), ("core-welcome")"#,
+            "INSERT INTO devmsglabels (label) VALUES ('core-welcome-image'), ('core-welcome')",
             (),
         )
         .await?;
