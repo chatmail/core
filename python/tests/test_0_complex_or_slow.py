@@ -1,7 +1,5 @@
 import time
 
-import deltachat as dc
-
 
 class TestGroupStressTests:
     def test_group_many_members_add_leave_remove(self, acfactory, lp):
@@ -63,9 +61,9 @@ class TestGroupStressTests:
         assert msg.is_encrypted()
 
 
-def test_qr_verified_group_and_chatting(acfactory, lp):
+def test_qr_group_join_and_chatting(acfactory, lp):
     ac1, ac2, ac3 = acfactory.get_online_accounts(3)
-    lp.sec("ac1: create verified-group QR, ac2 scans and joins")
+    lp.sec("ac1: create group QR, ac2 scans and joins")
     chat1 = ac1.create_group_chat("hello")
     qr = chat1.get_join_qr()
     lp.sec("ac2: start QR-code based join-group protocol")
@@ -86,14 +84,10 @@ def test_qr_verified_group_and_chatting(acfactory, lp):
     msg_out = chat1.send_text("hello")
     assert msg_out.is_encrypted()
 
-    lp.sec("ac2: read message and check that it's a verified chat")
+    lp.sec("ac2: read message and check that it is encrypted")
     msg = ac2._evtracker.wait_next_incoming_message()
     assert msg.text == "hello"
     assert msg.is_encrypted()
-
-    lp.sec("ac2: Check that ac2 verified ac1")
-    ac2_ac1_contact = ac2.get_contacts()[0]
-    assert ac2.get_self_contact().get_verifier(ac2_ac1_contact).id == dc.const.DC_CONTACT_ID_SELF
 
     lp.sec("ac2: send message and let ac1 read it")
     chat2.send_text("world")
@@ -109,22 +103,12 @@ def test_qr_verified_group_and_chatting(acfactory, lp):
     assert ch.id >= 10
     ac1._evtracker.wait_securejoin_inviter_progress(1000)
 
-    lp.sec("ac1: add ac3 to verified group")
+    lp.sec("ac1: add ac3 to the group")
     chat1.add_contact(ac3)
     msg = ac2._evtracker.wait_next_incoming_message()
     assert msg.is_encrypted()
     assert msg.is_system_message()
     assert not msg.error
-
-    lp.sec("ac2: Check that ac1 verified ac3 for ac2")
-    ac2_ac1_contact = ac2.get_contacts()[0]
-    assert ac2.get_self_contact().get_verifier(ac2_ac1_contact).id == dc.const.DC_CONTACT_ID_SELF
-    for ac2_contact in chat2.get_contacts():
-        if ac2_contact == ac2_ac1_contact or ac2_contact.id == dc.const.DC_CONTACT_ID_SELF:
-            continue
-        # Until we reset verifications and then send the _verified header,
-        # verification is not gossiped here:
-        assert ac2.get_self_contact().get_verifier(ac2_contact) is None
 
     lp.sec("ac2: send message and let ac3 read it")
     chat2.send_text("hi")
@@ -195,10 +179,10 @@ def test_ephemeral_timer(acfactory, lp):
     assert chat1.get_ephemeral_timer() == 0
 
 
-def test_see_new_verified_member_after_going_online(acfactory, tmp_path, lp):
+def test_see_new_member_after_going_online(acfactory, tmp_path, lp):
     """The test for the bug #3836:
     - Alice has two devices, the second is offline.
-    - Alice creates a verified group and sends a QR invitation to Bob.
+    - Alice creates a group and sends a QR invitation to Bob.
     - Bob joins the group and sends a message there. Alice sees it.
     - Alice's second devices goes online, but doesn't see Bob in the group.
     """
@@ -215,7 +199,7 @@ def test_see_new_verified_member_after_going_online(acfactory, tmp_path, lp):
     ac1_offl.import_self_keys(str(dir))
     ac1_offl.stop_io()
 
-    lp.sec("ac1: create verified-group QR, ac2 scans and joins")
+    lp.sec("ac1: create group QR, ac2 scans and joins")
     chat = ac1.create_group_chat("hello")
     qr = chat.get_join_qr()
     lp.sec("ac2: start QR-code based join-group protocol")
@@ -242,12 +226,12 @@ def test_see_new_verified_member_after_going_online(acfactory, tmp_path, lp):
     assert msg_in.get_sender_contact().addr == ac2_addr
 
 
-def test_use_new_verified_group_after_going_online(acfactory, data, tmp_path, lp):
+def test_use_new_group_after_going_online(acfactory, data, tmp_path, lp):
     """Another test for the bug #3836:
     - Bob has two devices, the second is offline.
-    - Alice creates a verified group and sends a QR invitation to Bob.
+    - Alice creates a group and sends a QR invitation to Bob.
     - Bob joins the group.
-    - Bob's second devices goes online, but sees a contact request instead of the verified group.
+    - Bob's second devices goes online, but sees a contact request instead of the group.
     - The "member added" message is not a system message but a plain text message.
     - Bob's second device doesn't display the Alice's avatar (bug #5354).
     - Sending a message fails as the key is missing -- message info says "proper enc-key for <Alice>
@@ -269,7 +253,7 @@ def test_use_new_verified_group_after_going_online(acfactory, data, tmp_path, lp
     avatar_path = data.get_path("d.png")
     ac1.set_avatar(avatar_path)
 
-    lp.sec("ac1: create verified-group QR, ac2 scans and joins")
+    lp.sec("ac1: create group QR, ac2 scans and joins")
     chat = ac1.create_group_chat("hello")
     qr = chat.get_join_qr()
     lp.sec("ac2: start QR-code based join-group protocol")

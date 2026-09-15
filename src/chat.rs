@@ -2686,7 +2686,7 @@ async fn prepare_send_msg(
 
     let skip_fn = |reason: &CantSendReason| match reason {
         CantSendReason::ContactRequest => {
-            // Allow securejoin messages, they are supposed to repair the verification.
+            // Allow securejoin messages.
             // If the chat is a contact request, let the user accept it later.
             msg.param.get_cmd() == SystemMessage::SecurejoinMessage
         }

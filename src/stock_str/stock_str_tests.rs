@@ -48,12 +48,11 @@ async fn test_stock_str() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_stock_string_repl_str() {
     let t = TestContext::new().await;
-    let contact_id = Contact::create(&t.ctx, "Someone", "someone@example.org")
-        .await
-        .unwrap();
-    let contact = Contact::get_by_id(&t.ctx, contact_id).await.unwrap();
     // uses %1$s substitution
-    assert_eq!(contact_verified(&t, &contact), "Someone verified.");
+    assert_eq!(
+        subject_for_new_contact(&t, "Someone"),
+        "Message from Someone"
+    );
     // We have no string using %1$d to test...
 }
 

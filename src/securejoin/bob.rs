@@ -106,7 +106,6 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             // If QR code is a group invite
             // and we are already in the chat,
             // nothing needs to be done.
-            // Even if Alice is not verified, we don't send anything.
             context.emit_event(EventType::SecurejoinJoinerProgress {
                 contact_id: invite.contact_id(),
                 progress: JoinerProgress::Succeeded.into_u16(),
@@ -270,7 +269,7 @@ pub(super) async fn handle_auth_required_or_pubkey(
             continue;
         }
 
-        info!(context, "Fingerprint verified.",);
+        info!(context, "Fingerprint matches.",);
         let chat_id = private_chat_id(context, &invite).await?;
         delete_securejoin_wait_msg(context, chat_id)
             .await
@@ -448,8 +447,8 @@ async fn private_chat_id(context: &Context, invite: &QrInvite) -> Result<ChatId>
 ///
 /// This is the chat in which you want to notify the user as well.
 ///
-/// When joining a group this is the [`ChatId`] of the group chat, when verifying a
-/// contact this is the [`ChatId`] of the single chat.
+/// When joining a group this is the [`ChatId`] of the group chat,
+/// when setting up a contact this is the [`ChatId`] of the single chat.
 /// The group chat will be created if it does not yet exist.
 async fn joining_chat_id(
     context: &Context,
@@ -495,7 +494,7 @@ async fn joining_chat_id(
 pub(crate) enum JoinerProgress {
     /// vg-vc-request-with-auth sent.
     ///
-    /// Typically shows as "alice@addr verified, introducing myself."
+    /// Typically shows as "introducing myself."
     RequestWithAuthSent,
     /// Completed securejoin.
     Succeeded,

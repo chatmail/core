@@ -796,9 +796,8 @@ def test_send_and_receive_image(acfactory, lp, data):
 
 
 def test_qr_email_capitalization(acfactory, lp):
-    """Regression test for a bug
-    that resulted in failure to propagate verification
-    when the database already contained the contact with a different email address capitalization.
+    """Tests joining a group via QR code
+    when the database already contains a contact with a different email address capitalization.
     """
 
     ac1, ac2, ac3 = acfactory.get_online_accounts(3)
@@ -822,13 +821,7 @@ def test_qr_email_capitalization(acfactory, lp):
     ac2.qr_join_chat(qr)
     ac1._evtracker.wait_next_incoming_message()
 
-    # ac1 should see both ac3 and ac2 as verified.
     assert len(ac1_chat.get_contacts()) == 3
-    # Until we reset verifications and then send the _verified header,
-    # the verification of ac2 is not gossiped here:
-    for contact in ac1_chat.get_contacts():
-        is_ac2 = contact.addr == ac2.get_config("addr")
-        assert contact.is_verified() != is_ac2
 
 
 def test_set_get_contact_avatar(acfactory, data, lp):

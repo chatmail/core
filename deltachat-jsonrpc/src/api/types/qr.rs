@@ -7,7 +7,7 @@ use typescript_type_def::TypeDef;
 #[serde(rename = "Qr", rename_all = "camelCase")]
 #[serde(tag = "kind")]
 pub enum QrObject {
-    /// Ask the user whether to verify the contact.
+    /// Ask the user whether to start chatting with the contact.
     ///
     /// If the user agrees, pass this QR code to [`crate::securejoin::join_securejoin`].
     AskVerifyContact {
@@ -61,7 +61,7 @@ pub enum QrObject {
         /// Whether the inviter supports the new Securejoin v3 protocol
         is_v3: bool,
     },
-    /// Contact fingerprint is verified.
+    /// Contact fingerprint matches.
     ///
     /// Ask the user if they want to start chatting.
     FprOk {

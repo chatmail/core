@@ -110,7 +110,6 @@ async fn test_key_contacts_migration_autocrypt() -> Result<()> {
         pgp_bob.fingerprint().unwrap(),
         pgp_bob.public_key(&t).await?.unwrap().dc_fingerprint()
     );
-    assert_eq!(pgp_bob.get_verifier_id(&t).await?, None);
 
     // Hidden address-contact can't be looked up by name.
     assert!(
@@ -149,7 +148,6 @@ async fn test_key_contacts_migration_email1() -> Result<()> {
     assert_eq!(email_bob.origin, Origin::OutgoingTo);
     assert_eq!(email_bob.e2ee_avail(&t).await?, false);
     assert_eq!(email_bob.fingerprint(), None);
-    assert_eq!(email_bob.get_verifier_id(&t).await?, None);
 
     Ok(())
 }
@@ -183,7 +181,6 @@ async fn test_key_contacts_migration_email2() -> Result<()> {
     assert_eq!(email_bob.origin, Origin::OutgoingTo);
     assert_eq!(email_bob.e2ee_avail(&t).await?, false);
     assert_eq!(email_bob.fingerprint(), None);
-    assert_eq!(email_bob.get_verifier_id(&t).await?, None);
 
     Ok(())
 }
@@ -227,7 +224,6 @@ async fn test_key_contacts_migration_verified() -> Result<()> {
         pgp_bob.fingerprint().unwrap(),
         pgp_bob.public_key(&t).await?.unwrap().dc_fingerprint()
     );
-    assert_eq!(pgp_bob.get_verifier_id(&t).await?, Some(None));
 
     Ok(())
 }

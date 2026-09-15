@@ -69,9 +69,6 @@ pub enum StockMessage {
     #[strum(props(fallback = "Fingerprints"))]
     FingerPrints = 30,
 
-    #[strum(props(fallback = "%1$s verified."))]
-    ContactVerified = 35,
-
     #[strum(props(fallback = "Archived chats"))]
     ArchivedChats = 40,
 
@@ -871,13 +868,6 @@ pub(crate) fn secure_join_group_qr_description(context: &Context, chat: &Chat) -
 /// Stock string: `Scan to join channel %1$s`.
 pub(crate) fn secure_join_broadcast_qr_description(context: &Context, chat: &Chat) -> String {
     translated(context, StockMessage::SecureJoinBrodcastQRDescription).replace1(chat.get_name())
-}
-
-/// Stock string: `%1$s verified.`.
-#[allow(dead_code)]
-pub(crate) fn contact_verified(context: &Context, contact: &Contact) -> String {
-    let addr = contact.get_display_name();
-    translated(context, StockMessage::ContactVerified).replace1(addr)
 }
 
 /// Stock string: `Archived chats`.

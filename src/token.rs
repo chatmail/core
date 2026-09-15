@@ -2,7 +2,7 @@
 //!
 //! Functions to read/write token from/to the database. A token is any string associated with a key.
 //!
-//! Tokens are used in SecureJoin verification protocols.
+//! Tokens are used in SecureJoin protocols.
 
 use anyhow::Result;
 use deltachat_derive::{FromSql, ToSql};

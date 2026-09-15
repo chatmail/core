@@ -25,13 +25,12 @@ def test_qr_setup_contact(acf, alice_and_remote_bob, version) -> None:
     remote_eval(f"bob.secure_join({qr_code!r})")
     alice.wait_for_securejoin_inviter_success()
 
-    # Test that Alice verified Bob's profile.
     alice_contact_bob_snapshot = alice_contact_bob.get_snapshot()
-    assert alice_contact_bob_snapshot.is_verified
+    assert alice_contact_bob_snapshot.e2ee_avail
 
     remote_eval("bob.wait_for_securejoin_joiner_success()")
 
-    # Test that Bob verified Alice's profile.
+    # The old core still marks Alice as verified, so the handshake is unchanged on the wire.
     assert remote_eval("bob_contact_alice.get_snapshot().is_verified")
 
     # Test that Bob can also scan a QR code
@@ -56,13 +55,12 @@ def test_qr_setup_contact_multitransport(acf, alice_and_remote_bob, version) -> 
     remote_eval(f"bob.secure_join({qr_code!r})")
     alice.wait_for_securejoin_inviter_success()
 
-    # Test that Alice verified Bob's profile.
     alice_contact_bob_snapshot = alice_contact_bob.get_snapshot()
-    assert alice_contact_bob_snapshot.is_verified
+    assert alice_contact_bob_snapshot.e2ee_avail
 
     remote_eval("bob.wait_for_securejoin_joiner_success()")
 
-    # Test that Bob verified Alice's profile.
+    # The old core still marks Alice as verified, so the handshake is unchanged on the wire.
     assert remote_eval("bob_contact_alice.get_snapshot().is_verified")
 
 
@@ -137,3 +135,88 @@ def test_keyupdate_against_core_2_48_march_2026(acf, alice_and_remote_bob, repla
     if replace_relay:
         remote_eval("bob_contact_alice.create_chat().send_text('hello after replacement')")
         assert alice.wait_for_incoming_msg().get_snapshot().text == "hello after replacement"
+
+
+class LocalSide:
+    """Alice on the core under test."""
+
+    def __init__(self, account, peer_contact):
+        self.account = account
+        self.peer_contact = peer_contact
+        self.chat = None
+
+    def make_qr(self, invite):
+        if invite == "group":
+            self.chat = self.account.create_group("Group")
+        elif invite == "broadcast":
+            self.chat = self.account.create_broadcast("Channel")
+        return self.chat.get_qr_code() if self.chat else self.account.get_qr_code()
+
+    def join(self, qr):
+        self.account.secure_join(qr)
+
+    def wait_inviter(self):
+        self.account.wait_for_securejoin_inviter_success()
+
+    def wait_joiner(self):
+        self.account.wait_for_securejoin_joiner_success()
+
+    def send_text(self, text):
+        chat = self.chat or self.peer_contact.create_chat()
+        chat.send_text(text)
+
+    def next_text(self):
+        return self.account.wait_for_incoming_msg().get_snapshot().text
+
+
+class RemoteSide:
+    """Bob on the other core, driven through remote_eval."""
+
+    def __init__(self, remote_eval):
+        self.remote_eval = remote_eval
+        self.chat = None
+
+    def make_qr(self, invite):
+        if invite == "contact":
+            return self.remote_eval("bob.get_qr_code()")
+        create = {"group": "bob.create_group('Group')", "broadcast": "bob.create_broadcast('Channel')"}[invite]
+        self.remote_eval(f"locals().update(chat={create})")
+        self.chat = "chat"
+        return self.remote_eval("chat.get_qr_code()")
+
+    def join(self, qr):
+        self.remote_eval(f"bob.secure_join({qr!r})")
+
+    def wait_inviter(self):
+        self.remote_eval("bob.wait_for_securejoin_inviter_success()")
+
+    def wait_joiner(self):
+        self.remote_eval("bob.wait_for_securejoin_joiner_success()")
+
+    def send_text(self, text):
+        chat = self.chat or "bob_contact_alice.create_chat()"
+        self.remote_eval(f"{chat}.send_text({text!r})")
+
+    def next_text(self):
+        return self.remote_eval("bob.wait_for_incoming_msg().get_snapshot().text")
+
+
+@pytest.mark.parametrize("version", ["2.48.0"])
+@pytest.mark.parametrize("invite", ["contact", "group", "broadcast"])
+@pytest.mark.parametrize("remote_invites", [False, True], ids=["local-invites", "remote-invites"])
+def test_securejoin_invite(alice_and_remote_bob, version, invite, remote_invites):
+    """Every invite link type works with either core as the inviter."""
+    alice, alice_contact_bob, remote_eval = alice_and_remote_bob(version)
+    local = LocalSide(alice, alice_contact_bob)
+    remote = RemoteSide(remote_eval)
+    inviter, joiner = (remote, local) if remote_invites else (local, remote)
+
+    joiner.join(inviter.make_qr(invite))
+    joiner.wait_joiner()
+    inviter.wait_inviter()
+    # Group and broadcast joins add an info message first.
+    if invite != "contact":
+        joiner.next_text()
+
+    inviter.send_text("hello")
+    assert joiner.next_text() == "hello"

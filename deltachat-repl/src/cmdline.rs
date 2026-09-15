@@ -259,19 +259,13 @@ async fn log_contactlist(context: &Context, contacts: &[ContactId]) -> Result<()
         let contact = Contact::get_by_id(context, *contact_id).await?;
         let name = contact.get_display_name();
         let addr = contact.get_addr();
-        let verified_str = if contact.is_verified(context).await? {
-            " √"
-        } else {
-            ""
-        };
         let line = format!(
-            "{}{} <{}>",
+            "{} <{}>",
             if !name.is_empty() {
                 name
             } else {
                 "<name unset>"
             },
-            verified_str,
             if !addr.is_empty() { addr } else { "addr unset" }
         );
 
