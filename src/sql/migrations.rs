@@ -2646,6 +2646,11 @@ UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
     if dbversion < migration_version {
         sql.execute_migration(
             "
+UPDATE msgs
+   SET state=24, -- OutFailed
+       error='Message sending canceled by upgrade'
+   WHERE state=20; -- OutPending
+DELETE FROM smtp;
 CREATE TABLE smtp2 (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     display_name TEXT NOT NULL,
