@@ -47,8 +47,6 @@ impl Lot {
                 Qr::AskVerifyGroup { grpname, .. } => Some(Cow::Borrowed(grpname)),
                 Qr::AskJoinBroadcast { name, .. } => Some(Cow::Borrowed(name)),
                 Qr::FprOk { .. } => None,
-                Qr::FprMismatch { .. } => None,
-                Qr::FprWithoutAddr { fingerprint, .. } => Some(Cow::Borrowed(fingerprint)),
                 Qr::Account { domain } => Some(Cow::Borrowed(domain)),
                 Qr::Backup2 { .. } => None,
                 Qr::BackupTooNew { .. } => None,
@@ -103,8 +101,6 @@ impl Lot {
                 Qr::AskVerifyGroup { .. } => LotState::QrAskVerifyGroup,
                 Qr::AskJoinBroadcast { .. } => LotState::QrAskJoinBroadcast,
                 Qr::FprOk { .. } => LotState::QrFprOk,
-                Qr::FprMismatch { .. } => LotState::QrFprMismatch,
-                Qr::FprWithoutAddr { .. } => LotState::QrFprWithoutAddr,
                 Qr::Account { .. } => LotState::QrAccount,
                 Qr::Backup2 { .. } => LotState::QrBackup2,
                 Qr::BackupTooNew { .. } => LotState::QrBackupTooNew,
@@ -132,8 +128,6 @@ impl Lot {
                 Qr::AskVerifyGroup { .. } => Default::default(),
                 Qr::AskJoinBroadcast { .. } => Default::default(),
                 Qr::FprOk { contact_id } => contact_id.to_u32(),
-                Qr::FprMismatch { contact_id } => contact_id.unwrap_or_default().to_u32(),
-                Qr::FprWithoutAddr { .. } => Default::default(),
                 Qr::Account { .. } => Default::default(),
                 Qr::Backup2 { .. } => Default::default(),
                 Qr::BackupTooNew { .. } => Default::default(),
@@ -180,12 +174,6 @@ pub enum LotState {
 
     /// id=contact
     QrFprOk = 210,
-
-    /// id=contact
-    QrFprMismatch = 220,
-
-    /// text1=formatted fingerprint
-    QrFprWithoutAddr = 230,
 
     /// text1=domain
     QrAccount = 250,

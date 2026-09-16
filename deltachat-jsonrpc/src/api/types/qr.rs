@@ -68,16 +68,6 @@ pub enum QrObject {
         /// Contact ID.
         contact_id: u32,
     },
-    /// Scanned fingerprint does not match the last seen fingerprint.
-    FprMismatch {
-        /// Contact ID.
-        contact_id: Option<u32>,
-    },
-    /// The scanned QR code contains a fingerprint but no e-mail address.
-    FprWithoutAddr {
-        /// Key fingerprint.
-        fingerprint: String,
-    },
     /// Ask the user if they want to create an account on the given domain.
     Account {
         /// Server domain name.
@@ -296,11 +286,6 @@ impl From<Qr> for QrObject {
                 let contact_id = contact_id.to_u32();
                 QrObject::FprOk { contact_id }
             }
-            Qr::FprMismatch { contact_id } => {
-                let contact_id = contact_id.map(|contact_id| contact_id.to_u32());
-                QrObject::FprMismatch { contact_id }
-            }
-            Qr::FprWithoutAddr { fingerprint } => QrObject::FprWithoutAddr { fingerprint },
             Qr::Account { domain } => QrObject::Account { domain },
             Qr::Backup2 {
                 ref node_addr,
