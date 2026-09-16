@@ -49,11 +49,11 @@ enum ChatForTransition {
 use ChatForTransition::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_aeap_transition_0() {
+async fn test_aeap_transition_single() {
     check_aeap_transition(Single).await;
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_aeap_transition_1() {
+async fn test_aeap_transition_group() {
     check_aeap_transition(GroupChat).await;
 }
 
