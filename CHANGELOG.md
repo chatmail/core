@@ -106,6 +106,7 @@
 
 - [**breaking**] Remove deprecated `dc_chat_is_protected()`.
 - Deprecate `dc_chat_get_info_json()` ([#8580](https://github.com/chatmail/core/pull/8580))
+- New `get_app_version()` JSON-RPC API to get information about available updates.
 
 ### Features / Changes
 
