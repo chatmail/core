@@ -467,15 +467,15 @@ pub(crate) async fn send_msg_to_smtp(
         let split_index = usize::try_from(chunk_size.min(unsent_len))
             .context("Failed to convert SMTP chunk size")?;
         let (chunk, rest) = unsent.split_at(split_index);
-        let status = smtp_send(context, chunk, body.as_str(), smtp, Some(msg_id)).await;
-        if !matches!(status, SendResult::Success) || rest.is_empty() {
-            break status;
-        }
         for sent_to_addr in chunk {
             let sent_to_addr_string = sent_to_addr.to_string();
             if !sent_to_set.insert(sent_to_addr_string) {
                 error!(context, "Attempted to send to {sent_to_addr} twice.");
             }
+        }
+        let status = smtp_send(context, chunk, body.as_str(), smtp, Some(msg_id)).await;
+        if !matches!(status, SendResult::Success) || rest.is_empty() {
+            break status;
         }
         let sent_to_str = sent_to_set
             .iter()
@@ -499,6 +499,15 @@ pub(crate) async fn send_msg_to_smtp(
                 .sql
                 .execute("DELETE FROM smtp2 WHERE id=?", (rowid,))
                 .await?;
+
+            let sent_to_len = sent_to_set.len();
+            debug_assert!(sent_to_len > 0);
+            let info_msg = format!(
+                "Message len={} was SMTP-sent to {sent_to_len} recipients.",
+                body.len()
+            );
+            info!(context, "{info_msg}.");
+            context.emit_event(EventType::SmtpMessageSent(info_msg));
         }
         SendResult::Failure(ref err) => {
             if err
