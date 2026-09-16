@@ -5,7 +5,6 @@ use async_smtp::{EmailAddress, Envelope, SendableEmail};
 use super::Smtp;
 use crate::config::Config;
 use crate::context::Context;
-use crate::events::EventType;
 use crate::log::warn;
 use crate::tools;
 
@@ -39,8 +38,6 @@ impl Smtp {
             context.ratelimit.write().await.send();
         }
 
-        let message_len_bytes = message.len();
-
         let envelope =
             Envelope::new(self.from.clone(), recipients.to_vec()).map_err(Error::Envelope)?;
         let mail = SendableEmail::new(envelope, message);
@@ -55,12 +52,6 @@ impl Smtp {
 
         transport.send(mail).await.map_err(Error::SmtpSend)?;
 
-        let info_msg = format!(
-            "Message len={message_len_bytes} was SMTP-sent to {} recipients.",
-            recipients.len()
-        );
-        info!(context, "{info_msg}.");
-        context.emit_event(EventType::SmtpMessageSent(info_msg));
         self.last_success = Some(tools::Time::now());
         Ok(())
     }
