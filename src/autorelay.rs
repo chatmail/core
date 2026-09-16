@@ -6,19 +6,25 @@
 //! which migrations seed with a list of known chatmail relays.
 //!
 //! Status of implementation:
-//! Additions are attempted right before going into IMAP IDLE,
-//! i.e. only while connected and with nothing more important to do,
-//! and only if a UI opted in via [`Config::Autorelay`].
-//! Once a profile has reached `NUM_TRANSPORTS_TARGET` transports,
-//! [`Config::AutorelayFinished`] is set and nothing is ever added again,
-//! so deleting a transport later does not pull in a replacement.
+//!
+//! - When the UI uses `init_transports()`, the user gets 3 randomly selected relays.
+//!
+//! - Later additions are attempted right before going into IMAP IDLE,
+//!   i.e. only while connected and with nothing more important to do,
+//!   and only if a UI opted in via [`Config::Autorelay`].
+//!   Once a profile has reached `NUM_TRANSPORTS_TARGET` transports,
+//!   [`Config::AutorelayFinished`] is set and nothing is ever added again,
+//!   so deleting a transport later does not pull in a replacement.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::pin::Pin;
 
 use anyhow::Result;
-use deltachat_contact_tools::addr_normalize;
+use deltachat_contact_tools::{EmailAddress, addr_normalize};
 use rand::distr::{Alphanumeric, SampleString};
-use rand::seq::IndexedRandom;
+use rand::rng;
+use rand::seq::{IndexedRandom, SliceRandom as _};
+use tokio::task::JoinSet;
 
 use crate::config::{self, Config};
 use crate::log::{LogExt, warn};
@@ -31,6 +37,90 @@ const NUM_TRANSPORTS_TARGET: usize = 3;
 const AUTOMATIC_ADDITION_DEBOUNCE_SECONDS: i64 = 60 * 60; // one hour
 /// How long we ignore a relay candidate after failing to connect to it:
 const BACKOFF_PERIOD_FOR_NOT_WORKING_RELAY: i64 = 60 * 60 * 24 * 7; // one week
+
+const DEFAULT_RELAY_CANDIDATES: &[&str] = &[
+    "chat.adminforge.de",
+    "tarpit.fun",
+    "sweetfern.net",
+    "chat.nuvon.app",
+    "nchrcht.la10cy.net",
+    "chat.sus.fr",
+    "chat.tinydispatch.org",
+    "chtml.ca",
+    "chatmail.uk",
+];
+
+pub(crate) async fn init_transports_inner(
+    context: &Context,
+    addrs_from_qr: Vec<String>,
+) -> Result<(), anyhow::Error> {
+    // TODO The default relay candidates need to be updated in the database, too.
+    // It would be annoying to have to write a migration everytime a relay candidate comes or goes;
+    // The solution is to make the relay candidates list into a const,
+    // and check in `load_relay_candidates()` whether any of them should be added
+    // rather than in a migration
+    // (if we need to remove some later, we will then need another const `REMOVED_RELAY_CANDIDATES` which are ignored;
+    // or alternatively we could use `relay_candidates` table only for saving the last used timestamps,
+    // and if we later want to add other sources for relay candidates then we need another table for that)
+    let mut candidates: Vec<&str> = DEFAULT_RELAY_CANDIDATES.into();
+    candidates.shuffle(&mut rng());
+
+    let (relays_sender, relays_receiver) = async_channel::unbounded::<String>();
+    for addr in addrs_from_qr {
+        let email = EmailAddress::new(&addr)?;
+        relays_sender.try_send(email.domain)?;
+    }
+    for relay in candidates {
+        relays_sender.try_send(relay.to_string())?;
+    }
+
+    let mut join_set = JoinSet::new();
+    for _ in 0..NUM_TRANSPORTS_TARGET {
+        let context = context.clone();
+        let relays_receiver = relays_receiver.clone();
+        join_set.spawn(async move {
+            loop {
+                // Take a lock in order to prevent other relay management code
+                // from running simultaneously
+                let _lock = context.background_task_lock.read();
+
+                let Ok(host) = relays_receiver.try_recv() else {
+                    return false; // No more relays to try
+                };
+                let param = login_param_from_host(&host);
+                let skip_network = false;
+                let res = crate::configure::configure(&context, &param, skip_network).await;
+                if let Err(err) = res {
+                    warn!(context, "Failed to init transport {host}: {err:#}.");
+                    // Try another relay in the next iteration of the loop
+                } else {
+                    if context.count_transports().await.unwrap_or(0) >= NUM_TRANSPORTS_TARGET {
+                        context
+                            .set_config_bool(Config::AutorelayFinished, true)
+                            .await
+                            .log_err(&context)
+                            .ok();
+                    }
+                    return true; // Success
+                }
+            }
+        });
+    }
+
+    while let Some(success) = join_set.join_next().await {
+        if success? {
+            break;
+        }
+        // If this task was not successful, continue waiting for the other tasks
+        // because maybe one of the ongoing configuration attempts will be successful
+    }
+
+    join_set.detach_all();
+
+    context.set_config_bool(Config::Autorelay, true).await?;
+
+    Ok(())
+}
 
 pub(crate) fn maybe_add_additional_relays(
     context: Context,
@@ -57,7 +147,7 @@ pub(crate) fn maybe_add_additional_relays(
 async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool) -> Result<bool> {
     let now = time();
 
-    let Ok(_lock) = context.background_task_mutex.try_lock() else {
+    let Ok(_lock) = context.background_task_lock.try_write() else {
         // Housekeeping or automatic relay management is already running in another thread, do nothing.
         return Ok(false);
     };
@@ -134,7 +224,7 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
     Ok(relay_added)
 }
 
-async fn load_relay_candidates(context: &Context, now: i64) -> Result<Vec<String>, anyhow::Error> {
+pub(crate) async fn load_relay_candidates(context: &Context, now: i64) -> Result<Vec<String>> {
     let cutoff_timestamp = now.saturating_sub(BACKOFF_PERIOD_FOR_NOT_WORKING_RELAY);
     let candidates: Vec<String> = context
         .sql

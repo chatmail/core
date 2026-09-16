@@ -40,7 +40,7 @@ use crate::transport::{
     ConnectionCandidate, delete_transport_row, maybe_update_sending_transport,
     purge_transport_caches, send_sync_transports, transport_addrs,
 };
-use crate::{EventType, stock_str};
+use crate::{EventType, autorelay, stock_str};
 
 /// Maximum number of relays.
 ///
@@ -187,6 +187,40 @@ impl Context {
             return result;
         }
         self.start_io().await;
+        Ok(())
+    }
+
+    /// Automatically adds up to three transports.
+    ///
+    /// If the user just scanned a QR code of type `Account`, `Login`,
+    /// `AskVerifyContact`, `AskVerifyGroup`, or `AskJoinBroadcast`,
+    /// then UI implementations should pass it as the `qr` parameter.
+    /// The host(s) from the QR code will then also be considered
+    /// for creating an account there.
+    pub async fn init_transports(&self, qr: Option<&str>) -> Result<()> {
+        if self.is_configured().await? {
+            bail!("Transports are already initialized");
+        }
+        self.stop_io().await;
+
+        let mut addrs_from_qr = vec![];
+
+        if let Some(qr) = qr {
+            match crate::qr::check_qr(self, qr).await? {
+                crate::qr::Qr::Account { .. } | crate::qr::Qr::Login { .. } => {
+                    return self.add_transport_from_qr(qr).await;
+                }
+                crate::qr::Qr::AskVerifyContact { addrs, .. }
+                | crate::qr::Qr::AskVerifyGroup { addrs, .. }
+                | crate::qr::Qr::AskJoinBroadcast { addrs, .. } => addrs_from_qr = addrs,
+                _ => bail!("This QR code can't be used to initialize transports"),
+            }
+        }
+
+        autorelay::init_transports_inner(self, addrs_from_qr).await?;
+
+        self.start_io().await;
+
         Ok(())
     }
 
