@@ -134,18 +134,6 @@ pub enum Qr {
         contact_id: ContactId,
     },
 
-    /// Scanned fingerprint does not match the last seen fingerprint.
-    FprMismatch {
-        /// Contact ID.
-        contact_id: Option<ContactId>,
-    },
-
-    /// The scanned QR code contains a fingerprint but no e-mail address.
-    FprWithoutAddr {
-        /// Key fingerprint.
-        fingerprint: String,
-    },
-
     /// Ask the user if they want to create an account on the given domain.
     Account {
         /// Server domain name.
@@ -653,24 +641,21 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                 is_v3,
             })
         }
-    } else if let Some(addr) = addrs.first() {
-        let fingerprint = fingerprint.hex();
-        let (contact_id, _) =
-            Contact::add_or_lookup_ext(context, "", addr, &fingerprint, Origin::UnhandledQrScan)
-                .await?;
-        let contact = Contact::get_by_id(context, contact_id).await?;
-
-        if contact.public_key(context).await?.is_some() {
-            Ok(Qr::FprOk { contact_id })
-        } else {
-            Ok(Qr::FprMismatch {
-                contact_id: Some(contact_id),
-            })
-        }
     } else {
-        Ok(Qr::FprWithoutAddr {
-            fingerprint: fingerprint.human_readable(),
-        })
+        let fingerprint = fingerprint.hex();
+        let contact_id: Option<ContactId> = context
+            .sql
+            .query_get_value(
+                "SELECT id FROM contacts WHERE fingerprint=?",
+                (fingerprint,),
+            )
+            .await?;
+
+        let Some(contact_id) = contact_id else {
+            bail!("Contact matching the fingerprint is not found");
+        };
+
+        Ok(Qr::FprOk { contact_id })
     }
 }
 
