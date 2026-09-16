@@ -97,7 +97,7 @@ pub mod stock_str;
 pub mod storage_usage;
 mod sync;
 mod token;
-mod transport;
+pub mod transport;
 mod update_helper;
 pub mod webxdc;
 #[macro_use]

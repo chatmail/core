@@ -19,7 +19,7 @@ use crate::log::LogExt;
 use crate::mimefactory::RECOMMENDED_FILE_SIZE;
 use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::get_abs_path;
-use crate::transport::{add_pseudo_transport, transport_addrs};
+use crate::transport::transport_addrs;
 use crate::{constants, stats};
 
 /// The available configuration keys.
@@ -753,39 +753,28 @@ impl Context {
                     bail!("Cannot unset configured_addr");
                 };
 
-                if !self.is_configured().await? {
-                    info!(
-                        self,
-                        "Creating a pseudo configured account which will not be able to send or receive messages. Only meant for tests!"
-                    );
-                    add_pseudo_transport(self, addr).await?;
-                    self.sql
-                        .set_raw_config(Config::ConfiguredAddr.as_ref(), Some(addr))
-                        .await?;
-                } else {
-                    self.sql
-                        .transaction(|transaction| {
-                            if transaction.query_row(
-                                "SELECT COUNT(*) FROM transports WHERE addr=?",
-                                (addr,),
-                                |row| {
-                                    let res: i64 = row.get(0)?;
-                                    Ok(res)
-                                },
-                            )? == 0
-                            {
-                                bail!("Address does not belong to any transport.");
-                            }
-                            transaction.execute(
-                                "UPDATE config SET value=? WHERE keyname='configured_addr'",
-                                (addr,),
-                            )?;
+                self.sql
+                    .transaction(|transaction| {
+                        if transaction.query_row(
+                            "SELECT COUNT(*) FROM transports WHERE addr=?",
+                            (addr,),
+                            |row| {
+                                let res: i64 = row.get(0)?;
+                                Ok(res)
+                            },
+                        )? == 0
+                        {
+                            bail!("Address does not belong to any transport.");
+                        }
+                        transaction.execute(
+                            "INSERT OR REPLACE INTO config (keyname, value) VALUES ('configured_addr', ?)",
+                            (addr,),
+                        )?;
 
-                            Ok(())
-                        })
-                        .await?;
-                    self.sql.uncache_raw_config("configured_addr").await;
-                }
+                        Ok(())
+                    })
+                    .await?;
+                self.sql.uncache_raw_config("configured_addr").await;
             }
             _ => {
                 self.sql.set_raw_config(key.as_ref(), value).await?;

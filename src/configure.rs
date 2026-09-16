@@ -715,7 +715,7 @@ mod tests {
         let mut tcm = TestContextManager::new();
         let t = &tcm.unconfigured().await;
 
-        // Setting ConfiguredAddr on an unconfigured account creates a pseudo transport
+        add_pseudo_transport(t, "primary@example.org").await?;
         t.set_config(Config::ConfiguredAddr, Some("primary@example.org"))
             .await?;
         assert_eq!(t.count_transports().await?, 1);
