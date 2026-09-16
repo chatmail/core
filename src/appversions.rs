@@ -388,4 +388,40 @@ mod tests {
 
         Ok(())
     }
+
+    // some systems may not get the update URL from the relays, but use a specific one.
+    // this is esp. useful when the app binary is not signed.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_get_app_versions_no_url() -> Result<()> {
+        let dir = tempfile::tempdir().unwrap();
+        let p: PathBuf = dir.path().join("accounts");
+        let writable = true;
+        let mut accounts = Accounts::new(p.clone(), writable).await.unwrap();
+
+        let account_id1 = accounts.add_account().await?;
+        let json = r##"{
+            "clients": [
+              {
+                "clientId": "deltawin",
+                "sources": [
+                  {
+                    "sourceId": "windows-3.11",
+                    "versionInteger": 300,
+                    "versionString": "3.00.000"
+                  }
+                ]
+              }
+            ]
+          }"##;
+        mockup_app_versions(&accounts, account_id1, 1, json).await;
+
+        let version = get_app_version(&accounts, "deltawin", "windows-3.11")
+            .await?
+            .unwrap();
+        assert_eq!(version.version_integer, 300);
+        assert_eq!(version.version_string, "3.00.000");
+        assert_eq!(version.download_url, ""); // no url given results in default empty string
+
+        Ok(())
+    }
 }
