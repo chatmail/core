@@ -133,16 +133,13 @@ pub enum Qr {
         contact_id: ContactId,
     },
 
-    /// Scanned fingerprint does not match the last seen fingerprint.
+    /// Scanned fingerprint does not match any contact
+    /// or the key for this contact is not available.
     FprMismatch {
-        /// Contact ID.
+        /// Contact ID if key-contact exists, but we have no key.
+        ///
+        /// `None` if there is no contact corresponding to the scanned fingerprint.
         contact_id: Option<ContactId>,
-    },
-
-    /// The scanned QR code contains a fingerprint but no e-mail address.
-    FprWithoutAddr {
-        /// Key fingerprint.
-        fingerprint: String,
     },
 
     /// Ask the user if they want to create an account on the given domain.
@@ -651,24 +648,28 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                 is_v3,
             })
         }
-    } else if let Some(addr) = addrs.first() {
-        let fingerprint = fingerprint.hex();
-        let (contact_id, _) =
-            Contact::add_or_lookup_ext(context, "", addr, &fingerprint, Origin::UnhandledQrScan)
-                .await?;
-        let contact = Contact::get_by_id(context, contact_id).await?;
-
-        if contact.public_key(context).await?.is_some() {
-            Ok(Qr::FprOk { contact_id })
-        } else {
-            Ok(Qr::FprMismatch {
-                contact_id: Some(contact_id),
-            })
-        }
     } else {
-        Ok(Qr::FprWithoutAddr {
-            fingerprint: fingerprint.human_readable(),
-        })
+        let fingerprint = fingerprint.hex();
+        let contact_id: Option<ContactId> = context
+            .sql
+            .query_get_value(
+                "SELECT id FROM contacts WHERE fingerprint=?",
+                (fingerprint,),
+            )
+            .await?;
+
+        if let Some(contact_id) = contact_id {
+            let contact = Contact::get_by_id(context, contact_id).await?;
+            if contact.public_key(context).await?.is_some() {
+                Ok(Qr::FprOk { contact_id })
+            } else {
+                Ok(Qr::FprMismatch {
+                    contact_id: Some(contact_id),
+                })
+            }
+        } else {
+            Ok(Qr::FprMismatch { contact_id: None })
+        }
     }
 }
 

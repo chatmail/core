@@ -2456,7 +2456,6 @@ void            dc_stop_ongoing_process      (dc_context_t* context);
 #define         DC_QR_ASK_VERIFYBROADCAST    204 // text1=broadcast name
 #define         DC_QR_FPR_OK                 210 // id=contact
 #define         DC_QR_FPR_MISMATCH           220 // id=contact
-#define         DC_QR_FPR_WITHOUT_ADDR       230 // test1=formatted fingerprint
 #define         DC_QR_ACCOUNT                250 // text1=domain
 #define         DC_QR_BACKUP2                252
 #define         DC_QR_BACKUP_TOO_NEW         255
@@ -2498,11 +2497,8 @@ void            dc_stop_ongoing_process      (dc_context_t* context);
  *   if so, call dc_create_chat_by_contact_id().
  *
  * - DC_QR_FPR_MISMATCH with dc_lot_t::id=Contact ID:
- *   scanned fingerprint does not match last seen fingerprint.
- *
- * - DC_QR_FPR_WITHOUT_ADDR with dc_lot_t::text1=Formatted fingerprint
- *   the scanned QR code contains a fingerprint but no e-mail address;
- *   suggest the user to establish an encrypted connection first.
+ *   scanned fingerprint does not match any contact
+ *   or the key for this contact is not available.
  *
  * - DC_QR_ACCOUNT dc_lot_t::text1=domain:
  *   ask the user if they want to create an account on the given domain,
