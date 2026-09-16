@@ -76,7 +76,7 @@ class RPCAccountFactory:
         """Create a new unconfigured bot."""
         return Bot(self.get_unconfigured_account())
 
-    def get_credentials(self) -> (str, str):
+    def get_credentials(self) -> tuple[str, str]:
         """Generate new credentials for chatmail account."""
         domain = os.environ["CHATMAIL_DOMAIN"]
         username = "ci-" + "".join(random.choice("2345789acdefghjkmnpqrstuvwxyz") for i in range(6))

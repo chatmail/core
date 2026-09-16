@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from deltachat_rpc_client import Account, EventType, const
+from deltachat_rpc_client import EventType, const
 
 if TYPE_CHECKING:
     from deltachat_rpc_client.pytestplugin import RPCAccountFactory
@@ -144,7 +144,7 @@ def test_download_on_demand(acf: RPCAccountFactory, rpcdata) -> None:
     wait_for_chatlist_specific_item(alice, chat_id)
 
 
-def get_multi_account_test_setup(acf: RPCAccountFactory) -> [Account, Account, Account]:
+def get_multi_account_test_setup(acf: RPCAccountFactory) -> list:
     alice, bob = acf.get_online_accounts(2)
 
     alice_contact_bob = alice.create_contact(bob, "Bob")
