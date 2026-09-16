@@ -3,7 +3,6 @@ name = "deltachat_ffi"
 version = "2.61.0-dev"
 description = "Deltachat FFI"
 edition = "2024"
-readme = "README.md"
 license = "MPL-2.0"
 
 keywords = ["deltachat", "chat", "openpgp", "email", "encryption"]
