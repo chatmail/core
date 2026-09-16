@@ -31,6 +31,7 @@ use deltachat::key::preconfigure_keypair;
 use deltachat::message::MsgId;
 use deltachat::qr_code_generator::{create_qr_svg, generate_backup_qr, get_securejoin_qr_svg};
 use deltachat::stock_str::StockMessage;
+use deltachat::transport::add_pseudo_transport;
 use deltachat::webxdc::StatusUpdateSerial;
 use deltachat::*;
 use deltachat::{accounts::Accounts, log::LogExt};
@@ -412,6 +413,21 @@ pub unsafe extern "C" fn dc_configure(context: *mut dc_context_t) {
 
     let ctx = unsafe { &*context };
     spawn_configure(ctx.clone());
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dc_add_pseudo_transport(
+    context: *mut dc_context_t,
+    addr: *const libc::c_char,
+) {
+    if context.is_null() {
+        eprintln!("ignoring careless call to dc_add_pseudo_transport()");
+        return;
+    }
+
+    let ctx = unsafe { &*context };
+    let addr = to_string_lossy(addr);
+    block_on(add_pseudo_transport(ctx, &addr)).log_err(ctx).ok();
 }
 
 #[unsafe(no_mangle)]

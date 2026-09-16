@@ -765,7 +765,7 @@ pub(crate) fn maybe_update_sending_transport(
 }
 
 /// Adds transport entry to the `transports` table with empty configuration.
-pub(crate) async fn add_pseudo_transport(context: &Context, addr: &str) -> Result<()> {
+pub async fn add_pseudo_transport(context: &Context, addr: &str) -> Result<()> {
     context.sql
         .execute(
             "INSERT OR IGNORE INTO transports (addr, entered_param, configured_param) VALUES (?, ?, ?)",

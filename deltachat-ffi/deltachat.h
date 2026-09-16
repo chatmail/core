@@ -694,6 +694,21 @@ void            dc_configure                 (dc_context_t* context);
 
 
 /**
+ * Add fake transport that cannot be used to connect.
+ *
+ * Used for offline tests only.
+ *
+ * To add a transport, use JSON-RPC calls `add_or_update_transport`
+ * and `add_transport_from_qr` instead.
+ *
+ * @memberof dc_context_t
+ * @param context The context object.
+ * @param addr The email address of the new transport.
+ */
+void            dc_add_pseudo_transport      (dc_context_t* context, const char *addr);
+
+
+/**
  * Check if the context is already configured.
  *
  * Typically, for unconfigured accounts, the user is prompted

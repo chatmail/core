@@ -557,6 +557,9 @@ impl TestContext {
     /// The context will be configured but the key will not be pre-generated so if a key is
     /// used the fingerprint will be different every time.
     pub async fn configure_addr(&self, addr: &str) {
+        add_pseudo_transport(&self.ctx, addr)
+            .await
+            .expect("Failed to add pseudo transport");
         self.ctx
             .set_config(Config::ConfiguredAddr, Some(addr))
             .await

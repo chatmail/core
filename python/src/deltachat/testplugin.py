@@ -11,6 +11,9 @@ import random
 from queue import Queue
 from typing import Callable, Dict, List, Optional
 
+from .capi import lib
+from .cutil import as_dc_charpointer
+
 import pytest
 from _pytest._code import Source
 
@@ -366,6 +369,7 @@ class ACFactory:
             ac.open(passphrase)
         acname = ac._logid
         addr = f"{acname}@offline.org"
+        lib.dc_add_pseudo_transport(ac._dc_context, as_dc_charpointer(addr))
         ac.update_config(
             {
                 "configured_addr": addr,
@@ -374,6 +378,7 @@ class ACFactory:
         )
         self._preconfigure_key(ac)
         self._acsetup.init_logging(ac)
+        assert ac.is_configured(), "Pseudo configured account should look like if it is configured"
         return ac
 
     def new_online_configuring_account(self, cloned_from=None, **kwargs) -> Account:

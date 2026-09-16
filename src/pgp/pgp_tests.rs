@@ -2,6 +2,7 @@ use std::sync::LazyLock;
 use tokio::sync::OnceCell;
 
 use super::*;
+use crate::transport::add_pseudo_transport;
 use crate::{
     config::Config,
     decrypt,
@@ -19,6 +20,9 @@ async fn decrypt_bytes(
     auth_tokens_for_decryption: &[String],
 ) -> Result<pgp::composed::Message<'static>> {
     let t = &TestContext::new().await;
+    add_pseudo_transport(t, "alice@example.org")
+        .await
+        .expect("Failed to add pseudo transport");
     t.set_config(Config::ConfiguredAddr, Some("alice@example.org"))
         .await
         .expect("Failed to configure address");
