@@ -549,7 +549,6 @@ impl Context {
         // Default values
         let val = match key {
             Config::ConfiguredInboxFolder => Some("INBOX".to_string()),
-            Config::Addr => self.get_config_opt(Config::ConfiguredAddr).await?,
             _ => key.get_str("default").map(|s| s.to_string()),
         };
         Ok(val)

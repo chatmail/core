@@ -709,9 +709,9 @@ async fn test_remove_member_bcc() -> Result<()> {
     let charlie = &tcm.charlie().await;
     alice.allow_unencrypted().await?;
 
-    let alice_addr = alice.get_config(Config::Addr).await?.unwrap();
-    let bob_addr = bob.get_config(Config::Addr).await?.unwrap();
-    let charlie_addr = charlie.get_config(Config::Addr).await?.unwrap();
+    let alice_addr = alice.get_config(Config::ConfiguredAddr).await?.unwrap();
+    let bob_addr = bob.get_config(Config::ConfiguredAddr).await?.unwrap();
+    let charlie_addr = charlie.get_config(Config::ConfiguredAddr).await?.unwrap();
 
     let bob_id = alice.add_or_lookup_address_contact_id(bob).await;
     let charlie_id = alice.add_or_lookup_address_contact_id(charlie).await;
@@ -874,7 +874,7 @@ async fn test_new_member_is_first_recipient() -> Result<()> {
     assert!(
         sent_msg
             .recipients
-            .starts_with(&charlie.get_config(Config::Addr).await?.unwrap())
+            .starts_with(&charlie.get_config(Config::ConfiguredAddr).await?.unwrap())
     );
 
     remove_contact_from_chat(alice, group, bob_id).await?;
@@ -885,7 +885,7 @@ async fn test_new_member_is_first_recipient() -> Result<()> {
     assert!(
         sent_msg
             .recipients
-            .starts_with(&bob.get_config(Config::Addr).await?.unwrap())
+            .starts_with(&bob.get_config(Config::ConfiguredAddr).await?.unwrap())
     );
     Ok(())
 }

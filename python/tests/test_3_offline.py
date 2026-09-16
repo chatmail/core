@@ -132,7 +132,7 @@ class TestOfflineContact:
 
     def test_create_self_contact(self, acfactory):
         ac1 = acfactory.get_pseudo_configured_account()
-        contact1 = ac1.create_contact(ac1.get_config("addr"))
+        contact1 = ac1.create_contact(ac1.get_config("configured_addr"))
         assert contact1.id == 1
 
     def test_get_contacts_and_delete(self, acfactory):
@@ -223,7 +223,7 @@ class TestOfflineChat:
         ac2 = acfactory.get_pseudo_configured_account()
         chat = ac1.create_group_chat(name="title1")
         contact = chat.add_contact(ac2)
-        assert contact.addr == ac2.get_config("addr")
+        assert contact.addr == ac2.get_config("configured_addr")
         assert contact.name == ac2.get_config("displayname")
         assert contact.account == ac1
         chat.remove_contact(ac2)
@@ -456,7 +456,7 @@ class TestOfflineChat:
         contacts = ac2.get_contacts()
         assert len(contacts) == 1
         contact2 = contacts[0]
-        assert contact2.addr == ac_contact.get_config("addr")
+        assert contact2.addr == ac_contact.get_config("configured_addr")
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
         assert len(messages) == 2 + E2EE_INFO_MSGS
@@ -552,7 +552,7 @@ class TestOfflineChat:
         contacts = ac2.get_contacts()
         assert len(contacts) == 1
         contact2 = contacts[0]
-        assert contact2.addr == ac_contact.get_config("addr")
+        assert contact2.addr == ac_contact.get_config("configured_addr")
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
         assert len(messages) == 2 + E2EE_INFO_MSGS
@@ -604,7 +604,7 @@ class TestOfflineChat:
         contacts = ac2.get_contacts()
         assert len(contacts) == 1
         contact2 = contacts[0]
-        assert contact2.addr == ac_contact.get_config("addr")
+        assert contact2.addr == ac_contact.get_config("configured_addr")
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
         assert len(messages) == 2 + E2EE_INFO_MSGS
@@ -621,7 +621,7 @@ class TestOfflineChat:
         contacts = ac2.get_contacts()
         assert len(contacts) == 1
         contact2 = contacts[0]
-        assert contact2.addr == ac_contact.get_config("addr")
+        assert contact2.addr == ac_contact.get_config("configured_addr")
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
         assert len(messages) == 2 + E2EE_INFO_MSGS

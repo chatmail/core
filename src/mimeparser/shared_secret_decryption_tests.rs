@@ -131,7 +131,7 @@ async fn test_broadcast_security_attacker_signature() -> Result<()> {
 
     let secret = load_broadcast_secret(alice, alice_chat_id).await?.unwrap();
 
-    let charlie_addr = charlie.get_config(Config::Addr).await?.unwrap();
+    let charlie_addr = charlie.get_config(Config::ConfiguredAddr).await?.unwrap();
 
     test_shared_secret_decryption_ext(
         bob,
@@ -183,10 +183,7 @@ async fn test_broadcast_security_happy_path() -> Result<()> {
 
     let secret = load_broadcast_secret(alice, alice_chat_id).await?.unwrap();
 
-    let alice_addr = alice
-        .get_config(crate::config::Config::Addr)
-        .await?
-        .unwrap();
+    let alice_addr = alice.get_config(Config::ConfiguredAddr).await?.unwrap();
 
     test_shared_secret_decryption_ext(bob, &alice_addr, &secret, Some(alice), None).await
 }
@@ -205,7 +202,7 @@ async fn test_qr_code_security() -> Result<()> {
     // Start a securejoin process, but don't finish it:
     join_securejoin(bob, &qr).await?;
 
-    let charlie_addr = charlie.get_config(Config::Addr).await?.unwrap();
+    let charlie_addr = charlie.get_config(Config::ConfiguredAddr).await?.unwrap();
 
     let alice_fp = self_fingerprint(alice).await?;
     let secret_for_encryption = format!("securejoin/{alice_fp}/{authcode}");
