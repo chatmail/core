@@ -684,6 +684,10 @@ async fn test_ephemeral_msg_offline() -> Result<()> {
     check_msg_will_be_deleted(alice, msg.id, &chat, now, now + i64::from(duration) + 1).await?;
     assert!(alice.sql.exists(stmt, (msg.id,)).await?);
 
+    alice
+        .assert_warn("No SMTP connection candidates provided")
+        .await;
+
     Ok(())
 }
 

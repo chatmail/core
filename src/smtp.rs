@@ -98,19 +98,36 @@ impl Smtp {
         }
 
         self.connectivity.set_connecting(context);
-        let (_transport_id, lp) = ConfiguredLoginParam::load(context)
-            .await?
-            .context("Not configured")?;
         let proxy_config = ProxyConfig::load(context).await?;
-        self.connect(
-            context,
-            &lp.smtp,
-            &lp.smtp_password,
-            &proxy_config,
-            &lp.addr,
-            lp.strict_tls(proxy_config.is_some())?,
-        )
-        .await
+        let transports = ConfiguredLoginParam::load_all(context).await?;
+
+        // Try to connect to the newest transport first. If sending is unreliable,
+        // user can configure a new transport and it will be the one used.
+        // Conversely, if user just added a new transport and sending got less reliable,
+        // user can restore old state by removing the just added transport.
+        for (transport_id, lp) in transports.into_iter().rev() {
+            info!(context, "Trying to connect to transport {transport_id}.");
+            match self
+                .connect(
+                    context,
+                    &lp.smtp,
+                    &lp.smtp_password,
+                    &proxy_config,
+                    &lp.addr,
+                    lp.strict_tls(proxy_config.is_some())?,
+                )
+                .await
+            {
+                Ok(()) => return Ok(()),
+                Err(err) => {
+                    warn!(
+                        context,
+                        "Failed to connect to SMTP transport {transport_id}: {err:#}."
+                    );
+                }
+            }
+        }
+        bail!("Failed to connect to any SMTP server");
     }
 
     /// Connect using the provided login params.

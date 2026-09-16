@@ -52,10 +52,9 @@ def test_add_second_address(acf) -> None:
 
 
 def test_change_address(acf) -> None:
-    """Test Alice configuring a second transport and setting it as a primary one."""
+    """Test Alice configuring a second transport and removing the first one."""
     alice, bob = acf.get_online_accounts(2)
 
-    bob_addr = bob.get_config("configured_addr")
     bob.create_chat(alice)
 
     alice_chat_bob = alice.create_chat(bob)
@@ -65,22 +64,14 @@ def test_change_address(acf) -> None:
     sender_addr1 = msg1.sender.get_snapshot().address
 
     alice.stop_io()
-    old_alice_addr = alice.get_config("configured_addr")
+    old_alice_addr = alice.list_transports()[0]["addr"]
     alice_vcard = alice.self_contact.make_vcard()
     assert old_alice_addr in alice_vcard
     qr = acf.get_account_qr()
     alice.add_transport_from_qr(qr)
     new_alice_addr = alice.list_transports()[1]["addr"]
-    with pytest.raises(JsonRpcError):
-        # Cannot use the address that is not
-        # configured for any transport.
-        alice.set_config("configured_addr", bob_addr)
 
-    # Load old address so it is cached.
-    assert alice.get_config("configured_addr") == old_alice_addr
-    alice.set_config("configured_addr", new_alice_addr)
-    # Make sure that setting `configured_addr` invalidated the cache.
-    assert alice.get_config("configured_addr") == new_alice_addr
+    alice.delete_transport(old_alice_addr)
 
     alice_vcard = alice.self_contact.make_vcard()
     assert old_alice_addr not in alice_vcard
