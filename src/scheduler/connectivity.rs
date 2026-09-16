@@ -1,6 +1,6 @@
 use core::fmt;
 use std::cmp::min;
-use std::{iter::once, ops::Deref, sync::Arc};
+use std::{ops::Deref, sync::Arc};
 
 use anyhow::Result;
 use humansize::{BINARY, format_size};
@@ -531,14 +531,15 @@ impl Context {
         Ok(ret)
     }
 
-    /// Returns true if all background work is done.
-    async fn all_work_done(&self) -> bool {
+    /// Returns true if all background work is done,
+    /// checking the outgoing message queue only if `include_smtp` is set.
+    async fn work_done(&self, include_smtp: bool) -> bool {
         let lock = self.scheduler.inner.read().await;
         let stores: Vec<_> = match *lock {
             InnerSchedulerState::Started(ref sched) => sched
                 .boxes()
                 .map(|b| &b.conn_state.state)
-                .chain(once(&sched.smtp.state))
+                .chain(include_smtp.then_some(&sched.smtp.state))
                 .map(|state| state.connectivity.clone())
                 .collect(),
             _ => return false,
@@ -555,19 +556,26 @@ impl Context {
 
     /// Waits until background work is finished.
     pub async fn wait_for_all_work_done(&self) {
+        let include_smtp = true;
+        self.wait_for_work_done(include_smtp).await
+    }
+
+    /// Waits until background work is finished,
+    /// checking the outgoing message queue only if `include_smtp` is set.
+    pub(crate) async fn wait_for_work_done(&self, include_smtp: bool) {
         // Ideally we could wait for connectivity change events,
         // but sleep loop is good enough.
 
         // First 100 ms sleep in chunks of 10 ms.
         for _ in 0..10 {
-            if self.all_work_done().await {
+            if self.work_done(include_smtp).await {
                 break;
             }
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
 
         // If we are not finished in 100 ms, keep waking up every 100 ms.
-        while !self.all_work_done().await {
+        while !self.work_done(include_smtp).await {
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
     }
@@ -576,6 +584,34 @@ impl Context {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_utils::TestContext;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_background_fetch_leaves_smtp_alone() -> Result<()> {
+        let alice = TestContext::new_alice().await;
+        alice.start_io().await;
+        alice.wait_for_all_work_done().await;
+
+        let smtp = match *alice.scheduler.inner.read().await {
+            InnerSchedulerState::Started(ref scheduler) => {
+                scheduler.smtp.state.connectivity.clone()
+            }
+            _ => panic!("scheduler is not running"),
+        };
+        smtp.set_working(&alice);
+
+        alice.background_fetch().await?;
+        assert!(!smtp.get_all_work_done());
+        assert!(alice.scheduler.is_running().await);
+
+        alice
+            .assert_warns_or_errors(&[
+                "No IMAP connection candidates provided",
+                "IMAP got rate limited",
+            ])
+            .await;
+        Ok(())
+    }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_combine_connectivities() {

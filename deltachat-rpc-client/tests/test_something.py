@@ -1354,6 +1354,22 @@ def test_background_fetch(acf, dc):
             break
 
 
+def test_background_fetch_does_not_wait_for_sending(dc, acf):
+    alice, bob = acf.get_online_accounts(2)
+    alice_chat_bob = alice.create_chat(bob)
+
+    alice.stop_io()
+    text = "x" * 200_000
+    for _ in range(50):
+        alice_chat_bob.send_text(text)
+    assert not dc.is_sending_finished()
+
+    alice.start_io()
+    dc.background_fetch(50)
+    dc.wait_for_event(EventType.ACCOUNTS_BACKGROUND_FETCH_DONE)
+    assert not dc.is_sending_finished()
+
+
 def test_message_exists(acf):
     ac1, ac2 = acf.get_online_accounts(2)
     chat = ac1.create_chat(ac2)

@@ -48,6 +48,13 @@ class DeltaChat:
         """Stop ongoing background fetch."""
         self.rpc.stop_background_fetch()
 
+    def wait_for_event(self, event_type=None) -> AttrDict:
+        """Wait until the next account manager event and return it."""
+        while True:
+            next_event = AttrDict(self.rpc.wait_for_event(0))
+            if event_type is None or next_event.kind == event_type:
+                return next_event
+
     def maybe_network(self) -> None:
         """Indicate that the network conditions might have changed."""
         self.rpc.maybe_network()
