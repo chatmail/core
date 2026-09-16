@@ -42,10 +42,12 @@ use crate::{constants, stats};
 #[strum(serialize_all = "snake_case")]
 pub enum Config {
     /// Deprecated(2026-04).
-    /// Use ConfiguredAddr, [`crate::login_param::EnteredLoginParam`],
-    /// or add_transport{from_qr}()/list_transports() instead.
     ///
-    /// Email address, used in the `From:` field.
+    /// Email address used by the deprecated configure() procedure.
+    ///
+    /// Use add_transport{from_qr}() to configure new transports,
+    /// Use list_transports() to learn about configured transports,
+    /// including their addresses.
     Addr,
 
     /// Deprecated(2026-04).
@@ -195,9 +197,9 @@ pub enum Config {
     #[strum(props(default = "0"))]
     DeleteDeviceAfter,
 
-    /// The address of the transport used for sending.
+    /// Deprecated(2026-09).
     ///
-    /// Device-local, other devices choose their own sending transport.
+    /// Use ConfiguredLoginParam and list_transports() instead.
     ConfiguredAddr,
 
     /// Deprecated(2026-04).

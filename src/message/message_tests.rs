@@ -631,6 +631,10 @@ async fn test_delete_msgs_offline() -> Result<()> {
     delete_msgs(alice, &[msg.id]).await?;
     assert!(!alice.sql.exists(stmt, (msg.id,)).await?);
 
+    alice
+        .assert_warn("No SMTP connection candidates provided")
+        .await;
+
     Ok(())
 }
 
