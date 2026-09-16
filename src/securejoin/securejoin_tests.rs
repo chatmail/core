@@ -48,7 +48,11 @@ async fn test_setup_contact_ext(case: SetupContactCase) -> (TestContext, TestCon
 
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
-    let alice_addr = &alice.get_config(Config::Addr).await.unwrap().unwrap();
+    let alice_addr = &alice
+        .get_config(Config::ConfiguredAddr)
+        .await
+        .unwrap()
+        .unwrap();
     if case == SetupContactCase::AliceHasName {
         alice
             .set_config(Config::Displayname, Some("Alice"))

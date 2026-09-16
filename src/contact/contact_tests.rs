@@ -1219,7 +1219,7 @@ async fn test_make_n_import_vcard() -> Result<()> {
     tokio::fs::write(&avatar_path, avatar_bytes).await?;
     bob.set_config(Config::Selfavatar, Some(avatar_path.to_str().unwrap()))
         .await?;
-    let bob_addr = bob.get_config(Config::Addr).await?.unwrap();
+    let bob_addr = bob.get_config(Config::ConfiguredAddr).await?.unwrap();
     let bob_biography = bob.get_config(Config::Selfstatus).await?.unwrap();
     let chat = bob.create_chat(alice).await;
     let sent_msg = bob.send_text(chat.id, "moin").await;
@@ -1315,7 +1315,7 @@ async fn test_make_n_import_vcard() -> Result<()> {
 async fn test_import_vcard_key_change() -> Result<()> {
     let alice = &TestContext::new_alice().await;
     let bob = &TestContext::new_bob().await;
-    let bob_addr = &bob.get_config(Config::Addr).await?.unwrap();
+    let bob_addr = &bob.get_config(Config::ConfiguredAddr).await?.unwrap();
     bob.set_config(Config::Displayname, Some("Bob")).await?;
     let vcard = make_vcard(bob, &[ContactId::SELF]).await?;
     alice.evtracker.clear_events();

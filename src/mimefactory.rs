@@ -1178,7 +1178,10 @@ impl MimeFactory {
                 };
                 let self_name = &match self_name {
                     Some(name) => name,
-                    None => context.get_config(Config::Addr).await?.unwrap_or_default(),
+                    None => context
+                        .get_config(Config::ConfiguredAddr)
+                        .await?
+                        .unwrap_or_default(),
                 };
                 stock_str::subject_for_new_contact(context, self_name)
             }
