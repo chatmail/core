@@ -278,10 +278,26 @@ impl CommandApi {
 
     /// Performs a background fetch for all accounts in parallel with a timeout.
     ///
+    /// For an account with IO stopped, the scheduler is paused
+    /// and every transport is fetched concurrently on a dedicated connection.
+    /// The account is done as soon as one transport received messages, the others stop.
+    /// Only one batch of messages is fetched per transport this way,
+    /// so a larger backlog is left to the next call or to started IO.
+    ///
+    /// For an account with IO running, IMAP IDLE is interrupted on every transport
+    /// and the account is done once every transport is.
+    ///
+    /// The call never waits for outgoing messages and never triggers sending them itself.
+    /// Received messages may still queue replies, securejoin handshakes for example,
+    /// which go out only while IO is running.
+    /// Use `is_sending_finished()` to tell whether the outgoing queue is empty.
+    ///
     /// The `AccountsBackgroundFetchDone` event is emitted at the end even in case of timeout,
     /// and immediately if another background fetch is already running.
     /// Process all events until you get this one and you can safely return to the background
-    /// without forgetting to create notifications caused by timing race conditions.
+    /// without forgetting to create a generic notification if no message was fetched.
+    /// The event carries no data identifying the call it belongs to,
+    /// so it marks your own call only if no concurrent background fetch is happening.
     async fn background_fetch(&self, timeout_in_seconds: f64) -> Result<()> {
         let future = {
             let lock = self.accounts.read().await;
@@ -292,6 +308,11 @@ impl CommandApi {
         Ok(())
     }
 
+    /// Stops an ongoing `background_fetch()` call, making it return early
+    /// without waiting for the remaining transports or for the timeout.
+    ///
+    /// The `AccountsBackgroundFetchDone` event is emitted as usual.
+    /// Does nothing if no background fetch is running.
     async fn stop_background_fetch(&self) -> Result<()> {
         self.accounts.read().await.stop_background_fetch();
         Ok(())

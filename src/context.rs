@@ -601,9 +601,13 @@ impl Context {
 
     /// Does a single round of fetching messages from all transports and returns.
     ///
-    /// Can be used even if I/O is currently stopped.
-    /// If I/O is stopped, fetches over a dedicated connection per transport
-    /// and returns as soon as one of them fetched messages.
+    /// If IO is stopped, pauses the scheduler and fetches over a dedicated connection
+    /// per transport, returning as soon as one of them fetched messages.
+    /// If IO is running, interrupts IMAP IDLE on all transports
+    /// and waits until they are done fetching.
+    ///
+    /// Does not wait for outgoing messages to be sent out,
+    /// use [`crate::accounts::Accounts::is_sending_finished`] for that.
     pub async fn background_fetch(&self) -> Result<()> {
         if !(self.is_configured().await?) {
             return Ok(());
@@ -613,8 +617,9 @@ impl Context {
         info!(self, "background_fetch started.");
 
         if self.scheduler.is_running().await {
-            self.scheduler.maybe_network().await;
-            self.wait_for_all_work_done().await;
+            self.scheduler.interrupt_inbox_idle().await;
+            let include_smtp = false;
+            self.wait_for_work_done(include_smtp).await;
         } else {
             self.scheduler.background_fetch_any(self).await?;
         }

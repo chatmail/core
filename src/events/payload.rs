@@ -365,6 +365,9 @@ pub enum EventType {
     /// A call made while another background fetch is running gets the event immediately,
     /// and the running fetch keeps emitting events until its own marker.
     ///
+    /// The event carries no data identifying the call it belongs to,
+    /// so it is unambiguous only if there are no concurrent background fetch calls.
+    ///
     /// This event is only emitted by the account manager.
     AccountsBackgroundFetchDone,
     /// Inform that set of chats or the order of the chats in the chatlist has changed.

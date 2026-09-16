@@ -3190,17 +3190,28 @@ void           dc_accounts_maybe_network_lost    (dc_accounts_t* accounts);
 
 /**
  * Perform a background fetch for all accounts in parallel with a timeout.
- * Pauses the scheduler, fetches from all transports at once and then resumes the scheduler.
- * The fetch for an account ends as soon as one of its transports received messages.
  *
- * dc_accounts_background_fetch() was created for the iOS Background fetch.
+ * For an account with IO stopped, the scheduler is paused
+ * and every transport is fetched concurrently on a dedicated connection.
+ * The account is done as soon as one transport received messages, the others stop.
+ * Only one batch of messages is fetched per transport this way,
+ * so a larger backlog is left to the next call or to started IO.
+ *
+ * For an account with IO running, IMAP IDLE is interrupted on every transport
+ * and the account is done once every transport is.
+ *
+ * The call never waits for outgoing messages and never triggers sending them itself.
+ * Received messages may still queue replies, securejoin handshakes for example,
+ * which go out only while IO is running.
  *
  * The `DC_EVENT_ACCOUNTS_BACKGROUND_FETCH_DONE` event is emitted at the end,
  * also on timeout, when another background fetch is already running
  * and when the call is ignored because the timeout is too small,
  * so it is safe to wait for the event whenever `accounts` is not NULL.
  * Process all events until you get this one and you can safely return to the background
- * without forgetting to create notifications caused by timing race conditions.
+ * without forgetting to create a generic notification if no message was fetched.
+ * The event carries no data identifying the call it belongs to,
+ * so it marks your own call only if no concurrent background fetch is happening.
  *
  * @memberof dc_accounts_t
  * @param accounts The account manager as created by dc_accounts_new().
@@ -6375,6 +6386,10 @@ void dc_event_unref(dc_event_t* event);
  * when you reach it, all events emitted during the fetch were processed.
  * A call made while another background fetch is running gets the event immediately,
  * and the running fetch keeps emitting events until its own marker.
+ *
+ * The event carries no data identifying the call it belongs to,
+ * so it marks your own call only if no concurrent background fetch is happening.
+ * Your own call has finished when dc_accounts_background_fetch() returns.
  *
  * This event is only emitted by the account manager
  */

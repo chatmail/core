@@ -215,10 +215,17 @@ impl SchedulerState {
 
     /// Indicate that the network likely has come back.
     pub(crate) async fn maybe_network(&self) {
+        self.interrupt_inbox_idle().await;
+        self.interrupt_smtp().await;
+    }
+
+    /// Interrupts IDLE on all transports so that they fetch,
+    /// and marks them as having work to do.
+    pub(crate) async fn interrupt_inbox_idle(&self) {
         let inner = self.inner.read().await;
         let inboxes = match *inner {
             InnerSchedulerState::Started(ref scheduler) => {
-                scheduler.maybe_network();
+                scheduler.interrupt_inbox();
                 scheduler
                     .inboxes
                     .iter()
@@ -797,13 +804,6 @@ impl Scheduler {
 
     fn boxes(&self) -> impl Iterator<Item = &SchedBox> {
         self.inboxes.iter()
-    }
-
-    fn maybe_network(&self) {
-        for b in self.boxes() {
-            b.conn_state.interrupt();
-        }
-        self.interrupt_smtp();
     }
 
     fn maybe_network_lost(&self) {

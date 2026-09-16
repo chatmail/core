@@ -482,11 +482,15 @@ impl Accounts {
     /// return immediately even before the timeout expiration
     /// or finishing fetching.
     ///
+    /// Pending outgoing messages are not waited for and not triggered.
+    ///
     /// The `AccountsBackgroundFetchDone` event is emitted at the end,
     /// process all events until you get this one and you can safely return to the background
     /// without forgetting to create notifications caused by timing race conditions.
     /// If another background fetch is already running,
     /// nothing is fetched and the event is emitted immediately.
+    /// The event carries no data identifying the call it belongs to,
+    /// so it only safely refers to your call if no concurrent background fetch is happening.
     ///
     /// Returns a future that resolves when background fetch is done,
     /// but does not capture `&self`.
