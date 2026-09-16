@@ -272,7 +272,7 @@ class Account:
         return Contact(self, SpecialContactId.SELF)
 
     @property
-    def device_contact(self) -> Chat:
+    def device_contact(self) -> Contact:
         """Account's device contact."""
         return Contact(self, SpecialContactId.DEVICE)
 

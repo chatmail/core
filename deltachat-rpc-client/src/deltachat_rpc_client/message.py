@@ -121,7 +121,7 @@ class Message:
         yield self._rpc.send_webxdc_realtime_advertisement.future(self.account.id, self.id)
 
     @futuremethod
-    def send_webxdc_realtime_data(self, data) -> None:
+    def send_webxdc_realtime_data(self, data):
         """Send data to the realtime channel."""
         yield self._rpc.send_webxdc_realtime_data.future(self.account.id, self.id, list(data))
 
