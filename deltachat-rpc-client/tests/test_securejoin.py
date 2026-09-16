@@ -525,8 +525,8 @@ def test_aeap_flow(acf):
 def test_securejoin_after_contact_resetup(acf) -> None:
     """
     Regression test for a bug that prevented joining a group with a QR code
-    if the group already contains a contact with an inconsistent key state
-    while a securejoin with that contact is still pending.
+    if the group already contains a contact with the same address as the inviter,
+    but different key fingerprint while a securejoin with that contact is still pending.
     """
     ac1, ac2, ac3 = acf.get_online_accounts(3)
 
@@ -557,8 +557,8 @@ def test_securejoin_after_contact_resetup(acf) -> None:
     # ac1 goes offline.
     ac1.remove()
 
-    # Scanning a QR code creates a group with the inviter, here ac1,
-    # which has an inconsistent key state. Normally the securejoin protocol
+    # Scanning a QR code creates a group with the inviter, here ac1.
+    # Normally the securejoin protocol
     # would complete and "Member added" would arrive,
     # but ac1 is offline so it never finishes.
     logging.info("ac2 scans ac1 QR code, this is not expected to finish")
