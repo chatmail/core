@@ -226,10 +226,11 @@ async fn test_delete_transport() -> Result<()> {
     Ok(())
 }
 
-/// Tests that promoting a transport bumps its `add_timestamp` on other devices
-/// even if it was added within the same second.
+/// Tests that selecting sending transport by setting "configured_addr" does not
+/// send the sync message, is not synchronized between devices even if sync message is forced,
+/// and does not bump sending transport `add_timestamp`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_promote_transport_same_second() -> Result<()> {
+async fn test_no_configured_addr_synchronization() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let alice2 = &tcm.alice().await;
@@ -238,11 +239,35 @@ async fn test_promote_transport_same_second() -> Result<()> {
         a.set_config_bool(Config::BccSelf, true).await?;
     }
 
-    add_dummy_transport(alice, "alice@otherprovider.com").await?;
+    let addr = "alice@otherprovider.com";
+    add_dummy_transport(alice, addr).await?;
     send_sync_transports(alice).await?;
-    sync_and_check_recipients(alice, alice2, "alice@otherprovider.com alice@example.org").await;
+    sync_and_check_recipients(alice, alice2, &format!("{addr} alice@example.org")).await;
 
-    promote_transport_and_sync(alice, alice2, "alice@otherprovider.com").await
+    // Selects `addr` on `alice` as the sending transport
+    // and syncs the transport update to `alice2`,
+    // whose own sending transport must stay unchanged.
+    let old_timestamp = add_timestamp(alice2, addr).await;
+    let alice2_primary = alice2.get_config(Config::ConfiguredAddr).await?;
+    alice.set_config(Config::ConfiguredAddr, Some(addr)).await?;
+    assert_eq!(add_timestamp(alice, addr).await, old_timestamp);
+
+    send_sync_transports(alice).await?;
+    alice.send_sync_msg().await?.unwrap();
+    let sync_msg = alice.pop_sent_msg().await;
+    assert_eq!(sync_msg.recipients, format!("alice@example.org {addr}"));
+    // The sync message comes from the new sending address,
+    // which must not make `alice2` adopt it as its own sending address.
+    assert!(sync_msg.payload.contains(&format!("From: <{addr}>")));
+    alice2.recv_msg_trash(&sync_msg).await;
+
+    // add_timestamp must not change.
+    assert_eq!(add_timestamp(alice2, addr).await, old_timestamp);
+    assert_eq!(
+        alice2.get_config(Config::ConfiguredAddr).await?,
+        alice2_primary
+    );
+    Ok(())
 }
 
 /// Tests that `sync_transports()` requests an IO restart
@@ -260,36 +285,6 @@ async fn test_sync_transports_requests_io_restart() -> Result<()> {
     sync_transports(alice, data, &[]).await?;
     assert!(!alice.restart_io_after_fetch.load(Ordering::Relaxed));
 
-    Ok(())
-}
-
-/// Promotes `addr` on `alice` and syncs the transport update to `alice2`,
-/// whose own primary transport must stay unchanged.
-async fn promote_transport_and_sync(
-    alice: &TestContext,
-    alice2: &TestContext,
-    addr: &str,
-) -> Result<()> {
-    let old_timestamp = add_timestamp(alice2, addr).await;
-    let alice2_primary = alice2.get_config(Config::ConfiguredAddr).await?;
-    alice.set_config(Config::ConfiguredAddr, Some(addr)).await?;
-    assert!(add_timestamp(alice, addr).await > old_timestamp);
-
-    alice.send_sync_msg().await?.unwrap();
-    let sync_msg = alice.pop_sent_msg().await;
-    assert_eq!(sync_msg.recipients, format!("alice@example.org {addr}"));
-    // The sync message comes from the new primary,
-    // which must not make `alice2` adopt it as its own primary.
-    assert!(sync_msg.payload.contains(&format!("From: <{addr}>")));
-    alice2.recv_msg_trash(&sync_msg).await;
-
-    // add_timestamp must monotonically increase because
-    // other devices ignore the change otherwise.
-    assert!(add_timestamp(alice2, addr).await > old_timestamp);
-    assert_eq!(
-        alice2.get_config(Config::ConfiguredAddr).await?,
-        alice2_primary
-    );
     Ok(())
 }
 

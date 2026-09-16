@@ -18,8 +18,8 @@ use crate::events::EventType;
 use crate::log::LogExt;
 use crate::mimefactory::RECOMMENDED_FILE_SIZE;
 use crate::sync::{self, Sync::*, SyncData};
-use crate::tools::{get_abs_path, time};
-use crate::transport::{add_pseudo_transport, send_sync_transports, transport_addrs};
+use crate::tools::get_abs_path;
+use crate::transport::{add_pseudo_transport, transport_addrs};
 use crate::{constants, stats};
 
 /// The available configuration keys.
@@ -781,28 +781,10 @@ impl Context {
                                 (addr,),
                             )?;
 
-                            // The timestamp must strictly increase because
-                            // other devices ignore the row update otherwise,
-                            // and contacts only adopt the re-signed key
-                            // if its signature timestamp increases.
-                            transaction
-                                .execute(
-                                    "UPDATE transports
-                                     SET add_timestamp=MAX(?, add_timestamp+1)
-                                     WHERE addr=?",
-                                    (time(), addr),
-                                )
-                                .context(
-                                    "Failed to update add_timestamp for the new sending transport",
-                                )?;
-
                             Ok(())
                         })
                         .await?;
-                    // Invalidate the cache so the sync message
-                    // cannot read a stale sending address.
                     self.sql.uncache_raw_config("configured_addr").await;
-                    send_sync_transports(self).await?;
                 }
             }
             _ => {
