@@ -217,8 +217,21 @@ impl Context {
             }
         }
 
+        let cancel_channel = self.alloc_ongoing().await?;
+
         let skip_network = false;
-        autorelay::init_transports_inner(self, addrs_from_qr, skip_network).await?;
+        let res = autorelay::init_transports_inner(self, addrs_from_qr, skip_network)
+            .race(cancel_channel.recv().map(|_| Err(format_err!("Canceled"))))
+            .await;
+
+        self.free_ongoing().await;
+
+        if let Err(err) = res {
+            let error_msg = stock_str::configuration_failed(self, &format!("{err:#}"));
+            progress!(self, 0, Some(error_msg.clone()));
+            bail!(error_msg);
+        }
+
         self.update_device_chats()
             .await
             .context("Failed to update device chats")?;

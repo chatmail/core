@@ -18,12 +18,14 @@
 
 use std::collections::BTreeSet;
 use std::pin::Pin;
+use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use deltachat_contact_tools::{EmailAddress, addr_normalize};
 use rand::distr::{Alphanumeric, SampleString};
 use rand::rng;
 use rand::seq::{IndexedRandom, SliceRandom as _};
+use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 
 use crate::config::{self, Config};
@@ -82,10 +84,13 @@ pub(crate) async fn init_transports_inner(
         }
     }
 
+    let last_error: Arc<Mutex<String>> = Default::default();
+
     let mut join_set = JoinSet::new();
     for _ in 0..NUM_TRANSPORTS_TARGET {
         let context = context.clone();
         let relays_receiver = relays_receiver.clone();
+        let last_error = last_error.clone();
         join_set.spawn(async move {
             loop {
                 // Take a lock in order to prevent other relay management code
@@ -99,6 +104,7 @@ pub(crate) async fn init_transports_inner(
                 let res = crate::configure::configure(&context, &param, skip_network).await;
                 if let Err(err) = res {
                     warn!(context, "Failed to init transport {host}: {err:#}.");
+                    *last_error.lock().await = format!("{err:#}");
                     // Try another relay in the next iteration of the loop
                 } else {
                     if context.count_transports().await.unwrap_or(0) >= NUM_TRANSPORTS_TARGET {
@@ -114,12 +120,16 @@ pub(crate) async fn init_transports_inner(
         });
     }
 
-    while let Some(success) = join_set.join_next().await {
-        if success? {
-            break;
+    loop {
+        match join_set.join_next().await {
+            Some(Ok(true)) => break,     // success
+            Some(Ok(false)) => continue, // Wait until one of the other tasks is successful
+            Some(Err(e)) => warn!(context, "One of the init_transports tasks failed: {e:#}"),
+            None => bail!(
+                "Could not configure any relay, are you offline? ({})",
+                last_error.try_lock()?
+            ),
         }
-        // If this task was not successful, continue waiting for the other tasks
-        // because maybe one of the ongoing configuration attempts will be successful
     }
 
     join_set.detach_all();
