@@ -5,6 +5,71 @@ use crate::test_utils::TestContext;
 use crate::tools::SystemTime;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_init_transports_basic() -> Result<()> {
+    let t = &TestContext::new().await;
+    assert!(t.list_transports().await?.is_empty());
+
+    let skip_network = true;
+    init_transports_inner(t, vec![], skip_network).await?;
+
+    // Wait until the tasks adding transports are finished:
+    let _ = t.background_task_lock.write().await;
+
+    let relays = get_configured_relays(t).await;
+    assert_eq!(relays.len(), NUM_TRANSPORTS_TARGET);
+    for relay in &relays {
+        assert!(DEFAULT_RELAY_CANDIDATES.contains(&relay.as_ref()));
+    }
+
+    assert_eq!(t.get_config_bool(Config::Autorelay).await?, true);
+    assert_eq!(t.get_config_bool(Config::AutorelayFinished).await?, true);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_init_transports_use_extra_addrs() -> Result<()> {
+    let t = &TestContext::new().await;
+
+    let skip_network = true;
+    init_transports_inner(
+        t,
+        vec![
+            "alice@example.org".to_string(),
+            "bob@example.org".to_string(),
+            "bob@nine.testrun.org".to_string(),
+        ],
+        skip_network,
+    )
+    .await?;
+
+    // Wait until the tasks adding transports are finished:
+    let _ = t.background_task_lock.write().await;
+
+    let relays = get_configured_relays(t).await;
+    assert_eq!(relays.len(), NUM_TRANSPORTS_TARGET);
+    assert!(relays.contains(&"example.org".to_string()));
+    assert!(relays.contains(&"nine.testrun.org".to_string()));
+
+    Ok(())
+}
+
+async fn get_configured_relays(t: &TestContext) -> Vec<String> {
+    let transports = t.list_transports().await.unwrap();
+    let mut relays: Vec<_> = transports
+        .iter()
+        .map(|t| t.addr.split_once('@').unwrap().1)
+        .collect();
+
+    // Check that every relay is used only once:
+    relays.sort();
+    relays.dedup();
+    assert_eq!(relays.len(), transports.len());
+
+    relays.into_iter().map(|s| s.to_string()).collect()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_load_relay_candidates_single() -> Result<()> {
     let t = &TestContext::new_alice().await;
     enable_config(t).await;

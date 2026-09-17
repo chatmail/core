@@ -60,7 +60,7 @@ pub(crate) async fn init_transports_inner(
     default_relays.shuffle(&mut rng());
 
     let (relays_sender, relays_receiver) = async_channel::unbounded::<String>();
-    let relays_from_qr: BTreeSet<_> = addrs_from_qr
+    let relays_from_qr: BTreeSet<String> = addrs_from_qr
         .into_iter()
         .filter_map(|addr| EmailAddress::new(&addr).ok())
         .map(|email| email.domain)
