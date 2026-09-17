@@ -981,7 +981,6 @@ mod tests {
             context1.get_config(Config::BccSelf).await?,
             Some("0".to_string())
         );
-        context1.set_config_bool(Config::IsChatmail, true).await?;
 
         assert_eq!(context1.get_config_bool(Config::IsMuted).await?, false);
         context1.set_config_bool(Config::IsMuted, true).await?;
@@ -1001,7 +1000,6 @@ mod tests {
             .get_matching(|evt| matches!(evt, EventType::ImexProgress(1000)))
             .await;
         assert!(context2.is_configured().await?);
-        assert!(context2.is_chatmail().await?);
         for ctx in [context1, context2] {
             // BccSelf should be enabled automatically when exporting a backup
             assert_eq!(ctx.get_config_bool(Config::BccSelf).await?, true);

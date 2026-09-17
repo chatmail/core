@@ -25,14 +25,6 @@ pub(crate) struct Capabilities {
     /// <https://tools.ietf.org/html/rfc4978>
     pub can_compress: bool,
 
-    /// True if the server has an XCHATMAIL capability
-    /// indicating that it is a <https://github.com/deltachat/chatmail> server.
-    ///
-    /// This can be used to hide some advanced settings in the UI
-    /// that are only interesting for normal email accounts,
-    /// e.g. the ability to move messages to Delta Chat folder.
-    pub is_chatmail: bool,
-
     /// Server ID if the server supports ID capability.
     pub server_id: Option<HashMap<String, String>>,
 }

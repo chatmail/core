@@ -703,9 +703,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_send_sync_msg_enables_bccself() -> Result<()> {
-        for (chatmail, sync_message_sent) in
-            [(false, false), (false, true), (true, false), (true, true)]
-        {
+        for sync_message_sent in [false, true] {
             let alice1 = TestContext::new_alice().await;
             let alice2 = TestContext::new_alice().await;
 
@@ -713,9 +711,6 @@ mod tests {
             // so we need to enable it
             alice1.set_config_bool(Config::SyncMsgs, true).await?;
             alice2.set_config_bool(Config::SyncMsgs, true).await?;
-
-            alice1.set_config_bool(Config::IsChatmail, chatmail).await?;
-            alice2.set_config_bool(Config::IsChatmail, chatmail).await?;
 
             alice1.set_config_bool(Config::BccSelf, true).await?;
             alice2.set_config_bool(Config::BccSelf, false).await?;
@@ -735,7 +730,7 @@ mod tests {
                 alice1.send_text(chat.id, "Hi").await
             };
 
-            // On chatmail accounts, BccSelf defaults to false.
+            // BccSelf defaults to false.
             // When receiving a sync message from another device,
             // there obviously is a multi-device-setup, and BccSelf
             // should be enabled.

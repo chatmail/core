@@ -42,7 +42,8 @@ struct Statistics {
     /// Size of the public key in bytes (encoded in binary, not base64).
     pubkey_size: usize,
     stats_id: String,
-    is_chatmail: bool,
+    /// Whether all transports are chatmail relays, `None` if not known for all of them.
+    is_chatmail: Option<bool>,
     contact_stats: Vec<ContactStat>,
     message_stats: BTreeMap<Chattype, MessageStats>,
     securejoin_sources: SecurejoinSources,
@@ -350,16 +351,22 @@ async fn get_stats(context: &Context) -> Result<String> {
     let sending_disabled_timestamps =
         get_timestamps(context, "stats_sending_disabled_events").await?;
 
+    let number_of_transports = context.count_transports().await?;
+    let metadata = context.metadata.read().await;
+    let is_chatmail = (!metadata.is_empty() && metadata.len() == number_of_transports)
+        .then(|| metadata.values().all(|m| m.supports_push));
+    drop(metadata);
+
     let stats = Statistics {
         core_version: DC_VERSION_STR.to_string(),
-        number_of_transports: context.count_transports().await?,
+        number_of_transports,
         key_create_timestamps,
         number_of_keys,
         key_version: self_public_key.primary_key.version().into(),
         key_algorithm: format!("{:?}", self_public_key.algorithm()),
         pubkey_size: DcKey::to_bytes(&self_public_key).len(),
         stats_id: stats_id(context).await?,
-        is_chatmail: context.is_chatmail().await?,
+        is_chatmail,
         contact_stats: get_contact_stats(context, last_old_contact).await?,
         message_stats: get_message_stats(context).await?,
         securejoin_sources: get_securejoin_source_stats(context).await?,

@@ -568,15 +568,6 @@ impl Context {
         self.scheduler.maybe_network().await;
     }
 
-    /// Deprecated, we are trying to get rid of this global setting.
-    /// It is possible to configure a profile with both chatmail relays
-    /// and classical email servers.
-    ///
-    /// Returns true if an account is on a chatmail server.
-    pub async fn is_chatmail(&self) -> Result<bool> {
-        self.get_config_bool(Config::IsChatmail).await
-    }
-
     /// Returns maximum number of recipients a single email can be sent to.
     pub(crate) async fn get_max_smtp_rcpt_to(&self) -> Result<u32> {
         let Some((transport_id, param)) = ConfiguredLoginParam::load(self).await? else {
@@ -885,13 +876,6 @@ impl Context {
             res.insert("imap_server_id", format!("{server_id:?}"));
         }
 
-        res.insert("is_chatmail", self.is_chatmail().await?.to_string());
-        res.insert(
-            "fix_is_chatmail",
-            self.get_config_bool(Config::FixIsChatmail)
-                .await?
-                .to_string(),
-        );
         res.insert(
             "is_muted",
             self.get_config_bool(Config::IsMuted).await?.to_string(),
