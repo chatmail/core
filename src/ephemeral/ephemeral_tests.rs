@@ -509,7 +509,7 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
             .await?;
     }
 
-    for (is_chatmail, other_transport, bcc_self) in [
+    for (force_encryption, other_transport, bcc_self) in [
         (false, false, false),
         (false, false, true),
         (false, true, false),
@@ -520,10 +520,12 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
         (true, true, true),
     ] {
         println!(
-            "Testing combination is_chatmail={is_chatmail}, other_transport={other_transport}, bcc_self={bcc_self}"
+            "Testing combination force_encryption={force_encryption}, other_transport={other_transport}, bcc_self={bcc_self}"
         );
 
         t.set_config_bool(Config::BccSelf, bcc_self).await?;
+        t.set_config_bool(Config::ForceEncryption, force_encryption)
+            .await?;
 
         delete_expired_imap_messages(
             &t,
@@ -532,7 +534,6 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
             } else {
                 transport_id
             },
-            is_chatmail,
         )
         .await?;
 
@@ -548,7 +549,7 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
         assert_eq!(is_deleted(&t, "no_expire@localhost").await?, !bcc_self);
         assert_eq!(
             is_deleted(&t, "no_expire_unencrypted@localhost").await?,
-            is_chatmail && !bcc_self
+            force_encryption && !bcc_self
         );
         assert_eq!(is_deleted(&t, "future@localhost").await?, !bcc_self);
         assert_eq!(is_deleted(&t, "expired_post@localhost").await?, true);
@@ -563,9 +564,10 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
         reset_targets(&t).await;
     }
 
-    // With BccSelf=true, non-expired messages are kept even if `is_chatmail` is true
+    // With BccSelf=true, non-expired messages are kept even if `force_encryption` is true
     t.set_config_bool(Config::BccSelf, true).await?;
-    delete_expired_imap_messages(&t, transport_id, true).await?;
+    t.set_config_bool(Config::ForceEncryption, true).await?;
+    delete_expired_imap_messages(&t, transport_id).await?;
     assert_eq!(is_deleted(&t, "expired@localhost").await?, true);
     assert_eq!(is_deleted(&t, "no_expire@localhost").await?, false);
     assert_eq!(is_deleted(&t, "done_pre@localhost").await?, false);

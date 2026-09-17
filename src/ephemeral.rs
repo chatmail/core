@@ -654,12 +654,11 @@ pub(crate) async fn ephemeral_loop(context: &Context, interrupt_receiver: Receiv
 pub(crate) async fn delete_expired_imap_messages(
     context: &Context,
     transport_id: u32,
-    is_chatmail: bool,
 ) -> Result<()> {
     let now = time();
 
     let bcc_self = context.get_config_bool(Config::BccSelf).await?;
-    if should_delete_all_downloaded_messages(bcc_self, is_chatmail) {
+    if should_delete_all_downloaded_messages(context).await? {
         // This is the only device using this relay.
         // Mark all downloaded messages for deletion, because they are not needed anymore.
         //
@@ -708,7 +707,7 @@ pub(crate) async fn delete_expired_imap_messages(
             )
             .await?;
     } else {
-        // Single device.
+        // Single device, but unencrypted messages are allowed.
         // Delete all expired and encrypted messages.
         context
             .sql
@@ -736,8 +735,9 @@ pub(crate) async fn delete_expired_imap_messages(
     Ok(())
 }
 
-pub(crate) fn should_delete_all_downloaded_messages(bcc_self: bool, is_chatmail: bool) -> bool {
-    !bcc_self && is_chatmail
+pub(crate) async fn should_delete_all_downloaded_messages(context: &Context) -> Result<bool> {
+    Ok(!context.get_config_bool(Config::BccSelf).await?
+        && context.get_config_bool(Config::ForceEncryption).await?)
 }
 
 /// Start ephemeral timers for seen messages if they are not started
