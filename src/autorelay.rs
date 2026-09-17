@@ -16,6 +16,7 @@
 //!   [`Config::AutorelayFinished`] is set and nothing is ever added again,
 //!   so deleting a transport later does not pull in a replacement.
 
+use std::collections::BTreeSet;
 use std::pin::Pin;
 
 use anyhow::Result;
@@ -53,17 +54,24 @@ const DEFAULT_RELAY_CANDIDATES: &[&str] = &[
 pub(crate) async fn init_transports_inner(
     context: &Context,
     addrs_from_qr: Vec<String>,
+    skip_network: bool,
 ) -> Result<(), anyhow::Error> {
-    let mut candidates: Vec<&str> = DEFAULT_RELAY_CANDIDATES.into();
-    candidates.shuffle(&mut rng());
+    let mut default_relays: Vec<&str> = DEFAULT_RELAY_CANDIDATES.into();
+    default_relays.shuffle(&mut rng());
 
     let (relays_sender, relays_receiver) = async_channel::unbounded::<String>();
-    for addr in addrs_from_qr {
-        let email = EmailAddress::new(&addr)?;
-        relays_sender.try_send(email.domain)?;
-    }
-    for relay in candidates {
+    let relays_from_qr: BTreeSet<_> = addrs_from_qr
+        .into_iter()
+        .filter_map(|addr| EmailAddress::new(&addr).ok())
+        .map(|email| email.domain)
+        .collect();
+    for relay in &relays_from_qr {
         relays_sender.try_send(relay.to_string())?;
+    }
+    for relay in default_relays {
+        if !relays_from_qr.contains(relay) {
+            relays_sender.try_send(relay.to_string())?;
+        }
     }
 
     let mut join_set = JoinSet::new();
@@ -80,7 +88,6 @@ pub(crate) async fn init_transports_inner(
                     return false; // No more relays to try
                 };
                 let param = login_param_from_host(&host);
-                let skip_network = false;
                 let res = crate::configure::configure(&context, &param, skip_network).await;
                 if let Err(err) = res {
                     warn!(context, "Failed to init transport {host}: {err:#}.");

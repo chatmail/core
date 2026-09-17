@@ -217,7 +217,8 @@ impl Context {
             }
         }
 
-        autorelay::init_transports_inner(self, addrs_from_qr).await?;
+        let skip_network = false;
+        autorelay::init_transports_inner(self, addrs_from_qr, skip_network).await?;
 
         self.start_io().await;
 
