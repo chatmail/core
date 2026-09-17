@@ -684,6 +684,38 @@ impl Sql {
     }
 }
 
+pub(crate) trait TransactionExt {
+    /// Prepares and executes the statement and maps a function over the resulting rows.
+    ///
+    /// Collects the resulting rows into a `Vec`.
+    fn query_map_vec<T, F>(
+        &self,
+        sql: &str,
+        params: impl rusqlite::Params + Send,
+        f: F,
+    ) -> Result<Vec<T>>
+    where
+        T: Send + 'static,
+        F: Send + FnMut(&rusqlite::Row) -> Result<T>;
+}
+
+impl TransactionExt for rusqlite::Transaction<'_> {
+    fn query_map_vec<T, F>(
+        &self,
+        sql: &str,
+        params: impl rusqlite::Params + Send,
+        f: F,
+    ) -> Result<Vec<T>>
+    where
+        T: Send + 'static,
+        F: Send + FnMut(&rusqlite::Row) -> Result<T>,
+    {
+        let mut stmt = self.prepare(sql)?;
+        let res = stmt.query_and_then(params, f)?;
+        res.collect()
+    }
+}
+
 /// Creates a new SQLite connection.
 ///
 /// `path` is the database path.

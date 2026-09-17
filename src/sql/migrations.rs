@@ -2673,6 +2673,13 @@ CREATE TABLE smtp2 (
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 167)?;
+    if dbversion < migration_version {
+        // The previous relay candidates were only for testing
+        sql.execute_migration("DELETE FROM relay_candidates;", migration_version)
+            .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?

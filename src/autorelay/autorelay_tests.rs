@@ -10,7 +10,12 @@ async fn test_load_relay_candidates_single() -> Result<()> {
     enable_config(t).await;
     let now = time();
 
-    t.sql.execute("DELETE FROM relay_candidates", ()).await?;
+    // Fill the default candidates, and make sure that they
+    // are not used by setting last_used to now:
+    load_relay_candidates(t, now).await?;
+    t.sql
+        .execute("UPDATE relay_candidates SET last_tried=?", (now,))
+        .await?;
 
     // This host should be returned by load_relay_candidates():
     t.sql
@@ -49,8 +54,9 @@ async fn test_load_relay_candidates_multiple() -> Result<()> {
     enable_config(t).await;
     let now = time();
 
-    t.sql.execute("DELETE FROM relay_candidates", ()).await?;
-    for host in ["a.example", "b.example", "c.example"] {
+    const EXAMPLE_CANDIDATES: &[&str] = &["a.example", "b.example", "c.example"];
+
+    for host in EXAMPLE_CANDIDATES {
         t.sql
             .execute(
                 "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
@@ -62,14 +68,11 @@ async fn test_load_relay_candidates_multiple() -> Result<()> {
     let mut candidates = load_relay_candidates(t, now).await?;
     candidates.sort();
 
-    assert_eq!(
-        candidates,
-        vec![
-            "a.example".to_string(),
-            "b.example".to_string(),
-            "c.example".to_string()
-        ]
-    );
+    let mut expected = EXAMPLE_CANDIDATES.to_vec();
+    expected.extend(DEFAULT_RELAY_CANDIDATES);
+    expected.sort();
+
+    assert_eq!(candidates, expected);
     Ok(())
 }
 
@@ -160,7 +163,13 @@ async fn test_maybe_add_additional_relays_add_one() -> Result<()> {
     enable_config(t).await;
     let now = time();
 
-    t.sql.execute("DELETE FROM relay_candidates", ()).await?;
+    // Fill the default candidates, and make sure that they
+    // are not used by setting last_used to now:
+    load_relay_candidates(t, now).await?;
+    t.sql
+        .execute("UPDATE relay_candidates SET last_tried=?", (now,))
+        .await?;
+
     t.sql
         .execute(
             "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
@@ -218,7 +227,13 @@ async fn test_maybe_add_additional_relays_failure() -> Result<()> {
     enable_config(t).await;
     let now = time();
 
-    t.sql.execute("DELETE FROM relay_candidates", ()).await?;
+    // Fill the default candidates, and make sure that they
+    // are not used by setting last_used to now:
+    load_relay_candidates(t, now).await?;
+    t.sql
+        .execute("UPDATE relay_candidates SET last_tried=?", (now,))
+        .await?;
+
     for i in 1..10 {
         t.sql
             .execute(

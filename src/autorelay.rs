@@ -16,7 +16,6 @@
 //!   [`Config::AutorelayFinished`] is set and nothing is ever added again,
 //!   so deleting a transport later does not pull in a replacement.
 
-use std::collections::{BTreeMap, BTreeSet};
 use std::pin::Pin;
 
 use anyhow::Result;
@@ -29,6 +28,7 @@ use tokio::task::JoinSet;
 use crate::config::{self, Config};
 use crate::log::{LogExt, warn};
 use crate::login_param::{EnteredCertificateChecks, EnteredImapLoginParam};
+use crate::sql::TransactionExt as _;
 use crate::{configure::EnteredLoginParam, context::Context, tools::time};
 
 /// The target number of transports.
@@ -54,14 +54,6 @@ pub(crate) async fn init_transports_inner(
     context: &Context,
     addrs_from_qr: Vec<String>,
 ) -> Result<(), anyhow::Error> {
-    // TODO The default relay candidates need to be updated in the database, too.
-    // It would be annoying to have to write a migration everytime a relay candidate comes or goes;
-    // The solution is to make the relay candidates list into a const,
-    // and check in `load_relay_candidates()` whether any of them should be added
-    // rather than in a migration
-    // (if we need to remove some later, we will then need another const `REMOVED_RELAY_CANDIDATES` which are ignored;
-    // or alternatively we could use `relay_candidates` table only for saving the last used timestamps,
-    // and if we later want to add other sources for relay candidates then we need another table for that)
     let mut candidates: Vec<&str> = DEFAULT_RELAY_CANDIDATES.into();
     candidates.shuffle(&mut rng());
 
@@ -226,23 +218,33 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
 
 pub(crate) async fn load_relay_candidates(context: &Context, now: i64) -> Result<Vec<String>> {
     let cutoff_timestamp = now.saturating_sub(BACKOFF_PERIOD_FOR_NOT_WORKING_RELAY);
+
     let candidates: Vec<String> = context
         .sql
-        .query_map_vec(
-            // This also selects candidates which have last_tried in the future,
-            // essentially treating them as never tried,
-            // so if some timestamp far in the future is accidentally stored,
-            // we are not stuck never trying the candidate.
-            // After trying the candidate, last_tried will be corrected to the current time.
-            "SELECT host FROM relay_candidates WHERE (last_tried<? OR last_tried>?)
+        .transaction(|transaction| {
+            // Add any relay candidates that are not in the database yet
+            let mut statement =
+                transaction.prepare("INSERT OR IGNORE INTO relay_candidates(host) VALUES (?)")?;
+            for host in DEFAULT_RELAY_CANDIDATES {
+                statement.execute((host,))?;
+            }
+
+            transaction.query_map_vec(
+                // This also selects candidates which have last_tried in the future,
+                // essentially treating them as never tried,
+                // so if some timestamp far in the future is accidentally stored,
+                // we are not stuck never trying the candidate.
+                // After trying the candidate, last_tried will be corrected to the current time.
+                "SELECT host FROM relay_candidates WHERE (last_tried<? OR last_tried>?)
                 AND NOT EXISTS (
                     SELECT 1
                     FROM transports
                     WHERE substr(addr, instr(addr, '@') + 1) = host
                 )",
-            (cutoff_timestamp, now),
-            |row| Ok(row.get::<_, String>(0)?),
-        )
+                (cutoff_timestamp, now),
+                |row| Ok(row.get::<_, String>(0)?),
+            )
+        })
         .await?;
 
     Ok(candidates)
