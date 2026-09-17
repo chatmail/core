@@ -95,7 +95,7 @@ pub(crate) async fn init_transports_inner(
             loop {
                 // Take a lock in order to prevent other relay management code
                 // from running simultaneously
-                let _lock = context.background_task_lock.read();
+                let _lock = context.background_task_lock.read().await;
 
                 let Ok(host) = relays_receiver.try_recv() else {
                     return false; // No more relays to try
@@ -107,12 +107,14 @@ pub(crate) async fn init_transports_inner(
                     *last_error.lock().await = format!("{err:#}");
                     // Try another relay in the next iteration of the loop
                 } else {
+                    info!(context, "Initialized with transport {host}");
                     if context.count_transports().await.unwrap_or(0) >= NUM_TRANSPORTS_TARGET {
                         context
                             .set_config_bool(Config::AutorelayFinished, true)
                             .await
                             .log_err(&context)
                             .ok();
+                        info!(context, "Target number of transports reached.");
                     }
                     return true; // Success
                 }
@@ -192,12 +194,16 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
     let mut relay_added = false;
     // Using `for` instead of `while` to prevent infinite loop
     for _ in 0..NUM_TRANSPORTS_TARGET {
-        if context.count_transports().await? >= NUM_TRANSPORTS_TARGET {
+        let num_transports = context.count_transports().await?;
+        if num_transports >= NUM_TRANSPORTS_TARGET {
+            info!(context, "Transports target reached at {num_transports}");
             context
                 .set_config_internal(Config::AutorelayFinished, config::from_bool(true))
                 .await?;
 
             return Ok(relay_added);
+        } else {
+            info!(context, "There are {num_transports} relays, will add more");
         }
 
         // First, query all candidates that were not tried since `BACKOFF_PERIOD_FOR_NOT_WORKING_RELAY` seconds.
