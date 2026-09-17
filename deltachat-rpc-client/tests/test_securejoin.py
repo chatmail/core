@@ -647,9 +647,8 @@ def test_qr_scan_updates_new_relay_address(acf):
     bob.wait_for_securejoin_joiner_success()
 
     for ac in [alice, bob]:
-        old_addr = ac.get_config("configured_addr")
+        old_addr = ac.list_transports()[0]["addr"]
         ac.add_transport_from_qr(acf.get_account_qr())
-        ac.set_config("configured_addr", ac.list_transports()[1]["addr"])
         ac.delete_transport(old_addr)
 
     bob.secure_join(alice.get_qr_code())

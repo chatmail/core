@@ -961,10 +961,6 @@ mod tests {
             .await;
 
         assert!(context2.is_configured().await?);
-        assert_eq!(
-            context2.get_config(Config::ConfiguredAddr).await?,
-            Some("alice@example.org".to_string())
-        );
         Ok(())
     }
 
@@ -1074,7 +1070,6 @@ mod tests {
             .await;
 
         assert!(!context2.is_configured().await?);
-        assert_eq!(context2.get_config(Config::ConfiguredAddr).await?, None);
 
         Ok(())
     }

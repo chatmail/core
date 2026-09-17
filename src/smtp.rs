@@ -13,7 +13,6 @@ use rusqlite::OptionalExtension as _;
 use tokio::task;
 
 use crate::chat::{ChatId, add_info_msg_with_cmd};
-use crate::config::Config;
 use crate::contact::{Contact, ContactId};
 use crate::context::Context;
 use crate::events::EventType;
@@ -558,7 +557,7 @@ pub(crate) async fn send_msg_to_smtp(context: &Context, smtp: &mut Smtp, rowid: 
         .max(1);
 
     let rendered_mail =
-        mimefactory::render_queued_mail(queued_mail, &public_key, &secret_key, from_addr)?;
+        mimefactory::render_queued_mail(queued_mail, &public_key, &secret_key, from_addr.clone())?;
     let body = rendered_mail.message;
 
     info!(
@@ -629,15 +628,9 @@ pub(crate) async fn send_msg_to_smtp(context: &Context, smtp: &mut Smtp, rowid: 
                     .await?;
 
                 if let Some((chat_id, timestamp_sort)) = res {
-                    let addr = context.get_config(Config::ConfiguredAddr).await?;
-                    let text = unencrypted_email(
-                        context,
-                        addr.unwrap_or_default()
-                            .split('@')
-                            .nth(1)
-                            .unwrap_or_default(),
-                    )
-                    .await;
+                    let text =
+                        unencrypted_email(context, from_addr.split('@').nth(1).unwrap_or_default())
+                            .await;
                     add_info_msg_with_cmd(
                         context,
                         chat_id,
