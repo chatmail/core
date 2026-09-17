@@ -694,9 +694,9 @@ impl Contact {
                     .await?
                     .unwrap_or_default();
                 contact.addr = context
-                    .get_config(Config::ConfiguredAddr)
-                    .await?
-                    .unwrap_or_default();
+                    .get_primary_self_addr()
+                    .await
+                    .context("Cannot get address for self-contact")?;
                 if let Some(self_fp) = self_fingerprint_opt(context).await? {
                     contact.fingerprint = Some(self_fp.to_string());
                 }

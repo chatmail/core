@@ -48,7 +48,7 @@ async fn test_setup_contact_ext(case: SetupContactCase) -> (TestContext, TestCon
 
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
-    let alice_addr = &alice
+    let alice_addr = alice
         .get_config(Config::ConfiguredAddr)
         .await
         .unwrap()
@@ -116,7 +116,7 @@ async fn test_setup_contact_ext(case: SetupContactCase) -> (TestContext, TestCon
     let contact_alice_id = bob.add_or_lookup_contact_no_key(&alice).await.id;
     let sent = bob.pop_sent_msg().await;
     assert!(!sent.payload.contains("Bob Examplenet"));
-    assert_eq!(sent.recipient(), EmailAddress::new(alice_addr).unwrap());
+    assert_eq!(sent.recipients, *alice_addr);
     let msg = alice.parse_msg(&sent).await;
     assert!(msg.signature.is_none());
     assert_eq!(

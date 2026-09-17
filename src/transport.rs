@@ -304,14 +304,14 @@ impl ConfiguredLoginParam {
             .await
     }
 
-    /// Loads legacy configured param. Only used for tests and the migration.
+    /// Loads legacy configured param. Only used for tests and migration 131.
     pub(crate) async fn load_legacy(context: &Context) -> Result<Option<Self>> {
         if !context.get_config_bool(Config::Configured).await? {
             return Ok(None);
         }
 
         let addr = context
-            .get_config(Config::ConfiguredAddr)
+            .get_config_opt(Config::ConfiguredAddr)
             .await?
             .unwrap_or_default()
             .trim()
@@ -653,7 +653,7 @@ pub(crate) async fn sync_transports(
         )
         .collect();
 
-    let (deleted_ids, reelected) = context
+    let deleted_ids = context
         .sql
         .transaction(|transaction| {
             let mut deleted_ids = Vec::new();
@@ -666,19 +666,12 @@ pub(crate) async fn sync_transports(
             }
             modified |= !deleted_ids.is_empty();
 
-            let reelected = maybe_update_sending_transport(transaction)?;
-            Ok((deleted_ids, reelected))
+            Ok(deleted_ids)
         })
         .await?;
 
     for transport_id in &deleted_ids {
         purge_transport_caches(context, *transport_id).await;
-    }
-
-    if let Some(new_addr) = reelected {
-        info!(context, "Re-elected sending transport {new_addr:?}.");
-        context.sql.uncache_raw_config("configured_addr").await;
-        modified = true;
     }
 
     if modified {
@@ -737,31 +730,6 @@ pub(crate) fn delete_transport_row(
 pub(crate) async fn purge_transport_caches(context: &Context, transport_id: u32) {
     context.quota.write().await.remove(&transport_id);
     context.metadata.write().await.remove(&transport_id);
-}
-
-/// Elects another transport for sending if the current one vanished.
-/// Any remaining transport works and selection is anyway moving
-/// to the authority of the SMTP loop, see <https://github.com/chatmail/core/pull/8619>
-pub(crate) fn maybe_update_sending_transport(
-    transaction: &mut rusqlite::Transaction,
-) -> Result<Option<String>> {
-    let configured_addr: String = transaction.query_row(
-        "SELECT value FROM config WHERE keyname='configured_addr'",
-        (),
-        |row| row.get(0),
-    )?;
-    let addrs = transport_addrs(transaction)?;
-    if addrs.contains(&configured_addr) {
-        return Ok(None);
-    }
-    let Some(new_addr) = addrs.into_iter().next() else {
-        return Ok(None);
-    };
-    transaction.execute(
-        "UPDATE config SET value=? WHERE keyname='configured_addr'",
-        (&new_addr,),
-    )?;
-    Ok(Some(new_addr))
 }
 
 /// Adds transport entry to the `transports` table with empty configuration.
