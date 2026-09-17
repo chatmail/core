@@ -4,7 +4,7 @@ use std::env;
 use std::path::Path;
 use std::str::FromStr;
 
-use anyhow::{Context as _, Result, bail, ensure};
+use anyhow::{Context as _, Result, ensure};
 use base64::Engine as _;
 use deltachat_contact_tools::{addr_cmp, sanitize_single_line};
 use serde::{Deserialize, Serialize};
@@ -196,11 +196,6 @@ pub enum Config {
     /// deleted.
     #[strum(props(default = "0"))]
     DeleteDeviceAfter,
-
-    /// Deprecated(2026-09).
-    ///
-    /// Use ConfiguredLoginParam and list_transports() instead.
-    ConfiguredAddr,
 
     /// Deprecated(2026-04).
     /// Use ConfiguredLoginParam and add_transport{from_qr}()/list_transports() instead.
@@ -752,34 +747,6 @@ impl Context {
                     .set_raw_config(key.as_ref(), value.map(|s| s.to_lowercase()).as_deref())
                     .await?;
             }
-            Config::ConfiguredAddr => {
-                let Some(addr) = value else {
-                    bail!("Cannot unset configured_addr");
-                };
-
-                self.sql
-                    .transaction(|transaction| {
-                        if transaction.query_row(
-                            "SELECT COUNT(*) FROM transports WHERE addr=?",
-                            (addr,),
-                            |row| {
-                                let res: i64 = row.get(0)?;
-                                Ok(res)
-                            },
-                        )? == 0
-                        {
-                            bail!("Address does not belong to any transport.");
-                        }
-                        transaction.execute(
-                            "INSERT OR REPLACE INTO config (keyname, value) VALUES ('configured_addr', ?)",
-                            (addr,),
-                        )?;
-
-                        Ok(())
-                    })
-                    .await?;
-                self.sql.uncache_raw_config("configured_addr").await;
-            }
             _ => {
                 self.sql.set_raw_config(key.as_ref(), value).await?;
             }
@@ -854,37 +821,11 @@ impl Context {
     /// Determine whether the specified addr maps to the/a self addr.
     /// Returns `false` if no addresses are configured.
     pub(crate) async fn is_self_addr(&self, addr: &str) -> Result<bool> {
-        // Employ the config cache to optimize for `ConfiguredAddr` passed.
-        if !addr.is_empty()
-            && addr_cmp(
-                addr,
-                &self
-                    .get_config(Config::ConfiguredAddr)
-                    .await?
-                    .unwrap_or_default(),
-            )
-        {
-            return Ok(true);
-        }
         Ok(self
             .get_self_addrs()
             .await?
             .iter()
             .any(|a| addr_cmp(addr, a)))
-    }
-
-    /// Sets `primary_new` as the address used for sending.
-    ///
-    /// This should only be used by test code and during configure.
-    #[cfg(test)] // AEAP is disabled, but there are still tests for it
-    pub(crate) async fn set_primary_self_addr(&self, primary_new: &str) -> Result<()> {
-        self.quota.write().await.clear();
-
-        self.sql
-            .set_raw_config(Config::ConfiguredAddr.as_ref(), Some(primary_new))
-            .await?;
-        self.emit_event(EventType::ConnectivityChanged);
-        Ok(())
     }
 
     /// Returns all self addresses, newest first.
@@ -895,10 +836,11 @@ impl Context {
             .await
     }
 
-    /// Returns the address of the transport used for sending.
+    /// Returns address of some transport.
     /// Returns an error if no self addr is configured.
     pub async fn get_primary_self_addr(&self) -> Result<String> {
-        self.get_config(Config::ConfiguredAddr)
+        self.sql
+            .query_get_value("SELECT addr FROM transports ORDER BY id", ())
             .await?
             .context("No self addr configured")
     }

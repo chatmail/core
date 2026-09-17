@@ -3853,7 +3853,7 @@ async fn test_unsigned_chat_group_hdr() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
-    let bob_addr = bob.get_config(Config::ConfiguredAddr).await?.unwrap();
+    let bob_addr = bob.get_primary_self_addr().await?;
     let bob_id = alice.add_or_lookup_contact_id(bob).await;
     let alice_chat_id = create_group(alice, "foos").await?;
     add_contact_to_chat(alice, alice_chat_id, bob_id).await?;
@@ -4541,7 +4541,7 @@ async fn test_outgoing_msg_forgery() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let export_dir = tempfile::tempdir().unwrap();
     let alice = &tcm.alice().await;
-    let alice_addr = &alice.get_config(Config::ConfiguredAddr).await?.unwrap();
+    let alice_addr = &alice.get_primary_self_addr().await?;
     imex(alice, ImexMode::ExportSelfKeys, export_dir.path(), None).await?;
     // We need Bob only to encrypt the forged message to Alice's key, actually Bob doesn't
     // participate in the scenario.
@@ -5638,7 +5638,7 @@ async fn test_bcc_not_a_group() -> Result<()> {
 async fn test_lookup_key_contact_by_address_self() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let t = &tcm.alice().await;
-    let addr = &t.get_config(Config::ConfiguredAddr).await?.unwrap();
+    let addr = &t.get_primary_self_addr().await?;
     assert_eq!(
         lookup_key_contact_by_address(t, addr, None).await?,
         Some(ContactId::SELF)
@@ -5690,10 +5690,7 @@ async fn test_outgoing_determined_by_signature() -> Result<()> {
     let alice_dev2 = &tcm.unconfigured().await;
     alice_dev2.configure_addr(different_from).await;
     key::store_self_keypair(alice_dev2, &alice_keypair()).await?;
-    assert_ne!(
-        alice.get_config(Config::ConfiguredAddr).await?.unwrap(),
-        different_from
-    );
+    assert_ne!(alice.get_primary_self_addr().await?, different_from);
 
     // Send message from alice_dev2 and check alice sees it as outgoing
     let chat_id = alice_dev2.create_chat_id(bob).await;

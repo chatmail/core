@@ -13,7 +13,6 @@ use rusqlite::OptionalExtension as _;
 use tokio::task;
 
 use crate::chat::{ChatId, add_info_msg_with_cmd};
-use crate::config::Config;
 use crate::contact::{Contact, ContactId};
 use crate::context::Context;
 use crate::events::EventType;
@@ -587,15 +586,11 @@ pub(crate) async fn send_msg_to_smtp(
                     .await?;
 
                 if let Some((chat_id, timestamp_sort)) = res {
-                    let addr = context.get_config(Config::ConfiguredAddr).await?;
-                    let text = unencrypted_email(
-                        context,
-                        addr.unwrap_or_default()
-                            .split('@')
-                            .nth(1)
-                            .unwrap_or_default(),
-                    )
-                    .await;
+                    // FIXME info message
+                    let addr = context.get_primary_self_addr().await?;
+                    let text =
+                        unencrypted_email(context, addr.split('@').nth(1).unwrap_or_default())
+                            .await;
                     add_info_msg_with_cmd(
                         context,
                         chat_id,

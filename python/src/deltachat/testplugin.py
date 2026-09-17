@@ -370,12 +370,7 @@ class ACFactory:
         acname = ac._logid
         addr = f"{acname}@offline.org"
         lib.dc_add_pseudo_transport(ac._dc_context, as_dc_charpointer(addr))
-        ac.update_config(
-            {
-                "configured_addr": addr,
-                "displayname": acname,
-            },
-        )
+        ac.set_config("displayname", acname)
         self._preconfigure_key(ac)
         self._acsetup.init_logging(ac)
         assert ac.is_configured(), "Pseudo configured account should look like if it is configured"

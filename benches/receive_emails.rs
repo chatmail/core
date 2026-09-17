@@ -110,11 +110,8 @@ async fn create_context() -> Context {
     }
 
     let addr = "alice@example.com";
+    // FIXME add_pseudo_transport()
     context.set_config(Config::Addr, Some(addr)).await.unwrap();
-    context
-        .set_config(Config::ConfiguredAddr, Some(addr))
-        .await
-        .unwrap();
     context
         .set_config(Config::Configured, Some("1"))
         .await
