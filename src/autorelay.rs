@@ -61,10 +61,9 @@ pub(crate) async fn init_transports_inner(
     context: &Context,
     addrs_from_qr: Vec<String>,
     skip_network: bool,
-) -> Result<(), anyhow::Error> {
-    let mut default_relays: Vec<&str> = DEFAULT_RELAY_CANDIDATES.into();
-    default_relays.shuffle(&mut rng());
-
+) -> Result<()> {
+    // If relays were provided via the addresses in the QR code,
+    // then these relays are tried first.
     let (relays_sender, relays_receiver) = async_channel::unbounded::<String>();
     let relays_from_qr: BTreeSet<String> = addrs_from_qr
         .into_iter()
@@ -74,6 +73,9 @@ pub(crate) async fn init_transports_inner(
     for relay in &relays_from_qr {
         relays_sender.try_send(relay.to_string())?;
     }
+
+    let mut default_relays: Vec<&str> = DEFAULT_RELAY_CANDIDATES.into();
+    default_relays.shuffle(&mut rng());
     for relay in default_relays {
         if !relays_from_qr.contains(relay) {
             relays_sender.try_send(relay.to_string())?;

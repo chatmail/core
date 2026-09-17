@@ -219,6 +219,10 @@ impl Context {
 
         let skip_network = false;
         autorelay::init_transports_inner(self, addrs_from_qr, skip_network).await?;
+        self.update_device_chats()
+            .await
+            .context("Failed to update device chats")?;
+        progress!(self, 1000);
 
         self.start_io().await;
 
@@ -315,6 +319,9 @@ impl Context {
             );
             return Err(error);
         };
+        self.update_device_chats()
+            .await
+            .context("Failed to update device chats")?;
         if provider::legacy_settings_for_addr(&param.addr)?.worse_media_quality
             && !self.config_exists(Config::MediaQuality).await?
         {
@@ -558,9 +565,6 @@ pub(crate) async fn configure(
     ctx.scheduler.interrupt_inbox().await;
 
     progress!(ctx, 940);
-    ctx.update_device_chats()
-        .await
-        .context("Failed to update device chats")?;
 
     ctx.sql.set_raw_config_bool("configured", true).await?;
     ctx.emit_event(EventType::AccountsItemChanged);
