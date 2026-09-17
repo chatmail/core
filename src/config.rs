@@ -487,11 +487,6 @@ impl Config {
                 | Self::ForceEncryption,
         )
     }
-
-    /// Whether the config option needs an IO scheduler restart to take effect.
-    pub(crate) fn needs_io_restart(&self) -> bool {
-        matches!(self, Config::ConfiguredAddr)
-    }
 }
 
 impl Context {
@@ -670,10 +665,6 @@ impl Context {
     pub async fn set_config(&self, key: Config, value: Option<&str>) -> Result<()> {
         Self::check_config(key, value)?;
 
-        let _pause = match key.needs_io_restart() {
-            true => self.scheduler.pause(self).await?,
-            _ => Default::default(),
-        };
         if key == Config::StatsSending {
             let old_value = self.get_config(key).await?;
             let old_value = bool_from_config(old_value.as_deref());
