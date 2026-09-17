@@ -7,7 +7,7 @@
 //!
 //! Status of implementation:
 //!
-//! - When the UI uses `init_transports()`, the user gets 3 randomly selected relays.
+//! - When the UI uses `init_transports()`, we attempt to add 3 relays.
 //!
 //! - Later additions are attempted right before going into IMAP IDLE,
 //!   i.e. only while connected and with nothing more important to do,
@@ -76,6 +76,8 @@ pub(crate) async fn init_transports_inner(
         relays_sender.try_send(relay.to_string())?;
     }
 
+    // After the relays from the QR code,
+    // the default relays are tried in a random order.
     let mut default_relays: Vec<&str> = DEFAULT_RELAY_CANDIDATES.into();
     default_relays.shuffle(&mut rng());
     for relay in default_relays {
@@ -86,6 +88,7 @@ pub(crate) async fn init_transports_inner(
 
     let last_error: Arc<Mutex<String>> = Default::default();
 
+    // Spawn NUM_TRANSPORTS_TARGET tasks that each add a relay concurrently.
     let mut join_set = JoinSet::new();
     for _ in 0..NUM_TRANSPORTS_TARGET {
         let context = context.clone();
@@ -124,8 +127,8 @@ pub(crate) async fn init_transports_inner(
 
     loop {
         match join_set.join_next().await {
-            Some(Ok(true)) => break,     // success
-            Some(Ok(false)) => continue, // Wait until one of the other tasks is successful
+            Some(Ok(true)) => break, // Success
+            Some(Ok(false)) => {}    // Wait until one of the other tasks is successful
             Some(Err(e)) => warn!(context, "One of the init_transports tasks failed: {e:#}"),
             None => bail!(
                 "Could not configure any relay, are you offline? ({})",
@@ -134,6 +137,8 @@ pub(crate) async fn init_transports_inner(
         }
     }
 
+    // Let the other tasks continue running in the background
+    // while the user can already use Delta Chat:
     join_set.detach_all();
 
     context.set_config_bool(Config::Autorelay, true).await?;
@@ -247,13 +252,12 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
     Ok(relay_added)
 }
 
-pub(crate) async fn load_relay_candidates(context: &Context, now: i64) -> Result<Vec<String>> {
+async fn load_relay_candidates(context: &Context, now: i64) -> Result<Vec<String>> {
     let cutoff_timestamp = now.saturating_sub(BACKOFF_PERIOD_FOR_NOT_WORKING_RELAY);
-
     let candidates: Vec<String> = context
         .sql
         .transaction(|transaction| {
-            // Add any relay candidates that are not in the database yet
+            // Add the default relays if they are not in the database yet
             let mut statement =
                 transaction.prepare("INSERT OR IGNORE INTO relay_candidates(host) VALUES (?)")?;
             for host in DEFAULT_RELAY_CANDIDATES {
