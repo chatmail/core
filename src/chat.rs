@@ -2895,11 +2895,11 @@ async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -> Result<Ve
     let (queued_msg, side_effects) = queued_msg_pair;
 
     if needs_encryption && !is_encrypted {
-        let addr = context.get_config(Config::ConfiguredAddr).await?;
+        // FIXME: remove this message? We don't know yet which provider we are going to send the message through.
+        let addr = context.get_primary_self_addr().await?;
         let text = stock_str::unencrypted_email(
             context,
-            addr.unwrap_or_default()
-                .split('@')
+            addr.split('@')
                 .nth(1)
                 .unwrap_or_default(),
         )
