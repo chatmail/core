@@ -169,7 +169,7 @@ pub(crate) fn login_param_from_host(host: &str, mark_as_autorelay: bool) -> Ente
     // while introducing onboarding on multiple community relays from a list:
     // though relay operators were asked to get on that list, unexpected things can happen,
     // and they want to return to allow only manual onboarding.
-    // this is possible by failing on `password_len == 23.
+    // this is possible by failing on `password_len == 23`.
 
     // 22 * log2(26 * 2 + 10) = 130 bits of entropy
     let password = Alphanumeric.sample_string(rng, if mark_as_autorelay { 23 } else { 22 });
