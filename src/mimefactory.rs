@@ -17,7 +17,7 @@ use tokio::fs;
 
 use crate::aheader::{Aheader, EncryptPreference};
 use crate::blob::BlobObject;
-use crate::chat::{self, Chat, ChatId, PARAM_BROADCAST_SECRET, load_broadcast_secret};
+use crate::chat::{self, Chat, PARAM_BROADCAST_SECRET, load_broadcast_secret};
 use crate::config::Config;
 use crate::constants::{Chattype, DC_FROM_HANDSHAKE};
 use crate::contact::{Contact, ContactId, Origin};
@@ -36,6 +36,9 @@ use crate::param::Param;
 use crate::peer_channels::{create_iroh_header, get_iroh_topic_for_msg};
 use crate::pgp::{SeipdVersion, addresses_from_public_key, pubkey_supports_seipdv2, relay_addrs};
 use crate::simplify::escape_message_footer_marks;
+use crate::smtp::queue::{
+    Encryption as QueuedEncryption, QueuedMail, SideEffects as QueueSideEffects, ToBeQueuedMail,
+};
 use crate::stock_str;
 use crate::tools::{IsNoneOrEmpty, create_outgoing_rfc724_mid, remove_subject_prefix, time};
 use crate::webxdc::StatusUpdateSerial;
@@ -220,110 +223,6 @@ pub struct RenderedMessage {
     /// and must be deleted if the message is actually queued for sending.
     sync_ids_to_delete: Option<String>,
 }
-
-#[derive(Debug, Clone)]
-pub(crate) enum QueuedEncryption {
-    /// Unencrypted message.
-    No,
-
-    /// The message is encrypted asymmetrically to public keys.
-    Asymmetric {
-        /// OpenPGP keys to use for encryption.
-        ///
-        /// The message is always encrypted to self,
-        /// no need to include own key here.
-        encryption_pubkeys: Vec<SignedPublicKey>,
-    },
-
-    /// Symmetrically encrypted message with a shared secret.
-    Symmetric { shared_secret: String },
-}
-
-impl QueuedEncryption {
-    pub(crate) fn is_encrypted(&self) -> bool {
-        match self {
-            Self::No => false,
-            Self::Asymmetric { .. } => true,
-            Self::Symmetric { .. } => true,
-        }
-    }
-}
-
-/// Email message queued, but not sent yet.
-///
-/// It is stored unencrypted to
-/// make it possible to change protected headers
-/// like the From address and Autocrypt header later.
-#[derive(Debug, Clone)]
-pub(crate) struct QueuedMail {
-    /// Unencrypted queued message.
-    ///
-    /// This message has both the headers and the body,
-    /// but without the From, Autocrypt and Message-ID headers.
-    ///
-    /// For encrypted messages this is the OpenPGP payload.
-    pub(crate) raw_message: Vec<u8>,
-
-    /// Display name to put in the `From:` field.
-    ///
-    /// Email address is not determined yet here.
-    pub(crate) display_name: String,
-
-    /// Message-ID.
-    pub(crate) rfc724_mid: String,
-
-    /// Whether the message is encrypted and encryption keys.
-    pub(crate) encryption: QueuedEncryption,
-
-    /// If true, Autocrypt header should be added before sending.
-    pub(crate) should_attach_pubkey: bool,
-
-    /// If true, OpenPGP compression may be used.
-    pub(crate) should_compress: bool,
-
-    /// If true, encrypted message should be signed.
-    pub(crate) should_sign: bool,
-
-    /// Recipient addresses.
-    pub(crate) recipients: Vec<String>,
-
-    /// Addresses the messages was already sent to.
-    pub(crate) sent_to: Vec<String>,
-
-    /// If true, own addresses should be added to the list of recipients.
-    ///
-    /// For unencrypted messages, only the sending addresses should be added.
-    /// For encrypted messages, all published addresses should be added.
-    pub(crate) bcc_self: bool,
-}
-
-/// Side effects that should be applied at the same time
-/// as the message is persisted in the queue.
-#[derive(Debug, Clone, Default)]
-pub struct QueueSideEffects {
-    /// ID of the chat side effects should be applied to.
-    pub chat_id: ChatId,
-
-    /// Largest timestamp of the location sent in `location.kml` in this message.
-    pub last_added_location_timestamp: Option<i64>,
-
-    /// True if the message has the avatar attached.
-    ///
-    /// Timestamp of the last time avatar was gossiped should be updated.
-    pub avatar_is_attached: bool,
-
-    /// A comma-separated string of sync-IDs that are used by the rendered email and must be deleted
-    /// from `multi_device_sync` once the message is actually queued for sending.
-    pub sync_ids_to_delete: Option<String>,
-
-    /// Subject that was rendered into the message.
-    ///
-    /// Used to update the subject on the sent message object.
-    pub subject: String,
-}
-
-/// Email message ready to be queued with the side effects that should be applied at the same time.
-pub(crate) type ToBeQueuedMail = (QueuedMail, Option<QueueSideEffects>);
 
 /// Renders [`QueuedMail`].
 ///

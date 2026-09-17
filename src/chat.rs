@@ -30,17 +30,17 @@ use crate::download::{DownloadState, PRE_MSG_ATTACHMENT_SIZE_THRESHOLD};
 use crate::ensure_and_debug_assert_eq;
 use crate::ephemeral::{Timer as EphemeralTimer, start_chat_ephemeral_timers};
 use crate::events::EventType;
-use crate::key::{DcKey as _, Fingerprint, self_fingerprint};
+use crate::key::{Fingerprint, self_fingerprint};
 use crate::log::{LogExt, warn};
 use crate::logged_debug_assert;
 use crate::message::{self, Message, MessageState, MsgId, Viewtype};
-use crate::mimefactory;
-use crate::mimefactory::{MimeFactory, QueueSideEffects, QueuedMail, ToBeQueuedMail};
+use crate::mimefactory::MimeFactory;
 use crate::mimeparser::SystemMessage;
 use crate::param::{Param, Params};
 use crate::pgp::addresses_from_public_key;
 use crate::reaction::broadcast_reactions;
 use crate::receive_imf::ReceivedMsg;
+use crate::smtp::queue::{ToBeQueuedMail, enqueue_mail};
 use crate::smtp::send_msg_to_smtp;
 use crate::stock_str;
 use crate::sync::{self, Sync::*, SyncData};
@@ -331,7 +331,7 @@ impl ChatId {
         Ok(chat_id)
     }
 
-    fn set_selfavatar_timestamp(
+    pub(crate) fn set_selfavatar_timestamp(
         self,
         transaction: &mut rusqlite::Transaction<'_>,
         timestamp: i64,
@@ -2813,99 +2813,6 @@ async fn render_mime_message_and_pre_message(
 
         Ok((None, (queued_msg, side_effects)))
     }
-}
-
-/// Process side effects and store queued mail.
-pub(crate) fn enqueue_mail(
-    transaction: &mut rusqlite::Transaction<'_>,
-    now: i64,
-    msg_id: MsgId,
-    queued_mail: &QueuedMail,
-    side_effects: Option<&QueueSideEffects>,
-) -> Result<i64> {
-    if let Some(side_effects) = side_effects {
-        if let Some(last_added_location_timestamp) = side_effects.last_added_location_timestamp {
-            transaction.execute(
-                "UPDATE chats SET locations_last_sent=? WHERE id=?;",
-                (last_added_location_timestamp, side_effects.chat_id),
-            )?;
-        }
-
-        if side_effects.avatar_is_attached {
-            side_effects
-                .chat_id
-                .set_selfavatar_timestamp(transaction, now)
-                .context("Failed to set selfavatar timestamp")?;
-        }
-
-        if let Some(ref sync_ids) = side_effects.sync_ids_to_delete {
-            transaction.execute(
-                &format!("DELETE FROM multi_device_sync WHERE id IN ({sync_ids})"),
-                (),
-            )?;
-        }
-    }
-
-    // Store mail into queue.
-    let all_recipients = queued_mail.recipients.join(" ");
-    let is_encrypted = queued_mail.encryption.is_encrypted();
-
-    transaction
-        .execute(
-            "
-    INSERT INTO smtp2 (
-      display_name,
-      rfc724_mid,
-      mime,
-      should_attach_pubkey,
-      should_compress,
-      should_sign,
-      msg_id,
-      recipients,
-      bcc_self,
-      is_encrypted,
-      shared_secret,
-      encryption_fingerprints
-    )
-    VALUES (
-      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-    )
-    ",
-            (
-                &queued_mail.display_name,
-                &queued_mail.rfc724_mid,
-                &queued_mail.raw_message,
-                queued_mail.should_attach_pubkey,
-                queued_mail.should_compress,
-                queued_mail.should_sign,
-                msg_id,
-                &all_recipients,
-                queued_mail.bcc_self,
-                is_encrypted,
-                if let mimefactory::QueuedEncryption::Symmetric { ref shared_secret } =
-                    queued_mail.encryption
-                {
-                    shared_secret
-                } else {
-                    ""
-                },
-                if let mimefactory::QueuedEncryption::Asymmetric {
-                    ref encryption_pubkeys,
-                } = queued_mail.encryption
-                {
-                    let res: Vec<String> = encryption_pubkeys
-                        .iter()
-                        .map(|pubkey| pubkey.dc_fingerprint().hex())
-                        .collect();
-                    res.join(" ")
-                } else {
-                    "".to_string()
-                },
-            ),
-        )
-        .context("Failed to insert a row into smtp2 table")?;
-    let row_id = transaction.last_insert_rowid();
-    Ok(row_id)
 }
 
 /// Constructs jobs for sending a message and inserts them into the `smtp` table.

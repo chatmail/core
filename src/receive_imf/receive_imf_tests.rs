@@ -5763,7 +5763,7 @@ pub(crate) async fn first_row_in_smtp_queue(context: &TestContext) -> (MsgId, St
     let queued_mail = context
         .sql
         .transaction_ext(query_only, |transaction| {
-            smtp::load_queued_mail(transaction, rowid)
+            smtp::queue::load_queued_mail(transaction, rowid)
         })
         .await
         .unwrap();
