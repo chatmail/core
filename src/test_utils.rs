@@ -627,7 +627,7 @@ ORDER BY id"
             .ctx
             .sql
             .transaction_ext(query_only, |transaction| {
-                smtp::load_queued_mail(transaction, rowid)
+                smtp::queue::load_queued_mail(transaction, rowid)
             })
             .await
             .expect("Failed to load queued mail");
@@ -724,7 +724,7 @@ ORDER BY id"
                 .ctx
                 .sql
                 .transaction_ext(query_only, |transaction| {
-                    smtp::load_queued_mail(transaction, rowid)
+                    smtp::queue::load_queued_mail(transaction, rowid)
                 })
                 .await
                 .expect("Failed to load queued mail");

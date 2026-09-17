@@ -528,7 +528,7 @@ impl Accounts {
     pub async fn is_sending_finished(&self) -> Result<bool> {
         let accounts: Vec<Context> = self.accounts.values().cloned().collect();
         for account in accounts {
-            if !smtp::is_queue_empty(&account).await? {
+            if !smtp::queue::is_empty(&account).await? {
                 return Ok(false);
             }
         }

@@ -1,6 +1,7 @@
 //! # SMTP transport module.
 
 mod connect;
+pub(crate) mod queue;
 pub mod send;
 
 use std::collections::BTreeSet;
@@ -8,27 +9,24 @@ use std::collections::BTreeSet;
 use anyhow::{Context as _, Error, Result, bail, format_err};
 use async_smtp::response::{Category, Code, Detail};
 use async_smtp::{EmailAddress, SmtpTransport};
-use pgp::composed::SignedPublicKey;
 use rusqlite::OptionalExtension as _;
 use tokio::task;
 
-use crate::chat;
 use crate::chat::{ChatId, add_info_msg_with_cmd};
 use crate::config::Config;
 use crate::contact::{Contact, ContactId};
 use crate::context::Context;
 use crate::events::EventType;
 use crate::key;
-use crate::key::DcKey;
 use crate::log::{LogExt, warn};
 use crate::message::Message;
 use crate::message::{self, MsgId};
 use crate::mimefactory;
 use crate::mimefactory::MimeFactory;
-use crate::mimefactory::QueuedMail;
 use crate::net::proxy::ProxyConfig;
 use crate::net::session::SessionBufStream;
 use crate::scheduler::connectivity::ConnectivityStore;
+use crate::smtp::queue::QueuedMail;
 use crate::stock_str::unencrypted_email;
 use crate::tools::{self, time_elapsed};
 use crate::transport::{
@@ -364,7 +362,7 @@ pub(crate) async fn insert_into_smtp(
     let msg_id = message::insert_tombstone(context, rfc724_mid).await?;
     context
         .sql
-        .transaction(|transaction| chat::enqueue_mail(transaction, now, msg_id, queued_msg, None))
+        .transaction(|transaction| queue::enqueue_mail(transaction, now, msg_id, queued_msg, None))
         .await?;
     Ok(())
 }
@@ -413,7 +411,7 @@ pub(crate) async fn send_msg_to_smtp(
             else {
                 return Ok(None);
             };
-            let queued_mail = load_queued_mail(transaction, rowid)
+            let queued_mail = queue::load_queued_mail(transaction, rowid)
                 .with_context(|| format!("Failed to load queued mail for {rowid}"))?;
             Ok(Some((queued_mail, msg_id, retries)))
         })
@@ -824,126 +822,4 @@ pub(crate) async fn add_self_recipients(
     recipients.push(from);
 
     Ok(())
-}
-
-/// Returns true if SMTP queue is empty.
-pub(crate) async fn is_queue_empty(context: &Context) -> Result<bool> {
-    let sending_finished = !context.sql.exists("SELECT COUNT(*) FROM smtp2", ()).await?;
-    Ok(sending_finished)
-}
-
-/// Loads the queued mail from `smtp2` table and the list of recipients.
-pub(crate) fn load_queued_mail(
-    transaction: &mut rusqlite::Transaction<'_>,
-    row_id: i64,
-) -> Result<QueuedMail> {
-    let (mut queued_mail, encryption_fingerprints) = transaction
-        .query_row_and_then(
-            "
-SELECT display_name,
-       rfc724_mid,
-       mime,
-       should_attach_pubkey,
-       should_compress,
-       should_sign,
-       is_encrypted,
-       shared_secret,
-       encryption_fingerprints,
-       recipients,
-       sent_to,
-       bcc_self
-FROM smtp2 WHERE id = ?
-",
-            (row_id,),
-            |row| {
-                let display_name: String = row.get(0)?;
-                let rfc724_mid: String = row.get(1)?;
-                let raw_message: Vec<u8> = row.get(2)?;
-                let should_attach_pubkey: bool = row.get(3)?;
-                let should_compress: bool = row.get(4)?;
-                let should_sign: bool = row.get(5)?;
-                let is_encrypted: bool = row.get(6)?;
-                let shared_secret: String = row.get(7)?;
-                let encryption_fingerprints: String = row.get(8)?;
-                let encryption_fingerprints: Vec<String> = if encryption_fingerprints.is_empty() {
-                    Vec::new()
-                } else {
-                    encryption_fingerprints
-                        .split(' ')
-                        .map(|s| s.to_string())
-                        .collect()
-                };
-                let recipients: String = row.get(9)?;
-                let recipients: Vec<String> = if recipients.is_empty() {
-                    Vec::new()
-                } else {
-                    recipients.split(' ').map(|s| s.to_string()).collect()
-                };
-                debug_assert!(!recipients.iter().any(|s| s.is_empty()));
-                let sent_to: String = row.get(10)?;
-                let sent_to: Vec<String> = if sent_to.is_empty() {
-                    Vec::new()
-                } else {
-                    sent_to.split(' ').map(|s| s.to_string()).collect()
-                };
-                let bcc_self: bool = row.get(11)?;
-
-                let encryption = match (
-                    is_encrypted,
-                    shared_secret.is_empty(),
-                    encryption_fingerprints.is_empty(),
-                ) {
-                    (false, true, true) => mimefactory::QueuedEncryption::No,
-                    (true, false, true) => {
-                        mimefactory::QueuedEncryption::Symmetric { shared_secret }
-                    }
-                    (true, true, _) => mimefactory::QueuedEncryption::Asymmetric {
-                        // Public keys are loaded below based on the encryption fingerprints.
-                        encryption_pubkeys: Vec::new(),
-                    },
-                    _ => bail!("Invalid encryption in smtp2 row"),
-                };
-                Ok::<_, anyhow::Error>((
-                    QueuedMail {
-                        raw_message,
-                        display_name,
-                        rfc724_mid,
-                        encryption,
-                        should_attach_pubkey,
-                        should_compress,
-                        should_sign,
-                        recipients,
-                        sent_to,
-                        bcc_self,
-                    },
-                    encryption_fingerprints,
-                ))
-            },
-        )
-        .with_context(|| format!("Failed to select row {row_id} from smtp2 table"))?;
-
-    if let mimefactory::QueuedEncryption::Asymmetric {
-        ref mut encryption_pubkeys,
-    } = queued_mail.encryption
-    {
-        for fingerprint in encryption_fingerprints {
-            let public_key_bytes: Option<Vec<u8>> = transaction
-                .query_row(
-                    "SELECT public_key FROM public_keys WHERE fingerprint=?",
-                    (fingerprint,),
-                    |row| {
-                        let bytes: Vec<u8> = row.get(0)?;
-                        Ok(bytes)
-                    },
-                )
-                .optional()
-                .context("Failed to select public key by fingerprint")?;
-            if let Some(public_key_bytes) = public_key_bytes {
-                let public_key = SignedPublicKey::from_slice(&public_key_bytes)?;
-                encryption_pubkeys.push(public_key);
-            }
-        }
-    }
-
-    Ok(queued_mail)
 }
