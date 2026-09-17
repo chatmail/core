@@ -421,7 +421,6 @@ def test_dont_move_sync_msgs(acf, direct_imap):
     addr, password = acf.get_credentials()
     ac1 = acf.get_unconfigured_account()
     ac1.set_config("bcc_self", "1")
-    ac1.set_config("fix_is_chatmail", "1")
     ac1.add_or_update_transport({"addr": addr, "password": password})
     ac1.start_io()
     ac1_direct_imap = direct_imap(ac1)

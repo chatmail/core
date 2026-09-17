@@ -6,7 +6,6 @@ mod tests {
 
     use crate::chat;
     use crate::chat::send_text_msg;
-    use crate::config::Config;
     use crate::message::Message;
     use crate::mimeparser::SystemMessage;
     use crate::receive_imf::receive_imf;
@@ -61,7 +60,6 @@ Sent with my Delta Chat Messenger: https://delta.chat";
     async fn test_chatmail_can_send_unencrypted() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let bob = &tcm.bob().await;
-        bob.set_config_bool(Config::IsChatmail, true).await?;
         bob.allow_unencrypted().await?;
         let bob_chat_id = receive_imf(
             bob,

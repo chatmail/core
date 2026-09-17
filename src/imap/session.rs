@@ -111,11 +111,6 @@ impl Session {
         self.capabilities.can_metadata
     }
 
-    // Returns true if IMAP server has `XCHATMAIL` capability.
-    pub(crate) fn is_chatmail(&self) -> bool {
-        self.capabilities.is_chatmail
-    }
-
     /// Prefetch `n_uids` messages starting from `uid_next`. Returns a list of fetch results in the
     /// order of ascending UIDs.
     #[expect(clippy::arithmetic_side_effects)]

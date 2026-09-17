@@ -490,17 +490,6 @@ pub(crate) async fn configure(
 
         progress!(ctx, 900);
 
-        let is_configured = ctx.is_configured().await?;
-        if !ctx.get_config_bool(Config::FixIsChatmail).await? {
-            if imap_session.is_chatmail() {
-                ctx.sql.set_raw_config("is_chatmail", Some("1")).await?;
-            } else if !is_configured {
-                // Reset the setting that may have been set
-                // during failed configuration.
-                ctx.sql.set_raw_config("is_chatmail", Some("0")).await?;
-            }
-        }
-
         // Drop the imap connection explicitly
         // to make sure that it's not forgotten in a future refactoring
         drop(imap_session);

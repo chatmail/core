@@ -514,7 +514,6 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
     };
 
     maybe_broadcast_reactions(ctx).await.log_err(ctx).ok();
-    maybe_send_stats(ctx).await.log_err(ctx).ok();
 
     session
         .update_metadata(ctx)
@@ -526,6 +525,8 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
             "Transport {transport_id}: Failed to register push token: {err:#}."
         );
     }
+
+    maybe_send_stats(ctx).await.log_err(ctx).ok();
 
     let session = fetch_idle(ctx, imap, session).await?;
     Ok(session)
