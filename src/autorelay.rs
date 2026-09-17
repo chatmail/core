@@ -39,16 +39,22 @@ const AUTOMATIC_ADDITION_DEBOUNCE_SECONDS: i64 = 60 * 60; // one hour
 /// How long we ignore a relay candidate after failing to connect to it:
 const BACKOFF_PERIOD_FOR_NOT_WORKING_RELAY: i64 = 60 * 60 * 24 * 7; // one week
 
+/// The list of relays to which we onboard
+/// if no other relays are provided via QR codes.
+/// Please keep this list alphabetically sorted.
 const DEFAULT_RELAY_CANDIDATES: &[&str] = &[
     "chat.adminforge.de",
-    "tarpit.fun",
-    "sweetfern.net",
+    "chat.feld.me",
     "chat.nuvon.app",
-    "nchrcht.la10cy.net",
-    "chat.sus.fr",
     "chat.tinydispatch.org",
-    "chtml.ca",
+    "chat.vim.wtf",
     "chatmail.uk",
+    "chtml.ca",
+    "mailchat.pl",
+    "nchrcht.la10cy.net",
+    "nine.testrun.org",
+    "sweetfern.net",
+    "tarpit.fun",
 ];
 
 pub(crate) async fn init_transports_inner(

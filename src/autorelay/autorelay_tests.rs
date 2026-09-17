@@ -28,7 +28,7 @@ async fn test_init_transports_basic() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_init_transports_use_extra_addrs() -> Result<()> {
+async fn test_init_transports_use_relays_from_qr() -> Result<()> {
     let t = &TestContext::new().await;
 
     let skip_network = true;
