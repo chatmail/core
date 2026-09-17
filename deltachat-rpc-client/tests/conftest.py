@@ -180,9 +180,6 @@ class DirectImap:
 class IdleManager:
     def __init__(self, direct_imap) -> None:
         self.direct_imap = direct_imap
-        # fetch latest messages before starting idle so that it only
-        # returns messages that arrive anew
-        self.direct_imap.conn.fetch("1:*")
         self.direct_imap.conn.idle.start()
 
     def check(self, timeout=None) -> list[bytes]:
