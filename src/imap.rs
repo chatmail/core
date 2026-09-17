@@ -452,7 +452,7 @@ impl Imap {
 
         // Mark expired messages for deletion. Note that `delete_expired_imap_messages` is
         // not well optimized and should not be called before fetching.
-        delete_expired_imap_messages(context, session.transport_id(), session.is_chatmail())
+        delete_expired_imap_messages(context, session.transport_id())
             .await
             .context("delete_expired_imap_messages")?;
 
