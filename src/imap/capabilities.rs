@@ -25,9 +25,6 @@ pub(crate) struct Capabilities {
     /// <https://tools.ietf.org/html/rfc4978>
     pub can_compress: bool,
 
-    /// True if the server advertises the legacy `XDELTAPUSH` capability.
-    pub has_xdeltapush: bool,
-
     /// True if the server has an XCHATMAIL capability
     /// indicating that it is a <https://github.com/deltachat/chatmail> server.
     ///
