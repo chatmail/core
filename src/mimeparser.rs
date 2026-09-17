@@ -2540,19 +2540,18 @@ async fn handle_ndn(
     for msg_id in msg_ids {
         let mut message = Message::load_from_db(context, msg_id).await?;
         let chat = Chat::load_from_db(context, message.chat_id).await?;
-        if chat.typ == constants::Chattype::OutBroadcast {
-            continue;
+        if chat.typ == constants::Chattype::Single {
+            let aggregated_error = message
+                .error
+                .as_ref()
+                .map(|err| format!("{err}\n\n{err_msg}"));
+            set_msg_failed(
+                context,
+                &mut message,
+                aggregated_error.as_ref().unwrap_or(err_msg),
+            )
+            .await?;
         }
-        let aggregated_error = message
-            .error
-            .as_ref()
-            .map(|err| format!("{err}\n\n{err_msg}"));
-        set_msg_failed(
-            context,
-            &mut message,
-            aggregated_error.as_ref().unwrap_or(err_msg),
-        )
-        .await?;
     }
 
     Ok(())
