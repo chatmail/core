@@ -726,6 +726,7 @@ async fn test_resend_after_ndn() -> Result<()> {
     Ok(())
 }
 
+// an NDN in a group does not make the whole message as failed
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_parse_ndn_group_msg() -> Result<()> {
     let t = TestContext::new().await;
@@ -758,16 +759,13 @@ async fn test_parse_ndn_group_msg() -> Result<()> {
 
     let msg = Message::load_from_db(&t, msg_id).await?;
 
-    assert_eq!(msg.state, MessageState::OutFailed);
+    assert_eq!(msg.state, MessageState::OutDelivered);
 
     let msgs = chat::get_chat_msgs(&t, msg.chat_id).await?;
     assert!(matches!(
         *msgs.last().unwrap(),
         ChatItem::Message { msg_id } if msg_id == msg.id
     ));
-
-    t.assert_warn("Delivery Status Notification (Failure)")
-        .await;
 
     Ok(())
 }
