@@ -1,42 +1,140 @@
 use std::time::Duration;
 
 use super::*;
-use crate::test_utils::TestContext;
+use crate::test_utils::{TestContext, TestContextManager};
 use crate::tools::SystemTime;
 
+/// Tests that the default relays are candidates without a row in the table.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_load_relay_candidates_single() -> Result<()> {
+async fn test_triable_relay_candidates_defaults() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.unconfigured().await;
+    let now = time();
+
+    assert!(DEFAULT_RELAY_CANDIDATES.is_sorted());
+    let mut candidates = triable_relay_candidates(t, now).await?;
+    candidates.sort();
+    assert_eq!(candidates, DEFAULT_RELAY_CANDIDATES);
+
+    let tried = DEFAULT_RELAY_CANDIDATES[0];
+    save_relay_candidates(t, &[tried], now).await?;
+    let candidates = triable_relay_candidates(t, now).await?;
+    assert_eq!(candidates.len(), DEFAULT_RELAY_CANDIDATES.len() - 1);
+    assert!(!candidates.contains(&tried.to_string()));
+
+    Ok(())
+}
+
+/// Tests that a transport is added on a candidate from the given addresses.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_add_transport_from_candidates() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.unconfigured().await;
+    mark_defaults_tried(t, time()).await?;
+    let addrs_from_qr = [
+        "alice@example.org".to_string(),
+        "bob@example.org".to_string(),
+    ];
+    let skip_network = true;
+    add_relay_candidates(t, &addrs_from_qr).await?;
+    add_transport_from_candidates(t, skip_network).await?;
+
+    let transports = t.list_transports().await?;
+    assert_eq!(transports.len(), 1);
+    assert!(transports[0].addr.ends_with("@example.org"));
+    let untried = untried_relay_candidates(t).await?;
+    assert_eq!(untried, ["example.org"]);
+
+    Ok(())
+}
+
+/// Tests correct add_transport_from_candidates error handling.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_add_transport_from_candidates_failure() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.unconfigured().await;
+    mark_defaults_tried(t, time()).await?;
+    save_relay_candidates(t, &["bad host", "worse host"], 0).await?;
+
+    let skip_network = false;
+    let err = add_transport_from_candidates(t, skip_network)
+        .await
+        .unwrap_err();
+    assert!(format!("{err:#}").contains("Bad email-address"));
+    assert!(!t.is_configured().await?);
+    let untried = untried_relay_candidates(t).await?;
+    assert_eq!(untried, ["bad host", "worse host"]);
+    t.assert_warns_or_errors(&[
+        "Failed to add relay bad host",
+        "Failed to add relay worse host",
+    ])
+    .await;
+
+    Ok(())
+}
+
+async fn untried_relay_candidates(t: &TestContext) -> Result<Vec<String>> {
+    t.sql
+        .query_map_vec(
+            "SELECT host FROM relay_candidates WHERE last_tried=0 ORDER BY host",
+            (),
+            |row| Ok(row.get(0)?),
+        )
+        .await
+}
+
+async fn save_relay_candidates(t: &TestContext, hosts: &[&str], last_tried: i64) -> Result<()> {
+    t.sql
+        .transaction(|tx| {
+            for host in hosts {
+                save_relay_candidate(tx, host, last_tried)?;
+            }
+            Ok(())
+        })
+        .await
+}
+
+/// Keeps the default relays out of `triable_relay_candidates()`.
+async fn mark_defaults_tried(t: &TestContext, now: i64) -> Result<()> {
+    save_relay_candidates(t, DEFAULT_RELAY_CANDIDATES, now).await
+}
+
+/// Tests that saving a candidate overwrites its stored timestamp.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_save_relay_candidate() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.unconfigured().await;
+    let now = time();
+
+    for last_tried in [0, now, 0] {
+        t.sql
+            .transaction(|tx| save_relay_candidate(tx, "relay.example", last_tried))
+            .await?;
+        let stored: Option<i64> = t
+            .sql
+            .query_get_value(
+                "SELECT last_tried FROM relay_candidates WHERE host=?",
+                ("relay.example",),
+            )
+            .await?;
+        assert_eq!(stored, Some(last_tried));
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_triable_relay_candidates_single() -> Result<()> {
     let t = &TestContext::new_alice().await;
     enable_config(t).await;
     let now = time();
 
-    t.sql.execute("DELETE FROM relay_candidates", ()).await?;
+    mark_defaults_tried(t, now).await?;
 
-    // This host should be returned by load_relay_candidates():
-    t.sql
-        .execute(
-            "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
-            ("never_tried.example", 0),
-        )
-        .await?;
+    save_relay_candidates(t, &["never_tried.example", "example.org"], 0).await?;
+    save_relay_candidates(t, &["recent.example"], now).await?;
 
-    // This host was recently tried and should not be returned:
-    t.sql
-        .execute(
-            "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
-            ("recent.example", now),
-        )
-        .await?;
-
-    // This host is already in use (alice@example.org) and should not be returned:
-    t.sql
-        .execute(
-            "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
-            ("example.org", 0),
-        )
-        .await?;
-
-    let candidates = load_relay_candidates(t, now).await?;
+    let candidates = triable_relay_candidates(t, now).await?;
 
     assert_eq!(candidates, vec!["never_tried.example".to_string()]);
 
@@ -44,22 +142,15 @@ async fn test_load_relay_candidates_single() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_load_relay_candidates_multiple() -> Result<()> {
+async fn test_triable_relay_candidates_multiple() -> Result<()> {
     let t = &TestContext::new().await;
     enable_config(t).await;
     let now = time();
 
-    t.sql.execute("DELETE FROM relay_candidates", ()).await?;
-    for host in ["a.example", "b.example", "c.example"] {
-        t.sql
-            .execute(
-                "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
-                (host, 0),
-            )
-            .await?;
-    }
+    mark_defaults_tried(t, now).await?;
+    save_relay_candidates(t, &["a.example", "b.example", "c.example"], 0).await?;
 
-    let mut candidates = load_relay_candidates(t, now).await?;
+    let mut candidates = triable_relay_candidates(t, now).await?;
     candidates.sort();
 
     assert_eq!(
@@ -160,13 +251,8 @@ async fn test_maybe_add_additional_relays_add_one() -> Result<()> {
     enable_config(t).await;
     let now = time();
 
-    t.sql.execute("DELETE FROM relay_candidates", ()).await?;
-    t.sql
-        .execute(
-            "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
-            ("relay.example", 0),
-        )
-        .await?;
+    mark_defaults_tried(t, now).await?;
+    save_relay_candidates(t, &["relay.example"], 0).await?;
 
     let transports_before = t.count_transports().await?;
 
@@ -189,15 +275,8 @@ async fn test_maybe_add_additional_relays_add_multiple() -> Result<()> {
     enable_config(t).await;
     let now = time();
 
-    t.sql.execute("DELETE FROM relay_candidates", ()).await?;
-    for host in ["a.example", "b.example", "c.example", "d.example"] {
-        t.sql
-            .execute(
-                "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
-                (host, 0),
-            )
-            .await?;
-    }
+    mark_defaults_tried(t, now).await?;
+    save_relay_candidates(t, &["a.example", "b.example", "c.example", "d.example"], 0).await?;
 
     let skip_network = true;
     let relay_added = maybe_add_additional_relays_inner(t, skip_network).await?;
@@ -218,14 +297,9 @@ async fn test_maybe_add_additional_relays_failure() -> Result<()> {
     enable_config(t).await;
     let now = time();
 
-    t.sql.execute("DELETE FROM relay_candidates", ()).await?;
+    mark_defaults_tried(t, now).await?;
     for i in 1..10 {
-        t.sql
-            .execute(
-                "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
-                (format!("{i}.invalid.example"), 0),
-            )
-            .await?;
+        save_relay_candidates(t, &[format!("{i}.invalid.example").as_str()], 0).await?;
     }
 
     let transports_before = t.count_transports().await?;
@@ -254,7 +328,7 @@ async fn test_maybe_add_additional_relays_failure() -> Result<()> {
 
     // ...but not all, because there might be many relay candidates
     // and we don't want to try all of them in a single call:
-    assert_eq!(load_relay_candidates(t, now).await?.is_empty(), false);
+    assert_eq!(triable_relay_candidates(t, now).await?.is_empty(), false);
 
     t.assert_warns_or_errors(&[
         "DNS lookup with memory cache failure",

@@ -13,6 +13,7 @@ use serde::Deserialize;
 
 use crate::autorelay::login_param_from_host;
 use crate::config::Config;
+use crate::configure::MAX_RELAYS;
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::key::Fingerprint;
@@ -500,7 +501,8 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
             addrs.push(normalize_address(primary_addr)?);
         };
         if let Some(secondary_addrs_raw) = param.get("r") {
-            for secondary_address in secondary_addrs_raw.split(',') {
+            let max_secondary = MAX_RELAYS.saturating_sub(addrs.len());
+            for secondary_address in secondary_addrs_raw.split(',').take(max_secondary) {
                 addrs.push(normalize_address(secondary_address)?)
             }
         }
