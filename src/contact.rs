@@ -43,6 +43,9 @@ use crate::{chat, chatlist_events, ensure_and_debug_assert, stock_str};
 /// Time during which a contact is considered as seen recently.
 const SEEN_RECENTLY_SECONDS: i64 = 600;
 
+/// If "seen recently" is older, the contact is marked as potentially stale.
+const CONTACT_STALE_SECONDS: i64 = 90 * 24 * 60 * 60;
+
 /// Contact ID, including reserved IDs.
 ///
 /// Some contact IDs are reserved to identify special contacts.  This
@@ -729,6 +732,12 @@ impl Contact {
     #[expect(clippy::arithmetic_side_effects)]
     pub fn was_seen_recently(&self) -> bool {
         time() - self.last_seen <= SEEN_RECENTLY_SECONDS
+    }
+
+    /// Returns `true` if this contact was not seen for a long time.
+    #[expect(clippy::arithmetic_side_effects)]
+    pub fn is_stale(&self) -> bool {
+        time() - self.last_seen > CONTACT_STALE_SECONDS
     }
 
     /// Check if a contact is blocked.

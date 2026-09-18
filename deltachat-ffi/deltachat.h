@@ -5122,6 +5122,23 @@ int             dc_contact_was_seen_recently (const dc_contact_t* contact);
 
 
 /**
+ * Check if the contact was not seen a long time ago.
+ *
+ * The UI shall highlight these contacts,
+ * draw a orange green dot on the avatars of the user,
+ * and show a hint in the contact's profile.
+ *
+ * DC_CONTACT_ID_SELF and other special contact IDs are defined as never been stale (they should not get a dot).
+ * To get the time a contact was seen, use dc_contact_get_last_seen().
+ *
+ * @memberof dc_contact_t
+ * @param contact The contact object.
+ * @return 1=contact seen recently, 0=contact not seen recently.
+ */
+int             dc_contact_is_stale (const dc_contact_t* contact)
+
+
+/**
  * Check if a contact is blocked.
  *
  * To block or unblock a contact, use dc_block_contact().
