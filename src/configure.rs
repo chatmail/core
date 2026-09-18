@@ -31,7 +31,7 @@ use crate::login_param::EnteredCertificateChecks;
 pub use crate::login_param::EnteredLoginParam;
 use crate::net::proxy::ProxyConfig;
 use crate::provider::{self, Protocol, Socket};
-use crate::qr::{login_param_from_account_qr, login_param_from_login_qr};
+use crate::qr::{Qr, check_qr, login_param_from_account_qr, login_param_from_login_qr};
 use crate::smtp::Smtp;
 use crate::sync::Sync::Nosync;
 use crate::tools::time;
@@ -40,7 +40,7 @@ use crate::transport::{
     ConnectionCandidate, delete_transport_row, maybe_update_sending_transport,
     purge_transport_caches, send_sync_transports, transport_addrs,
 };
-use crate::{EventType, stock_str};
+use crate::{EventType, autorelay, stock_str};
 
 /// Maximum number of relays.
 ///
@@ -185,6 +185,62 @@ impl Context {
             }
             return result;
         }
+        self.start_io().await;
+        Ok(())
+    }
+
+    /// Adds an initial transport on a randomly chosen chatmail relay
+    /// and lets the profile add further ones in the background.
+    ///
+    /// A `DCACCOUNT:` or `DCLOGIN:` `qr` code adds a single transport
+    /// while securejoin codes add the inviter's relays to the candidates.
+    ///
+    /// Does nothing if the profile already has a transport.
+    pub async fn init_transports(&self, qr: Option<&str>) -> Result<()> {
+        if self.is_configured().await? {
+            return Ok(());
+        }
+        if let Some(qr) = qr {
+            match check_qr(self, qr).await? {
+                Qr::Account { .. } | Qr::Login { .. } => {
+                    return self.add_transport_from_qr(qr).await;
+                }
+                Qr::AskVerifyContact { addrs, .. }
+                | Qr::AskVerifyGroup { addrs, .. }
+                | Qr::AskJoinBroadcast { addrs, .. } => {
+                    autorelay::add_relay_candidates(self, &addrs).await?
+                }
+                _ => bail!("QR code does not contain a relay"),
+            }
+        }
+
+        let cancel_channel = self.alloc_ongoing().await?;
+        let skip_network = false;
+        let res = autorelay::add_transport_from_candidates(self, skip_network)
+            .race(cancel_channel.recv().map(|_| Err(format_err!("Canceled"))))
+            .await;
+        self.free_ongoing().await;
+
+        let configured = self.is_configured().await?;
+        match res {
+            Ok(()) => {}
+            Err(err) if configured => {
+                warn!(
+                    self,
+                    "Onboarding interrupted after adding a transport: {err:#}."
+                );
+            }
+            Err(err) => {
+                let error_msg = stock_str::configuration_failed(self, &format!("{err:#}"));
+                self.emit_event(EventType::ConfigureProgress {
+                    progress: 0,
+                    comment: Some(error_msg.clone()),
+                });
+                bail!(error_msg);
+            }
+        }
+        self.set_config_bool(Config::Autorelay, true).await?;
+        emit_progress(self, 1000);
         self.start_io().await;
         Ok(())
     }
@@ -685,6 +741,28 @@ mod tests {
             event,
             EventType::ConfigureProgress { progress: 0, .. }
         ));
+
+        Ok(())
+    }
+
+    /// Tests that init_transports() fails on a bad code
+    /// and does nothing on a profile that already has a transport.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_init_transports() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let t = &tcm.unconfigured().await;
+        assert!(t.init_transports(Some("not a qr code")).await.is_err());
+        assert!(!t.is_configured().await?);
+
+        let alice = &tcm.alice().await;
+        let invite = "openpgp4fpr:79252762C34C5096AF57958F4FC3D21A81B0F0A7#a=cli%40invite.example&i=TbnwJ6lSvD5&s=0ejvbdFSQxB";
+        alice.init_transports(Some(invite)).await?;
+        let candidates = alice
+            .sql
+            .count("SELECT COUNT(*) FROM relay_candidates", ())
+            .await?;
+        assert_eq!(candidates, 0);
+        assert_eq!(alice.count_transports().await?, 1);
 
         Ok(())
     }

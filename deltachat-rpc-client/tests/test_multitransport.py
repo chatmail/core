@@ -24,6 +24,12 @@ def wait_for_imap_message(imap):
         time.sleep(1)
 
 
+def test_init_transports(acf):
+    account = acf.get_unconfigured_account()
+    account.init_transports(acf.get_account_qr())
+    assert len(account.list_transports()) == 1
+
+
 def test_add_second_address(acf) -> None:
     account = acf.new_configured_account()
     assert len(account.list_transports()) == 1

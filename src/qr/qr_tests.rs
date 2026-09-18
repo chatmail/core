@@ -361,6 +361,23 @@ async fn test_decode_openpgp_secure_join() -> Result<()> {
         bail!("Wrong QR code type");
     }
 
+    // A bad invite code must not be able to steer us onto arbitrarily many relays.
+    let relays: Vec<String> = (0..20).map(|i| format!("cli%40r{i}.example.org")).collect();
+    let qr = check_qr(
+        &ctx.ctx,
+        &format!(
+            "openpgp4fpr:79252762C34C5096AF57958F4FC3D21A81B0F0A7#a=cli%40deltachat.de&r={}&i=TbnwJ6lSvD5&s=0ejvbdFSQxB",
+            relays.join(",")
+        ),
+    )
+    .await?;
+
+    if let Qr::AskVerifyContact { addrs, .. } = qr {
+        assert_eq!(addrs.len(), MAX_RELAYS);
+    } else {
+        bail!("Wrong QR code type");
+    }
+
     Ok(())
 }
 
