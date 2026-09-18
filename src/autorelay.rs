@@ -2,8 +2,8 @@
 //!
 //! Chatmail relays create an account on first login,
 //! so a profile can add further transports on its own without user interaction.
-//! Candidate hosts come from the `relay_candidates` table,
-//! which migrations seed with a list of known chatmail relays.
+//! Candidate hosts come from the `relay_candidates` table
+//! as well as the [`DEFAULT_RELAY_CANDIDATES`] list.
 //!
 //! Status of implementation:
 //! Additions are attempted right before going into IMAP IDLE,
@@ -13,6 +13,7 @@
 //! [`Config::AutorelayFinished`] is set and nothing is ever added again,
 //! so deleting a transport later does not pull in a replacement.
 
+use std::collections::BTreeSet;
 use std::pin::Pin;
 
 use anyhow::Result;
@@ -165,13 +166,7 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
             candidates.len(),
         );
 
-        context
-            .sql
-            .execute(
-                "UPDATE relay_candidates SET last_tried=? WHERE host=?",
-                (now, host),
-            )
-            .await?;
+        set_relay_candidate_last_tried(context, host, now).await?;
         let param = login_param_from_host(host);
         let res = crate::configure::configure(context, &param, skip_network).await;
         if let Err(e) = res {
@@ -188,37 +183,54 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
     Ok(relay_added)
 }
 
+async fn set_relay_candidate_last_tried(
+    context: &Context,
+    host: &str,
+    now: i64,
+) -> Result<(), anyhow::Error> {
+    context
+        .sql
+        .execute(
+            "INSERT OR REPLACE INTO relay_candidates_last_tried(host, last_tried) VALUES(?, ?)",
+            (host, now),
+        )
+        .await?;
+    Ok(())
+}
+
 async fn load_relay_candidates(context: &Context, now: i64) -> Result<Vec<String>> {
-    let cutoff_timestamp = now.saturating_sub(BACKOFF_PERIOD_FOR_NOT_WORKING_RELAY);
-    let candidates: Vec<String> = context
+    let res = context
         .sql
         .transaction(|transaction| {
-            // Add the default relays if they are not in the database yet
-            let mut statement =
-                transaction.prepare("INSERT OR IGNORE INTO relay_candidates(host) VALUES (?)")?;
-            for host in DEFAULT_RELAY_CANDIDATES {
-                statement.execute((host,))?;
-            }
+            let mut candidates: BTreeSet<String> =
+                transaction.query_map_collect("SELECT host FROM relay_candidates", (), |row| {
+                    Ok(row.get(0)?)
+                })?;
 
-            transaction.query_map_vec(
-                // This also selects candidates which have last_tried in the future,
-                // essentially treating them as never tried,
-                // so if some timestamp far in the future is accidentally stored,
-                // we are not stuck never trying the candidate.
-                // After trying the candidate, last_tried will be corrected to the current time.
-                "SELECT host FROM relay_candidates WHERE (last_tried<? OR last_tried>?)
-                AND NOT EXISTS (
-                    SELECT 1
-                    FROM transports
-                    WHERE substr(addr, instr(addr, '@') + 1) = host
-                )",
+            candidates.extend(DEFAULT_RELAY_CANDIDATES.iter().map(|s| s.to_string()));
+
+            let cutoff_timestamp = now.saturating_sub(BACKOFF_PERIOD_FOR_NOT_WORKING_RELAY);
+            // This does not select candidates which have last_tried in the future,
+            // essentially treating them as never tried,
+            // so if some timestamp far in the future is accidentally stored,
+            // we are not stuck never trying the candidate.
+            // After trying the candidate, last_tried will be corrected to the current time.
+            let exclude: BTreeSet<String> = transaction.query_map_collect(
+                "SELECT host FROM relay_candidates_last_tried WHERE (last_tried>=? AND last_tried<=?)
+                UNION
+                SELECT substr(addr, instr(addr, '@') + 1) FROM transports",
                 (cutoff_timestamp, now),
-                |row| Ok(row.get::<_, String>(0)?),
-            )
+                |row| Ok(row.get(0)?),
+            )?;
+
+            Ok(candidates
+                .difference(&exclude)
+                .map(|s| s.to_string())
+                .collect::<Vec<String>>())
         })
         .await?;
 
-    Ok(candidates)
+    Ok(res)
 }
 
 pub(crate) fn login_param_from_host(host: &str) -> EnteredLoginParam {
