@@ -139,6 +139,18 @@ class Account:
         """Add a new transport using a QR code."""
         yield self._rpc.add_transport_from_qr.future(self.id, qr)
 
+    @futuremethod
+    def init_transports(self, qr: Optional[str] = None):
+        """Add an initial transport on a randomly chosen chatmail relay.
+
+        The profile then adds further ones in the background.
+        A ``DCACCOUNT:`` or ``DCLOGIN:`` ``qr`` code adds a single transport
+        while securejoin codes add the inviter's relays to the candidates.
+
+        Does nothing if the profile already has a transport.
+        """
+        yield self._rpc.init_transports.future(self.id, qr)
+
     def delete_transport(self, addr: str):
         """Delete a transport."""
         self._rpc.delete_transport(self.id, addr)
