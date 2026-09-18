@@ -95,11 +95,11 @@ pub(crate) async fn init_transports_inner(
         let relays_receiver = relays_receiver.clone();
         let last_error = last_error.clone();
         join_set.spawn(async move {
-            loop {
-                // Take a lock in order to prevent other relay management code
-                // from running simultaneously
-                let _lock = context.background_task_lock.read().await;
+            // Take a lock in order to prevent other relay management code
+            // from running simultaneously
+            let _lock = context.background_task_lock.read().await;
 
+            loop {
                 let Ok(host) = relays_receiver.try_recv() else {
                     return false; // No more relays to try
                 };
@@ -118,6 +118,7 @@ pub(crate) async fn init_transports_inner(
                             .log_err(&context)
                             .ok();
                         info!(context, "Target number of transports reached.");
+                        context.restart_io_if_running().await;
                     }
                     return true; // Success
                 }
