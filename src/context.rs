@@ -568,11 +568,9 @@ impl Context {
         self.scheduler.maybe_network().await;
     }
 
-    /// Returns maximum number of recipients a single email can be sent to.
-    pub(crate) async fn get_max_smtp_rcpt_to(&self) -> Result<u32> {
-        let Some((transport_id, param)) = ConfiguredLoginParam::load(self).await? else {
-            bail!("Not configured");
-        };
+    /// Returns maximum number of recipients a single email can be sent to
+    /// over the transport `transport_id`, which sends from `addr`.
+    pub(crate) async fn get_max_smtp_rcpt_to(&self, transport_id: u32, addr: &str) -> Result<u32> {
         let metadata_limit = self
             .metadata
             .read()
@@ -582,9 +580,7 @@ impl Context {
         if let Some(limit) = metadata_limit {
             return Ok(limit);
         }
-        if let Some(limit) =
-            crate::provider::legacy_settings_for_addr(&param.addr)?.max_smtp_rcpt_to
-        {
+        if let Some(limit) = crate::provider::legacy_settings_for_addr(addr)?.max_smtp_rcpt_to {
             return Ok(limit);
         }
         Ok(constants::DEFAULT_MAX_SMTP_RCPT_TO)

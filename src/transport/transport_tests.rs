@@ -62,7 +62,7 @@ async fn test_save_load_login_param() -> Result<()> {
         expected_param
     );
     assert_eq!(t.is_configured().await?, true);
-    let (_transport_id, loaded) = ConfiguredLoginParam::load(&t).await?.unwrap();
+    let (_transport_id, loaded) = ConfiguredLoginParam::load_all(&t).await?.remove(0);
     assert_eq!(param, loaded);
 
     let formatted = format!(" {loaded}");
@@ -75,7 +75,7 @@ async fn test_save_load_login_param() -> Result<()> {
     // Legacy ConfiguredImapCertificateChecks config is ignored
     t.set_config(Config::ConfiguredImapCertificateChecks, Some("999"))
         .await?;
-    assert!(ConfiguredLoginParam::load(&t).await.is_ok());
+    assert!(ConfiguredLoginParam::load_all(&t).await.is_ok());
 
     // Test that we don't panic on unknown ConfiguredImapCertificateChecks values.
     let wrong_param = expected_param.replace("Strict", "Stricct");
@@ -83,7 +83,7 @@ async fn test_save_load_login_param() -> Result<()> {
     t.sql
         .execute("UPDATE transports SET configured_param=?", (wrong_param,))
         .await?;
-    assert!(ConfiguredLoginParam::load(&t).await.is_err());
+    assert!(ConfiguredLoginParam::load_all(&t).await.is_err());
 
     Ok(())
 }
