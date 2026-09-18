@@ -98,6 +98,8 @@ pub(crate) async fn init_transports_inner(
             // Take a lock in order to prevent other relay management code
             // from running simultaneously
             let _lock = context.background_task_lock.read().await;
+            // TODO add a back-channel here,
+            // and then the surrounding function has to wait until all tasks took the lock
 
             loop {
                 let Ok(host) = relays_receiver.try_recv() else {
