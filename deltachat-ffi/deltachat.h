@@ -5135,7 +5135,7 @@ int             dc_contact_was_seen_recently (const dc_contact_t* contact);
  * @param contact The contact object.
  * @return 1=contact seen recently, 0=contact not seen recently.
  */
-int             dc_contact_is_stale (const dc_contact_t* contact)
+int             dc_contact_is_stale (const dc_contact_t* contact);
 
 
 /**
