@@ -201,7 +201,6 @@ impl Context {
         if self.is_configured().await? {
             bail!("Transports are already initialized");
         }
-        self.stop_io().await;
 
         let mut addrs_from_qr = vec![];
 
@@ -217,6 +216,7 @@ impl Context {
             }
         }
 
+        self.stop_io().await;
         let cancel_channel = self.alloc_ongoing().await?;
 
         let skip_network = false;
