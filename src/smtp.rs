@@ -431,10 +431,16 @@ pub(crate) async fn send_msg_to_smtp(
 
     let mut recipients = queued_mail.recipients.clone();
     if queued_mail.bcc_self {
+        let from_addr = smtp
+            .from
+            .as_ref()
+            .context("No From address available, likely not connected")?
+            .to_string();
         add_self_recipients(
             context,
             &mut recipients,
             queued_mail.encryption.is_encrypted(),
+            from_addr,
         )
         .await
         .context("Failed to add self recipients")?;
@@ -703,7 +709,7 @@ async fn send_mdn_rfc724_mid(
     let body = rendered_msg.message;
 
     if context.get_config_bool(Config::BccSelf).await? {
-        add_self_recipients(context, &mut recipients, encrypted).await?;
+        add_self_recipients(context, &mut recipients, encrypted, from).await?;
     }
     let recipients: Vec<_> = recipients
         .into_iter()
@@ -820,11 +826,11 @@ pub(crate) async fn add_self_recipients(
     context: &Context,
     recipients: &mut Vec<String>,
     encrypted: bool,
+    from: String,
 ) -> Result<()> {
     // Avoid sending unencrypted messages to all transports,
     // chatmail relays won't accept them. Normally the user should have
     // a non-chatmail sending transport to send unencrypted messages.
-    let from = context.get_primary_self_addr().await?;
     if encrypted {
         for addr in context.get_self_addrs().await? {
             if addr != from {
