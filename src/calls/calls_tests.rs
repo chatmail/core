@@ -779,3 +779,13 @@ async fn test_end_text_call() -> Result<()> {
 
     Ok(())
 }
+
+/// Tests that fallback ice servers just carry the Turn one
+#[test]
+fn test_fallback_ice_servers() {
+    let hostnames: Vec<String> = create_fallback_ice_servers()
+        .into_iter()
+        .map(|UnresolvedIceServer::Turn { hostname, .. }| hostname)
+        .collect();
+    assert_eq!(hostnames, ["turn.delta.chat"]);
+}
