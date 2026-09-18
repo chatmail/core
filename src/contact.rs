@@ -737,6 +737,9 @@ impl Contact {
     /// Returns `true` if this contact was not seen for a long time.
     #[expect(clippy::arithmetic_side_effects)]
     pub fn is_stale(&self) -> bool {
+        if self.last_seen == 0 || self.id <= ContactId::LAST_SPECIAL {
+            return false;
+        }
         time() - self.last_seen > CONTACT_STALE_SECONDS
     }
 
