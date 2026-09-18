@@ -5,11 +5,34 @@ use tempfile::tempdir;
 use super::*;
 use crate::chat::{Chat, MuteDuration, get_chat_contacts, get_chat_msgs, send_msg, set_muted};
 use crate::chatlist::Chatlist;
-use crate::constants::Chattype;
+use crate::constants::{Chattype, DEFAULT_MAX_SMTP_RCPT_TO};
 use crate::message::Message;
 use crate::receive_imf::receive_imf;
 use crate::test_utils::{E2EE_INFO_MSGS, TestContext, TestContextManager};
 use crate::tools::{SystemTime, create_outgoing_rfc724_mid};
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_get_max_smtp_rcpt_to() -> Result<()> {
+    let t = TestContext::new().await;
+    assert_eq!(
+        t.get_max_smtp_rcpt_to(2, "alice@example.org").await?,
+        DEFAULT_MAX_SMTP_RCPT_TO
+    );
+
+    for (transport_id, limit) in [(1, 3), (2, 7)] {
+        t.metadata.write().await.insert(
+            transport_id,
+            ServerMetadata {
+                max_smtp_rcpt_to: Some(limit),
+                ..Default::default()
+            },
+        );
+    }
+
+    assert_eq!(t.get_max_smtp_rcpt_to(2, "alice@example.org").await?, 7);
+    assert_eq!(t.get_max_smtp_rcpt_to(1, "alice@example.org").await?, 3);
+    Ok(())
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_wrong_db() -> Result<()> {

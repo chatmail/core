@@ -41,6 +41,9 @@ pub(crate) struct Smtp {
     /// Email address we are sending from.
     from: Option<EmailAddress>,
 
+    /// Transport we are connected to.
+    transport_id: Option<u32>,
+
     /// Timestamp of last successful send/receive network interaction
     /// (eg connect or send succeeded). On initialization and disconnect
     /// it is set to None.
@@ -116,7 +119,10 @@ impl Smtp {
                 )
                 .await
             {
-                Ok(()) => return Ok(()),
+                Ok(()) => {
+                    self.transport_id = Some(transport_id);
+                    return Ok(());
+                }
                 Err(err) => {
                     warn!(
                         context,
@@ -466,6 +472,12 @@ pub(crate) async fn send_msg_to_smtp(
         .context("No From address available, likely not connected")?
         .to_string();
 
+    let transport_id = smtp.transport_id.context("Not connected")?;
+    let chunk_size = context
+        .get_max_smtp_rcpt_to(transport_id, &from_addr)
+        .await?
+        .max(1);
+
     let rendered_mail =
         mimefactory::render_queued_mail(queued_mail, &public_key, &secret_key, from_addr)?;
     let body = rendered_mail.message;
@@ -474,8 +486,6 @@ pub(crate) async fn send_msg_to_smtp(
         context,
         "Try number {retries} to send message {msg_id} (entry {rowid}) over SMTP."
     );
-
-    let chunk_size = context.get_max_smtp_rcpt_to().await?.max(1);
     let mut unsent = recipients_list.as_slice();
     let status = loop {
         let unsent_len = u32::try_from(unsent.len()).context("Too many SMTP recipients")?;
