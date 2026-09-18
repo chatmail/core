@@ -814,7 +814,7 @@ async fn incremental_vacuum(context: &Context) -> Result<()> {
 
 /// Cleanup the account to restore some storage and optimize the database.
 pub async fn housekeeping(context: &Context) -> Result<()> {
-    let Ok(_housekeeping_lock) = context.background_task_lock.try_write() else {
+    let Ok(_housekeeping_lock) = context.background_task_mutex.try_lock() else {
         // Housekeeping is already running in another thread, do nothing.
         return Ok(());
     };

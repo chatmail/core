@@ -232,7 +232,7 @@ pub struct InnerContext {
     /// clients.
     running_state: RwLock<RunningState>,
     /// Lock to prevent running housekeeping or relay management from multiple threads at once.
-    pub(crate) background_task_lock: RwLock<()>,
+    pub(crate) background_task_mutex: Mutex<()>,
 
     /// Mutex to prevent multiple IMAP loops from fetching the messages at once.
     ///
@@ -487,7 +487,7 @@ impl Context {
             blobdir,
             running_state: RwLock::new(Default::default()),
             sql: Sql::new(dbfile),
-            background_task_lock: RwLock::new(()),
+            background_task_mutex: Mutex::new(()),
             fetch_msgs_mutex: Mutex::new(()),
             translated_stockstrings: stockstrings,
             events,
