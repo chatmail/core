@@ -632,10 +632,15 @@ ORDER BY id"
             .await
             .expect("Failed to load queued mail");
         if queued_mail.bcc_self {
+            let from = self
+                .get_primary_self_addr()
+                .await
+                .expect("Cannot get From address");
             smtp::add_self_recipients(
                 &self.ctx,
                 &mut queued_mail.recipients,
                 queued_mail.encryption.is_encrypted(),
+                from,
             )
             .await
             .expect("Failed to add self recipients");
@@ -729,10 +734,15 @@ ORDER BY id"
                 .await
                 .expect("Failed to load queued mail");
             if queued_mail.bcc_self {
+                let from = self
+                    .get_primary_self_addr()
+                    .await
+                    .expect("Cannot get self address");
                 smtp::add_self_recipients(
                     &self.ctx,
                     &mut queued_mail.recipients,
                     queued_mail.encryption.is_encrypted(),
+                    from,
                 )
                 .await
                 .expect("Failed to add self recipients");
