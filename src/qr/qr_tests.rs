@@ -373,16 +373,15 @@ async fn test_decode_openpgp_fingerprint() -> Result<()> {
     let alice_contact = bob.add_or_lookup_contact(alice).await;
     let alice_contact_id = alice_contact.id;
 
+    // OPENPGP4FPR may have an address,
+    // but it is not used anymore since key contacts are introduced.
+    // We lookup the contact only by fingerprint and ignore the address.
     let qr = check_qr(
         bob,
         "OPENPGP4FPR:1234567890123456789012345678901234567890#a=alice@example.org",
     )
     .await?;
-    if let Qr::FprMismatch { contact_id, .. } = qr {
-        assert_ne!(contact_id.unwrap(), alice_contact_id);
-    } else {
-        bail!("Wrong QR code type");
-    }
+    assert_eq!(qr, Qr::FprMismatch { contact_id: None });
 
     let qr = check_qr(
         bob,
@@ -410,6 +409,10 @@ async fn test_decode_openpgp_fingerprint() -> Result<()> {
     Ok(())
 }
 
+/// Tests OPENPGP4FPR QR codes without an email address.
+///
+/// Email address in OPENPGP4FPR QR codes was an extension
+/// used before switch to identifying contacts by fingerprint.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_decode_openpgp_without_addr() -> Result<()> {
     let ctx = TestContext::new().await;
@@ -419,12 +422,7 @@ async fn test_decode_openpgp_without_addr() -> Result<()> {
         "OPENPGP4FPR:1234567890123456789012345678901234567890",
     )
     .await?;
-    assert_eq!(
-        qr,
-        Qr::FprWithoutAddr {
-            fingerprint: "1234 5678 9012 3456 7890\n1234 5678 9012 3456 7890".to_string()
-        }
-    );
+    assert_eq!(qr, Qr::FprMismatch { contact_id: None });
 
     // Test it again with lowercased "openpgp4fpr:" uri scheme
 
@@ -433,12 +431,7 @@ async fn test_decode_openpgp_without_addr() -> Result<()> {
         "openpgp4fpr:1234567890123456789012345678901234567890",
     )
     .await?;
-    assert_eq!(
-        qr,
-        Qr::FprWithoutAddr {
-            fingerprint: "1234 5678 9012 3456 7890\n1234 5678 9012 3456 7890".to_string()
-        }
-    );
+    assert_eq!(qr, Qr::FprMismatch { contact_id: None });
 
     let res = check_qr(&ctx.ctx, "OPENPGP4FPR:12345678901234567890").await;
     assert!(res.is_err());
