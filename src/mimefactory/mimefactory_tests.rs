@@ -307,7 +307,8 @@ async fn test_mdn_create_encrypted() -> Result<()> {
     let mimefactory =
         MimeFactory::from_mdn(&bob, rcvd.from_id, rcvd.rfc724_mid.clone(), vec![]).await?;
     assert!(!mimefactory.will_be_encrypted());
-    let rendered_msg = mimefactory.render(&bob).await?;
+    let bob_addr = bob.get_primary_self_addr().await?;
+    let rendered_msg = mimefactory.render(&bob, &bob_addr).await?;
 
     assert!(!rendered_msg.message.contains("Bob Examplenet"));
     assert!(!rendered_msg.message.contains("Alice Exampleorg"));
@@ -320,7 +321,8 @@ async fn test_mdn_create_encrypted() -> Result<()> {
 
     let mimefactory = MimeFactory::from_mdn(&bob, rcvd.from_id, rcvd.rfc724_mid, vec![]).await?;
     assert!(mimefactory.will_be_encrypted());
-    let rendered_msg = mimefactory.render(&bob).await?;
+    let bob_addr = bob.get_primary_self_addr().await?;
+    let rendered_msg = mimefactory.render(&bob, &bob_addr).await?;
 
     assert!(!rendered_msg.message.contains("Bob Examplenet"));
     assert!(!rendered_msg.message.contains("Alice Exampleorg"));
@@ -363,7 +365,8 @@ async fn test_mdn_autocrypt_throttle() -> Result<()> {
         rcvd: &Message,
     ) -> Result<bool> {
         let mf = MimeFactory::from_mdn(bob, rcvd.from_id, rcvd.rfc724_mid.clone(), vec![]).await?;
-        let rendered_msg = mf.render(bob).await?;
+        let addr = bob.get_primary_self_addr().await?;
+        let rendered_msg = mf.render(bob, &addr).await?;
         let mime = MimeMessage::from_bytes(alice, rendered_msg.message.as_bytes()).await?;
         Ok(mime.autocrypt_fingerprint.is_some())
     }
@@ -644,7 +647,8 @@ async fn test_render_reply() {
     let recipients = mimefactory.recipients();
     assert_eq!(recipients, vec!["charlie@example.net"]);
 
-    let rendered_msg = mimefactory.render(t).await.unwrap();
+    let addr = t.get_primary_self_addr().await.unwrap();
+    let rendered_msg = mimefactory.render(t, &addr).await.unwrap();
 
     let mail = mailparse::parse_mail(rendered_msg.message.as_bytes()).unwrap();
     assert_eq!(

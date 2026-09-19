@@ -389,3 +389,14 @@ def test_background_fetch_no_duplicates(acf, direct_imap, dc):
 
     dc.background_fetch(300)
     assert len(messages_with_text(alice_chat, "hello")) == 1
+
+
+def test_multitransport_mdn(acf):
+    """Test sending an MDN right after configuring two transports."""
+    alice, bob = acf.get_online_accounts(2)
+    alice.add_transport_from_qr(acf.get_account_qr())
+    alice.bring_online()
+    alice.create_chat(bob)
+    bob_msg = bob.create_chat(alice).send_text("Hello!")
+    alice.wait_for_incoming_msg().mark_seen()
+    assert bob.wait_for_event(EventType.MSG_READ).msg_id == bob_msg.id

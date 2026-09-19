@@ -218,15 +218,6 @@ pub(crate) async fn smtp_send(
 
     smtp.connectivity.set_working(context);
 
-    if let Err(err) = smtp
-        .connect_configured(context)
-        .await
-        .context("Failed to open SMTP connection")
-    {
-        smtp.last_send_error = Some(format!("{err:#}"));
-        return SendResult::Retry;
-    }
-
     let send_result = smtp.send(context, recipients, message.as_bytes()).await;
     smtp.last_send_error = send_result.as_ref().err().map(|e| e.to_string());
 
@@ -703,7 +694,12 @@ async fn send_mdn_rfc724_mid(
     } else {
         mimefactory.recipients()
     };
-    let rendered_msg = Box::pin(mimefactory.render(context)).await?;
+    let from = smtp
+        .from
+        .as_ref()
+        .context("No From address, not connected")?
+        .to_string();
+    let rendered_msg = Box::pin(mimefactory.render(context, &from)).await?;
     let body = rendered_msg.message;
 
     if context.get_config_bool(Config::BccSelf).await? {
@@ -771,6 +767,19 @@ async fn send_mdn(context: &Context, smtp: &mut Smtp) -> Result<bool> {
         return Ok(false);
     };
     let (rfc724_mid, contact_id) = msg_row;
+
+    // Connect SMTP after checking that we have an MDN to send,
+    // but before increasing MDN retry counter.
+    // If we don't have an MDN, no need to connect.
+    // If we are offline and cannot connect, it is not a failure of an MDN.
+    if let Err(err) = smtp
+        .connect_configured(context)
+        .await
+        .context("SMTP connection failure while preparing to send MDNs")
+    {
+        smtp.last_send_error = Some(format!("{err:#}"));
+        return Err(err);
+    }
 
     context
         .sql
