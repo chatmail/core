@@ -141,7 +141,7 @@ class Account:
 
     @futuremethod
     def init_transports(self, qr: Optional[str] = None):
-        """Add an initial transport on a randomly chosen chatmail relay.
+        """Add an initial transport on the chatmail relay that answers fastest.
 
         The profile then adds further ones in the background.
         A ``DCACCOUNT:`` or ``DCLOGIN:`` ``qr`` code adds a single transport

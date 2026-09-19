@@ -11,11 +11,13 @@ use deltachat_contact_tools::addr_normalize;
 use rand::distr::{Alphanumeric, SampleString};
 use rand::seq::{IndexedRandom, SliceRandom};
 use rusqlite::Transaction;
+use tokio::task::JoinSet;
 
 use crate::config::{self, Config};
 use crate::configure::{EnteredLoginParam, configure};
 use crate::log::{LogExt, warn};
 use crate::login_param::{EnteredCertificateChecks, EnteredImapLoginParam};
+use crate::net::{connect_tcp, proxy::ProxyConfig};
 use crate::{context::Context, tools::time};
 
 /// The target number of transports.
@@ -57,19 +59,41 @@ pub(crate) async fn add_relay_candidates(context: &Context, addrs: &[String]) ->
 /// All candidates are probed at once with a TCP connection to their HTTPS port
 /// and configured in the order in which the connections complete,
 /// stopping at the first success. Candidates that fail the probe are skipped.
+/// Answering TCP fastest is used as a network proximity measure,
+/// which keeps latency low for initial onboarding,
+/// and it avoids relays that are down or black-holing traffic.
 pub(crate) async fn add_transport_from_candidates(
     context: &Context,
     skip_network: bool,
 ) -> Result<()> {
     let mut candidates = triable_relay_candidates(context, time()).await?;
     candidates.shuffle(&mut rand::rng());
-    let mut last_err = format_err!("No relay candidates");
+    let mut probes = JoinSet::new();
+    let proxy_config = ProxyConfig::load(context).await?;
+    let load_cache = false;
+    for host in candidates {
+        let ctx = context.clone();
+        let proxy_config = proxy_config.clone();
+        probes.spawn(async move {
+            let res = match proxy_config {
+                _ if skip_network => Ok(()),
+                Some(proxy) => proxy.connect(&ctx, &host, 443, load_cache).await.map(drop),
+                None => connect_tcp(&ctx, &host, 443, load_cache).await.map(drop),
+            };
+            (host, res)
+        });
+    }
 
-    // We patiently try each candidate in turn which might take a while
-    // if many hosts are unreachable but eventually succeeds if one candidate works.
+    let mut last_err = format_err!("No relay candidates");
     let mark_as_autorelay = true;
-    for host in &candidates {
-        let param = login_param_from_host(host, mark_as_autorelay);
+    while let Some(res) = probes.join_next().await {
+        let (host, res) = res?;
+        if let Err(err) = res {
+            warn!(context, "Failed to connect to relay {host}: {err:#}.");
+            last_err = err;
+            continue;
+        }
+        let param = login_param_from_host(&host, mark_as_autorelay);
         match configure(context, &param, skip_network).await {
             Ok(()) => {
                 info!(context, "Added a transport on relay {host}.");
