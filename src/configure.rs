@@ -37,8 +37,8 @@ use crate::sync::Sync::Nosync;
 use crate::tools::time;
 use crate::transport::{
     ConfiguredCertificateChecks, ConfiguredLoginParam, ConfiguredServerLoginParam,
-    ConnectionCandidate, delete_transport_row, maybe_update_sending_transport,
-    purge_transport_caches, send_sync_transports, transport_addrs,
+    ConnectionCandidate, delete_transport_row, purge_transport_caches, send_sync_transports,
+    transport_addrs,
 };
 use crate::{EventType, stock_str};
 
@@ -215,7 +215,7 @@ impl Context {
     /// another one is chosen automatically.
     pub async fn delete_transport(&self, addr: &str) -> Result<()> {
         let now = time();
-        let (removed_transport_id, reelected) = self
+        let removed_transport_id = self
             .sql
             .transaction(|transaction| {
                 if transport_addrs(transaction)?.len() <= 1 {
@@ -234,14 +234,9 @@ impl Context {
                 let remove_timestamp = std::cmp::max(now, add_timestamp);
                 let transport_id = delete_transport_row(transaction, addr, remove_timestamp)?
                     .context("Transport disappeared")?;
-                let reelected = maybe_update_sending_transport(transaction)?;
-                Ok((transport_id, reelected))
+                Ok(transport_id)
             })
             .await?;
-        if let Some(new_addr) = reelected {
-            info!(self, "Using transport {new_addr:?} for sending now.");
-            self.sql.uncache_raw_config("configured_addr").await;
-        }
         send_sync_transports(self).await?;
         purge_transport_caches(self, removed_transport_id).await;
         // Restarting all IO also stops the removed transport's IMAP loop.
