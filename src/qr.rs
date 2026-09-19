@@ -838,7 +838,8 @@ pub(crate) async fn login_param_from_account_qr(
         .context("Invalid DCACCOUNT scheme")?;
 
     if !payload.starts_with(HTTPS_SCHEME) {
-        let param = login_param_from_host(payload);
+        let mark_as_autorelay = false;
+        let param = login_param_from_host(payload, mark_as_autorelay);
         return Ok(param);
     }
 

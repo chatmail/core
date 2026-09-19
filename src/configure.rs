@@ -670,7 +670,8 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_early_configure_failure_is_reported() -> Result<()> {
         let t = TestContext::new().await;
-        let mut param = login_param_from_host("example.org");
+        let mark_as_autorelay = false;
+        let mut param = login_param_from_host("example.org", mark_as_autorelay);
 
         // An ongoing process, e.g. a backup import,
         // makes configuration fail without ever contacting a relay.

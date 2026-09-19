@@ -118,7 +118,8 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
                 (now, host),
             )
             .await?;
-        let param = login_param_from_host(host);
+        let mark_as_autorelay = true;
+        let param = login_param_from_host(host, mark_as_autorelay);
         let res = crate::configure::configure(context, &param, skip_network).await;
         if let Err(e) = res {
             warn!(
@@ -158,13 +159,20 @@ async fn load_relay_candidates(context: &Context, now: i64) -> Result<Vec<String
     Ok(candidates)
 }
 
-pub(crate) fn login_param_from_host(host: &str) -> EnteredLoginParam {
+pub(crate) fn login_param_from_host(host: &str, mark_as_autorelay: bool) -> EnteredLoginParam {
     let rng = &mut rand::rng();
     let username = Alphanumeric.sample_string(rng, 9);
     let addr = username + "@" + host;
     let addr = addr_normalize(&addr);
+
+    // `mark_as_autorelay` is a temporary precaution hack
+    // while introducing onboarding on multiple community relays from a list:
+    // though relay operators were asked to get on that list, unexpected things can happen,
+    // and they want to return to allow only manual onboarding.
+    // this is possible by failing on `password_len == 23`.
+
     // 22 * log2(26 * 2 + 10) = 130 bits of entropy
-    let password = Alphanumeric.sample_string(rng, 22);
+    let password = Alphanumeric.sample_string(rng, if mark_as_autorelay { 23 } else { 22 });
 
     EnteredLoginParam {
         addr,
