@@ -2733,7 +2733,8 @@ async fn test_read_receipts_dont_create_chats() -> Result<()> {
         vec![],
     )
     .await?;
-    let rendered_mdn = mdn_mimefactory.render(&bob).await?;
+    let bob_addr = bob.get_primary_self_addr().await?;
+    let rendered_mdn = mdn_mimefactory.render(&bob, &bob_addr).await?;
     let mdn_body = rendered_mdn.message;
 
     // Alice receives the read receipt.
@@ -2768,7 +2769,8 @@ async fn test_read_receipts_dont_unmark_bots() -> Result<()> {
         vec![],
     )
     .await?;
-    let rendered_mdn = mdn_mimefactory.render(bob).await?;
+    let bob_addr = bob.get_primary_self_addr().await?;
+    let rendered_mdn = mdn_mimefactory.render(bob, &bob_addr).await?;
     let mdn_body = rendered_mdn.message;
 
     // Alice receives the read receipt.
