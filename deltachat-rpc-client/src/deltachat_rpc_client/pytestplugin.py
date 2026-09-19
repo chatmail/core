@@ -92,9 +92,10 @@ class RPCAccountFactory:
         """Create a new configured account."""
         account = self.get_unconfigured_account()
         qr = self.get_account_qr()
-        yield account.add_transport_from_qr.future(qr)
+        yield account.init_transports.future(qr)
 
         assert account.is_configured()
+        assert len(account.list_transports()) == 1
         return account
 
     def new_configured_bot(self) -> Bot:

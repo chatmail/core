@@ -632,6 +632,15 @@ CREATE TABLE broadcast_secrets(
 -- Candidate chatmail relays for automatic relay management.
 CREATE TABLE relay_candidates(
     host TEXT PRIMARY KEY NOT NULL,
+    last_tried INTEGER NOT NULL DEFAULT 0 -- Deprecated 2026-09, replaced with separate relay_candidates_last_tried table.
+) STRICT;
+
+-- This table is used for storing the timestamp of the last
+-- connection attempt per chatmail relay candidate.
+-- This table can contain relays that were removed from the list of candidates,
+-- and it does not contain the default relays.
+CREATE TABLE relay_candidates_last_tried(
+    host TEXT PRIMARY KEY NOT NULL,
     last_tried INTEGER NOT NULL DEFAULT 0 -- Timestamp of the last connection attempt.
 ) STRICT;
 

@@ -32,6 +32,12 @@ def test_add_second_address(acf) -> None:
     account.add_transport_from_qr(qr)
     assert len(account.list_transports()) == 2
 
+    # init_transports() only works on an unconfigured profile:
+    with pytest.raises(JsonRpcError):
+        account.init_transports(qr)
+    with pytest.raises(JsonRpcError):
+        account.init_transports()
+
     account.add_transport_from_qr(qr)
     assert len(account.list_transports()) == 3
 

@@ -5,40 +5,77 @@ use crate::test_utils::TestContext;
 use crate::tools::SystemTime;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_init_transports_basic() -> Result<()> {
+    let t = &TestContext::new().await;
+    assert!(t.list_transports().await?.is_empty());
+
+    let skip_network = true;
+    init_transports_inner(t, vec![], skip_network).await?;
+
+    let relays = get_configured_relays(t).await;
+    assert_eq!(relays.len(), 1);
+    for relay in &relays {
+        assert!(DEFAULT_RELAY_CANDIDATES.contains(&relay.as_ref()));
+    }
+
+    assert_eq!(t.get_config_bool(Config::Autorelay).await?, true);
+
+    Ok(())
+}
+
+async fn get_configured_relays(t: &TestContext) -> Vec<String> {
+    let transports = t.list_transports().await.unwrap();
+    let mut relays: Vec<_> = transports
+        .iter()
+        .map(|t| t.addr.split_once('@').unwrap().1)
+        .collect();
+
+    // Check that every relay is used only once:
+    relays.sort();
+    relays.dedup();
+    assert_eq!(relays.len(), transports.len());
+
+    relays.into_iter().map(|s| s.to_string()).collect()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_load_relay_candidates_single() -> Result<()> {
     let t = &TestContext::new_alice().await;
     enable_config(t).await;
     let now = time();
 
-    t.sql.execute("DELETE FROM relay_candidates", ()).await?;
-
     // This host should be returned by load_relay_candidates():
     t.sql
         .execute(
-            "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
-            ("never_tried.example", 0),
+            "INSERT INTO relay_candidates (host) VALUES (?)",
+            ("never_tried.example",),
         )
         .await?;
 
     // This host was recently tried and should not be returned:
     t.sql
         .execute(
-            "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
-            ("recent.example", now),
+            "INSERT INTO relay_candidates (host) VALUES (?)",
+            ("recent.example",),
         )
         .await?;
+    set_relay_candidate_last_tried(t, "recent.example", now).await?;
 
     // This host is already in use (alice@example.org) and should not be returned:
     t.sql
         .execute(
-            "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
-            ("example.org", 0),
+            "INSERT INTO relay_candidates (host) VALUES (?)",
+            ("example.org",),
         )
         .await?;
 
     let candidates = load_relay_candidates(t, now).await?;
 
-    assert_eq!(candidates, vec!["never_tried.example".to_string()]);
+    assert!(candidates.contains(&"never_tried.example".to_string()));
+    assert_eq!(candidates.contains(&"recent.example".to_string()), false);
+    assert_eq!(candidates.contains(&"example.org".to_string()), false);
+
+    assert_eq!(candidates.len(), DEFAULT_RELAY_CANDIDATES.len() + 1);
 
     Ok(())
 }
@@ -49,27 +86,22 @@ async fn test_load_relay_candidates_multiple() -> Result<()> {
     enable_config(t).await;
     let now = time();
 
-    t.sql.execute("DELETE FROM relay_candidates", ()).await?;
-    for host in ["a.example", "b.example", "c.example"] {
+    const EXAMPLE_CANDIDATES: &[&str] = &["a.example", "b.example", "c.example"];
+
+    for host in EXAMPLE_CANDIDATES {
         t.sql
-            .execute(
-                "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
-                (host, 0),
-            )
+            .execute("INSERT INTO relay_candidates (host) VALUES (?)", (host,))
             .await?;
     }
 
     let mut candidates = load_relay_candidates(t, now).await?;
     candidates.sort();
 
-    assert_eq!(
-        candidates,
-        vec![
-            "a.example".to_string(),
-            "b.example".to_string(),
-            "c.example".to_string()
-        ]
-    );
+    let mut expected = EXAMPLE_CANDIDATES.to_vec();
+    expected.extend(DEFAULT_RELAY_CANDIDATES);
+    expected.sort();
+
+    assert_eq!(candidates, expected);
     Ok(())
 }
 
@@ -160,11 +192,21 @@ async fn test_maybe_add_additional_relays_add_one() -> Result<()> {
     enable_config(t).await;
     let now = time();
 
-    t.sql.execute("DELETE FROM relay_candidates", ()).await?;
+    // Make sure that default relay candidates
+    // are not used by setting last_used to now:
+    for candidate in DEFAULT_RELAY_CANDIDATES {
+        t.sql
+            .execute(
+                "INSERT INTO relay_candidates_last_tried(host, last_tried) VALUES(?,?)",
+                (candidate, now),
+            )
+            .await?;
+    }
+
     t.sql
         .execute(
-            "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
-            ("relay.example", 0),
+            "INSERT INTO relay_candidates (host) VALUES (?)",
+            ("relay.example",),
         )
         .await?;
 
@@ -189,16 +231,6 @@ async fn test_maybe_add_additional_relays_add_multiple() -> Result<()> {
     enable_config(t).await;
     let now = time();
 
-    t.sql.execute("DELETE FROM relay_candidates", ()).await?;
-    for host in ["a.example", "b.example", "c.example", "d.example"] {
-        t.sql
-            .execute(
-                "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
-                (host, 0),
-            )
-            .await?;
-    }
-
     let skip_network = true;
     let relay_added = maybe_add_additional_relays_inner(t, skip_network).await?;
     assert!(relay_added);
@@ -218,12 +250,22 @@ async fn test_maybe_add_additional_relays_failure() -> Result<()> {
     enable_config(t).await;
     let now = time();
 
-    t.sql.execute("DELETE FROM relay_candidates", ()).await?;
+    // Make sure that default relay candidates
+    // are not used by setting last_used to now:
+    for candidate in DEFAULT_RELAY_CANDIDATES {
+        t.sql
+            .execute(
+                "INSERT INTO relay_candidates_last_tried(host, last_tried) VALUES(?,?)",
+                (candidate, now - 2),
+            )
+            .await?;
+    }
+
     for i in 1..10 {
         t.sql
             .execute(
-                "INSERT INTO relay_candidates (host, last_tried) VALUES (?, ?)",
-                (format!("{i}.invalid.example"), 0),
+                "INSERT INTO relay_candidates (host) VALUES (?)",
+                (format!("{i}.invalid.example"),),
             )
             .await?;
     }
@@ -246,7 +288,7 @@ async fn test_maybe_add_additional_relays_failure() -> Result<()> {
     assert!(
         t.sql
             .exists(
-                "SELECT COUNT(*) FROM relay_candidates WHERE last_tried>=?",
+                "SELECT COUNT(*) FROM relay_candidates_last_tried WHERE last_tried>=?",
                 (now,)
             )
             .await?

@@ -546,6 +546,18 @@ impl CommandApi {
         ctx.add_transport_from_qr(&qr).await
     }
 
+    /// Automatically adds up to three transports.
+    ///
+    /// If the user just scanned a QR code of type `Account`, `Login`,
+    /// `AskVerifyContact`, `AskVerifyGroup`, or `AskJoinBroadcast`,
+    /// then UI implementations should pass it as the `qr` parameter.
+    /// The host(s) from the QR code will then also be considered
+    /// for creating an account there.
+    async fn init_transports(&self, account_id: u32, qr: Option<String>) -> Result<()> {
+        let ctx = self.get_context(account_id).await?;
+        ctx.init_transports(qr.as_deref()).await
+    }
+
     /// Returns the list of all email accounts that are used as a transport in the current profile.
     /// Use [Self::add_or_update_transport()] to add or change a transport
     /// and [Self::delete_transport()] to remove a transport.

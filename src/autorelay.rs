@@ -2,8 +2,8 @@
 //!
 //! Chatmail relays create an account on first login,
 //! so a profile can add further transports on its own without user interaction.
-//! Candidate hosts come from the `relay_candidates` table,
-//! which migrations seed with a list of known chatmail relays.
+//! Candidate hosts come from the `relay_candidates` table
+//! as well as the [`DEFAULT_RELAY_CANDIDATES`] list.
 //!
 //! Status of implementation:
 //! Additions are attempted right before going into IMAP IDLE,
@@ -13,6 +13,7 @@
 //! [`Config::AutorelayFinished`] is set and nothing is ever added again,
 //! so deleting a transport later does not pull in a replacement.
 
+use std::collections::BTreeSet;
 use std::pin::Pin;
 
 use anyhow::Result;
@@ -23,6 +24,7 @@ use rand::seq::IndexedRandom;
 use crate::config::{self, Config};
 use crate::log::{LogExt, warn};
 use crate::login_param::{EnteredCertificateChecks, EnteredImapLoginParam};
+use crate::sql::TransactionExt as _;
 use crate::{configure::EnteredLoginParam, context::Context, tools::time};
 
 /// The target number of transports.
@@ -31,6 +33,59 @@ const NUM_TRANSPORTS_TARGET: usize = 3;
 const AUTOMATIC_ADDITION_DEBOUNCE_SECONDS: i64 = 60 * 60; // one hour
 /// How long we ignore a relay candidate after failing to connect to it:
 const BACKOFF_PERIOD_FOR_NOT_WORKING_RELAY: i64 = 60 * 60 * 24 * 7; // one week
+
+/// The list of relays to which we onboard
+/// if no other relays are provided via QR codes.
+/// Please keep this list alphabetically sorted.
+const DEFAULT_RELAY_CANDIDATES: &[&str] = &[
+    "chat.adminforge.de",
+    "chat.feld.me",
+    "chat.me.ke",
+    "chat.nuvon.app",
+    "chat.tinydispatch.org",
+    "chat.vim.wtf",
+    "chatmail.uk",
+    "chtml.ca",
+    "deltachat.me",
+    "e2e.sus.fr",
+    "jp.deltachat.me",
+    "mailchat.pl",
+    "nchrcht.la10cy.net",
+    "nine.testrun.org",
+    "sweetfern.net",
+    "tarpit.fun",
+];
+
+pub(crate) async fn init_transports_inner(
+    context: &Context,
+    addrs_from_qr: Vec<String>,
+    skip_network: bool,
+) -> Result<()> {
+    context
+        .sql
+        .transaction(|transaction| {
+            let mut stmt = transaction.prepare("INSERT INTO relay_candidates(host) VALUES(?)")?;
+            for addr in addrs_from_qr {
+                stmt.execute((addr,))?;
+            }
+            Ok(())
+        })
+        .await?;
+
+    let host = "nine.testrun.org";
+    let param = login_param_from_host(host);
+    let res = crate::configure::configure(context, &param, skip_network).await;
+    if let Err(err) = &res {
+        warn!(context, "Failed to init transports: {err:#}.");
+    } else {
+        info!(context, "Initialized with transport {host}");
+    }
+    res?;
+
+    context.set_config_bool(Config::Autorelay, true).await?;
+
+    Ok(())
+}
 
 pub(crate) fn maybe_add_additional_relays(
     context: Context,
@@ -85,12 +140,16 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
     let mut relay_added = false;
     // Using `for` instead of `while` to prevent infinite loop
     for _ in 0..NUM_TRANSPORTS_TARGET {
-        if context.count_transports().await? >= NUM_TRANSPORTS_TARGET {
+        let num_transports = context.count_transports().await?;
+        if num_transports >= NUM_TRANSPORTS_TARGET {
+            info!(context, "Transports target reached at {num_transports}");
             context
                 .set_config_internal(Config::AutorelayFinished, config::from_bool(true))
                 .await?;
 
             return Ok(relay_added);
+        } else {
+            info!(context, "There are {num_transports} relays, will add more");
         }
 
         // First, query all candidates that were not tried since `BACKOFF_PERIOD_FOR_NOT_WORKING_RELAY` seconds.
@@ -111,13 +170,7 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
             candidates.len(),
         );
 
-        context
-            .sql
-            .execute(
-                "UPDATE relay_candidates SET last_tried=? WHERE host=?",
-                (now, host),
-            )
-            .await?;
+        set_relay_candidate_last_tried(context, host, now).await?;
         let param = login_param_from_host(host);
         let res = crate::configure::configure(context, &param, skip_network).await;
         if let Err(e) = res {
@@ -134,28 +187,54 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
     Ok(relay_added)
 }
 
-async fn load_relay_candidates(context: &Context, now: i64) -> Result<Vec<String>, anyhow::Error> {
-    let cutoff_timestamp = now.saturating_sub(BACKOFF_PERIOD_FOR_NOT_WORKING_RELAY);
-    let candidates: Vec<String> = context
+async fn set_relay_candidate_last_tried(
+    context: &Context,
+    host: &str,
+    now: i64,
+) -> Result<(), anyhow::Error> {
+    context
         .sql
-        .query_map_vec(
-            // This also selects candidates which have last_tried in the future,
+        .execute(
+            "INSERT OR REPLACE INTO relay_candidates_last_tried(host, last_tried) VALUES(?, ?)",
+            (host, now),
+        )
+        .await?;
+    Ok(())
+}
+
+async fn load_relay_candidates(context: &Context, now: i64) -> Result<Vec<String>> {
+    let res = context
+        .sql
+        .transaction(|transaction| {
+            let mut candidates: BTreeSet<String> =
+                transaction.query_map_collect("SELECT host FROM relay_candidates", (), |row| {
+                    Ok(row.get(0)?)
+                })?;
+
+            candidates.extend(DEFAULT_RELAY_CANDIDATES.iter().map(|s| s.to_string()));
+
+            let cutoff_timestamp = now.saturating_sub(BACKOFF_PERIOD_FOR_NOT_WORKING_RELAY);
+            // This does not select candidates which have last_tried in the future,
             // essentially treating them as never tried,
             // so if some timestamp far in the future is accidentally stored,
             // we are not stuck never trying the candidate.
             // After trying the candidate, last_tried will be corrected to the current time.
-            "SELECT host FROM relay_candidates WHERE (last_tried<? OR last_tried>?)
-                AND NOT EXISTS (
-                    SELECT 1
-                    FROM transports
-                    WHERE substr(addr, instr(addr, '@') + 1) = host
-                )",
-            (cutoff_timestamp, now),
-            |row| Ok(row.get::<_, String>(0)?),
-        )
+            let exclude: BTreeSet<String> = transaction.query_map_collect(
+                "SELECT host FROM relay_candidates_last_tried WHERE (last_tried>=? AND last_tried<=?)
+                UNION
+                SELECT substr(addr, instr(addr, '@') + 1) FROM transports",
+                (cutoff_timestamp, now),
+                |row| Ok(row.get(0)?),
+            )?;
+
+            Ok(candidates
+                .difference(&exclude)
+                .map(|s| s.to_string())
+                .collect::<Vec<String>>())
+        })
         .await?;
 
-    Ok(candidates)
+    Ok(res)
 }
 
 pub(crate) fn login_param_from_host(host: &str) -> EnteredLoginParam {

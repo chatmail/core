@@ -139,6 +139,18 @@ class Account:
         """Add a new transport using a QR code."""
         yield self._rpc.add_transport_from_qr.future(self.id, qr)
 
+    @futuremethod
+    def init_transports(self, qr: Optional[str] = None):
+        """Automatically adds up to three transports.
+
+        If the user just scanned a QR code of type `Account`, `Login`,
+        `AskVerifyContact`, `AskVerifyGroup`, or `AskJoinBroadcast`,
+        then UI implementations should pass it as the `qr` parameter.
+        The host(s) from the QR code will then also be considered
+        for creating an account there.
+        """
+        yield self._rpc.init_transports.future(self.id, qr)
+
     def delete_transport(self, addr: str):
         """Delete a transport."""
         self._rpc.delete_transport(self.id, addr)

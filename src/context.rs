@@ -231,7 +231,7 @@ pub struct InnerContext {
     /// This is a global mutex-like state for operations which should be modal in the
     /// clients.
     running_state: RwLock<RunningState>,
-    /// Mutex to prevent running housekeeping or relay management from multiple threads at once.
+    /// Lock to prevent running housekeeping or relay management from multiple threads at once.
     pub(crate) background_task_mutex: Mutex<()>,
 
     /// Mutex to prevent multiple IMAP loops from fetching the messages at once.
