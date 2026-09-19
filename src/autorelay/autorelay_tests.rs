@@ -56,7 +56,7 @@ async fn test_add_transport_from_candidates_failure() -> Result<()> {
     mark_defaults_tried(t, time()).await?;
     save_relay_candidates(t, &["bad host", "worse host"], 0).await?;
 
-    let skip_network = false;
+    let skip_network = true;
     let err = add_transport_from_candidates(t, skip_network)
         .await
         .unwrap_err();

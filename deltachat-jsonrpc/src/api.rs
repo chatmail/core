@@ -546,7 +546,7 @@ impl CommandApi {
         ctx.add_transport_from_qr(&qr).await
     }
 
-    /// Adds an initial transport on a randomly chosen chatmail relay
+    /// Adds an initial transport on the chatmail relay that answers fastest
     /// and lets the profile add further ones in the background.
     ///
     /// A `DCACCOUNT:` or `DCLOGIN:` `qr` code adds a single transport
