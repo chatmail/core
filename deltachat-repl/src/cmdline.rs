@@ -27,55 +27,6 @@ use deltachat::sql;
 use deltachat::tools::*;
 use tokio::fs;
 
-/// Reset database tables.
-/// Argument is a bitmask, executing single or multiple actions in one call.
-/// e.g. bitmask 7 triggers actions defined with bits 1, 2 and 4.
-async fn reset_tables(context: &Context, bits: i32) {
-    println!("Resetting tables ({bits})...");
-    if 0 != bits & 4 {
-        context
-            .sql()
-            .execute("DELETE FROM keypairs;", ())
-            .await
-            .unwrap();
-        println!("(4) Private keypairs reset.");
-    }
-    if 0 != bits & 8 {
-        context
-            .sql()
-            .execute("DELETE FROM contacts WHERE id>9;", ())
-            .await
-            .unwrap();
-        context
-            .sql()
-            .execute("DELETE FROM chats WHERE id>9;", ())
-            .await
-            .unwrap();
-        context
-            .sql()
-            .execute("DELETE FROM chats_contacts;", ())
-            .await
-            .unwrap();
-        context
-            .sql()
-            .execute("DELETE FROM msgs WHERE id>9;", ())
-            .await
-            .unwrap();
-        context
-            .sql()
-            .execute(
-                "DELETE FROM config WHERE keyname LIKE 'imap.%' OR keyname LIKE 'configured%';",
-                (),
-            )
-            .await
-            .unwrap();
-        context.sql().config_cache().write().await.clear();
-        println!("(8) Rest but server config reset.");
-    }
-
-    context.emit_msgs_changed_without_ids();
-}
-
 async fn poke_eml_file(context: &Context, filename: &Path) -> Result<()> {
     let data = read_file(context, filename).await?;
 
@@ -304,7 +255,6 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                  export-keys\n\
                  import-keys <key-file>\n\
                  poke [<eml-file>|<folder>|<addr> <key-file>]\n\
-                 reset <flags>\n\
                  stop\n\
                  ============================================="
             ),
@@ -443,15 +393,6 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
         }
         "poke" => {
             ensure!(poke_spec(&context, Some(arg1)).await, "Poke failed");
-        }
-        "reset" => {
-            ensure!(
-                !arg1.is_empty(),
-                "Argument <bits> missing: 4=private keys, 8=rest but server config"
-            );
-            let bits: i32 = arg1.parse()?;
-            ensure!(bits < 16, "<bits> must be lower than 16.");
-            reset_tables(&context, bits).await;
         }
         "stop" => {
             context.stop_ongoing().await;

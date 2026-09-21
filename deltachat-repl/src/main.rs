@@ -147,7 +147,7 @@ impl Completer for DcHelper {
     }
 }
 
-const IMEX_COMMANDS: [&str; 10] = [
+const IMEX_COMMANDS: [&str; 9] = [
     "has-backup",
     "export-backup",
     "import-backup",
@@ -156,7 +156,6 @@ const IMEX_COMMANDS: [&str; 10] = [
     "export-keys",
     "import-keys",
     "poke",
-    "reset",
     "stop",
 ];
 
