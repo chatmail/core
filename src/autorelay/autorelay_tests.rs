@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use super::*;
+use crate::EventType;
 use crate::test_utils::{TestContext, TestContextManager};
 use crate::tools::SystemTime;
 
@@ -44,6 +45,7 @@ async fn test_add_transport_from_candidates() -> Result<()> {
     assert!(transports[0].addr.ends_with("@example.org"));
     let untried = untried_relay_candidates(t).await?;
     assert_eq!(untried, ["example.org"]);
+    assert!(configure_progress_emitted(t).await);
 
     Ok(())
 }
@@ -97,6 +99,14 @@ async fn save_relay_candidates(t: &TestContext, hosts: &[&str], last_tried: i64)
 /// Keeps the default relays out of `triable_relay_candidates()`.
 async fn mark_defaults_tried(t: &TestContext, now: i64) -> Result<()> {
     save_relay_candidates(t, DEFAULT_RELAY_CANDIDATES, now).await
+}
+
+/// Consumes emitted events, telling whether a configure progress is among them.
+async fn configure_progress_emitted(t: &TestContext) -> bool {
+    t.evtracker
+        .get_matching_opt(t, |evt| matches!(evt, EventType::ConfigureProgress { .. }))
+        .await
+        .is_some()
 }
 
 /// Tests that saving a candidate overwrites its stored timestamp.
@@ -265,6 +275,7 @@ async fn test_maybe_add_additional_relays_add_one() -> Result<()> {
 
     let transports_after = t.count_transports().await?;
     assert_eq!(transports_after, transports_before + 1);
+    assert!(!configure_progress_emitted(t).await);
 
     Ok(())
 }
