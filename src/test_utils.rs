@@ -35,7 +35,7 @@ use crate::context::Context;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::key::{self, DcKey, self_fingerprint};
 use crate::message::{Message, MessageState, MsgId};
-use crate::mimefactory;
+use crate::mimefactory::{self, MimeFactory};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::pgp::SeipdVersion;
 use crate::receive_imf::{ReceivedMsg, receive_imf};
@@ -848,6 +848,17 @@ ORDER BY id"
             .unwrap()
             .unwrap();
         assert_eq!(received.chat_id, ChatId::TRASH);
+    }
+
+    /// Receives a read receipt from `reader`, who received `msg`.
+    pub async fn recv_mdn(&self, reader: &TestContext, msg: &Message) -> Result<()> {
+        let mdn = MimeFactory::from_mdn(reader, msg.from_id, msg.rfc724_mid.clone(), vec![])
+            .await?
+            .render(reader, &reader.get_primary_self_addr().await?)
+            .await?
+            .message;
+        receive_imf(self, mdn.as_bytes(), false).await?;
+        Ok(())
     }
 
     /// Gets the most recent message ID of a chat.
