@@ -1,5 +1,88 @@
 # Changelog
 
+## [2.61.0] - 2026-09-21
+
+### API-Changes
+
+- add `init_transports()` for multi-relay onboarding.
+- add JSON-RPC API `is_sending_finished()`.
+- [**breaking**] remove verification methods from the FFI and JSON-RPC APIs.
+  - `dc_contact_is_verified()` and `dc_contact_get_verifier_id()` are removed.
+  - the JSON-RPC Contact object loses the `isVerified` and `verifierId` fields. A bot reading `snapshot.is_verified` now gets an `AttributeError` at runtime.
+  - the Python bindings lose `Contact.is_verified()` and `Contact.get_verifier()`.
+  - `DC_STR_CONTACT_VERIFIED` (35) is removed, so UIs should stop registering a translation for it. A stock id core does not know is logged and otherwise ignored, so an un-updated client keeps working.
+- [**breaking**] remove default value for "addr" config.
+- [**breaking**] remove `addr` field from Account objects in JSON-RPC APIs.
+  - `list_transports()` should be used instead.
+- [**breaking**] remove `is_chatmail` and the XCHATMAIL capability.
+  - `is_chatmail` is no longer a known config key.
+- [**breaking**] remove `Contact.get_name_n_addr()` and related APIs.
+  - `dc_contact_get_name_n_addr()` CFFI is removed
+  - JSON-RPC contact objects don't have nameAndAddr field anymore
+- [**breaking**] replace `was_seen_recently` by `freshness` in contact object.
+  - use contact's `freshness` instead of `seen_recently`
+
+### Fixes
+
+- always emit `AccountsBackgroundFetchDone`.
+- make `background_fetch` not wait on or trigger SMTP connections.
+- do not send a sync message when changing `configured_addr`.
+- emit `SmtpMessageSent` event after deleting the message from SMTP queue.
+- don't use extra STUN nine server for fallback.
+- use `max_smtp_rcpt_to` chunking for the actual transport we are sending from.
+- use correct `From` address when sending MDNs.
+- use correct address for Bcc-self in unencrypted mails.
+- don't emit configure progress events during background relay additions.
+
+### Features / Changes
+
+- better quality of image recoding ([#8682](https://github.com/chatmail/core/pull/8682)).
+- perform background fetch from all transports.
+- queue messages for SMTP before encryption.
+- [**breaking**] stop tracking contact verification.
+  - the statistics JSON sent to the self-reporting-bot on Android changes: Contacts have `encrypted` instead of `verified` and lose `transitive_chain` properties and message stats have `encrypted` instead of `verified` and `unverified_encrypted`, and securejoin invites lose `already_verified`. The collecting bot stores incoming reports verbatim but analysis will have to make sense of older and newer reports.
+- remove last usage of XDELTAPUSH capability.
+- base server-side message deletion on `force_encryption`.
+- do not restart I/O when setting `configured_addr`.
+- do not use ConfiguredAddr when connecting to SMTP.
+- mark autorelays for relay operators ([#8701](https://github.com/chatmail/core/pull/8701)).
+- try fasted relays to attempt first configure on.
+- do not mark message as failed for which we got a read receipt before.
+- a single NDN does not mark a group message as failed.
+
+### Documentation
+
+- update `sys.msgsize_max_recommended` documentation.
+- add hint about how to reset an invitation ([#8160](https://github.com/chatmail/core/pull/8160)).
+- mention `get_app_version()` API in the changelog for 2.59.0.
+- remove `protect_autocrypt` setting.
+
+### Miscellaneous Tasks
+
+- cleanup "primary" wording in comments.
+- update rustls to 0.23.45.
+- fix nightly "cargo" warnings.
+- fix some types in `deltachat_rpc_client`.
+
+### Refactor
+
+- add `Encryption.is_encrypted()`.
+- separate QueuedEncryption.
+- sql: disable double-quoted string literals.
+- add smtp::queue module.
+- substitute configure progress macro with simple function call.
+
+### Tests
+
+- cleanup `get_smtp_rows_for_msg()`.
+- cross-core securejoin invites for every chat type.
+- explicitly empty url in appversion updates ([#8702](https://github.com/chatmail/core/pull/8702)).
+- do not talk about "inconsistent key state" in `test_securejoin_after_contact_resetup`.
+- rename `test_aeap_transition_{0,1}` to `test_aeap_transition_{single,group}`.
+- do not fetch all messages when `direct_imap` is created.
+- `direct_imap`: always pass `mark_seen=False` to fetch().
+- add pseudo transport explicitly rather than by setting ConfiguredAddr.
+
 ## [2.60.0] - 2026-09-11
 
 ### API-Changes
@@ -8794,3 +8877,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.58.0]: https://github.com/chatmail/core/compare/v2.57.0..v2.58.0
 [2.59.0]: https://github.com/chatmail/core/compare/v2.58.0..v2.59.0
 [2.60.0]: https://github.com/chatmail/core/compare/v2.59.0..v2.60.0
+[2.61.0]: https://github.com/chatmail/core/compare/v2.60.0..v2.61.0
