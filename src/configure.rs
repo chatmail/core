@@ -47,20 +47,16 @@ use crate::{EventType, stock_str};
 /// See <https://github.com/chatmail/core/issues/7608>.
 pub(crate) const MAX_RELAYS: usize = 5;
 
-macro_rules! progress {
-    ($context:tt, $progress:expr, $comment:expr) => {
-        assert!(
-            $progress <= 1000,
-            "value in range 0..1000 expected with: 0=error, 1..999=progress, 1000=success"
-        );
-        $context.emit_event($crate::events::EventType::ConfigureProgress {
-            progress: $progress,
-            comment: $comment,
-        });
-    };
-    ($context:tt, $progress:expr) => {
-        progress!($context, $progress, None);
-    };
+#[track_caller]
+fn emit_progress(ctx: &Context, progress: u16) {
+    assert!(
+        progress <= 1000,
+        "value in range 0..1000 expected with: 0=error, 1..999=progress, 1000=success"
+    );
+    ctx.emit_event(EventType::ConfigureProgress {
+        progress,
+        comment: None,
+    });
 }
 
 impl Context {
@@ -124,14 +120,17 @@ impl Context {
     pub(crate) async fn add_transport_inner(&self, param: &mut EnteredLoginParam) -> Result<()> {
         match self.add_transport_unreported(param).await {
             Ok(()) => {
-                progress!(self, 1000);
+                emit_progress(self, 1000);
                 Ok(())
             }
             Err(err) => {
                 // We are using Anyhow's .context() and to show the
                 // inner error, too, we need the {:#}:
                 let error_msg = stock_str::configuration_failed(self, &format!("{err:#}"));
-                progress!(self, 0, Some(error_msg.clone()));
+                self.emit_event(EventType::ConfigureProgress {
+                    progress: 0,
+                    comment: Some(error_msg.clone()),
+                });
                 bail!(error_msg);
             }
         }
@@ -321,7 +320,7 @@ async fn get_configured_param(
     let parsed = EmailAddress::new(&param.addr).context("Bad email-address")?;
     let param_domain = parsed.domain;
 
-    progress!(ctx, 200);
+    emit_progress(ctx, 200);
 
     let param_autoconfig = if param.imap.server.is_empty()
         && param.imap.port == 0
@@ -343,7 +342,7 @@ async fn get_configured_param(
         None
     };
 
-    progress!(ctx, 500);
+    emit_progress(ctx, 500);
 
     let mut servers = param_autoconfig.unwrap_or_default();
     if !servers
@@ -437,13 +436,13 @@ pub(crate) async fn configure(
     param: &EnteredLoginParam,
     skip_network: bool,
 ) -> Result<()> {
-    progress!(ctx, 1);
+    emit_progress(ctx, 1);
 
     let configured_param = get_configured_param(ctx, param, skip_network).await?;
     let proxy_config = ProxyConfig::load(ctx).await?;
     let strict_tls = configured_param.strict_tls(proxy_config.is_some())?;
 
-    progress!(ctx, 550);
+    emit_progress(ctx, 550);
 
     if !skip_network {
         // Spawn SMTP configuration task
@@ -469,7 +468,7 @@ pub(crate) async fn configure(
             Ok::<(), anyhow::Error>(())
         });
 
-        progress!(ctx, 600);
+        emit_progress(ctx, 600);
 
         // Configure IMAP
 
@@ -483,12 +482,12 @@ pub(crate) async fn configure(
             }
         };
 
-        progress!(ctx, 850);
+        emit_progress(ctx, 850);
 
         // Wait for SMTP configuration
         smtp_config_task.await??;
 
-        progress!(ctx, 900);
+        emit_progress(ctx, 900);
 
         // Drop the imap connection explicitly
         // to make sure that it's not forgotten in a future refactoring
@@ -496,7 +495,7 @@ pub(crate) async fn configure(
         drop(imap);
     }
 
-    progress!(ctx, 910);
+    emit_progress(ctx, 910);
 
     configured_param
         .clone()
@@ -507,11 +506,11 @@ pub(crate) async fn configure(
     ctx.set_config_internal(Config::ConfiguredTimestamp, Some(&time().to_string()))
         .await?;
 
-    progress!(ctx, 920);
+    emit_progress(ctx, 920);
 
     ctx.scheduler.interrupt_inbox().await;
 
-    progress!(ctx, 940);
+    emit_progress(ctx, 940);
     ctx.update_device_chats()
         .await
         .context("Failed to update device chats")?;
@@ -555,7 +554,7 @@ async fn get_autoconfig(
     {
         return Some(res);
     }
-    progress!(ctx, 300);
+    emit_progress(ctx, 300);
 
     // `?emailaddress=` query string is excluded on purpose.
     // It is not part of the URL according to <https://datatracker.ietf.org/doc/draft-ietf-mailmaint-autoconfig/06/>.
@@ -570,7 +569,7 @@ async fn get_autoconfig(
     {
         return Some(res);
     }
-    progress!(ctx, 310);
+    emit_progress(ctx, 310);
 
     // Outlook uses always SSL but different domains (this comment describes the next two steps)
     if let Ok(res) = outlk_autodiscover(
@@ -582,7 +581,7 @@ async fn get_autoconfig(
     {
         return Some(res);
     }
-    progress!(ctx, 320);
+    emit_progress(ctx, 320);
 
     if let Ok(res) = outlk_autodiscover(
         ctx,
@@ -593,7 +592,7 @@ async fn get_autoconfig(
     {
         return Some(res);
     }
-    progress!(ctx, 330);
+    emit_progress(ctx, 330);
 
     // always SSL for Thunderbird's database
     if let Ok(res) = moz_autoconfigure(
