@@ -3367,6 +3367,35 @@ async fn test_blocked_contact_creates_group() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_blocked_contact_sends_reaction() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let bob_msg_id = tcm.send_recv_accept(alice, bob, "Hi!").await.id;
+
+    let chat = alice.get_chat(&bob).await;
+    chat.id.block(&alice).await?;
+
+    crate::reaction::send_reaction(bob, bob_msg_id, "👍").await?;
+    let sent = bob.pop_sent_msg().await;
+    alice.recv_msg_hidden(&sent).await;
+    alice.emit_event(EventType::Test);
+
+    while let Some(ev) = alice.evtracker.recv().await {
+        match ev.typ {
+            EventType::IncomingReaction { .. } => {
+                panic!("Alice is not supposed to receive a notification, since she blocked Bob")
+            }
+            EventType::Test => break,
+            _ => {}
+        }
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_outgoing_undecryptable() -> Result<()> {
     let alice = &TestContext::new().await;
     alice.configure_addr("alice@example.org").await;

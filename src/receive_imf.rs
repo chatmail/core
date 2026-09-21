@@ -2107,7 +2107,8 @@ async fn add_parts(
         let hidden = part.is_reaction;
         if part.is_reaction {
             let reaction_str = simplify::remove_footers(part.msg.as_str());
-            let is_incoming_fresh = mime_parser.incoming && !seen;
+            let is_incoming_fresh =
+                mime_parser.incoming && !seen && chat_id_blocked == Blocked::Not;
             set_msg_reaction(
                 context,
                 mime_in_reply_to,
