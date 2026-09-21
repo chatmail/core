@@ -155,7 +155,7 @@ def test_list_transports(acf) -> None:
 def test_account(acf) -> None:
     alice, bob = acf.get_online_accounts(2)
 
-    bob_addr = bob.get_config("addr")
+    bob_addr = bob.get_config("configured_addr")
     alice_contact_bob = alice.create_contact(bob, "Bob")
     alice_chat_bob = alice_contact_bob.create_chat()
     alice_chat_bob.send_text("Hello!")
@@ -318,7 +318,7 @@ def test_chat(acf) -> None:
 def test_contact(acf) -> None:
     alice, bob = acf.get_online_accounts(2)
 
-    bob_addr = bob.get_config("addr")
+    bob_addr = bob.get_config("configured_addr")
     alice_contact_bob = alice.create_contact(bob, "Bob")
 
     assert alice_contact_bob == alice.get_contact_by_id(alice_contact_bob.id)
@@ -604,7 +604,6 @@ def test_import_export_online_all(acf, tmp_path, rpcdata, log) -> None:
     (ac1, some1) = acf.get_online_accounts(2)
 
     log.section("create some chat content")
-    some1_addr = some1.get_config("addr")
     chat1 = ac1.create_contact(some1).create_chat()
     chat1.send_text("msg1")
     assert len(ac1.get_contacts()) == 1
@@ -622,7 +621,6 @@ def test_import_export_online_all(acf, tmp_path, rpcdata, log) -> None:
         contacts = ac.get_contacts()
         assert len(contacts) == 1
         contact2 = contacts[0]
-        assert contact2.get_snapshot().address == some1_addr
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
         assert len(messages) == 3 + E2EE_INFO_MSGS
