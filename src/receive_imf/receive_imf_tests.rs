@@ -3374,8 +3374,8 @@ async fn test_blocked_contact_sends_reaction() -> Result<()> {
 
     let bob_msg_id = tcm.send_recv_accept(alice, bob, "Hi!").await.id;
 
-    let chat = alice.get_chat(&bob).await;
-    chat.id.block(&alice).await?;
+    let chat = alice.get_chat(bob).await;
+    chat.id.block(alice).await?;
 
     crate::reaction::send_reaction(bob, bob_msg_id, "👍").await?;
     let sent = bob.pop_sent_msg().await;
