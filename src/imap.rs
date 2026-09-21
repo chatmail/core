@@ -299,7 +299,8 @@ impl Imap {
         self.conn_backoff_ms = max(BACKOFF_MIN_MS, self.conn_backoff_ms);
 
         let login_params = prioritize_server_login_params(&context.sql, &self.lp, "imap").await?;
-        let mut first_error = None;
+        let mut first_connection_error = None;
+        let mut first_login_error = None;
         'candidate: for lp in login_params {
             info!(context, "IMAP trying to connect to {}.", lp.connection);
             let connection_candidate = lp.connection.clone();
@@ -315,7 +316,7 @@ impl Imap {
                 Ok(client) => client,
                 Err(err) => {
                     warn!(context, "{err:#}.");
-                    first_error.get_or_insert(err);
+                    first_connection_error.get_or_insert(err);
                     continue 'candidate;
                 }
             };
@@ -394,12 +395,14 @@ impl Imap {
 
                 Err(err) => {
                     warn!(context, "{err:#}.");
-                    first_error.get_or_insert(err);
+                    first_login_error.get_or_insert(err);
                 }
             }
         }
 
-        Err(first_error.unwrap_or_else(|| format_err!("No IMAP connection candidates provided")))
+        Err(first_login_error
+            .or(first_connection_error)
+            .unwrap_or_else(|| format_err!("No IMAP connection candidates provided")))
     }
 
     /// Prepare a new IMAP session.
