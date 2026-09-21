@@ -1,10 +1,32 @@
 use anyhow::Result;
+use deltachat::contact;
 use deltachat::context::Context;
 use deltachat::key::{DcKey, SignedPublicKey};
 use serde::Serialize;
 use typescript_type_def::TypeDef;
 
 use super::color_int_to_hex_string;
+
+/// Freshness of a contact, based on when it was last seen.
+#[derive(Serialize, TypeDef, schemars::JsonSchema)]
+pub enum ContactFreshness {
+    /// Contact shall not be highlighted.
+    Normal,
+    /// Contact was seen recently.
+    RecentlySeen,
+    /// Contact was not seen for a long time.
+    Old,
+}
+
+impl From<contact::Freshness> for ContactFreshness {
+    fn from(freshness: contact::Freshness) -> Self {
+        match freshness {
+            contact::Freshness::Normal => ContactFreshness::Normal,
+            contact::Freshness::RecentlySeen => ContactFreshness::RecentlySeen,
+            contact::Freshness::Old => ContactFreshness::Old,
+        }
+    }
+}
 
 #[derive(Serialize, TypeDef, schemars::JsonSchema)]
 #[serde(rename = "Contact", rename_all = "camelCase")]
@@ -32,7 +54,7 @@ pub struct ContactObject {
 
     /// the contact's last seen timestamp
     last_seen: i64,
-    was_seen_recently: bool,
+    freshness: ContactFreshness,
 
     /// If the contact is a bot.
     is_bot: bool,
@@ -60,7 +82,7 @@ impl ContactObject {
             is_key_contact: contact.is_key_contact(),
             e2ee_avail: contact.e2ee_avail(context).await?,
             last_seen: contact.last_seen(),
-            was_seen_recently: contact.was_seen_recently(),
+            freshness: contact.get_freshness().into(),
             is_bot: contact.is_bot(),
         })
     }

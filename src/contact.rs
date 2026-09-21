@@ -40,8 +40,32 @@ use crate::sync::{self, Sync::*};
 use crate::tools::{SystemTime, duration_to_str, get_abs_path, normalize_text, time, to_lowercase};
 use crate::{chat, chatlist_events, ensure_and_debug_assert, stock_str};
 
-/// Time during which a contact is considered as seen recently.
+/// If the contact's "last seen" is newer, the contact freshness is set to "recently seen".
 const SEEN_RECENTLY_SECONDS: i64 = 600;
+
+/// If the contact's "last seen" is older, the contact freshness is set to "old".
+const CONTACT_OLD_SECONDS: i64 = 60 * 24 * 60 * 60;
+
+/// Freshness of a contact, based on when it was last seen.
+///
+/// Used by the UI to highlight contacts:
+/// recently seen contacts get a little green dot on the avatar,
+/// contacts not seen for a long time get a string below the name (e.g. "Seen 2 months ago").
+#[derive(Debug, PartialEq, Eq)]
+pub enum Freshness {
+    /// Contact shall not be highlighted.
+    Normal = 0,
+    /// Contact was seen recently.
+    RecentlySeen = 1,
+    /// Contact was not seen for a long time.
+    Old = 2,
+}
+
+impl From<Freshness> for u32 {
+    fn from(freshness: Freshness) -> Self {
+        freshness as u32
+    }
+}
 
 /// Contact ID, including reserved IDs.
 ///
@@ -726,9 +750,22 @@ impl Contact {
     }
 
     /// Returns `true` if this contact was seen recently.
-    #[expect(clippy::arithmetic_side_effects)]
-    pub fn was_seen_recently(&self) -> bool {
-        time() - self.last_seen <= SEEN_RECENTLY_SECONDS
+    pub fn get_freshness(&self) -> Freshness {
+        if self.id.is_special() {
+            return Freshness::Normal;
+        }
+
+        let is_old = time().saturating_sub(self.last_seen) > CONTACT_OLD_SECONDS;
+        if is_old || self.last_seen <= 0 {
+            return Freshness::Old;
+        }
+
+        let seen_recently = time().saturating_sub(self.last_seen) <= SEEN_RECENTLY_SECONDS;
+        if seen_recently {
+            return Freshness::RecentlySeen;
+        }
+
+        Freshness::Normal
     }
 
     /// Check if a contact is blocked.
