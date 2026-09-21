@@ -47,12 +47,19 @@ use crate::{EventType, autorelay, stock_str};
 /// See <https://github.com/chatmail/core/issues/7608>.
 pub(crate) const MAX_RELAYS: usize = 5;
 
+tokio::task_local! {
+    pub(crate) static SILENT_PROGRESS: ();
+}
+
 #[track_caller]
 fn emit_progress(ctx: &Context, progress: u16) {
     assert!(
         progress <= 1000,
         "value in range 0..1000 expected with: 0=error, 1..999=progress, 1000=success"
     );
+    if SILENT_PROGRESS.try_with(|_| ()).is_ok() {
+        return;
+    }
     ctx.emit_event(EventType::ConfigureProgress {
         progress,
         comment: None,

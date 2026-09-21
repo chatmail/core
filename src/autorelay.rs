@@ -14,7 +14,7 @@ use rusqlite::Transaction;
 use tokio::task::JoinSet;
 
 use crate::config::{self, Config};
-use crate::configure::{EnteredLoginParam, configure};
+use crate::configure::{EnteredLoginParam, SILENT_PROGRESS, configure};
 use crate::log::{LogExt, warn};
 use crate::login_param::{EnteredCertificateChecks, EnteredImapLoginParam};
 use crate::net::{connect_tcp, proxy::ProxyConfig};
@@ -190,7 +190,9 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
             .await?;
         let mark_as_autorelay = true;
         let param = login_param_from_host(host, mark_as_autorelay);
-        let res = configure(context, &param, skip_network).await;
+        let res = SILENT_PROGRESS
+            .scope((), configure(context, &param, skip_network))
+            .await;
         if let Err(e) = res {
             warn!(
                 context,
