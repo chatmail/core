@@ -1448,10 +1448,7 @@ impl MessageState {
     /// Returns true if the message can transition to `OutFailed` state from the current state.
     pub fn can_fail(self) -> bool {
         use MessageState::*;
-        matches!(
-            self,
-            OutPending | OutDelivered | OutMdnRcvd // OutMdnRcvd can still fail because it could be a group message and only some recipients failed.
-        )
+        matches!(self, OutPending | OutDelivered)
     }
 
     /// Returns true for any outgoing message states.
