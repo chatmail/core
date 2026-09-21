@@ -4913,6 +4913,38 @@ uint32_t        dc_msg_get_saved_msg_id     (const dc_msg_t* msg);
 
 
 /**
+ * @defgroup DC_FRESHNESS DC_FRESHNESS
+ *
+ * These constants describe the freshness of a contact,
+ * as returned by dc_contact_get_freshness().
+ *
+ * @addtogroup DC_FRESHNESS
+ * @{
+ */
+
+/**
+ * Contact shall not be highlighted, e.g. neither shown with a "seen recently" dot
+ * nor with a "not seen for a long time" hint.
+ */
+#define DC_FRESHNESS_NORMAL         0
+
+/**
+ * Contact was seen recently, the UI shall highlight it e.g. with a little green dot on the avatar.
+ */
+#define DC_FRESHNESS_RECENTLY_SEEN  1
+
+/**
+ * Contact was not seen for a long time, the UI shall highlight it e.g. with a string
+ * below the contact name (e.g. "Seen 2 months ago").
+ */
+#define DC_FRESHNESS_OLD            2
+
+/**
+ * @}
+ */
+
+
+/**
  * @class dc_contact_t
  *
  * An object representing a single contact in memory.
@@ -5084,18 +5116,18 @@ int64_t         dc_contact_get_last_seen     (const dc_contact_t* contact);
 
 
 /**
- * Check if the contact was seen recently.
+ * Get the contact's freshness.
  *
- * The UI may highlight these contacts,
- * eg. draw a little green dot on the avatars of the users recently seen.
- * DC_CONTACT_ID_SELF and other special contact IDs are defined as never seen recently (they should not get a dot).
+ * The UI shall hightlight contacts that are recently seen by a little green dot on the avatar
+ * and contacts that were not seen for a long time by a string below the contact name (e.g. "Seen 2 months ago")
+ *
  * To get the time a contact was seen, use dc_contact_get_last_seen().
  *
  * @memberof dc_contact_t
  * @param contact The contact object.
- * @return 1=contact seen recently, 0=contact not seen recently.
+ * @return One of the @ref DC_FRESHNESS constants.
  */
-int             dc_contact_was_seen_recently (const dc_contact_t* contact);
+int             dc_contact_get_freshness (const dc_contact_t* contact);
 
 
 /**
