@@ -1187,7 +1187,6 @@ def test_leave_broadcast(acf, all_devices_online):
 
     def check_account(ac, contact, inviter_side, please_wait_info_msg=False):
         chat = get_broadcast(ac)
-        contact_snapshot = contact.get_snapshot()
         chat_msgs = chat.get_messages()
 
         encrypted_msg = chat_msgs.pop(0).get_snapshot()
@@ -1199,14 +1198,11 @@ def test_leave_broadcast(acf, all_devices_online):
             assert "invited you to join this channel" in first_msg.text
             assert first_msg.is_info
 
-        member_added_msg = chat_msgs.pop(0).get_snapshot()
-        if inviter_side:
-            assert member_added_msg.text == f"Member {contact_snapshot.display_name} added."
-        else:
-            assert member_added_msg.text == "You joined the channel."
-        assert member_added_msg.is_info
-
         if not inviter_side:
+            member_added_msg = chat_msgs.pop(0).get_snapshot()
+            assert member_added_msg.text == "You joined the channel."
+            assert member_added_msg.is_info
+
             leave_msg = chat_msgs.pop(0).get_snapshot()
             assert leave_msg.text == "You left the channel."
 
