@@ -454,6 +454,28 @@ async fn test_get_state() -> Result<()> {
     Ok(())
 }
 
+/// Tests that a failure reported after a read receipt leaves the message untouched.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_set_msg_failed_after_mdn() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let alice_chat = alice.create_chat(bob).await;
+    let sent = alice.send_text(alice_chat.id, "hi").await;
+    let bob_msg = bob.recv_msg(&sent).await;
+    alice.recv_mdn(bob, &bob_msg).await?;
+    let mut msg = sent.load_from_db().await;
+    assert_eq!(msg.state, MessageState::OutMdnRcvd);
+
+    set_msg_failed(alice, &mut msg, "relay bounced").await?;
+    let msg = sent.load_from_db().await;
+    assert_eq!(msg.state, MessageState::OutMdnRcvd);
+    assert_eq!(msg.error(), None);
+    let chats = Chatlist::try_load(alice, 0, None, None).await?;
+    assert_eq!(chats.get_msg_id(0)?, Some(msg.id));
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_is_bot() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -771,12 +793,12 @@ fn test_can_fail() -> Result<()> {
     assert!(!InNoticed.can_fail());
     assert!(!InSeen.can_fail());
     assert!(!OutDraft.can_fail());
-    assert!(!OutFailed.can_fail());
     assert!(!OutMdnRcvd.can_fail());
 
     // states that are allowed to transition to OutFailed
     assert!(OutPending.can_fail());
     assert!(OutDelivered.can_fail());
+    assert!(OutFailed.can_fail());
 
     Ok(())
 }

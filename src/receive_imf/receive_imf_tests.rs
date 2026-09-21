@@ -2723,20 +2723,7 @@ async fn test_read_receipts_dont_create_chats() -> Result<()> {
     let chats = Chatlist::try_load(&alice, 0, None, None).await?;
     assert_eq!(chats.len(), 0);
 
-    // Bob sends a read receipt.
-    let mdn_mimefactory = crate::mimefactory::MimeFactory::from_mdn(
-        &bob,
-        received_msg.from_id,
-        received_msg.rfc724_mid,
-        vec![],
-    )
-    .await?;
-    let bob_addr = bob.get_primary_self_addr().await?;
-    let rendered_mdn = mdn_mimefactory.render(&bob, &bob_addr).await?;
-    let mdn_body = rendered_mdn.message;
-
-    // Alice receives the read receipt.
-    receive_imf(&alice, mdn_body.as_bytes(), false).await?;
+    alice.recv_mdn(&bob, &received_msg).await?;
 
     // Chat should not pop up in the chatlist.
     let chats = Chatlist::try_load(&alice, 0, None, None).await?;
@@ -2759,20 +2746,7 @@ async fn test_read_receipts_dont_unmark_bots() -> Result<()> {
         .await;
     let received_msg = bob.get_last_msg().await;
 
-    // Bob sends a read receipt.
-    let mdn_mimefactory = crate::mimefactory::MimeFactory::from_mdn(
-        bob,
-        received_msg.from_id,
-        received_msg.rfc724_mid,
-        vec![],
-    )
-    .await?;
-    let bob_addr = bob.get_primary_self_addr().await?;
-    let rendered_mdn = mdn_mimefactory.render(bob, &bob_addr).await?;
-    let mdn_body = rendered_mdn.message;
-
-    // Alice receives the read receipt.
-    receive_imf(alice, mdn_body.as_bytes(), false).await?;
+    alice.recv_mdn(bob, &received_msg).await?;
     let msg = alice.get_last_msg_in(alice_chat.id).await;
     assert_eq!(msg.state, MessageState::OutMdnRcvd);
     let ab_contact = alice.add_or_lookup_contact(bob).await;

@@ -1445,10 +1445,10 @@ impl std::fmt::Display for MessageState {
 }
 
 impl MessageState {
-    /// Returns true if the message can transition to `OutFailed` state from the current state.
+    /// Returns true if the message can be marked as failed in the current state.
     pub fn can_fail(self) -> bool {
         use MessageState::*;
-        matches!(self, OutPending | OutDelivered)
+        matches!(self, OutPending | OutDelivered | OutFailed)
     }
 
     /// Returns true for any outgoing message states.
@@ -1972,15 +1972,15 @@ pub(crate) async fn set_msg_failed(
     msg: &mut Message,
     error: &str,
 ) -> Result<()> {
-    if msg.state.can_fail() {
-        msg.state = MessageState::OutFailed;
-        warn!(context, "{} failed: {}", msg.id, error);
-    } else {
-        warn!(
+    if !msg.state.can_fail() {
+        info!(
             context,
-            "{} seems to have failed ({}), but state is {}", msg.id, error, msg.state
-        )
+            "Ignoring failed {} in state {}: {}", msg.id, msg.state, error
+        );
+        return Ok(());
     }
+    msg.state = MessageState::OutFailed;
+    warn!(context, "{} failed: {}", msg.id, error);
     msg.error = Some(error.to_string());
 
     let exists = context
