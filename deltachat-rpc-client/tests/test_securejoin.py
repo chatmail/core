@@ -27,7 +27,7 @@ def test_qr_setup_contact(acf) -> None:
 
 def test_qr_setup_contact_svg(acf) -> None:
     alice = acf.new_configured_account()
-    _, _, domain = alice.get_config("addr").rpartition("@")
+    _, _, domain = alice.list_transports()[0]["addr"].rpartition("@")
 
     _qr_code, svg = alice.get_qr_code_svg()
 
@@ -43,6 +43,7 @@ def test_qr_setup_contact_svg(acf) -> None:
 def test_qr_securejoin(acf):
     alice, bob, fiona = acf.get_online_accounts(3)
 
+    alice.set_config("displayname", "Alice")
     # Setup second device for Alice
     # to test observing securejoin protocol.
     alice2 = alice.clone()
@@ -67,7 +68,7 @@ def test_qr_securejoin(acf):
     assert alice_contact_bob_snapshot.e2ee_avail
 
     snapshot = bob.wait_for_incoming_msg().get_snapshot()
-    assert snapshot.text == "You were added by {}.".format(alice.get_config("addr"))
+    assert snapshot.text == "You were added by Alice."
 
     bob_contact_alice = bob.create_contact(alice)
     bob_contact_alice_snapshot = bob_contact_alice.get_snapshot()
@@ -499,11 +500,9 @@ def test_aeap_flow(acf):
     assert msg_in_1.text == msg_out.text
 
     logging.info("changing email account")
-    ac1.set_config("addr", addr)
-    ac1.set_config("mail_pw", password)
-    ac1.stop_io()
-    ac1.configure()
-    ac1.start_io()
+    old_addr = ac1.list_transports()[0]["addr"]
+    ac1.add_transport_from_qr(acf.get_account_qr())
+    ac1.delete_transport(old_addr)
 
     logging.info("sending second message")
     msg_out = chat.send_text("changed address").get_snapshot()
@@ -525,6 +524,7 @@ def test_securejoin_after_contact_resetup(acf) -> None:
     but different key fingerprint while a securejoin with that contact is still pending.
     """
     ac1, ac2, ac3 = acf.get_online_accounts(3)
+    ac3.set_config("displayname", "ac3")
 
     # ac3 creates a group with ac1.
     ac3_chat = ac3.create_group("Group")
@@ -536,7 +536,7 @@ def test_securejoin_after_contact_resetup(acf) -> None:
 
     # ac1 waits for member added message and creates a QR code.
     snapshot = ac1.wait_for_incoming_msg().get_snapshot()
-    assert snapshot.text == "You were added by {}.".format(ac3.get_config("addr"))
+    assert snapshot.text == "You were added by ac3."
     ac1_qr_code = snapshot.chat.get_qr_code()
 
     # ac2 sets up contact with ac1
@@ -576,6 +576,8 @@ def test_securejoin_after_contact_resetup(acf) -> None:
 
 def test_withdraw_securejoin_qr(acf):
     alice, bob = acf.get_online_accounts(2)
+    alice.set_config("displayname", "Alice")
+    bob.set_config("displayname", "Bob")
 
     logging.info("Alice creates a group")
     alice_chat = alice.create_group("Group")
@@ -588,11 +590,11 @@ def test_withdraw_securejoin_qr(acf):
     alice.clear_all_events()
 
     snapshot = bob.wait_for_incoming_msg().get_snapshot()
-    assert snapshot.text == "You were added by {}.".format(alice.get_config("addr"))
+    assert snapshot.text == "You were added by Alice."
     bob_chat.leave()
 
     snapshot = alice.get_message_by_id(alice.wait_for_msgs_changed_event().msg_id).get_snapshot()
-    assert snapshot.text == "Group left by {}.".format(bob.get_config("addr"))
+    assert snapshot.text == "Group left by Bob."
 
     logging.info("Alice withdraws QR code.")
     qr = alice.check_qr(qr_code)

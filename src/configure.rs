@@ -162,9 +162,7 @@ impl Context {
             .await;
 
         self.free_ongoing().await;
-        res?;
-
-        param.save_legacy(self).await
+        res
     }
 
     /// Adds a new email account as a transport

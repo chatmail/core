@@ -520,32 +520,6 @@ where
     }
 }
 
-pub(crate) trait ToOption<T> {
-    fn to_option(self) -> Option<T>;
-}
-impl<'a> ToOption<&'a str> for &'a String {
-    fn to_option(self) -> Option<&'a str> {
-        if self.is_empty() { None } else { Some(self) }
-    }
-}
-impl ToOption<String> for u16 {
-    fn to_option(self) -> Option<String> {
-        if self == 0 {
-            None
-        } else {
-            Some(self.to_string())
-        }
-    }
-}
-impl ToOption<String> for Option<i32> {
-    fn to_option(self) -> Option<String> {
-        match self {
-            None | Some(0) => None,
-            Some(v) => Some(v.to_string()),
-        }
-    }
-}
-
 #[expect(clippy::arithmetic_side_effects)]
 pub(crate) fn remove_subject_prefix(last_subject: &str) -> String {
     let subject_start = if last_subject.starts_with("Chat:") {

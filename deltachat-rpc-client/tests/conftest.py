@@ -24,8 +24,16 @@ class DirectImap:
 
     def __init__(self, account: Account, addr=None, password=None) -> None:
         self.account = account
-        self.addr = addr or account.get_config("addr")
-        self.password = password or account.get_config("mail_pw")
+        if addr is None or password is None:
+            transport = account.list_transports()[-1]
+        if addr is None:
+            self.addr = transport["addr"]
+        else:
+            self.addr = addr
+        if password is None:
+            self.password = transport["password"]
+        else:
+            self.password = password
         self.logid = account.get_config("displayname") or id(account)
         self._idling = False
         self.connect()

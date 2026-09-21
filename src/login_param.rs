@@ -9,14 +9,12 @@
 use std::fmt;
 
 use anyhow::{Context as _, Result};
-use num_traits::ToPrimitive as _;
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
 use crate::context::Context;
 pub use crate::net::proxy::ProxyConfig;
 pub use crate::provider::Socket;
-use crate::tools::ToOption;
 
 /// User-entered setting for certificate checks.
 ///
@@ -232,62 +230,6 @@ impl EnteredLoginParam {
             oauth2: false,
         })
     }
-
-    /// Saves entered account settings,
-    /// so that they can be prefilled if the user wants to configure the server again.
-    ///
-    /// This is needed in case a UI is not yet updated, and still uses `get_config("mail_pw")` etc.
-    /// in order to prefill the entered account settings.
-    pub(crate) async fn save_legacy(&self, context: &Context) -> Result<()> {
-        context.set_config(Config::Addr, Some(&self.addr)).await?;
-
-        context
-            .set_config(Config::MailServer, self.imap.server.to_option())
-            .await?;
-        context
-            .set_config(Config::MailPort, self.imap.port.to_option().as_deref())
-            .await?;
-        context
-            .set_config(
-                Config::MailSecurity,
-                self.imap.security.to_i32().to_option().as_deref(),
-            )
-            .await?;
-        context
-            .set_config(Config::MailUser, self.imap.user.to_option())
-            .await?;
-        context
-            .set_config(Config::MailPw, self.imap.password.to_option())
-            .await?;
-
-        context
-            .set_config(Config::SendServer, self.smtp.server.to_option())
-            .await?;
-        context
-            .set_config(Config::SendPort, self.smtp.port.to_option().as_deref())
-            .await?;
-        context
-            .set_config(
-                Config::SendSecurity,
-                self.smtp.security.to_i32().to_option().as_deref(),
-            )
-            .await?;
-        context
-            .set_config(Config::SendUser, self.smtp.user.to_option())
-            .await?;
-        context
-            .set_config(Config::SendPw, self.smtp.password.to_option())
-            .await?;
-
-        context
-            .set_config(
-                Config::ImapCertificateChecks,
-                self.certificate_checks.to_i32().to_option().as_deref(),
-            )
-            .await?;
-
-        Ok(())
-    }
 }
 
 impl fmt::Display for EnteredLoginParam {
@@ -366,43 +308,6 @@ mod tests {
         t.set_config(Config::ImapCertificateChecks, Some("999"))
             .await?;
         assert!(EnteredLoginParam::load_legacy(t).await.is_err());
-
-        Ok(())
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_save_entered_login_param() -> Result<()> {
-        let t = TestContext::new().await;
-        let param = EnteredLoginParam {
-            addr: "alice@example.org".to_string(),
-            imap: EnteredImapLoginParam {
-                server: "".to_string(),
-                port: 0,
-                folder: "".to_string(),
-                security: Socket::Starttls,
-                user: "".to_string(),
-                password: "foobar".to_string(),
-            },
-            smtp: EnteredSmtpLoginParam {
-                server: "".to_string(),
-                port: 2947,
-                security: Socket::default(),
-                user: "".to_string(),
-                password: "".to_string(),
-            },
-            certificate_checks: Default::default(),
-            oauth2: false,
-        };
-        param.save_legacy(&t).await?;
-        assert_eq!(
-            t.get_config(Config::Addr).await?.unwrap(),
-            "alice@example.org"
-        );
-        assert_eq!(t.get_config(Config::MailPw).await?.unwrap(), "foobar");
-        assert_eq!(t.get_config(Config::SendPw).await?, None);
-        assert_eq!(t.get_config_int(Config::SendPort).await?, 2947);
-
-        assert_eq!(EnteredLoginParam::load_legacy(&t).await?, param);
 
         Ok(())
     }
