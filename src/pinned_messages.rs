@@ -13,6 +13,7 @@ use anyhow::{Result, ensure};
 use crate::chat::{ChatId, send_msg};
 use crate::contact::ContactId;
 use crate::context::Context;
+use crate::events::EventType;
 use crate::log::warn;
 use crate::message::{Message, MessageState, MsgId, Viewtype};
 use crate::mimeparser::SystemMessage;
@@ -78,7 +79,11 @@ async fn update_pinned_state_in_db(
             (new_pinned_state, msg.id),
         )
         .await?;
+
     context.emit_msgs_changed(msg.chat_id, msg.id);
+    context.emit_event(EventType::PinnedMessagesChanged {
+        chat_id: msg.chat_id,
+    });
 
     Ok(())
 }

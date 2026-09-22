@@ -93,6 +93,14 @@ pub enum EventType {
         contact_id: ContactId,
     },
 
+    /// The list of pinned messages for the chat has changed.
+    ///
+    /// Some message got pinned, or pinned message is unpinned or deleted.
+    PinnedMessagesChanged {
+        /// ID of the chat where the list of pinned messages changed.
+        chat_id: ChatId,
+    },
+
     /// A reaction to one's own sent message received.
     /// Typically, the UI will show a notification for that.
     ///

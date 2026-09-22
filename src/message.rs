@@ -1641,10 +1641,14 @@ pub(crate) async fn delete_msgs_locally_done(
     context: &Context,
     msg_ids: &[MsgId],
     modified_chat_ids: BTreeSet<ChatId>,
+    pinned_messages_changed_chat_ids: BTreeSet<ChatId>,
 ) -> Result<()> {
     for modified_chat_id in modified_chat_ids {
         context.emit_msgs_changed_without_msg_id(modified_chat_id);
         chatlist_events::emit_chatlist_item_changed(context, modified_chat_id);
+    }
+    for chat_id in pinned_messages_changed_chat_ids {
+        context.emit_event(EventType::PinnedMessagesChanged { chat_id });
     }
     if !msg_ids.is_empty() {
         context.emit_msgs_changed_without_ids();
@@ -1671,6 +1675,7 @@ pub async fn delete_msgs_ext(
     delete_for_all: bool,
 ) -> Result<()> {
     let mut modified_chat_ids = BTreeSet::new();
+    let mut pinned_messages_changed_chat_ids = BTreeSet::new();
     let mut deleted_rfc724_mid = Vec::new();
     let mut res = Ok(());
 
@@ -1686,6 +1691,9 @@ pub async fn delete_msgs_ext(
         );
 
         modified_chat_ids.insert(msg.chat_id);
+        if msg.is_pinned() {
+            pinned_messages_changed_chat_ids.insert(msg.chat_id);
+        }
         deleted_rfc724_mid.push(msg.rfc724_mid.clone());
 
         let update_db = |trans: &mut rusqlite::Transaction| {
@@ -1743,7 +1751,13 @@ pub async fn delete_msgs_ext(
         let msg = Message::load_from_db(context, msg_id).await?;
         delete_msg_locally(context, &msg).await?;
     }
-    delete_msgs_locally_done(context, msg_ids, modified_chat_ids).await?;
+    delete_msgs_locally_done(
+        context,
+        msg_ids,
+        modified_chat_ids,
+        pinned_messages_changed_chat_ids,
+    )
+    .await?;
 
     // Interrupt Inbox loop to start message deletion, run housekeeping and call send_sync_msg().
     context.scheduler.interrupt_inbox().await;

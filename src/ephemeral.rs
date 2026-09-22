@@ -363,7 +363,7 @@ pub(crate) async fn start_chat_ephemeral_timers(context: &Context, chat_id: Chat
 /// Selects messages which are expired according to
 /// `delete_device_after` setting or `ephemeral_timestamp` column.
 ///
-/// For each message a row ID, chat id, viewtype and location ID is returned.
+/// For each message a row ID, chat id, viewtype, whether the message is pinned and location ID is returned.
 ///
 /// Unknown viewtypes are returned as `Viewtype::Unknown`
 /// and not as errors bubbled up, easily resulting in infinite loop or leaving messages undeleted.
@@ -371,12 +371,12 @@ pub(crate) async fn start_chat_ephemeral_timers(context: &Context, chat_id: Chat
 async fn select_expired_messages(
     context: &Context,
     now: i64,
-) -> Result<Vec<(MsgId, ChatId, Viewtype, u32)>> {
+) -> Result<Vec<(MsgId, ChatId, Viewtype, bool, u32)>> {
     let mut rows = context
         .sql
         .query_map_vec(
             r#"
-SELECT id, chat_id, type, location_id
+SELECT id, chat_id, type, pinned, location_id
 FROM msgs
 WHERE
   ephemeral_timestamp != 0
@@ -392,8 +392,9 @@ WHERE
                     .context("Using default viewtype for ephemeral handling.")
                     .log_err(context)
                     .unwrap_or_default();
+                let pinned: bool = row.get("pinned")?;
                 let location_id: u32 = row.get("location_id")?;
-                Ok((id, chat_id, viewtype, location_id))
+                Ok((id, chat_id, viewtype, pinned, location_id))
             },
         )
         .await?;
@@ -414,7 +415,7 @@ WHERE
             .sql
             .query_map_vec(
                 r#"
-SELECT id, chat_id, type, location_id
+SELECT id, chat_id, type, pinned, location_id
 FROM msgs
 WHERE
   timestamp < ?1
@@ -437,8 +438,9 @@ WHERE
                         .context("Using default viewtype for delete-old handling.")
                         .log_err(context)
                         .unwrap_or_default();
+                    let pinned: bool = row.get("pinned")?;
                     let location_id: u32 = row.get("location_id")?;
-                    Ok((id, chat_id, viewtype, location_id))
+                    Ok((id, chat_id, viewtype, pinned, location_id))
                 },
             )
             .await?;
@@ -463,11 +465,15 @@ pub(crate) async fn delete_expired_messages(context: &Context, now: i64) -> Resu
     if !rows.is_empty() {
         info!(context, "Attempting to delete {} messages.", rows.len());
 
-        let (msgs_changed, webxdc_deleted) = context
+        let (msgs_changed, webxdc_deleted, pinned_chat_ids) = context
             .sql
             .transaction(|transaction| {
                 let mut msgs_changed = Vec::with_capacity(rows.len());
                 let mut webxdc_deleted = Vec::new();
+
+                // IDs of the chats in which pinned messages were deleted.
+                let mut pinned_chat_ids = BTreeSet::new();
+
                 // If you change which information is preserved here, also change `MsgId::trash()`
                 // and other places it references.
                 let mut del_msg_stmt = transaction.prepare(
@@ -478,7 +484,7 @@ SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ? FROM msgs WHERE id=?1
                 )?;
                 let mut del_location_stmt =
                     transaction.prepare("DELETE FROM locations WHERE independent=1 AND id=?")?;
-                for (msg_id, chat_id, viewtype, location_id) in rows {
+                for (msg_id, chat_id, viewtype, is_pinned, location_id) in rows {
                     del_msg_stmt.execute((msg_id, ChatId::TRASH))?;
                     if location_id > 0 {
                         del_location_stmt.execute((location_id,))?;
@@ -488,8 +494,12 @@ SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ? FROM msgs WHERE id=?1
                     if viewtype == Viewtype::Webxdc {
                         webxdc_deleted.push(msg_id)
                     }
+
+                    if is_pinned {
+                        pinned_chat_ids.insert(chat_id);
+                    }
                 }
-                Ok((msgs_changed, webxdc_deleted))
+                Ok((msgs_changed, webxdc_deleted, pinned_chat_ids))
             })
             .await?;
 
@@ -502,6 +512,10 @@ SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ? FROM msgs WHERE id=?1
 
         for modified_chat_id in modified_chat_ids {
             context.emit_msgs_changed_without_msg_id(modified_chat_id);
+        }
+
+        for chat_id in pinned_chat_ids {
+            context.emit_event(EventType::PinnedMessagesChanged { chat_id });
         }
 
         for msg_id in webxdc_deleted {

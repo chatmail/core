@@ -258,6 +258,15 @@ pub enum EventType {
         chat_id: u32,
     },
 
+    /// The list of pinned messages for the chat has changed.
+    ///
+    /// Some message got pinned, or pinned message is unpinned or deleted.
+    #[serde(rename_all = "camelCase")]
+    PinnedMessagesChanged {
+        /// ID of the chat where the list of pinned messages changed.
+        chat_id: u32,
+    },
+
     /// Contact(s) created, renamed, blocked or deleted.
     #[serde(rename_all = "camelCase")]
     ContactsChanged {
@@ -511,6 +520,9 @@ impl From<CoreEventType> for EventType {
                 chat_id: chat_id.to_u32(),
                 msg_id: msg_id.to_u32(),
                 contact_id: contact_id.to_u32(),
+            },
+            CoreEventType::PinnedMessagesChanged { chat_id } => PinnedMessagesChanged {
+                chat_id: chat_id.to_u32(),
             },
             CoreEventType::IncomingReaction {
                 chat_id,
