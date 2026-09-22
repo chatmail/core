@@ -1075,6 +1075,48 @@ async fn test_contact_freshness() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_contact_freshness_blocked() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = tcm.alice().await;
+    let bob = tcm.bob().await;
+
+    // Alice sends message to Bob. Bob receives message, contact's freshness is "recently seen"
+    let msg = tcm.send_recv(&alice, &bob, "moin").await;
+
+    let contact = Contact::get_by_id(&bob, msg.from_id).await?;
+    assert_eq!(contact.get_freshness(), Freshness::RecentlySeen);
+
+    // Bob blocks Alice, contact's freshness is "normal" now
+    Contact::block(&bob, msg.from_id).await?;
+    let contact = Contact::get_by_id(&bob, msg.from_id).await?;
+    assert!(contact.is_blocked());
+    assert_eq!(contact.get_freshness(), Freshness::Normal);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_contact_freshness_address_contact() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = tcm.alice().await;
+    alice.allow_unencrypted().await?;
+    let bob = tcm.bob().await;
+    bob.allow_unencrypted().await?;
+
+    // Alice sends a message to Bob
+    let alice_chat = alice.create_email_chat(&bob).await;
+    let sent_msg = alice.send_text(alice_chat.id, "moin").await;
+
+    // Bob receives message, contact's freshness is "normal", even though the messages was just received
+    let msg = bob.recv_msg(&sent_msg).await;
+    let contact = Contact::get_by_id(&bob, msg.from_id).await?;
+    assert!(!contact.is_key_contact());
+    assert_eq!(contact.get_freshness(), Freshness::Normal);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_was_seen_recently_event() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
