@@ -683,7 +683,11 @@ CREATE TABLE imap (
     transport_id INTEGER NOT NULL, -- ID of the transport in the `transports` table.
     rfc724_mid TEXT NOT NULL, -- Message-ID header
     folder TEXT NOT NULL, -- IMAP folder
-    target TEXT NOT NULL, -- Destination folder. Empty string means that the message shall be deleted.
+
+    -- Destination folder. Empty string means that the message shall be deleted.
+    -- Since we don't move messages between IMAP folders anymore,
+    -- this is always either empty or equal to `folder`.
+    target TEXT NOT NULL,
     uid INTEGER NOT NULL, -- UID
     uidvalidity INTEGER NOT NULL,
     UNIQUE (transport_id, folder, uid, uidvalidity)

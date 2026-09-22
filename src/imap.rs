@@ -423,13 +423,13 @@ impl Imap {
         Ok(session)
     }
 
-    /// FETCH-MOVE-DELETE iteration.
+    /// FETCH-and-DELETE iteration.
     ///
-    /// Prefetches headers and downloads new message from the folder, moves messages away from the
-    /// folder and deletes messages in the folder.
+    /// Prefetches headers and downloads new message from the folder
+    /// and deletes messages in the folder.
     ///
     /// Returns true if at least one message was fetched.
-    pub async fn fetch_move_delete(
+    pub async fn fetch_delete(
         &mut self,
         context: &Context,
         session: &mut Session,
@@ -460,9 +460,9 @@ impl Imap {
             .context("delete_expired_imap_messages")?;
 
         session
-            .move_delete_messages(context, watch_folder)
+            .delete_messages(context, watch_folder)
             .await
-            .context("move_delete_messages")?;
+            .context("delete_messages")?;
 
         Ok(msgs_fetched)
     }
@@ -573,16 +573,6 @@ impl Imap {
                 .size
                 .context("imap fetch response does not contain size")?;
 
-            // Determine the target folder where the message should be moved to.
-            //
-            // We only move the messages from the INBOX and Spam folders.
-            // This is required to avoid infinite MOVE loop on IMAP servers
-            // that alias `DeltaChat` folder to other names.
-            // For example, some Dovecot servers alias `DeltaChat` folder to `INBOX.DeltaChat`.
-            // In this case moving from `INBOX.DeltaChat` to `DeltaChat`
-            // results in the messages getting a new UID,
-            // so the messages will be detected as new
-            // in the `INBOX.DeltaChat` folder again.
             let delete = if let Some(message_id) = &message_id {
                 message::rfc724_mid_exists_ext(context, message_id, "deleted=1")
                     .await?
@@ -620,13 +610,7 @@ impl Imap {
                 )
                 .await?;
 
-            // Download only the messages which have reached their target folder if there are
-            // multiple devices. This prevents race conditions in multidevice case, where one
-            // device tries to download the message while another device moves the message at the
-            // same time. Even in single device case it is possible to fail downloading the first
-            // message, move it to the movebox and then download the second message before
-            // downloading the first one, if downloading from inbox before moving is allowed.
-            if folder == target
+            if !delete
                 && prefetch_should_download(context, &headers, &message_id, fetch_response.flags())
                     .await
                     .context("prefetch_should_download")?
@@ -863,75 +847,10 @@ impl Session {
         Ok(())
     }
 
-    /// Moves batch of messages identified by their UID from the currently
-    /// selected folder to the target folder.
-    async fn move_message_batch(
-        &mut self,
-        context: &Context,
-        set: &str,
-        row_ids: Vec<i64>,
-        target: &str,
-    ) -> Result<()> {
-        if self.can_move() {
-            match self.uid_mv(set, &target).await {
-                Ok(()) => {
-                    // Messages are moved or don't exist, IMAP returns OK response in both cases.
-                    context
-                        .sql
-                        .transaction(|transaction| {
-                            let mut stmt = transaction.prepare("DELETE FROM imap WHERE id = ?")?;
-                            for row_id in row_ids {
-                                stmt.execute((row_id,))?;
-                            }
-                            Ok(())
-                        })
-                        .await
-                        .context("Cannot delete moved messages from imap table")?;
-                    context.emit_event(EventType::ImapMessageMoved(format!(
-                        "IMAP messages {set} moved to {target}"
-                    )));
-                    return Ok(());
-                }
-                Err(err) => {
-                    warn!(
-                        context,
-                        "Cannot move messages, fallback to COPY/DELETE {} to {}: {}",
-                        set,
-                        target,
-                        err
-                    );
-                }
-            }
-        }
-
-        // Server does not support MOVE or MOVE failed.
-        // Copy messages to the destination folder if needed and mark records for deletion.
-        info!(
-            context,
-            "Server does not support MOVE, fallback to COPY/DELETE {} to {}", set, target
-        );
-        self.uid_copy(&set, &target).await?;
-        context
-            .sql
-            .transaction(|transaction| {
-                let mut stmt = transaction.prepare("UPDATE imap SET target='' WHERE id = ?")?;
-                for row_id in row_ids {
-                    stmt.execute((row_id,))?;
-                }
-                Ok(())
-            })
-            .await
-            .context("Cannot plan deletion of messages")?;
-        context.emit_event(EventType::ImapMessageMoved(format!(
-            "IMAP messages {set} copied to {target}"
-        )));
-        Ok(())
-    }
-
-    /// Moves and deletes messages as planned in the `imap` table.
+    /// Deletes messages as planned in the `imap` table.
     ///
-    /// This is the only place where messages are moved or deleted on the IMAP server.
-    async fn move_delete_messages(&mut self, context: &Context, folder: &str) -> Result<()> {
+    /// This is the only place where messages are deleted on the IMAP server.
+    async fn delete_messages(&mut self, context: &Context, folder: &str) -> Result<()> {
         let transport_id = self.transport_id();
         let rows = context
             .sql
@@ -953,23 +872,21 @@ impl Session {
 
         for (target, rowid_set, uid_set) in UidGrouper::from(rows) {
             // Select folder inside the loop to avoid selecting it if there are no pending
-            // MOVE/DELETE operations. This does not result in multiple SELECT commands
+            // DELETE operations. This does not result in multiple SELECT commands
             // being sent because `select_folder()` does nothing if the folder is already
             // selected.
             let folder_exists = self.select_with_uidvalidity(context, folder).await?;
             ensure!(folder_exists, "No folder {folder}");
 
             // Empty target folder name means messages should be deleted.
+            // Since we don't move messages between IMAP folders anymore,
+            // `target` is always either empty or equal to `folder`.
+            debug_assert!(target.is_empty() || folder == target);
+
             if target.is_empty() {
                 self.delete_message_batch(context, &uid_set, rowid_set)
                     .await
                     .with_context(|| format!("cannot delete batch of messages {uid_set:?}"))?;
-            } else {
-                self.move_message_batch(context, &uid_set, rowid_set, &target)
-                    .await
-                    .with_context(|| {
-                        format!("cannot move batch of messages {uid_set:?} to folder {target:?}",)
-                    })?;
             }
         }
 

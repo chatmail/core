@@ -99,10 +99,6 @@ impl Session {
         self.capabilities.can_idle
     }
 
-    pub fn can_move(&self) -> bool {
-        self.capabilities.can_move
-    }
-
     pub fn can_check_quota(&self) -> bool {
         self.capabilities.can_check_quota
     }
