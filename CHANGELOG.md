@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.62.0] - 2026-09-22
+
+### API-Changes
+
+- Remove unused ImapMessageMoved event.
+- [**breaking**] get rid of `Qr::FprWithoutAddr` and `Qr::FprMismatch` variants.
+  - removed `DC_QR_FPR_WITHOUT_ADDR` and `DC_QR_FPR_MISMATCH` constants from CFFI
+  - removed FprWithoutAddr and FprMismatch variants from JSON-RPC QrObject returned by `check_qr`
+
+### Features / Changes
+
+- Don't show "member added" messages in channels ([#8730](https://github.com/chatmail/core/pull/8730)).
+
+### Fixes
+
+- Don't notify about a reaction sent by a blocked contact ([#8729](https://github.com/chatmail/core/pull/8729)).
+- keep a message read status if a failure arrives later.
+- prefer login errors over connection errors in the log message ([#8727](https://github.com/chatmail/core/pull/8727)).
+- blocked or email contacts contacts are never recently seen or old ([#8733](https://github.com/chatmail/core/pull/8733)).
+
+### Refactor
+
+- Remove code that moves messages between IMAP folders.
+
 ## [2.61.0] - 2026-09-21
 
 ### API-Changes
@@ -8878,3 +8902,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.59.0]: https://github.com/chatmail/core/compare/v2.58.0..v2.59.0
 [2.60.0]: https://github.com/chatmail/core/compare/v2.59.0..v2.60.0
 [2.61.0]: https://github.com/chatmail/core/compare/v2.60.0..v2.61.0
+[2.62.0]: https://github.com/chatmail/core/compare/v2.61.0..v2.62.0
