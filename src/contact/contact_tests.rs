@@ -1080,12 +1080,9 @@ async fn test_contact_freshness_blocked() -> Result<()> {
     let alice = tcm.alice().await;
     let bob = tcm.bob().await;
 
-    // Alice sends message to Bob
-    let alice_chat = alice.create_chat(&bob).await;
-    let sent_msg = alice.send_text(alice_chat.id, "moin").await;
+    // Alice sends message to Bob. Bob receives message, contact's freshness is "recently seen"
+    let msg = tcm.send_recv(&alice, &bob, "moin").await;
 
-    // Bob receives message, contact's freshness is "recently seen"
-    let msg = bob.recv_msg(&sent_msg).await;
     let contact = Contact::get_by_id(&bob, msg.from_id).await?;
     assert_eq!(contact.get_freshness(), Freshness::RecentlySeen);
 
