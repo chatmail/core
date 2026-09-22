@@ -9,10 +9,6 @@ pub(crate) struct Capabilities {
     /// <https://tools.ietf.org/html/rfc2177>
     pub can_idle: bool,
 
-    /// True if the server has MOVE capability as defined in
-    /// <https://tools.ietf.org/html/rfc6851>
-    pub can_move: bool,
-
     /// True if the server has QUOTA capability as defined in
     /// <https://tools.ietf.org/html/rfc2087>
     pub can_check_quota: bool,

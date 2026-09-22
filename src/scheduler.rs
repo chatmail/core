@@ -341,7 +341,7 @@ async fn background_fetch_from_transport(
 
     let folder = connection.folder.clone();
     connection
-        .fetch_move_delete(context, &mut session, &folder)
+        .fetch_delete(context, &mut session, &folder)
         .await
 }
 
@@ -556,9 +556,9 @@ async fn fetch_idle(ctx: &Context, connection: &mut Imap, mut session: Session) 
 
     // Fetch the watched folder.
     connection
-        .fetch_move_delete(ctx, &mut session, &watch_folder)
+        .fetch_delete(ctx, &mut session, &watch_folder)
         .await
-        .context("fetch_move_delete")?;
+        .context("fetch_delete")?;
 
     download_known_post_messages_without_pre_message(ctx, &mut session).await?;
     download_msgs(ctx, &mut session)
