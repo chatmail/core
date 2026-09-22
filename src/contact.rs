@@ -749,7 +749,7 @@ impl Contact {
         self.last_seen
     }
 
-    /// Returns `true` if this contact was seen recently.
+    /// Returns freshness of the contact.
     pub fn get_freshness(&self) -> Freshness {
         if self.id.is_special() || !self.is_key_contact() || self.is_blocked() {
             return Freshness::Normal;
