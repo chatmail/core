@@ -1100,6 +1100,7 @@ To: <bob@example.net>
 Subject: Message from alice@example.org
 References: <MESSAGE_ID@localhost>
 Chat-Version: 1.0
+Chat-Disposition-Notification-To: alice@example.org
 Content-Transfer-Encoding: 7bit
 
 Hello!"#
@@ -1151,6 +1152,7 @@ To: <bob@example.net>
 Subject: Message from alice@example.org
 References: <MESSAGE_ID@localhost>
 Chat-Version: 1.0
+Chat-Disposition-Notification-To: alice@example.org
 
 
 --BOUNDARY
@@ -1165,7 +1167,8 @@ Content-Transfer-Encoding: base64
 
 Y29udGVudA==
 
---BOUNDARY--"#
+--BOUNDARY--
+"#
     .replace("\n", "\r\n");
     assert_eq!(
         unencrypted, expected,
