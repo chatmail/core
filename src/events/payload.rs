@@ -33,9 +33,6 @@ pub enum EventType {
     /// Emitted when an IMAP message has been marked as deleted
     ImapMessageDeleted(String),
 
-    /// Emitted when an IMAP message has been moved
-    ImapMessageMoved(String),
-
     /// Emitted before going into IDLE on the Inbox folder.
     ImapInboxIdle,
 

@@ -44,9 +44,6 @@ pub enum EventType {
     /// Emitted when an IMAP message has been marked as deleted
     ImapMessageDeleted { msg: String },
 
-    /// Emitted when an IMAP message has been moved
-    ImapMessageMoved { msg: String },
-
     /// Emitted before going into IDLE on the Inbox folder.
     ImapInboxIdle,
 
@@ -496,7 +493,6 @@ impl From<CoreEventType> for EventType {
             CoreEventType::ImapConnected(msg) => ImapConnected { msg },
             CoreEventType::SmtpMessageSent(msg) => SmtpMessageSent { msg },
             CoreEventType::ImapMessageDeleted(msg) => ImapMessageDeleted { msg },
-            CoreEventType::ImapMessageMoved(msg) => ImapMessageMoved { msg },
             CoreEventType::ImapInboxIdle => ImapInboxIdle,
             CoreEventType::NewBlobFile(file) => NewBlobFile { file },
             CoreEventType::DeletedBlobFile(file) => DeletedBlobFile { file },

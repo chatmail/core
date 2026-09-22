@@ -5940,14 +5940,6 @@ void dc_event_unref(dc_event_t* event);
 #define DC_EVENT_IMAP_MESSAGE_DELETED   104
 
 /**
- * Emitted when a message was successfully moved on IMAP.
- *
- * @param data1 0
- * @param data2 (char*) Info string in English language.
- */
-#define DC_EVENT_IMAP_MESSAGE_MOVED   105
-
-/**
  * Emitted before going into IDLE on the Inbox folder.
  *
  * @param data1 0
