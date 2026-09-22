@@ -1,9 +1,28 @@
 use super::*;
 use crate::chat::{ChatItem, add_info_msg, create_broadcast, get_chat_msgs};
 use crate::config::Config;
+use crate::ephemeral;
+use crate::message;
 use crate::securejoin::get_securejoin_qr;
-use crate::test_utils::{TestContextManager, sync};
+use crate::test_utils::{TestContext, TestContextManager, sync};
+use crate::tools::{SystemTime, time};
 use std::time::Duration;
+
+/// Waits for a PinnedMessagesChanged for a given `chat_id`.
+///
+/// Panics if event arrives for the wrong `chat_id`.
+async fn expect_pinned_message_event(context: &TestContext, chat_id: ChatId) {
+    let EventType::PinnedMessagesChanged {
+        chat_id: event_chat_id,
+    } = context
+        .evtracker
+        .get_matching(|evt| matches!(evt, EventType::PinnedMessagesChanged { .. }))
+        .await
+    else {
+        unreachable!();
+    };
+    assert_eq!(event_chat_id, chat_id);
+}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_pinned_messages() -> Result<()> {
@@ -40,6 +59,7 @@ async fn test_pinned_messages() -> Result<()> {
 
         set_pinned_state(alice, msg1.id, true).await?;
         let sent2 = alice.pop_sent_msg().await;
+        expect_pinned_message_event(alice, msg1.chat_id).await;
         assert!(sent1.load_from_db().await.is_pinned());
 
         let info_msg = sent2.load_from_db().await;
@@ -62,6 +82,7 @@ async fn test_pinned_messages() -> Result<()> {
         set_pinned_state(alice, msg1.id, false).await?;
         let sent4 = alice.pop_sent_msg().await;
         assert!(!sent1.load_from_db().await.is_pinned());
+        expect_pinned_message_event(alice, msg1.chat_id).await;
 
         let pinned = get_pinned_messages(alice, alice_chat_id).await?;
         assert!(pinned.is_empty());
@@ -80,6 +101,7 @@ async fn test_pinned_messages() -> Result<()> {
 
             // Bob receives info message to pin "Foo"
             bob.recv_msg(&sent2).await;
+            expect_pinned_message_event(bob, msg1.chat_id).await;
             assert!(Message::load_from_db(bob, msg1.id).await?.is_pinned());
 
             let pinned = get_pinned_messages(bob, msg1.chat_id).await?;
@@ -96,6 +118,7 @@ async fn test_pinned_messages() -> Result<()> {
             // Bob receives message "Bar" and hidden message to unpin message "Foo"
             bob.recv_msg(&sent3).await;
             bob.recv_msg_trash(&sent4).await;
+            expect_pinned_message_event(bob, msg1.chat_id).await;
             assert!(!Message::load_from_db(bob, msg1.id).await?.is_pinned());
 
             let pinned = get_pinned_messages(bob, msg1.chat_id).await?;
@@ -110,10 +133,12 @@ async fn test_pinned_messages() -> Result<()> {
         // Alice's second device receives all four messages and ends up in the same state
         let msg1 = alice2.recv_msg(&sent1).await;
         alice2.recv_msg(&sent2).await;
+        expect_pinned_message_event(alice2, msg1.chat_id).await;
         assert!(Message::load_from_db(alice2, msg1.id).await?.is_pinned());
 
         alice2.recv_msg(&sent3).await;
         alice2.recv_msg_trash(&sent4).await;
+        expect_pinned_message_event(alice2, msg1.chat_id).await;
         assert!(!Message::load_from_db(alice2, msg1.id).await?.is_pinned());
 
         let no_info_msg =
@@ -215,6 +240,70 @@ async fn test_handle_pinned_state_from_wire() -> Result<()> {
             .is_ok()
     );
     alice.assert_warn("Message is not pinnable").await;
+
+    Ok(())
+}
+
+/// Tests that disappearing pinned message expires and emits `PinnedMessagesChanged` event.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_ephemeral_pinned_message() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_chat_id = alice.create_chat_id(bob).await;
+
+    // Alice sends ephemeral timer in single chat with Bob.
+    alice_chat_id
+        .set_ephemeral_timer(alice, ephemeral::Timer::from_u32(60))
+        .await?;
+    let sent = alice.pop_sent_msg().await;
+    bob.recv_msg(&sent).await;
+
+    // Alice sends "Hello!" message to Bob.
+    let bob_msg = tcm.send_recv_accept(alice, bob, "Hello!").await;
+    let bob_chat_id = bob_msg.chat_id;
+
+    // Bob reads the message, so the timer starts.
+    message::markseen_msgs(bob, vec![bob_msg.id]).await?;
+
+    // Bob pins "Hello!" message received from Alice.
+    set_pinned_state(bob, bob_msg.id, true).await?;
+    expect_pinned_message_event(bob, bob_chat_id).await;
+    let pinned = get_pinned_messages(bob, bob_chat_id).await?;
+    assert_eq!(pinned.len(), 1);
+
+    // Wait until the message expires.
+    SystemTime::shift(Duration::from_secs(100));
+    ephemeral::delete_expired_messages(bob, time()).await?;
+
+    expect_pinned_message_event(bob, bob_chat_id).await;
+    let pinned = get_pinned_messages(bob, bob_chat_id).await?;
+    assert!(pinned.is_empty());
+
+    Ok(())
+}
+
+/// Tests that `PinnedMessagesChanged` event is emitted when pinned message is deleted.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_delete_pinned_message() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let bob_msg = tcm.send_recv_accept(alice, bob, "Hello!").await;
+    let bob_chat_id = bob_msg.chat_id;
+
+    // Bob pins "Hello!" message received from Alice.
+    set_pinned_state(bob, bob_msg.id, true).await?;
+    expect_pinned_message_event(bob, bob_chat_id).await;
+    let pinned = get_pinned_messages(bob, bob_chat_id).await?;
+    assert_eq!(pinned.len(), 1);
+
+    message::delete_msgs(bob, &[bob_msg.id]).await?;
+    expect_pinned_message_event(bob, bob_chat_id).await;
+    let pinned = get_pinned_messages(bob, bob_chat_id).await?;
+    assert!(pinned.is_empty());
 
     Ok(())
 }

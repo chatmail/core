@@ -6179,6 +6179,17 @@ void dc_event_unref(dc_event_t* event);
 
 
 /**
+ * The list of pinned messages for the chat has changed.
+ *
+ * Some message got pinned, or pinned message is unpinned or deleted.
+ *
+ * @param data1 (int) chat_id
+ * @param data2 (int) 0
+ */
+#define DC_EVENT_PINNED_MESSAGES_CHANGED 2024
+
+
+/**
  * Contact(s) created, renamed, blocked or deleted.
  *
  * @param data1 (int) contact_id of the changed contact or 0 on batch-changes or deletion.

@@ -2392,6 +2392,7 @@ async fn handle_edit_delete(
         }
 
         let mut modified_chat_ids = BTreeSet::new();
+        let mut pinned_messages_changed_chat_ids = BTreeSet::new();
         let mut msg_ids = Vec::new();
 
         let rfc724_mid_vec: Vec<&str> = rfc724_mid_list.split_whitespace().collect();
@@ -2416,8 +2417,17 @@ async fn handle_edit_delete(
             message::delete_msg_locally(context, &msg).await?;
             msg_ids.push(msg.id);
             modified_chat_ids.insert(msg.chat_id);
+            if msg.is_pinned() {
+                pinned_messages_changed_chat_ids.insert(msg.chat_id);
+            }
         }
-        message::delete_msgs_locally_done(context, &msg_ids, modified_chat_ids).await?;
+        message::delete_msgs_locally_done(
+            context,
+            &msg_ids,
+            modified_chat_ids,
+            pinned_messages_changed_chat_ids,
+        )
+        .await?;
     }
     Ok(())
 }

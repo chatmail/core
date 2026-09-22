@@ -384,6 +384,7 @@ impl Context {
 
     async fn sync_message_deletion(&self, msgs: &[String]) -> Result<()> {
         let mut modified_chat_ids = BTreeSet::new();
+        let mut pinned_messages_changed_chat_ids = BTreeSet::new();
         let mut msg_ids = Vec::new();
         for rfc724_mid in msgs {
             if let Some(msg_id) = message::rfc724_mid_exists(self, rfc724_mid).await? {
@@ -391,6 +392,9 @@ impl Context {
                     message::delete_msg_locally(self, &msg).await?;
                     msg_ids.push(msg.id);
                     modified_chat_ids.insert(msg.chat_id);
+                    if msg.is_pinned() {
+                        pinned_messages_changed_chat_ids.insert(msg.chat_id);
+                    }
                 } else {
                     warn!(self, "Sync message delete: Database entry does not exist.");
                 }
@@ -398,7 +402,13 @@ impl Context {
                 warn!(self, "Sync message delete: {rfc724_mid:?} not found.");
             }
         }
-        message::delete_msgs_locally_done(self, &msg_ids, modified_chat_ids).await?;
+        message::delete_msgs_locally_done(
+            self,
+            &msg_ids,
+            modified_chat_ids,
+            pinned_messages_changed_chat_ids,
+        )
+        .await?;
         Ok(())
     }
 }

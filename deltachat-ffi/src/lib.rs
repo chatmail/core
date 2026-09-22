@@ -514,6 +514,7 @@ pub unsafe extern "C" fn dc_event_get_id(event: *mut dc_event_t) -> libc::c_int 
         EventType::ChatModified(_) => 2020,
         EventType::ChatEphemeralTimerModified { .. } => 2021,
         EventType::ChatDeleted { .. } => 2023,
+        EventType::PinnedMessagesChanged { .. } => 2024,
         EventType::ContactsChanged(_) => 2030,
         EventType::LocationChanged(_) => 2035,
         EventType::ConfigureProgress { .. } => 2041,
@@ -587,7 +588,8 @@ pub unsafe extern "C" fn dc_event_get_data1_int(event: *mut dc_event_t) -> libc:
         | EventType::MsgReadCountChanged { chat_id, .. }
         | EventType::ChatModified(chat_id)
         | EventType::ChatEphemeralTimerModified { chat_id, .. }
-        | EventType::ChatDeleted { chat_id } => chat_id.to_u32() as libc::c_int,
+        | EventType::ChatDeleted { chat_id }
+        | EventType::PinnedMessagesChanged { chat_id } => chat_id.to_u32() as libc::c_int,
         EventType::ContactsChanged(id) | EventType::LocationChanged(id) => {
             let id = id.unwrap_or_default();
             id.to_u32() as libc::c_int
@@ -661,7 +663,8 @@ pub unsafe extern "C" fn dc_event_get_data2_int(event: *mut dc_event_t) -> libc:
         | EventType::OutgoingCallAccepted { .. }
         | EventType::CallEnded { .. }
         | EventType::EventChannelOverflow { .. }
-        | EventType::TransportsModified => 0,
+        | EventType::TransportsModified
+        | EventType::PinnedMessagesChanged { .. } => 0,
         EventType::MsgsChanged { msg_id, .. }
         | EventType::ReactionsChanged { msg_id, .. }
         | EventType::IncomingReaction { msg_id, .. }
@@ -762,7 +765,8 @@ pub unsafe extern "C" fn dc_event_get_data2_str(event: *mut dc_event_t) -> *mut 
         | EventType::AccountsItemChanged
         | EventType::IncomingCallAccepted { .. }
         | EventType::WebxdcRealtimeAdvertisementReceived { .. }
-        | EventType::TransportsModified => ptr::null_mut(),
+        | EventType::TransportsModified
+        | EventType::PinnedMessagesChanged { .. } => ptr::null_mut(),
         EventType::IncomingCall {
             place_call_info, ..
         } => place_call_info.strdup(),
