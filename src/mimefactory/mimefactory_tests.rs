@@ -22,7 +22,7 @@ use crate::key::{load_self_secret_key, secret_key_to_public_key};
 use crate::message;
 use crate::mimeparser::MimeMessage;
 use crate::receive_imf::receive_imf;
-use crate::test_utils;
+use crate::test_utils::{self, SentMessage};
 use crate::test_utils::{TestContext, TestContextManager, get_chat_msg};
 use crate::tools::SystemTime;
 
@@ -1022,7 +1022,7 @@ END:VCARD";
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_render_outer_headers() -> Result<()> {
+async fn test_render_outer_headers_of_encrypted_msg() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
@@ -1030,26 +1030,9 @@ async fn test_render_outer_headers() -> Result<()> {
     let chat_id = alice.create_chat_id(bob).await;
     let sent = alice.send_text(chat_id, "Hello!").await;
 
-    let (unencrypted, _encrypted) = sent
-        .payload()
-        .split_once("-----BEGIN PGP MESSAGE-----")
-        .unwrap();
+    let payload = normalized_payload(sent).await;
 
-    // Normalize the parts of the message that vary between runs
-    // (MIME boundary, Date, Message-ID)
-    let boundary = unencrypted
-        .split_once("boundary=\"")
-        .and_then(|(_, rest)| rest.split_once('"'))
-        .map(|(b, _)| b)
-        .unwrap_or_default();
-    let unencrypted = unencrypted.replace(boundary, "BOUNDARY");
-
-    let rfc724_mid = sent.load_from_db().await.rfc724_mid;
-    let unencrypted = unencrypted.replace(&rfc724_mid, "MESSAGE_ID@localhost");
-
-    let unencrypted = regex!(r"Date:[^\r\n]*")
-        .replace(&unencrypted, "Date: DATE")
-        .to_string();
+    let (unencrypted, _encrypted) = payload.split_once("-----BEGIN PGP MESSAGE-----").unwrap();
 
     let expected = r#"From: <alice@example.org>
 Date: DATE
@@ -1084,4 +1067,138 @@ expected (debug print): {expected:?}"
     );
 
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_render_unencrypted_msg_basic() -> Result<()> {
+    let alice = &TestContext::new_alice().await;
+    alice.allow_unencrypted().await?;
+
+    let chat = alice
+        .create_chat_with_contact("Bob", "bob@example.net")
+        .await;
+    let sent = alice.send_text(chat.id, "Hello!").await;
+    let unencrypted = normalized_payload(sent).await;
+
+    let expected = r#"From: <alice@example.org>
+Message-ID: <MESSAGE_ID@localhost>
+MIME-Version: 1.0
+Autocrypt: addr=alice@example.org; prefer-encrypt=mutual; keydata=mDMEXlh13RYJKwYBBAHaRw8BAQdAzfVIAleCXMJrq8VeLlEVof6ITCviMktKjmcBKAu4m5
+	 DCtAQfFggAZgUCXlh13RYhBC5vossjtTLXKGNLWGSwj2Gp7ZRDAhsDAh4JBAsJCAcFFQgJCgsDFgIB
+	 AycJAgIZASwUgAAAAAASABFyZWxheXNAY2hhdG1haWwuYXRhbGljZUBleGFtcGxlLm9yZwAAb1QA/0
+	 HbvPN3/Vn02Gk1dcQMEcyGyETld9dSsRo8uwHAyW35AQCrFJjAQFLTud7XK61uYt9BC/QHipCfIGbq
+	 X1FjMbTUC80TPGFsaWNlQGV4YW1wbGUub3JnPsKRBBMWCAA5BQJeWHXdFiEELm+iyyO1MtcoY0tYZL
+	 CPYantlEMCGwMCHgkECwkIBwUVCAkKCwMWAgEDJwkCAhkBAAoJEGSwj2Gp7ZRD1m4A/iOifEzIOiP8
+	 wW0O8I/sg69gQtG8Czn4MsVV6Ea1EyIqAP4uByHaUJdy8MSQPfv/Usr09KsidNgy2Jh37yg82fKUBr
+	 g4BF5Ydd0SCisGAQQBl1UBBQEBB0AG7cjWy2SFAU8KnltlubVW67rFiyfp01JrRe6Xqy22HQMBCAeI
+	 eAQYFggAIBYhBC5vossjtTLXKGNLWGSwj2Gp7ZRDBQJeWHXdAhsMAAoJEGSwj2Gp7ZRDLo8BAObE8G
+	 nsGVwKzNqCvHeWgJsqhjS3C6gvSlV3tEm9XmF6AQDXucIyVfoBwoyMh2h6cSn/ATn5QJb35pgo+ivp
+	 3jsMAg==
+Content-Type: text/plain; charset="utf-8"
+Date: DATE
+To: <bob@example.net>
+Subject: Message from alice@example.org
+References: <MESSAGE_ID@localhost>
+Chat-Version: 1.0
+Content-Transfer-Encoding: 7bit
+
+Hello!"#
+    .replace("\n", "\r\n");
+    assert_eq!(
+        unencrypted, expected,
+        "---------------- Actual: ----------------
+{unencrypted}
+-----------------------------------------
+actual (debug print): {unencrypted:?}
+expected (debug print): {expected:?}"
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_render_unencrypted_msg_with_attachment() -> Result<()> {
+    let alice = &TestContext::new_alice().await;
+    alice.allow_unencrypted().await?;
+
+    let chat = alice
+        .create_chat_with_contact("Bob", "bob@example.net")
+        .await;
+    let mut msg = Message::new(Viewtype::File);
+    msg.set_text("Hello!".to_string());
+    msg.set_file_from_bytes(alice, "foo.bar", "content".as_bytes(), None)?;
+    let sent = alice.send_msg(chat.id, &mut msg).await;
+    let unencrypted = normalized_payload(sent).await;
+
+    let expected = r#"From: <alice@example.org>
+Message-ID: <MESSAGE_ID@localhost>
+MIME-Version: 1.0
+Autocrypt: addr=alice@example.org; prefer-encrypt=mutual; keydata=mDMEXlh13RYJKwYBBAHaRw8BAQdAzfVIAleCXMJrq8VeLlEVof6ITCviMktKjmcBKAu4m5
+	 DCtAQfFggAZgUCXlh13RYhBC5vossjtTLXKGNLWGSwj2Gp7ZRDAhsDAh4JBAsJCAcFFQgJCgsDFgIB
+	 AycJAgIZASwUgAAAAAASABFyZWxheXNAY2hhdG1haWwuYXRhbGljZUBleGFtcGxlLm9yZwAAb1QA/0
+	 HbvPN3/Vn02Gk1dcQMEcyGyETld9dSsRo8uwHAyW35AQCrFJjAQFLTud7XK61uYt9BC/QHipCfIGbq
+	 X1FjMbTUC80TPGFsaWNlQGV4YW1wbGUub3JnPsKRBBMWCAA5BQJeWHXdFiEELm+iyyO1MtcoY0tYZL
+	 CPYantlEMCGwMCHgkECwkIBwUVCAkKCwMWAgEDJwkCAhkBAAoJEGSwj2Gp7ZRD1m4A/iOifEzIOiP8
+	 wW0O8I/sg69gQtG8Czn4MsVV6Ea1EyIqAP4uByHaUJdy8MSQPfv/Usr09KsidNgy2Jh37yg82fKUBr
+	 g4BF5Ydd0SCisGAQQBl1UBBQEBB0AG7cjWy2SFAU8KnltlubVW67rFiyfp01JrRe6Xqy22HQMBCAeI
+	 eAQYFggAIBYhBC5vossjtTLXKGNLWGSwj2Gp7ZRDBQJeWHXdAhsMAAoJEGSwj2Gp7ZRDLo8BAObE8G
+	 nsGVwKzNqCvHeWgJsqhjS3C6gvSlV3tEm9XmF6AQDXucIyVfoBwoyMh2h6cSn/ATn5QJb35pgo+ivp
+	 3jsMAg==
+Content-Type: multipart/mixed; 
+	boundary="BOUNDARY"
+Date: DATE
+To: <bob@example.net>
+Subject: Message from alice@example.org
+References: <MESSAGE_ID@localhost>
+Chat-Version: 1.0
+
+
+--BOUNDARY
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Hello!
+--BOUNDARY
+Content-Type: application/octet-stream
+Content-Disposition: attachment; filename="foo.bar"
+Content-Transfer-Encoding: base64
+
+Y29udGVudA==
+
+--BOUNDARY--"#
+    .replace("\n", "\r\n");
+    assert_eq!(
+        unencrypted, expected,
+        "---------------- Actual: ----------------
+{unencrypted}
+-----------------------------------------
+actual (debug print): {unencrypted:?}
+expected (debug print): {expected:?}"
+    );
+
+    Ok(())
+}
+
+/// Normalize the parts of the message that vary between runs
+/// (MIME boundary, Date, Message-ID)
+async fn normalized_payload(sent: SentMessage<'_>) -> String {
+    let rfc724_mid = sent.load_from_db().await.rfc724_mid;
+
+    let mut payload = sent.payload;
+
+    if let Some(boundary) = payload
+        .split_once("boundary=\"")
+        .and_then(|(_, rest)| rest.split_once('"'))
+        .map(|(b, _)| b)
+    {
+        payload = payload.replace(boundary, "BOUNDARY");
+    }
+
+    payload = payload.replace(&rfc724_mid, "MESSAGE_ID@localhost");
+
+    payload = regex!(r"Date:[^\r\n]*")
+        .replace(&payload, "Date: DATE")
+        .to_string();
+
+    payload
 }
