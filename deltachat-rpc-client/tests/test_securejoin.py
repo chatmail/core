@@ -146,17 +146,13 @@ def test_qr_securejoin_broadcast(acf, all_devices_online):
             assert "invited you to join this channel" in first_msg.text
             assert first_msg.is_info
 
-        if inviter_side:
-            member_added_msg = chat_msgs.pop(0).get_snapshot()
-            assert member_added_msg.text == f"Member {contact_snapshot.display_name} added."
-            assert member_added_msg.info_contact_id == contact_snapshot.id
-        else:
+        if not inviter_side:
             if chat_msgs[0].get_snapshot().text == "You joined the channel.":
                 member_added_msg = chat_msgs.pop(0).get_snapshot()
             else:
                 member_added_msg = chat_msgs.pop(1).get_snapshot()
                 assert member_added_msg.text == "You joined the channel."
-        assert member_added_msg.is_info
+            assert member_added_msg.is_info
 
         hello_msg = chat_msgs.pop(0).get_snapshot()
         assert hello_msg.text == "Hello everyone!"
@@ -221,7 +217,7 @@ def test_qr_securejoin_broadcast(acf, all_devices_online):
     snapshot = fiona.wait_for_incoming_msg().get_snapshot()
     assert snapshot.text == "You joined the channel."
 
-    get_broadcast(alice2).get_messages()[2].resend()
+    get_broadcast(alice2).get_messages()[1].resend()
     snapshot = fiona.wait_for_incoming_msg().get_snapshot()
     assert snapshot.text == "Hello everyone!"
 

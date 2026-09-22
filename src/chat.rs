@@ -3918,15 +3918,7 @@ pub(crate) async fn add_contact_to_chat_ext(
         msg.viewtype = Viewtype::Text;
 
         let contact_addr = contact.get_addr().to_lowercase();
-        let added_by = if from_handshake && chat.typ == Chattype::OutBroadcast {
-            // The contact was added via a QR code rather than explicit user action,
-            // so it could be confusing to say 'You added member Alice'.
-            // And in a broadcast, SELF is the only one who can add members,
-            // so, no information is lost by just writing 'Member Alice added' instead.
-            ContactId::UNDEFINED
-        } else {
-            ContactId::SELF
-        };
+        let added_by = ContactId::SELF;
         msg.text = stock_str::msg_add_member_local(context, contact.id, added_by).await;
         msg.param.set_cmd(SystemMessage::MemberAddedToGroup);
         msg.param.set(Param::Arg, contact_addr);
@@ -3940,6 +3932,11 @@ pub(crate) async fn add_contact_to_chat_ext(
                 .await?
                 .context("Failed to find broadcast shared secret")?;
             msg.param.set(PARAM_BROADCAST_SECRET, secret);
+
+            // We don't show "member added" info-messages in channels,
+            // because there can be a lot members added,
+            // and these messages would clutter the timeline.
+            msg.hidden = true;
         }
         send_msg(context, chat_id, &mut msg).await?;
 
@@ -5107,7 +5104,7 @@ async fn set_contacts_by_fingerprints(
     if contacts == contacts_old {
         return Ok(());
     }
-    let broadcast_contacts_added = context
+    context
         .sql
         .transaction(move |transaction| {
             // For broadcast channels, we only add members,
@@ -5124,31 +5121,12 @@ async fn set_contacts_by_fingerprints(
             let mut statement = transaction.prepare(
                 "INSERT OR IGNORE INTO chats_contacts (chat_id, contact_id) VALUES (?, ?)",
             )?;
-            let mut broadcast_contacts_added = Vec::new();
             for contact_id in &contacts {
-                if statement.execute((id, contact_id))? > 0 && chat.typ == Chattype::OutBroadcast {
-                    broadcast_contacts_added.push(*contact_id);
-                }
+                statement.execute((id, contact_id))?;
             }
-            Ok(broadcast_contacts_added)
+            Ok(())
         })
         .await?;
-    let timestamp = time();
-    for added_id in broadcast_contacts_added {
-        let msg = stock_str::msg_add_member_local(context, added_id, ContactId::UNDEFINED).await;
-        add_info_msg_with_cmd(
-            context,
-            id,
-            &msg,
-            SystemMessage::MemberAddedToGroup,
-            Some(timestamp),
-            timestamp,
-            None,
-            Some(ContactId::SELF),
-            Some(added_id),
-        )
-        .await?;
-    }
     context.emit_event(EventType::ChatModified(id));
     Ok(())
 }
