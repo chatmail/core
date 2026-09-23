@@ -32,8 +32,6 @@ fn migrate_key_contacts(
     context: &Context,
     transaction: &mut rusqlite::Transaction<'_>,
 ) -> std::result::Result<(), anyhow::Error> {
-    info!(context, "Starting key-contact transition.");
-
     // =============================== Step 1: ===============================
     //                              Alter tables
     transaction.execute_batch(
@@ -79,12 +77,11 @@ fn migrate_key_contacts(
         .optional()
         .context("Step 0")?
     else {
-        info!(
-            context,
-            "Not yet configured, no need to migrate key-contacts"
-        );
+        // Not yet configured, no need to migrate key-contacts.
         return Ok(());
     };
+
+    info!(context, "Starting key-contact transition.");
 
     // =============================== Step 2: ===============================
     // Create up to 3 new contacts for every contact that has a peerstate:
@@ -1936,14 +1933,9 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
 
     inc_and_check(&mut migration_version, 132)?;
     if dbversion < migration_version {
-        let start = Time::now();
         sql.execute_migration_transaction(|t| migrate_key_contacts(context, t), migration_version)
             .await?;
-        info!(
-            context,
-            "key-contacts migration took {:?} in total.",
-            time_elapsed(&start),
-        );
+
         // Schedule `msgs_to_key_contacts()`.
         context
             .set_config_internal(Config::LastHousekeeping, None)
