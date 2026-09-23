@@ -199,8 +199,8 @@ impl Pool {
         Arc::clone(&self.inner).get(query_only).await
     }
 
-    /// Truncates the WAL file.
-    pub(crate) async fn wal_checkpoint(&self) -> Result<WalCheckpointStats> {
-        wal_checkpoint::wal_checkpoint(self).await
+    /// Runs a WAL checkpoint operation.
+    pub(crate) async fn wal_checkpoint(&self, force_truncate: bool) -> Result<WalCheckpointStats> {
+        wal_checkpoint::wal_checkpoint(self, force_truncate).await
     }
 }

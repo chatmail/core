@@ -26,26 +26,45 @@ pub(crate) struct WalCheckpointStats {
 
     /// Number of checkpointed WAL pages.
     ///
-    /// It should be the same as `pages_total`
+    /// If TRUNCATE is forced, it should be the same as `pages_total`
     /// unless there are external connections to the database
     /// that are not in the pool.
     pub pages_checkpointed: i64,
 }
 
-/// Runs a checkpoint operation in TRUNCATE mode, so the WAL file is truncated to 0 bytes.
-pub(super) async fn wal_checkpoint(pool: &Pool) -> Result<WalCheckpointStats> {
+/// Runs a WAL checkpoint operation.
+///
+/// * `force_truncate` - Force TRUNCATE mode to truncate the WAL file to 0 bytes, otherwise only run
+///   PASSIVE mode if the WAL isn't too large.
+pub(super) async fn wal_checkpoint(
+    pool: &Pool,
+    force_truncate: bool,
+) -> Result<WalCheckpointStats> {
     let t_start = Time::now();
 
     // Do as much work as possible without blocking anybody.
     let query_only = true;
     let conn = pool.get(query_only).await?;
-    tokio::task::block_in_place(|| {
+    let (pages_total, pages_checkpointed) = tokio::task::block_in_place(|| {
         // Execute some transaction causing the WAL file to be opened so that the
         // `wal_checkpoint()` can proceed, otherwise it fails when called the first time,
         // see https://sqlite.org/forum/forumpost/7512d76a05268fc8.
         conn.query_row("PRAGMA table_list", [], |_| Ok(()))?;
-        conn.query_row("PRAGMA wal_checkpoint(PASSIVE)", [], |_| Ok(()))
+        conn.query_row("PRAGMA wal_checkpoint(PASSIVE)", [], |row| {
+            let pages_total: i64 = row.get(1)?;
+            let pages_checkpointed: i64 = row.get(2)?;
+            Ok((pages_total, pages_checkpointed))
+        })
     })?;
+    if !force_truncate && pages_total < 4096 {
+        return Ok(WalCheckpointStats {
+            total_duration: time_elapsed(&t_start),
+            writers_blocked_duration: Duration::ZERO,
+            readers_blocked_duration: Duration::ZERO,
+            pages_total,
+            pages_checkpointed,
+        });
+    }
 
     // Kick out writers. `write_mutex` should be locked before taking an `InnerPool.semaphore`
     // permit to avoid ABBA deadlocks, so drop `conn` which holds a semaphore permit.
