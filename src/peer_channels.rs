@@ -46,7 +46,7 @@ use crate::mimeparser::SystemMessage;
 
 /// The length of an ed25519 `PublicKey`, in bytes.
 const PUBLIC_KEY_LENGTH: usize = 32;
-const PUBLIC_KEY_STUB: &[u8] = "static_string".as_bytes();
+const PUBLIC_KEY_STUB: &[u8] = b"static_string";
 
 /// Store Iroh peer channels for the context.
 #[derive(Debug)]

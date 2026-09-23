@@ -795,7 +795,7 @@ async fn test_protected_headers_directive() -> Result<()> {
     // Long messages are truncated and MimeMessage::decoded_data is set for them. We need
     // decoded_data to check presence of the necessary headers.
     msg.set_text("a".repeat(constants::DC_DESIRED_TEXT_LEN + 1));
-    msg.set_file_from_bytes(&bob, "foo.bar", "content".as_bytes(), None)?;
+    msg.set_file_from_bytes(&bob, "foo.bar", b"content", None)?;
     let sent = bob.send_msg(chat, &mut msg).await;
     assert!(msg.get_showpadlock());
     assert!(sent.payload.contains("\r\nSubject: [...]\r\n"));
@@ -1127,7 +1127,7 @@ async fn test_render_unencrypted_msg_with_attachment() -> Result<()> {
         .await;
     let mut msg = Message::new(Viewtype::File);
     msg.set_text("Hello!".to_string());
-    msg.set_file_from_bytes(alice, "foo.bar", "content".as_bytes(), None)?;
+    msg.set_file_from_bytes(alice, "foo.bar", b"content", None)?;
     let sent = alice.send_msg(chat.id, &mut msg).await;
     let unencrypted = normalized_payload(sent).await;
 

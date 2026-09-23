@@ -1201,30 +1201,28 @@ async fn test_get_webxdc_blob_with_subdirs() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_parse_webxdc_manifest() -> Result<()> {
-    let result = parse_webxdc_manifest(r#"key = syntax error"#.as_bytes());
+    let result = parse_webxdc_manifest(br#"key = syntax error"#);
     assert!(result.is_err());
 
-    let manifest = parse_webxdc_manifest(r#"no_name = "no name, no icon""#.as_bytes())?;
+    let manifest = parse_webxdc_manifest(br#"no_name = "no name, no icon""#)?;
     assert_eq!(manifest.name, None);
 
-    let manifest = parse_webxdc_manifest(r#"name = "name, no icon""#.as_bytes())?;
+    let manifest = parse_webxdc_manifest(br#"name = "name, no icon""#)?;
     assert_eq!(manifest.name, Some("name, no icon".to_string()));
 
     let manifest = parse_webxdc_manifest(
-        r#"name = "foo"
-icon = "bar""#
-            .as_bytes(),
+        br#"name = "foo"
+icon = "bar""#,
     )?;
     assert_eq!(manifest.name, Some("foo".to_string()));
 
     let manifest = parse_webxdc_manifest(
-        r#"name = "foz"
+        br#"name = "foz"
 icon = "baz"
 add_item = "that should be just ignored"
 
 [section]
-sth_for_the = "future""#
-            .as_bytes(),
+sth_for_the = "future""#,
     )?;
     assert_eq!(manifest.name, Some("foz".to_string()));
     Ok(())
@@ -1232,13 +1230,13 @@ sth_for_the = "future""#
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_parse_webxdc_manifest_min_api() -> Result<()> {
-    let manifest = parse_webxdc_manifest(r#"min_api = 3"#.as_bytes())?;
+    let manifest = parse_webxdc_manifest(br#"min_api = 3"#)?;
     assert_eq!(manifest.min_api, Some(3));
 
-    let result = parse_webxdc_manifest(r#"min_api = "1""#.as_bytes());
+    let result = parse_webxdc_manifest(br#"min_api = "1""#);
     assert!(result.is_err());
 
-    let result = parse_webxdc_manifest(r#"min_api = 1.2"#.as_bytes());
+    let result = parse_webxdc_manifest(br#"min_api = 1.2"#);
     assert!(result.is_err());
 
     Ok(())
@@ -1246,10 +1244,10 @@ async fn test_parse_webxdc_manifest_min_api() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_parse_webxdc_manifest_source_code_url() -> Result<()> {
-    let result = parse_webxdc_manifest(r#"source_code_url = 3"#.as_bytes());
+    let result = parse_webxdc_manifest(br#"source_code_url = 3"#);
     assert!(result.is_err());
 
-    let manifest = parse_webxdc_manifest(r#"source_code_url = "https://foo.bar""#.as_bytes())?;
+    let manifest = parse_webxdc_manifest(br#"source_code_url = "https://foo.bar""#)?;
     assert_eq!(
         manifest.source_code_url,
         Some("https://foo.bar".to_string())
