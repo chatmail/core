@@ -86,14 +86,14 @@ async fn test_can_communicate() {
         .get_or_try_init_peer_channel()
         .await
         .unwrap()
-        .send_webxdc_realtime_data(alice, alice_webxdc.id, "alice -> bob".as_bytes().to_vec())
+        .send_webxdc_realtime_data(alice, alice_webxdc.id, b"alice -> bob".to_vec())
         .await
         .unwrap();
 
     loop {
         let event = bob.evtracker.recv().await.unwrap();
         if let EventType::WebxdcRealtimeData { data, .. } = event.typ {
-            if data == "alice -> bob".as_bytes() {
+            if data == b"alice -> bob" {
                 break;
             } else {
                 panic!(
@@ -107,14 +107,14 @@ async fn test_can_communicate() {
     bob.get_or_try_init_peer_channel()
         .await
         .unwrap()
-        .send_webxdc_realtime_data(bob, bob_webxdc.id, "bob -> alice".as_bytes().to_vec())
+        .send_webxdc_realtime_data(bob, bob_webxdc.id, b"bob -> alice".to_vec())
         .await
         .unwrap();
 
     loop {
         let event = alice.evtracker.recv().await.unwrap();
         if let EventType::WebxdcRealtimeData { data, .. } = event.typ {
-            if data == "bob -> alice".as_bytes() {
+            if data == b"bob -> alice" {
                 break;
             } else {
                 panic!(
@@ -149,14 +149,14 @@ async fn test_can_communicate() {
     bob.get_or_try_init_peer_channel()
         .await
         .unwrap()
-        .send_webxdc_realtime_data(bob, bob_webxdc.id, "bob -> alice 2".as_bytes().to_vec())
+        .send_webxdc_realtime_data(bob, bob_webxdc.id, b"bob -> alice 2".to_vec())
         .await
         .unwrap();
 
     loop {
         let event = alice.evtracker.recv().await.unwrap();
         if let EventType::WebxdcRealtimeData { data, .. } = event.typ {
-            if data == "bob -> alice 2".as_bytes() {
+            if data == b"bob -> alice 2" {
                 break;
             } else {
                 panic!(
@@ -314,14 +314,14 @@ async fn test_can_reconnect() {
         .get_or_try_init_peer_channel()
         .await
         .unwrap()
-        .send_webxdc_realtime_data(alice, alice_webxdc.id, "alice -> bob".as_bytes().to_vec())
+        .send_webxdc_realtime_data(alice, alice_webxdc.id, b"alice -> bob".to_vec())
         .await
         .unwrap();
 
     loop {
         let event = bob.evtracker.recv().await.unwrap();
         if let EventType::WebxdcRealtimeData { data, .. } = event.typ {
-            if data == "alice -> bob".as_bytes() {
+            if data == b"alice -> bob" {
                 break;
             } else {
                 panic!(
@@ -373,14 +373,14 @@ async fn test_can_reconnect() {
     bob.get_or_try_init_peer_channel()
         .await
         .unwrap()
-        .send_webxdc_realtime_data(bob, bob_webxdc.id, "bob -> alice".as_bytes().to_vec())
+        .send_webxdc_realtime_data(bob, bob_webxdc.id, b"bob -> alice".to_vec())
         .await
         .unwrap();
 
     loop {
         let event = alice.evtracker.recv().await.unwrap();
         if let EventType::WebxdcRealtimeData { data, .. } = event.typ {
-            if data == "bob -> alice".as_bytes() {
+            if data == b"bob -> alice" {
                 break;
             } else {
                 panic!(
