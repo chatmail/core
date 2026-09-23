@@ -384,7 +384,7 @@ fn test_merge_openpgp_certificates() {
 
     // Cannot merge certificates with different primary key.
     assert!(merge_openpgp_certificates(alice.clone(), bob.clone()).is_err());
-    assert!(merge_openpgp_certificates(bob.clone(), alice.clone()).is_err());
+    assert!(merge_openpgp_certificates(bob, alice).is_err());
 }
 
 /// Test PQC support.

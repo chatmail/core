@@ -401,7 +401,7 @@ pub fn merge_openpgp_certificates(
     // such as Alice's key in `test-data/key/alice-secret.asc`.
     let best_user: Option<SignedUser> = old_users
         .into_iter()
-        .chain(new_users.clone())
+        .chain(new_users)
         .filter_map(|SignedUser { id, signatures }| {
             // Select the best signature for each User ID.
             // If User ID has no valid signatures, it is filtered out.

@@ -29,7 +29,7 @@ impl ServerParams {
         if self.username.is_empty() {
             vec![Self {
                 username: addr.to_string(),
-                ..self.clone()
+                ..self
             }]
         } else {
             vec![self]

@@ -362,7 +362,7 @@ impl Context {
                 .update_timestamp(Param::WebxdcSummaryTimestamp, timestamp)?
         {
             let summary = sanitize_bidi_characters(summary);
-            instance.param.set(Param::WebxdcSummary, summary.clone());
+            instance.param.set(Param::WebxdcSummary, summary);
             param_changed = true;
         }
 

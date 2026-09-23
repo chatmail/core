@@ -120,7 +120,7 @@ pub(super) fn decode_login(qr: &str) -> Result<Qr> {
         };
 
         Ok(Qr::Login {
-            address: addr.to_owned(),
+            address: addr,
             options,
         })
     } else {

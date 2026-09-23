@@ -294,11 +294,7 @@ impl MimeMessage {
             &mut wants_mdn,
             &mail,
         );
-        headers_removed.extend(
-            headers
-                .extract_if(|k, _v| is_hidden(k))
-                .map(|(k, _v)| k.to_string()),
-        );
+        headers_removed.extend(headers.extract_if(|k, _v| is_hidden(k)).map(|(k, _v)| k));
 
         // Parse hidden headers.
         let mimetype = mail.ctype.mimetype.parse::<Mime>()?;
@@ -1751,7 +1747,7 @@ impl MimeMessage {
         headers_removed.extend(
             headers
                 .extract_if(|k, _v| has_header_protection || is_protected(k))
-                .map(|(k, _v)| k.to_string()),
+                .map(|(k, _v)| k),
         );
 
         if has_header_protection {

@@ -764,7 +764,7 @@ fn decode_tg_socks_proxy(_context: &Context, qr: &str) -> Result<Qr> {
 fn decode_shadowsocks_proxy(qr: &str) -> Result<Qr> {
     let server_config = shadowsocks::config::ServerConfig::from_url(qr)?;
     let addr = server_config.addr();
-    let host = addr.host().to_string();
+    let host = addr.host();
     let port = addr.port();
     Ok(Qr::Proxy {
         url: qr.to_string(),
@@ -1124,7 +1124,7 @@ fn normalize_address(addr: &str) -> Result<String> {
 
     ensure!(may_be_valid_addr(&new_addr), "Bad e-mail address");
 
-    Ok(new_addr.to_string())
+    Ok(new_addr)
 }
 
 #[cfg(test)]
