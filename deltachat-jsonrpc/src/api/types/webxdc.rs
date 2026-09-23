@@ -66,7 +66,7 @@ impl WebxdcMessageInfo {
             self_addr,
             is_app_sender,
             is_broadcast,
-            send_update_interval,
+            send_update_interval_ms,
             send_update_max_size,
         } = message.get_webxdc_info(context).await?;
 
@@ -80,7 +80,7 @@ impl WebxdcMessageInfo {
             self_addr,
             is_app_sender,
             is_broadcast,
-            send_update_interval,
+            send_update_interval: send_update_interval_ms,
             send_update_max_size,
         })
     }
