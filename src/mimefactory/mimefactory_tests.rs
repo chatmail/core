@@ -304,11 +304,9 @@ async fn test_mdn_create_encrypted() -> Result<()> {
 
     let rcvd = bob.recv_msg(&sent).await;
     message::markseen_msgs(&bob, vec![rcvd.id]).await?;
-    let mimefactory =
-        MimeFactory::from_mdn(&bob, rcvd.from_id, rcvd.rfc724_mid.clone(), vec![]).await?;
-    assert!(!mimefactory.will_be_encrypted());
-    let bob_addr = bob.get_primary_self_addr().await?;
-    let rendered_msg = mimefactory.render(&bob, &bob_addr).await?;
+    let queued_mdn = mdn(&bob, rcvd.from_id, &rcvd.rfc724_mid, vec![]).await?;
+    assert!(!queued_mdn.encryption.is_encrypted());
+    let rendered_msg = render_queued_mail_with_context(queued_mdn, &bob).await?;
 
     assert!(!rendered_msg.message.contains("Bob Examplenet"));
     assert!(!rendered_msg.message.contains("Alice Exampleorg"));
@@ -319,10 +317,9 @@ async fn test_mdn_create_encrypted() -> Result<()> {
     let rcvd = tcm.send_recv(&alice, &bob, "Heyho").await;
     message::markseen_msgs(&bob, vec![rcvd.id]).await?;
 
-    let mimefactory = MimeFactory::from_mdn(&bob, rcvd.from_id, rcvd.rfc724_mid, vec![]).await?;
-    assert!(mimefactory.will_be_encrypted());
-    let bob_addr = bob.get_primary_self_addr().await?;
-    let rendered_msg = mimefactory.render(&bob, &bob_addr).await?;
+    let queued_mdn = mdn(&bob, rcvd.from_id, &rcvd.rfc724_mid, vec![]).await?;
+    assert!(queued_mdn.encryption.is_encrypted());
+    let rendered_msg = render_queued_mail_with_context(queued_mdn, &bob).await?;
 
     assert!(!rendered_msg.message.contains("Bob Examplenet"));
     assert!(!rendered_msg.message.contains("Alice Exampleorg"));
@@ -349,8 +346,8 @@ async fn test_mdn_sent_to_all_relays() -> Result<()> {
     )?;
     import_public_key(alice, &bob_public_key).await?;
 
-    let mimefactory = MimeFactory::from_mdn(alice, rcvd.from_id, rcvd.rfc724_mid, vec![]).await?;
-    let mut recipients = mimefactory.recipients();
+    let queued_mdn = mdn(alice, rcvd.from_id, &rcvd.rfc724_mid, vec![]).await?;
+    let mut recipients = queued_mdn.recipients;
     recipients.sort();
     assert_eq!(recipients, vec!["bob@example.net", "bob@relay2.example"]);
 
@@ -364,9 +361,8 @@ async fn test_mdn_autocrypt_throttle() -> Result<()> {
         alice: &TestContext,
         rcvd: &Message,
     ) -> Result<bool> {
-        let mf = MimeFactory::from_mdn(bob, rcvd.from_id, rcvd.rfc724_mid.clone(), vec![]).await?;
-        let addr = bob.get_primary_self_addr().await?;
-        let rendered_msg = mf.render(bob, &addr).await?;
+        let queued_mdn = mdn(bob, rcvd.from_id, &rcvd.rfc724_mid, vec![]).await?;
+        let rendered_msg = render_queued_mail_with_context(queued_mdn, bob).await?;
         let mime = MimeMessage::from_bytes(alice, rendered_msg.message.as_bytes()).await?;
         Ok(mime.autocrypt_fingerprint.is_some())
     }
@@ -647,8 +643,7 @@ async fn test_render_reply() {
     let recipients = mimefactory.recipients();
     assert_eq!(recipients, vec!["charlie@example.net"]);
 
-    let addr = t.get_primary_self_addr().await.unwrap();
-    let rendered_msg = mimefactory.render(t, &addr).await.unwrap();
+    let rendered_msg = mimefactory.render(t).await.unwrap();
 
     let mail = mailparse::parse_mail(rendered_msg.message.as_bytes()).unwrap();
     assert_eq!(

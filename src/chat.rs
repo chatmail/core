@@ -2924,9 +2924,7 @@ async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -> Result<Ve
         );
     }
 
-    if let Some(ref side_effects) = side_effects {
-        msg.subject.clone_from(&side_effects.subject);
-    }
+    msg.subject.clone_from(&side_effects.subject);
     if is_encrypted {
         msg.param.set_int(Param::GuaranteeE2ee, 1);
     } else {
@@ -2968,13 +2966,13 @@ async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -> Result<Ve
                     now,
                     msg.id,
                     &queued_pre_msg,
-                    pre_side_effects.as_ref(),
+                    Some(&pre_side_effects),
                 )
                 .context("Failed to enqueue pre-message")?;
                 row_ids.push(row_id)
             }
             row_ids.push(
-                enqueue_mail(transaction, now, msg.id, &queued_msg, side_effects.as_ref())
+                enqueue_mail(transaction, now, msg.id, &queued_msg, Some(&side_effects))
                     .context("Failed to enqueue message")?,
             );
             Ok(row_ids)
