@@ -33,7 +33,7 @@ pub(crate) use qrinvite::QrInvite;
 
 use crate::token::Namespace;
 
-const DISALLOWED_CHARACTERS: &AsciiSet = &NON_ALPHANUMERIC_WITHOUT_DOT.remove(b'_');
+const DISALLOWED_CHARACTERS: &AsciiSet = &NON_ALPHANUMERIC_WITHOUT_DOT.remove(b'_').remove(b'@');
 
 fn inviter_progress(
     context: &Context,
@@ -124,18 +124,19 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
     let self_addr = context.get_primary_self_addr().await?;
     let self_addr_urlencoded = utf8_percent_encode(&self_addr, DISALLOWED_CHARACTERS).to_string();
 
-    let r_param = context
+    let encoded_extra_relays: Vec<String> = context
         .get_self_addrs()
         .await?
         .into_iter()
         .filter(|addr| *addr != self_addr)
-        .reduce(|acc, addr| {
-            format!(
-                "{acc},{}",
-                utf8_percent_encode(&addr, DISALLOWED_CHARACTERS)
-            )
-        })
-        .map_or(String::default(), |addrs| format!("&r={addrs}"));
+        .map(|addr| utf8_percent_encode(&addr, DISALLOWED_CHARACTERS).to_string())
+        .collect();
+
+    let r_param = if encoded_extra_relays.is_empty() {
+        "".to_string()
+    } else {
+        format!("&r={}", encoded_extra_relays.join(","))
+    };
 
     let self_name = context
         .get_config(Config::Displayname)
