@@ -22,7 +22,6 @@ use crate::log::{LogExt, warn};
 use crate::message::Message;
 use crate::message::{self, MsgId};
 use crate::mimefactory;
-use crate::mimefactory::MimeFactory;
 use crate::net::proxy::ProxyConfig;
 use crate::net::session::SessionBufStream;
 use crate::scheduler::connectivity::ConnectivityStore;
@@ -687,28 +686,30 @@ async fn send_mdn_rfc724_mid(
         )
         .await?;
 
-    let mimefactory = MimeFactory::from_mdn(
+    let queued_mdn = mimefactory::mdn(
         context,
         contact_id,
-        rfc724_mid.to_string(),
+        rfc724_mid,
         additional_rfc724_mids.clone(),
     )
     .await?;
-    let encrypted = mimefactory.will_be_encrypted();
-    let mut recipients = if contact_id == ContactId::SELF {
-        Vec::new()
-    } else {
-        mimefactory.recipients()
-    };
+    let bcc_self = queued_mdn.bcc_self;
+
+    let encrypted = queued_mdn.encryption.is_encrypted();
+    let mut recipients = queued_mdn.recipients.clone();
+
+    let public_key = key::load_self_public_key(context).await?;
+    let secret_key = key::load_self_secret_key(context).await?;
     let from = smtp
         .from
         .as_ref()
         .context("No From address, not connected")?
         .to_string();
-    let rendered_msg = Box::pin(mimefactory.render(context, &from)).await?;
+    let rendered_msg =
+        mimefactory::render_queued_mail(queued_mdn, &public_key, &secret_key, from.clone())?;
     let body = rendered_msg.message;
 
-    if context.get_config_bool(Config::BccSelf).await? {
+    if bcc_self {
         add_self_recipients(context, &mut recipients, encrypted, from).await?;
     }
     let recipients: Vec<_> = recipients

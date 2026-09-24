@@ -109,7 +109,7 @@ pub struct SideEffects {
 }
 
 /// Email message ready to be queued with the side effects that should be applied at the same time.
-pub(crate) type ToBeQueuedMail = (QueuedMail, Option<SideEffects>);
+pub(crate) type ToBeQueuedMail = (QueuedMail, SideEffects);
 
 /// Process side effects and store queued mail.
 pub(crate) fn enqueue_mail(
