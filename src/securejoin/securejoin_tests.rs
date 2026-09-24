@@ -1154,7 +1154,7 @@ async fn test_get_securejoin_qr_encoding() -> Result<()> {
 
     // `@` in email addresses must not be percent-encoded:
     add_pseudo_transport(alice, "asdf@example.org").await?;
-    // But `%` does need percent-ecoding:
+    // But `%` does need percent-encoding:
     add_pseudo_transport(alice, "jk%l@example.net").await?;
 
     let qr = get_securejoin_qr(alice, None).await?;
