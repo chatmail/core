@@ -84,12 +84,14 @@ pub(crate) fn create_keypair(addr: EmailAddress) -> Result<SignedSecretKey> {
 /// Selects a subkey of the public key to use for encryption.
 ///
 /// Returns `None` if the public key cannot be used for encryption.
-///
-/// TODO: take key flags and expiration dates into account
 fn select_pk_for_encryption(key: &SignedPublicKey) -> Option<&SignedPublicSubKey> {
-    key.public_subkeys
-        .iter()
-        .find(|subkey| subkey.algorithm().can_encrypt())
+    key.public_subkeys.iter().find(|subkey| {
+        subkey.algorithm().can_encrypt()
+            && subkey
+                .signatures
+                .iter()
+                .any(|signature| signature.key_flags().encrypt_comms())
+    })
 }
 
 /// Version of SEIPD packet to use.
