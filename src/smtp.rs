@@ -687,8 +687,14 @@ async fn send_mdn_rfc724_mid(
         )
         .await?;
 
+    let from = smtp
+        .from
+        .as_ref()
+        .context("No From address, not connected")?
+        .to_string();
     let mimefactory = MimeFactory::from_mdn(
         context,
+        &from,
         contact_id,
         rfc724_mid.to_string(),
         additional_rfc724_mids.clone(),
@@ -700,11 +706,6 @@ async fn send_mdn_rfc724_mid(
     } else {
         mimefactory.recipients()
     };
-    let from = smtp
-        .from
-        .as_ref()
-        .context("No From address, not connected")?
-        .to_string();
     let rendered_msg = Box::pin(mimefactory.render(context, &from)).await?;
     let body = rendered_msg.message;
 

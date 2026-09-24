@@ -852,7 +852,8 @@ ORDER BY id"
 
     /// Receives a read receipt from `reader`, who received `msg`.
     pub async fn recv_mdn(&self, reader: &TestContext, msg: &Message) -> Result<()> {
-        let mdn = MimeFactory::from_mdn(reader, msg.from_id, msg.rfc724_mid.clone(), vec![])
+        let addr = reader.get_primary_self_addr().await?;
+        let mdn = MimeFactory::from_mdn(reader, &addr, msg.from_id, msg.rfc724_mid.clone(), vec![])
             .await?
             .render(reader, &reader.get_primary_self_addr().await?)
             .await?

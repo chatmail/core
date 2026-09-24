@@ -862,12 +862,12 @@ impl MimeFactory {
 
     pub async fn from_mdn(
         context: &Context,
+        from_addr: &str,
         from_id: ContactId,
         rfc724_mid: String,
         additional_msg_ids: Vec<String>,
     ) -> Result<MimeFactory> {
         let contact = Contact::get_by_id(context, from_id).await?;
-        let from_addr = context.get_primary_self_addr().await?;
         let timestamp = time();
 
         let addr = contact.get_addr().to_string();
@@ -890,7 +890,7 @@ impl MimeFactory {
         };
 
         let res = MimeFactory {
-            from_addr,
+            from_addr: from_addr.to_string(),
             from_displayname: "".to_string(),
             sender_displayname: None,
             selfstatus: "".to_string(),
