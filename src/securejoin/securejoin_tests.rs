@@ -13,6 +13,7 @@ use crate::test_utils::{
     AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, TestContext, TestContextManager,
     TimeShiftFalsePositiveNote, get_chat_msg, sync,
 };
+use crate::transport::add_pseudo_transport;
 
 #[derive(PartialEq)]
 enum SetupContactCase {
@@ -1138,6 +1139,43 @@ async fn test_get_securejoin_qr_name_is_last() -> Result<()> {
     let alice_chat_id = chat::create_group(alice, "The Chat").await?;
     let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
     assert!(qr.ends_with("The+Chat"));
+
+    Ok(())
+}
+
+/// Test that addresses in QR codes are percent-encoded.
+/// `@` should not be encoded unnecessarily,
+/// since this would just make the QR code longer.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_get_securejoin_qr_encoding() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    // `@` in email addresses must not be percent-encoded:
+    add_pseudo_transport(alice, "asdf@example.org").await?;
+    // But `%` does need percent-encoding:
+    add_pseudo_transport(alice, "jk%l@example.net").await?;
+
+    let qr = get_securejoin_qr(alice, None).await?;
+    assert!(
+        qr.contains("a=alice@example.org"),
+        "{qr} doesn't contain 'a=alice@example.org'"
+    );
+    assert!(
+        qr.contains("r=jk%25l@example.net,asdf@example.org"),
+        "{qr} doesn't contain 'r=jk%25l@example.net,asdf@example.org'"
+    );
+
+    let qr = check_qr(bob, &qr).await?;
+    let Qr::AskVerifyContact { mut addrs, .. } = qr else {
+        unreachable!()
+    };
+    addrs.sort();
+    assert_eq!(
+        addrs,
+        vec!["alice@example.org", "asdf@example.org", "jk%l@example.net",]
+    );
 
     Ok(())
 }
