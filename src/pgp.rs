@@ -27,6 +27,8 @@ use sha2::Sha256;
 use crate::configure::MAX_RELAYS;
 use crate::key::{DcKey, Fingerprint};
 
+pub(crate) mod autocrypt2;
+
 /// Preferred symmetric encryption algorithm.
 const SYMMETRIC_KEY_ALGORITHM: SymmetricKeyAlgorithm = SymmetricKeyAlgorithm::AES128;
 
