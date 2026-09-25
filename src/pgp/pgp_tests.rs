@@ -11,6 +11,7 @@ use crate::{
     test_utils::{TestContext, TestContextManager, alice_keypair, bob_keypair},
     token,
 };
+use chrono::{TimeZone as _, Utc};
 use pgp::composed::{Esk, Message};
 use pgp::packet::PublicKeyEncryptedSessionKey;
 
@@ -422,4 +423,213 @@ async fn test_securejoin_pqc_joiner() {
     let bob = &tcm.bob().await;
 
     tcm.execute_securejoin(bob, pqc).await;
+}
+
+/// Tests that public subkey selection for encryption respects key flags and prefers expring subkeys.
+///
+/// Non-encryption subkeys such as RSA subkey for authentication are ignored.
+#[test]
+fn test_select_pk_for_encryption() {
+    // Public key generated with GnuPG 2.4.9 with the following subkeys:
+    // 1. Auth-only RSA subkey (92E762B9084CA740).
+    // 2. Expired Curve25519 encryption subkey with 1-day expiration (C8F382BD0F35C49E)
+    // 3. Ed25519 signing subkey (F177AC3118F923CC).
+    // 4. Curve25519 encryption subkey with fingerprint (36188C6FFC8E267B)
+    // 5. Curve25519 encryption subkey with 1 year expiration, valid in the beginning of 2008, with key ID 9223FCEE7546CDE7
+    // 6. Curve25519 encryption subkey with no expiration (FD2C0567967223D8).
+    // Primary key is an Ed25519 not expiring key.
+    // Key 4 is the one that should be selected.
+
+    // Subkey 4 fingerprint.
+    let expected_fallback_fingerprint = "cdeb3ba3999bf7880f0ee1f536188c6ffc8e267b";
+
+    // Subkey 5 fingerprint, should be preferred to fallback when not expired.
+    let expected_expiring_fingerprint = "5133fab157c4a46ca41f6dc39223fcee7546cde7";
+
+    let alice_tpk_asc = "
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+
+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
+=AXAi
+-----END PGP PUBLIC KEY BLOCK-----
+    ";
+
+    let alice_tpk = SignedPublicKey::from_asc(alice_tpk_asc).unwrap();
+    let now = pgp::types::Timestamp::now();
+    let encryption_subkey = select_pk_for_encryption(now.as_secs(), &alice_tpk).unwrap();
+    assert_eq!(
+        encryption_subkey.fingerprint().to_string().as_str(),
+        expected_fallback_fingerprint
+    );
+
+    // If we pass 1199149200 as the `now` argument, which was in the beginning of 2008,
+    // then the expiring subkey is not yet expired and should be used.
+    let encryption_subkey = select_pk_for_encryption(1199149200, &alice_tpk).unwrap();
+    assert_eq!(
+        encryption_subkey.fingerprint().to_string().as_str(),
+        expected_expiring_fingerprint
+    );
+}
+
+/// Tests that key selection fails if there is only an expired subkey.
+#[test]
+fn test_select_only_expired_subkey() {
+    let alice_tpk_asc = "
+    -----BEGIN PGP PUBLIC KEY BLOCK-----
+
+mDMERvfcPBYJKwYBBAHaRw8BAQdAUz6AZXIRE8T04Vh8RReFiP3tEV8UfSs2EiYs
+8b8i4ce0GUFsaWNlIDxhbGljZUBleGFtcGxlLm9yZz6IkAQTFgoAOBYhBNRG3w/A
+qWyPitBaqkGLyqDx3CaUBQJG99w8AhsDBQsJCAcCBhUKCQgLAgQWAgMBAh4BAheA
+AAoJEEGLyqDx3CaUMjIA/Rq9/iORLP360s6EsIDe9qSmlmSCggtivafH+uVBWa0X
+AP0Wb+kailDwISq2O9Ef/jceZw7ozyzDLeDskKpCYiL3A7g4BEb33DwSCisGAQQB
+l1UBBQEBB0BXhbrks9iskW1GfT3B022W3KhJCgz8gw81z9lAWv7OZgMBCAeIfgQY
+FgoAJhYhBNRG3w/AqWyPitBaqkGLyqDx3CaUBQJG99w8AhsMBQkB4TOAAAoJEEGL
+yqDx3CaU6/YA/jaYJsZMXvu5grrMq1wq3Z/yzGXd15zeWp+alY/6UYxoAQCmSrBC
+SOtE3ODLZN9tC3F7k1N9clme1cHXyUiH3EliBQ==
+=zWPq
+-----END PGP PUBLIC KEY BLOCK-----
+";
+
+    let alice_tpk = SignedPublicKey::from_asc(alice_tpk_asc).unwrap();
+    let now = pgp::types::Timestamp::now();
+
+    assert_eq!(select_pk_for_encryption(now.as_secs(), &alice_tpk), None);
+}
+
+/// Tests that the key with the closest expiration date is selected.
+#[test]
+fn test_expiring_subkey_selection() {
+    // The key has the following keys:
+    // 1. Primary non-expiring Ed25519 key created on 2025-01-01
+    // 2. Non-expiring subkey CE5FC3FD479E41F08069DCE6F6CAD4ADB9AF47F1 created on 2025-01-01
+    // 3. Subkey 10493EF4DBA7EE4D55C826A7634684D9BFEEB890 created on 2026-06-01 and expiring on 2026-07-01
+    // 4. Subkey 477650C13FA4842BAF2831BC41C2D560BE27B38D created on 2026-06-01 and expiring on 2026-06-15
+    // 5. Subkey AB92F4AFD46DDD7D31FB05151BE08A8089F67CA2 created on 2026-06-08 and expiring on 2026-06-22
+    let alice_tpk_asc = "
+    -----BEGIN PGP PUBLIC KEY BLOCK-----
+
+mDMEZ3SFgBYJKwYBBAHaRw8BAQdAOrjYsxkYNvVtjbZwvglXk94Rd8S3F0YlIgcQ
+SSp45ni0GUFsaWNlIDxhbGljZUBleGFtcGxlLm9yZz6IkAQTFgoAOBYhBGV3iWZU
+bA6WJh3MR00wvB0X57PiBQJndIWAAhsDBQsJCAcCBhUKCQgLAgQWAgMBAh4BAheA
+AAoJEE0wvB0X57PiAr0A/0qzulPRXZR1+D1fUeW6/C3BRP+8qRZTlOvF0XEnxPOV
+AQD7oePZ/QI6AuDMFmnJ5HQJ6cQSSOp/FwyucD8yiAoABrg4BGd0hYASCisGAQQB
+l1UBBQEBB0DBBk+BdzyTu3Hys6dewzd0L5AFeYMRIOC99XosMBLZYwMBCAeIeAQY
+FgoAIBYhBGV3iWZUbA6WJh3MR00wvB0X57PiBQJndIWAAhsMAAoJEE0wvB0X57Pi
+BxYA+gOtDVtb9p9vVaKyAuYCG7LdJ63Bqu0OtrVxmZEQvHQbAQDJmJX/yOX5QSkh
+cRtM1qoiY7OUjcT8ERnaoAcw2suFBLg4BGocy4ASCisGAQQBl1UBBQEBB0AgEDSA
+muuqS2iyi7aZeV608Xx2qdVqYKjREgiC3cu4YQMBCAeIfgQYFgoAJhYhBGV3iWZU
+bA6WJh3MR00wvB0X57PiBQJqHMuAAhsMBQkAJ40AAAoJEE0wvB0X57Pi9KgA/2vW
+4yNU1EF/WRCKmr87mJtmYR5Xf9Jps54Tv4BexNGgAQDxxx9lKvwW4U9/8UkrSF28
+HrGdWES4wAa9N9HvJzuOD7g4BGocy4ASCisGAQQBl1UBBQEBB0CK1TifDqKtFzks
+4E8gNmF90OkIYVriZxdY3QFSwowILQMBCAeIfgQYFgoAJhYhBGV3iWZUbA6WJh3M
+R00wvB0X57PiBQJqHMuAAhsMBQkAEnUAAAoJEE0wvB0X57PiZ+UA/0+s3fM/8OOb
+8Ft21QMFM/7Ce1P/ovKgkxsYWjk8q7zYAP9HYm/vcWBGzQw08mn3X26UFB9UfCF3
+qc1yyltDEeERDrg4BGomBgASCisGAQQBl1UBBQEBB0AvGvgG8Wkwx/KklkUHdLuC
+UKKSqTp4xsjocWXJs69rSwMBCAeIfgQYFgoAJhYhBGV3iWZUbA6WJh3MR00wvB0X
+57PiBQJqJgYAAhsMBQkAEnUAAAoJEE0wvB0X57PibzQA/A0qT23pcdenNJJ5QZN/
+ecs08p2pbiipv+adPeojVGZIAP47Pyr8Hj0o3qhrEhhFZkIhTxxDxS/jAsq2v4UG
+JGp8Ag==
+=RzZZ
+-----END PGP PUBLIC KEY BLOCK-----
+";
+
+    let alice_tpk = SignedPublicKey::from_asc(alice_tpk_asc).unwrap();
+
+    // Two-week subkey that was generated earlier is selected
+    // because it expires earlier, on 2026-06-15.
+    {
+        let ts = u32::try_from(
+            Utc.with_ymd_and_hms(2026, 6, 9, 0, 0, 0)
+                .unwrap()
+                .timestamp(),
+        )
+        .unwrap();
+        let subkey = select_pk_for_encryption(ts, &alice_tpk).unwrap();
+        assert_eq!(
+            subkey.fingerprint().to_string().as_str(),
+            "477650c13fa4842baf2831bc41c2d560be27b38d",
+        );
+    }
+
+    // Now both 477650C13FA4842BAF2831BC41C2D560BE27B38D expires
+    // and we switch to another subkey that expires on 2026-06-22.
+    {
+        let ts = u32::try_from(
+            Utc.with_ymd_and_hms(2026, 6, 16, 0, 0, 0)
+                .unwrap()
+                .timestamp(),
+        )
+        .unwrap();
+        let subkey = select_pk_for_encryption(ts, &alice_tpk).unwrap();
+        assert_eq!(
+            subkey.fingerprint().to_string().as_str(),
+            "ab92f4afd46ddd7d31fb05151be08a8089f67ca2",
+        );
+    }
+
+    // Now both two-week subkeys have expired and we switch to expiring subkey that expires on 2026-07-01.
+    {
+        let ts = u32::try_from(
+            Utc.with_ymd_and_hms(2026, 6, 23, 0, 0, 0)
+                .unwrap()
+                .timestamp(),
+        )
+        .unwrap();
+        let subkey = select_pk_for_encryption(ts, &alice_tpk).unwrap();
+        assert_eq!(
+            subkey.fingerprint().to_string().as_str(),
+            "10493ef4dba7ee4d55c826a7634684d9bfeeb890",
+        );
+    }
+
+    // All expiring subkeys are expired, switching to non-expiring subkey.
+    {
+        let ts = u32::try_from(
+            Utc.with_ymd_and_hms(2026, 7, 2, 0, 0, 0)
+                .unwrap()
+                .timestamp(),
+        )
+        .unwrap();
+        let subkey = select_pk_for_encryption(ts, &alice_tpk).unwrap();
+        assert_eq!(
+            subkey.fingerprint().to_string().as_str(),
+            "ce5fc3fd479e41f08069dce6f6cad4adb9af47f1",
+        );
+    }
 }
