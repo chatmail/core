@@ -164,9 +164,9 @@ impl<'a> BlobObject<'a> {
     /// you want to create a [BlobObject] for a filename read from the
     /// database.
     pub fn from_name(context: &'a Context, name: &str) -> Result<BlobObject<'a>> {
-        let name = match name.starts_with("$BLOBDIR/") {
-            true => name.splitn(2, '/').last().unwrap(),
-            false => name,
+        let name = match name.strip_prefix("$BLOBDIR/") {
+            Some(name) => name,
+            None => name,
         };
         if !BlobObject::is_acceptible_blob_name(name) {
             return Err(format_err!("not an acceptable blob name: {name}"));
