@@ -1,6 +1,6 @@
 //! Handle plain text together with some attributes.
 
-use std::sync::LazyLock;
+use regex::regex;
 
 use crate::simplify::remove_message_footer;
 
@@ -25,12 +25,8 @@ impl PlainText {
     /// Convert plain text to HTML.
     /// The function handles quotes, links, fixed and floating text paragraphs.
     pub fn to_html(&self) -> String {
-        static LINKIFY_MAIL_RE: LazyLock<regex::Regex> =
-            LazyLock::new(|| regex::Regex::new(r"\b([\w.\-+]+@[\w.\-]+)\b").unwrap());
-
-        static LINKIFY_URL_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
-            regex::Regex::new(r"\b((http|https|ftp|ftps):[\w.,:;$/@!?&%\-~=#+]+)").unwrap()
-        });
+        let linkify_mail_re = regex!(r"\b([\w.\-+]+@[\w.\-]+)\b");
+        let linkify_url_re = regex!(r"\b((http|https|ftp|ftps):[\w.,:;$/@!?&%\-~=#+]+)");
 
         let lines: Vec<&str> = self.text.lines().collect();
         let (lines, _footer) = remove_message_footer(&lines);
@@ -52,12 +48,12 @@ impl PlainText {
             // to avoid double encoding, we escape our html-entities by \r that must not be used in the string elsewhere.
             let line = line.to_string().replace('\r', "");
 
-            let mut line = LINKIFY_MAIL_RE
+            let mut line = linkify_mail_re
                 .replace_all(&line, "\rLTa href=\rQUOTmailto:$1\rQUOT\rGT$1\rLT/a\rGT")
                 .as_ref()
                 .to_string();
 
-            line = LINKIFY_URL_RE
+            line = linkify_url_re
                 .replace_all(&line, "\rLTa href=\rQUOT$1\rQUOT\rGT$1\rLT/a\rGT")
                 .as_ref()
                 .to_string();
