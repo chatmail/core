@@ -31,7 +31,7 @@ impl Session {
 
         self.select_with_uidvalidity(context, folder).await?;
 
-        if self.drain_unsolicited_responses(context)? {
+        if self.drain_unsolicited_responses(context) {
             self.new_mail = true;
         }
 

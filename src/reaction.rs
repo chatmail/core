@@ -165,7 +165,7 @@ async fn set_msg_id_reaction(
             .await?;
         if chat
             .param
-            .update_timestamp(Param::LastReactionTimestamp, timestamp)?
+            .update_timestamp(Param::LastReactionTimestamp, timestamp)
         {
             chat.param
                 .set_i64(Param::LastReactionMsgId, i64::from(msg_id.to_u32()));

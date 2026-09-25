@@ -163,7 +163,7 @@ async fn maybe_add_additional_relays_inner(context: &Context, skip_network: bool
     for _ in 0..NUM_TRANSPORTS_TARGET {
         if context.count_transports().await? >= NUM_TRANSPORTS_TARGET {
             context
-                .set_config_internal(Config::AutorelayFinished, config::from_bool(true))
+                .set_config_internal(Config::AutorelayFinished, Some(config::from_bool(true)))
                 .await?;
 
             return Ok(relay_added);

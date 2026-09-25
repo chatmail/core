@@ -40,7 +40,7 @@ fn inviter_progress(
     contact_id: ContactId,
     chat_id: ChatId,
     chat_type: Chattype,
-) -> Result<()> {
+) {
     // No other values are used.
     let progress = 1000;
     context.emit_event(EventType::SecurejoinInviterProgress {
@@ -49,8 +49,6 @@ fn inviter_progress(
         chat_type,
         progress,
     });
-
-    Ok(())
 }
 
 /// Shorten name to max. `length` characters.
@@ -660,7 +658,7 @@ pub(crate) async fn handle_securejoin_handshake(
                     context.emit_event(EventType::ContactsChanged(Some(contact_id)));
                 }
 
-                inviter_progress(context, contact_id, joining_chat_id, chat.typ)?;
+                inviter_progress(context, contact_id, joining_chat_id, chat.typ);
                 // IMAP-delete the message to avoid handling it by another device and adding the
                 // member twice. Another device will know the member's key from Autocrypt-Gossip.
                 Ok(HandshakeMessage::Done)
@@ -671,7 +669,7 @@ pub(crate) async fn handle_securejoin_handshake(
                     .await
                     .context("failed sending vc-contact-confirm message")?;
 
-                inviter_progress(context, contact_id, chat_id, Chattype::Single)?;
+                inviter_progress(context, contact_id, chat_id, Chattype::Single);
                 Ok(HandshakeMessage::Ignore) // "Done" would delete the message and break multi-device (the key from Autocrypt-header is needed)
             }
         }
@@ -818,7 +816,7 @@ pub(crate) async fn observe_securejoin_on_other_device(
         // and tests which don't care about the chat ID,
         // so we pass invalid chat ID here.
         let chat_id = ChatId::new(0);
-        inviter_progress(context, contact_id, chat_id, chat_type)?;
+        inviter_progress(context, contact_id, chat_id, chat_type);
     }
 
     if matches!(step, SecureJoinStep::MemberAdded) {
