@@ -98,7 +98,8 @@ pub trait DcKey: Serialize + Deserializable + Clone {
         // Because we write to a Vec<u8> the io::Write impls never
         // fail and we can hide this error.
         let mut buf = Vec::new();
-        self.to_writer(&mut buf).unwrap();
+        self.to_writer(&mut buf)
+            .expect("Writing to Vec<u8> cannot fail");
         buf
     }
 
