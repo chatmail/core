@@ -718,9 +718,9 @@ impl Contact {
                     .await?
                     .unwrap_or_default();
                 contact.addr = context
-                    .get_config(Config::ConfiguredAddr)
-                    .await?
-                    .unwrap_or_default();
+                    .get_primary_self_addr()
+                    .await
+                    .context("Cannot get address for self-contact")?;
                 if let Some(self_fp) = self_fingerprint_opt(context).await? {
                     contact.fingerprint = Some(self_fp.to_string());
                 }
@@ -1421,10 +1421,6 @@ WHERE addr=?
         );
 
         let contact = Contact::get_by_id(context, contact_id).await?;
-        let addr = context
-            .get_config(Config::ConfiguredAddr)
-            .await?
-            .unwrap_or_default();
 
         let Some(fingerprint_other) = contact.fingerprint() else {
             return Ok(stock_str::encr_none(context));
@@ -1444,30 +1440,26 @@ WHERE addr=?
             .await?
             .dc_fingerprint()
             .human_readable();
-        if addr < contact.addr {
+        if fingerprint_self < fingerprint_other {
             cat_fingerprint(
                 &mut ret,
                 &stock_str::self_msg(context),
-                &addr,
                 &fingerprint_self,
             );
             cat_fingerprint(
                 &mut ret,
                 contact.get_display_name(),
-                &contact.addr,
                 &fingerprint_other,
             );
         } else {
             cat_fingerprint(
                 &mut ret,
                 contact.get_display_name(),
-                &contact.addr,
                 &fingerprint_other,
             );
             cat_fingerprint(
                 &mut ret,
                 &stock_str::self_msg(context),
-                &addr,
                 &fingerprint_self,
             );
         }
@@ -1968,8 +1960,8 @@ pub(crate) async fn update_last_seen(
     Ok(())
 }
 
-fn cat_fingerprint(ret: &mut String, name: &str, addr: &str, fingerprint: &str) {
-    *ret += &format!("\n\n{name} ({addr}):\n{fingerprint}");
+fn cat_fingerprint(ret: &mut String, name: &str, fingerprint: &str) {
+    *ret += &format!("\n\n{name}:\n{fingerprint}");
 }
 
 fn split_address_book(book: &str) -> Vec<(&str, &str)> {

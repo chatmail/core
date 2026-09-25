@@ -526,6 +526,14 @@ impl Context {
 
     /// Get a config key value if set, or a default value. Returns `None` if no value exists.
     pub async fn get_config(&self, key: Config) -> Result<Option<String>> {
+        if key == Config::ConfiguredAddr {
+            let addr: Option<String> = self
+                .sql
+                .query_get_value("SELECT addr FROM transports", ())
+                .await?;
+            return Ok(addr);
+        }
+
         let value = self.get_config_opt(key).await?;
         if value.is_some() {
             return Ok(value);
@@ -884,7 +892,7 @@ impl Context {
             .await
     }
 
-    /// Returns the address of the transport used for sending.
+    /// Returns address of some transport.
     /// Returns an error if no self addr is configured.
     pub async fn get_primary_self_addr(&self) -> Result<String> {
         self.get_config(Config::ConfiguredAddr)
