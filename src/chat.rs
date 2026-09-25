@@ -3639,7 +3639,7 @@ pub(crate) async fn create_out_broadcast_ext(
         )?;
         ensure!(cnt == 0, "{cnt} chats exist with grpid {grpid}");
         let mut params: Params = Params::new();
-        params.update_timestamp(Param::GroupNameTimestamp, time())?;
+        params.update_timestamp(Param::GroupNameTimestamp, time());
 
         t.execute(
             "INSERT INTO chats

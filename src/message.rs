@@ -580,7 +580,7 @@ impl Message {
 
         if let Some(msg) = &mut msg {
             msg.additional_text =
-                Self::get_additional_text(context, msg.download_state, &msg.param)?;
+                Self::get_additional_text(context, msg.download_state, &msg.param);
         }
 
         Ok(msg)
@@ -618,7 +618,7 @@ impl Message {
         context: &Context,
         download_state: DownloadState,
         param: &Params,
-    ) -> Result<String> {
+    ) -> String {
         if download_state != DownloadState::Done {
             let file_size = param
                 .get(Param::PostMessageFileBytes)
@@ -635,14 +635,14 @@ impl Message {
                 .unwrap_or("?".to_owned());
 
             return match viewtype {
-                Viewtype::File => Ok(format!(" [{file_name} – {file_size}]")),
+                Viewtype::File => format!(" [{file_name} – {file_size}]"),
                 _ => {
                     let translated_viewtype = viewtype.to_locale_string(context);
-                    Ok(format!(" [{translated_viewtype} – {file_size}]"))
+                    format!(" [{translated_viewtype} – {file_size}]")
                 }
             };
         }
-        Ok(String::new())
+        String::new()
     }
 
     /// Returns the MIME type of an attached file if it exists.

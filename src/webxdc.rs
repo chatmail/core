@@ -350,7 +350,7 @@ impl Context {
         if let Some(ref document) = status_update_item.document
             && instance
                 .param
-                .update_timestamp(Param::WebxdcDocumentTimestamp, timestamp)?
+                .update_timestamp(Param::WebxdcDocumentTimestamp, timestamp)
         {
             instance.param.set(Param::WebxdcDocument, document);
             param_changed = true;
@@ -359,7 +359,7 @@ impl Context {
         if let Some(ref summary) = status_update_item.summary
             && instance
                 .param
-                .update_timestamp(Param::WebxdcSummaryTimestamp, timestamp)?
+                .update_timestamp(Param::WebxdcSummaryTimestamp, timestamp)
         {
             let summary = sanitize_bidi_characters(summary);
             instance.param.set(Param::WebxdcSummary, summary);

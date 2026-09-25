@@ -1454,7 +1454,7 @@ impl Session {
     /// or flags have been changed.
     /// In this case we may want to skip next IDLE and do a round
     /// of fetching new messages and synchronizing seen flags.
-    fn drain_unsolicited_responses(&self, context: &Context) -> Result<bool> {
+    fn drain_unsolicited_responses(&self, context: &Context) -> bool {
         use UnsolicitedResponse::*;
         use async_imap::imap_proto::Response;
         use async_imap::imap_proto::ResponseCode;
@@ -1499,7 +1499,7 @@ impl Session {
                 }
             }
         }
-        Ok(should_refetch)
+        should_refetch
     }
 }
 

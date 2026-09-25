@@ -784,7 +784,7 @@ async fn test_get_existing_msg_ids() -> Result<()> {
 }
 
 #[test]
-fn test_can_fail() -> Result<()> {
+fn test_can_fail() {
     use MessageState::*;
 
     // states that are not allowed to transition to OutFailed
@@ -799,6 +799,4 @@ fn test_can_fail() -> Result<()> {
     assert!(OutPending.can_fail());
     assert!(OutDelivered.can_fail());
     assert!(OutFailed.can_fail());
-
-    Ok(())
 }

@@ -2311,7 +2311,7 @@ INSERT INTO msgs
         // This way, `LastSubject` actually refers to the most recent message _shown_ in the chat.
         if chat
             .param
-            .update_timestamp(Param::SubjectTimestamp, sort_timestamp)?
+            .update_timestamp(Param::SubjectTimestamp, sort_timestamp)
         {
             // write the last subject even if empty -
             // otherwise a reply may get an outdated subject.
@@ -3414,7 +3414,7 @@ async fn apply_chat_name_avatar_and_description_changes(
         && is_from_in_chat
         && chat
             .param
-            .update_timestamp(Param::AvatarTimestamp, mime_parser.timestamp_sent)?
+            .update_timestamp(Param::AvatarTimestamp, mime_parser.timestamp_sent)
     {
         info!(context, "Group-avatar change for {}.", chat.id);
         match avatar_action {
