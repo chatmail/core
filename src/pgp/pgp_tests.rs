@@ -423,3 +423,85 @@ async fn test_securejoin_pqc_joiner() {
 
     tcm.execute_securejoin(bob, pqc).await;
 }
+
+/// Tests that public subkey selection for encryption follows Autocrypt 2 rules.
+///
+/// If there is an expiring subkey, it is preferred, otherwise non-expiring subkey is selected.
+/// Non-encryption subkeys such as RSA subkey for authentication are ignored.
+#[test]
+fn test_select_pk_for_encryption() {
+    // Public key generated with GnuPG 2.4.9 with the following subkeys:
+    // 1. Auth-only RSA subkey (92E762B9084CA740).
+    // 2. Expired Curve25519 encryption subkey with 1-day expiration (C8F382BD0F35C49E)
+    // 3. Ed25519 signing subkey (F177AC3118F923CC).
+    // 4. Curve25519 encryption subkey with fingerprint (36188C6FFC8E267B)
+    // 5. Curve25519 encryption subkey with 1 year expiration, valid in the beginning of 2008, with key ID 9223FCEE7546CDE7
+    // 6. Curve25519 encryption subkey with no expiration (FD2C0567967223D8).
+    // Primary key is an Ed25519 not expiring key.
+    // Key 4 is the one that should be selected.
+
+    // Subkey 4 fingerprint.
+    let expected_fallback_fingerprint = "cdeb3ba3999bf7880f0ee1f536188c6ffc8e267b";
+
+    // Subkey 5 fingerprint, should be preferred to fallback when not expired.
+    let expected_expiring_fingerprint = "5133fab157c4a46ca41f6dc39223fcee7546cde7";
+
+    let alice_tpk_asc = "
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+
+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
+=AXAi
+-----END PGP PUBLIC KEY BLOCK-----
+    ";
+
+    let alice_tpk = SignedPublicKey::from_asc(alice_tpk_asc).unwrap();
+    let now = pgp::types::Timestamp::now();
+    let encryption_subkey = select_pk_for_encryption(now.as_secs(), &alice_tpk).unwrap();
+    assert_eq!(
+        encryption_subkey.fingerprint().to_string().as_str(),
+        expected_fallback_fingerprint
+    );
+
+    // In the beginning of 2008 expiring subkey is not expired yet and should be used.
+    let encryption_subkey = select_pk_for_encryption(1199149200, &alice_tpk).unwrap();
+    assert_eq!(
+        encryption_subkey.fingerprint().to_string().as_str(),
+        expected_expiring_fingerprint
+    );
+}
