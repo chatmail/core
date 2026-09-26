@@ -34,6 +34,7 @@ const DEFAULT_RELAY_CANDIDATES: &[&str] = &[
     "chat.nuvon.app",
     "chat.tinydispatch.org",
     "chat.vim.wtf",
+    "chatmail.au",
     "chatmail.uk",
     "chtml.ca",
     "deltachat.me",
