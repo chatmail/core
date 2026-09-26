@@ -44,6 +44,7 @@ const DEFAULT_RELAY_CANDIDATES: &[&str] = &[
     "nine.testrun.org",
     "sweetfern.net",
     "tarpit.fun",
+    "chatmail.au",
 ];
 
 /// Records the hosts of `addrs` as relay candidates.
