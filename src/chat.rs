@@ -3985,7 +3985,7 @@ ORDER BY timestamp DESC, id DESC -- final ORDER BY is needed as UNION does not g
             (
                 chat_id,
                 Viewtype::Webxdc,
-                constants::N_MSGS_TO_NEW_BROADCAST_MEMBER,
+                constants::N_MSGS_TO_NEW_BROADCAST_MEMBER as u32,
                 ContactId::INFO,
             ),
             |row: &rusqlite::Row| Ok(row.get::<_, MsgId>(0)?),
