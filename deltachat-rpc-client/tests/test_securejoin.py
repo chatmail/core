@@ -1,4 +1,5 @@
 import logging
+import time
 
 import pytest
 
@@ -88,6 +89,30 @@ def test_qr_securejoin(acf):
     fiona.secure_join(qr_code)
     alice2.wait_for_securejoin_inviter_success()
     fiona.wait_for_securejoin_joiner_success()
+
+
+def test_qr_securejoin_request_deleted_on_all_transports(acf):
+    alice, bob = acf.get_online_accounts(2)
+    alice.add_transport_from_qr(acf.get_account_qr())
+    alice.bring_online()
+    alice_chat = alice.create_group("Group")
+    qr_code = alice_chat.get_qr_code()
+    alice2 = alice.clone()
+
+    bob.secure_join(qr_code)
+    alice.wait_for_securejoin_inviter_success()
+    alice_chat.remove_contact(bob)
+    # Stop and start io in order to wait until the remove message is sent out.
+    alice.stop_io()
+    alice.bring_online()
+
+    # Membership timestamps have a resolution of one second.
+    time.sleep(1)
+    # By now, the securejoin message sent by Bob must be deleted on Alice's relays.
+    # Otherwise, alice2 would execute securejoin again and re-add Bob.
+    alice2.bring_online()
+    alice2_chat = alice2.get_chat_by_id(alice_chat.id)
+    assert alice2.create_contact(bob) not in alice2_chat.get_contacts()
 
 
 @pytest.mark.parametrize("all_devices_online", [True, False])

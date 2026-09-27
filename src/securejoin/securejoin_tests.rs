@@ -6,6 +6,7 @@ use crate::chat::{CantSendReason, ChatId, add_contact_to_chat, remove_contact_fr
 use crate::chatlist::Chatlist;
 use crate::constants::Chattype;
 use crate::key::self_fingerprint;
+use crate::message::rfc724_mid_exists_ext;
 use crate::qr::Qr;
 use crate::receive_imf::receive_imf;
 use crate::stock_str::{self, messages_e2ee_info_msg};
@@ -1561,5 +1562,31 @@ async fn test_deduplicate_member_added() -> Result<()> {
     // Second message is a no-op, so it is trashed.
     bob.recv_msg_trash(&sent2).await;
 
+    Ok(())
+}
+
+/// Tests that a handled join request is also marked as "deleted"
+/// in the database, so that if a copy of the request arrives via
+/// other relays in the future, then this copy will also be deleted.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_join_request_deleted_on_all_relays() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_chat_id = chat::create_group(alice, "Group").await?;
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
+    bob.add_or_lookup_contact_id(alice).await;
+    join_securejoin(bob, &qr).await?;
+    let request = bob.pop_sent_msg().await;
+    alice.recv_msg_trash(&request).await;
+
+    let rfc724_mid = Message::load_from_db(bob, request.sender_msg_id)
+        .await?
+        .rfc724_mid;
+    let (_, deleted) = rfc724_mid_exists_ext(alice, &rfc724_mid, "deleted=1")
+        .await?
+        .unwrap();
+    assert!(deleted);
     Ok(())
 }
