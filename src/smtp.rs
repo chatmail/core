@@ -356,7 +356,7 @@ pub(crate) async fn insert_into_smtp(
     queued_msg: &QueuedMail,
 ) -> Result<()> {
     let now = tools::time();
-    let msg_id = message::insert_tombstone(context, rfc724_mid).await?;
+    let msg_id = message::insert_tombstone(context, rfc724_mid, false).await?;
     context
         .sql
         .transaction(|transaction| queue::enqueue_mail(transaction, now, msg_id, queued_msg, None))
@@ -720,7 +720,7 @@ async fn send_mdn_rfc724_mid(
                 .ok()
         })
         .collect();
-    message::insert_tombstone(context, &rendered_msg.rfc724_mid).await?;
+    message::insert_tombstone(context, &rendered_msg.rfc724_mid, false).await?;
     match smtp_send(context, &recipients, &body, smtp, None).await {
         SendResult::Success => {
             if !recipients.is_empty() {
