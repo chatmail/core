@@ -4795,12 +4795,27 @@ pub(crate) async fn get_chat_id_by_grpid(
 ///
 /// Optional `label` can be provided to ensure that message is added only once.
 /// If `important` is true, a notification will be sent.
-#[expect(clippy::arithmetic_side_effects)]
 pub async fn add_device_msg_with_importance(
     context: &Context,
     label: Option<&str>,
     msg: Option<&mut Message>,
     important: bool,
+) -> Result<MsgId> {
+    add_device_msg_with_timestamp(context, label, msg, important, time()).await
+}
+
+/// Adds a message to device chat.
+///
+/// Similar to add_device_msg_with_importance(),
+/// with an additional timestamp that will be shown on the device message.
+/// The timestamp does not affect ordering, it is still sorted as the last message of the device chat.
+#[expect(clippy::arithmetic_side_effects)]
+pub(crate) async fn add_device_msg_with_timestamp(
+    context: &Context,
+    label: Option<&str>,
+    msg: Option<&mut Message>,
+    important: bool,
+    timestamp_sent: i64,
 ) -> Result<MsgId> {
     ensure!(
         label.is_some() || msg.is_some(),
@@ -4820,11 +4835,10 @@ pub async fn add_device_msg_with_importance(
         chat_id = ChatId::get_for_contact(context, ContactId::DEVICE).await?;
 
         let rfc724_mid = create_outgoing_rfc724_mid();
-        let timestamp_sent = time();
 
         // makes sure, the added message is the last one,
         // even if the date is wrong (useful esp. when warning about bad dates)
-        msg.timestamp_sort = timestamp_sent;
+        msg.timestamp_sort = time();
         if let Some(last_msg_time) = chat_id.get_timestamp(context).await?
             && msg.timestamp_sort <= last_msg_time
         {
@@ -4920,6 +4934,12 @@ pub(crate) async fn delete_and_reset_all_device_msgs(context: &Context) -> Resul
         .execute("DELETE FROM msgs WHERE from_id=?;", (ContactId::DEVICE,))
         .await?;
     context.sql.execute("DELETE FROM devmsglabels;", ()).await?;
+    context
+        .set_config_internal(Config::BackupTransferMsgId, None)
+        .await?;
+    context
+        .set_config_internal(Config::BackupTransferTimestamp, None)
+        .await?;
 
     // Insert labels for welcome messages to avoid them being re-added on reconfiguration.
     context
