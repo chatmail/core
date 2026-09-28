@@ -281,6 +281,8 @@ async fn test_subject_mdn() {
     assert_eq!("Re: Hello, Bob", mf.subject_str(t).await.unwrap());
 }
 
+/// Tests that MDNs sent in reply to encrypted messages are encrypted.
+/// and MDNs sent to unencrypted messages are not.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_mdn_create_encrypted() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -312,6 +314,11 @@ async fn test_mdn_create_encrypted() -> Result<()> {
 
     assert!(!rendered_msg.message.contains("Bob Examplenet"));
     assert!(!rendered_msg.message.contains("Alice Exampleorg"));
+
+    // Unencrypted MDNs have a Date header.
+    // This is a regression test, the Date header was missing in chatmail core 2.62.0.
+    assert!(rendered_msg.message.contains("Date: "));
+
     let bob_alice_contact = bob.add_or_lookup_contact(&alice).await;
     assert_eq!(bob_alice_contact.get_authname(), "Alice Exampleorg");
 
