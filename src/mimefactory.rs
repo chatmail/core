@@ -1515,19 +1515,10 @@ impl MimeFactory {
             self.from_displayname.clone()
         };
 
-        let is_mdn = matches!(self.loaded, Loaded::Mdn { .. });
         let should_sign = true;
 
         let message = if is_encrypted {
             add_headers_to_encrypted_part(message, headers)
-        } else if is_mdn {
-            // Never add outer multipart/mixed wrapper to MDN
-            // as multipart/report Content-Type is used to recognize MDNs
-            // by Delta Chat receiver and Chatmail servers
-            // allowing them to be unencrypted and not contain Autocrypt header
-            // without resetting Autocrypt encryption or triggering Chatmail filter
-            // that normally only allows encrypted mails.
-            message
         } else {
             // Unencrypted message.
             let message = if let Loaded::Message { msg, .. } = &self.loaded
@@ -1543,6 +1534,12 @@ impl MimeFactory {
                 // but only as long as they have this MIME structure.
                 MimePart::new("multipart/mixed", vec![message])
             } else {
+                // Never add outer multipart/mixed wrapper to MDN
+                // as multipart/report Content-Type is used to recognize MDNs
+                // by Delta Chat receiver and Chatmail servers
+                // allowing them to be unencrypted and not contain Autocrypt header
+                // without resetting Autocrypt encryption or triggering Chatmail filter
+                // that normally only allows encrypted mails.
                 message
             };
 
