@@ -281,7 +281,7 @@ async fn test_subject_mdn() {
     assert_eq!("Re: Hello, Bob", mf.subject_str(t).await.unwrap());
 }
 
-/// Tests that MDNs sent in reply to encrypted messages are encrypted.
+/// Tests that MDNs sent in reply to encrypted messages are encrypted
 /// and MDNs sent to unencrypted messages are not.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_mdn_create_encrypted() -> Result<()> {

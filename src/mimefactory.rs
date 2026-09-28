@@ -1543,12 +1543,7 @@ impl MimeFactory {
                 message
             };
 
-            headers.iter().fold(message, |message, (header, value)| {
-                debug_assert_ne!(*header, "from");
-                debug_assert_ne!(*header, "message-id");
-                debug_assert_ne!(*header, "autocrypt");
-                message.header(*header, value.clone())
-            })
+            add_headers_to_part(message, headers)
         };
         let raw_message = part_to_bytes(message);
         let recipients = self.recipients();
@@ -2233,20 +2228,26 @@ pub(crate) fn wrap_encrypted_part(encrypted: String) -> MimePart<'static> {
     )
 }
 
+fn add_headers_to_part(
+    message: MimePart<'static>,
+    headers: Vec<(&'static str, HeaderType<'static>)>,
+) -> MimePart<'static> {
+    headers
+        .into_iter()
+        .fold(message, |message, (header, value)| {
+            debug_assert_ne!(header, "from");
+            debug_assert_ne!(header, "message-id");
+            debug_assert_ne!(header, "autocrypt");
+            message.header(header, value)
+        })
+}
+
 fn add_headers_to_encrypted_part(
     message: MimePart<'static>,
     protected_headers: Vec<(&'static str, HeaderType<'static>)>,
 ) -> MimePart<'static> {
     // Store protected headers in the inner message.
-    let mut message: MimePart<'static> =
-        protected_headers
-            .into_iter()
-            .fold(message, |message, (header, value)| {
-                debug_assert_ne!(header, "from");
-                debug_assert_ne!(header, "message-id");
-                debug_assert_ne!(header, "autocrypt");
-                message.header(header, value)
-            });
+    let mut message = add_headers_to_part(message, protected_headers);
 
     // Set the appropriate Content-Type for the inner message
     for (h, v) in &mut message.headers {
