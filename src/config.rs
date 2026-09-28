@@ -336,6 +336,17 @@ pub enum Config {
     /// Timestamp of the last time housekeeping was run
     LastHousekeeping,
 
+    /// ID of the device message added after backup transfer.
+    ///
+    /// If the message does not exist on the first housekeeping
+    /// after `READD_BACKUP_TRANSFER_MSG_DELAY`, it is re-added.
+    BackupTransferMsgId,
+
+    /// Timestamp of the device message added after backup transfer.
+    ///
+    /// Needed to check against `READD_BACKUP_TRANSFER_MSG_DELAY`.
+    BackupTransferTimestamp,
+
     /// Timestamp of the last time accumulated broadcast channel reactions were sent
     LastReactionsBroadcast,
 

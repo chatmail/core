@@ -40,20 +40,67 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::EventType;
-use crate::chat::add_device_msg;
+use crate::chat::add_device_msg_with_importance;
+use crate::config::Config;
 use crate::context::Context;
 use crate::imex::BlobDirContents;
 use crate::key;
 use crate::log::warn;
-use crate::message::Message;
+use crate::message::{Message, MsgId};
 use crate::qr::Qr;
 use crate::stock_str::backup_transfer_msg_body;
-use crate::tools::{TempPathGuard, create_id};
+use crate::tools::{TempPathGuard, create_id, time};
 
 use super::{DBFILE_BACKUP_NAME, export_backup_stream, export_database, import_backup_stream};
 
 /// ALPN protocol identifier for the backup transfer protocol.
 const BACKUP_ALPN: &[u8] = b"/deltachat/backup";
+
+/// Minimum time after a backup transfer before we check
+/// whether the "second device added" device message still exists.
+///
+/// The check is done in the first housekeeping after this delay;
+/// if the message was deleted until then, it is re-added with the original timestamp.
+/// After the check, the user can delete the message as usual without it being re-added.
+///
+/// This makes it easier to spot unwanted "add second device" actions.
+/// It is clear that this does not catch all eventualities, it is best-effort.
+/// First line of defense is device locking and asking for secret explicitly before adding a second device.
+const READD_BACKUP_TRANSFER_MSG_DELAY: i64 = 60 * 60;
+
+/// Checks `Config::BackupTransferMsgId`
+/// and re-adds the backup transfer device message if it does not exist and some time passed.
+pub(crate) async fn maybe_readd_backup_transfer_msg(context: &Context) -> Result<()> {
+    let Some(msg_id) = context
+        .get_config_parsed::<u32>(Config::BackupTransferMsgId)
+        .await?
+    else {
+        return Ok(());
+    };
+
+    let timestamp = context
+        .get_config_i64(Config::BackupTransferTimestamp)
+        .await?;
+    if time() < timestamp.saturating_add(READD_BACKUP_TRANSFER_MSG_DELAY) {
+        return Ok(());
+    }
+
+    context
+        .set_config_internal(Config::BackupTransferMsgId, None)
+        .await?;
+    context
+        .set_config_internal(Config::BackupTransferTimestamp, None)
+        .await?;
+    if Message::load_from_db_optional(context, MsgId::new(msg_id))
+        .await?
+        .is_none()
+    {
+        let mut msg = Message::new_text(backup_transfer_msg_body(context));
+        add_device_msg_with_importance(context, None, Some(&mut msg), false, timestamp).await?;
+    }
+
+    Ok(())
+}
 
 /// Provide or send a backup of this device.
 ///
@@ -212,8 +259,23 @@ impl BackupProvider {
         info!(context, "Received backup reception acknowledgement.");
         context.emit_event(EventType::ImexProgress(1000));
 
+        let timestamp = time();
         let mut msg = Message::new_text(backup_transfer_msg_body(&context));
-        add_device_msg(&context, None, Some(&mut msg)).await?;
+        let msg_id =
+            add_device_msg_with_importance(&context, None, Some(&mut msg), false, timestamp)
+                .await?;
+        context
+            .set_config_internal(
+                Config::BackupTransferTimestamp,
+                Some(&timestamp.to_string()),
+            )
+            .await?;
+        context
+            .set_config_internal(
+                Config::BackupTransferMsgId,
+                Some(&msg_id.to_u32().to_string()),
+            )
+            .await?;
 
         Ok(())
     }
@@ -393,14 +455,17 @@ pub async fn get_backup(context: &Context, qr: Qr) -> Result<()> {
 mod tests {
     use std::time::Duration;
 
-    use crate::chat::{ChatItem, get_chat_msgs, send_msg};
-    use crate::message::Viewtype;
+    use crate::chat::{ChatId, ChatItem, get_chat_msgs, send_msg};
+    use crate::contact::ContactId;
+    use crate::message::{Viewtype, delete_msgs};
+    use crate::sql::housekeeping;
     use crate::test_utils::TestContextManager;
+    use crate::tools::SystemTime;
 
     use super::*;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_send_receive() {
+    async fn test_send_receive() -> Result<()> {
         let mut tcm = TestContextManager::new();
 
         // Create first device.
@@ -472,6 +537,31 @@ mod tests {
                 .get_matching(|ev| matches!(ev, EventType::ImexProgress(1000)))
                 .await;
         }
+
+        // When deleting the backup transfer message on the sending device,
+        // it is re-added once on housekeeping,
+        // but not within the first hour after the transfer.
+        let device_chat_id = ChatId::get_for_contact(&ctx0, ContactId::DEVICE).await?;
+        let original_msg = ctx0.get_last_msg_in(device_chat_id).await;
+        assert_eq!(original_msg.text, backup_transfer_msg_body(&ctx0));
+        delete_msgs(&ctx0, &[original_msg.id]).await?;
+        housekeeping(&ctx0).await?;
+        assert!(get_chat_msgs(&ctx0, device_chat_id).await?.is_empty()); // re-adding not done in first hour
+
+        SystemTime::shift(Duration::from_secs(60 * 60));
+        housekeeping(&ctx0).await?;
+        let readded_msg = ctx0.get_last_msg_in(device_chat_id).await;
+        assert_ne!(readded_msg.id, original_msg.id);
+        assert_eq!(readded_msg.get_text(), original_msg.get_text());
+        assert_eq!(readded_msg.get_timestamp(), original_msg.get_timestamp());
+        assert!(readded_msg.get_sort_timestamp() > original_msg.get_sort_timestamp());
+
+        delete_msgs(&ctx0, &[readded_msg.id]).await?;
+        housekeeping(&ctx0).await?;
+        let device_msgs = get_chat_msgs(&ctx0, device_chat_id).await?;
+        assert!(device_msgs.is_empty()); // re-adding is done only once
+
+        Ok(())
     }
 
     /// Tests that trying to accidentally overwrite a profile

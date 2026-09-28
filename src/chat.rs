@@ -4795,12 +4795,14 @@ pub(crate) async fn get_chat_id_by_grpid(
 ///
 /// Optional `label` can be provided to ensure that message is added only once.
 /// If `important` is true, a notification will be sent.
+/// `timestamp_sent` is the time shown on the message; it does not affect ordering.
 #[expect(clippy::arithmetic_side_effects)]
 pub async fn add_device_msg_with_importance(
     context: &Context,
     label: Option<&str>,
     msg: Option<&mut Message>,
     important: bool,
+    timestamp_sent: i64,
 ) -> Result<MsgId> {
     ensure!(
         label.is_some() || msg.is_some(),
@@ -4820,11 +4822,10 @@ pub async fn add_device_msg_with_importance(
         chat_id = ChatId::get_for_contact(context, ContactId::DEVICE).await?;
 
         let rfc724_mid = create_outgoing_rfc724_mid();
-        let timestamp_sent = time();
 
         // makes sure, the added message is the last one,
         // even if the date is wrong (useful esp. when warning about bad dates)
-        msg.timestamp_sort = timestamp_sent;
+        msg.timestamp_sort = time();
         if let Some(last_msg_time) = chat_id.get_timestamp(context).await?
             && msg.timestamp_sort <= last_msg_time
         {
@@ -4892,7 +4893,7 @@ pub async fn add_device_msg(
     label: Option<&str>,
     msg: Option<&mut Message>,
 ) -> Result<MsgId> {
-    add_device_msg_with_importance(context, label, msg, false).await
+    add_device_msg_with_importance(context, label, msg, false, time()).await
 }
 
 /// Returns true if device message with a given label was ever added to the device chat.
@@ -4920,6 +4921,12 @@ pub(crate) async fn delete_and_reset_all_device_msgs(context: &Context) -> Resul
         .execute("DELETE FROM msgs WHERE from_id=?;", (ContactId::DEVICE,))
         .await?;
     context.sql.execute("DELETE FROM devmsglabels;", ()).await?;
+    context
+        .set_config_internal(Config::BackupTransferMsgId, None)
+        .await?;
+    context
+        .set_config_internal(Config::BackupTransferTimestamp, None)
+        .await?;
 
     // Insert labels for welcome messages to avoid them being re-added on reconfiguration.
     context

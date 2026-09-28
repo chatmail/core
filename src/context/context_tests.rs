@@ -294,6 +294,8 @@ async fn test_get_info_completeness() {
     // too sensitive or summarized in another item.
     let skip_from_get_info = vec![
         "addr",
+        "backup_transfer_msg_id",
+        "backup_transfer_timestamp",
         "displayname",
         "imap_certificate_checks",
         "mail_server",

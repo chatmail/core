@@ -30,6 +30,7 @@ use crate::tools::{
 mod transfer;
 
 use ::pgp::types::KeyDetails;
+pub(crate) use transfer::maybe_readd_backup_transfer_msg;
 pub use transfer::{BackupProvider, get_backup};
 
 // Name of the database file in the backup.
