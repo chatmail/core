@@ -4795,22 +4795,9 @@ pub(crate) async fn get_chat_id_by_grpid(
 ///
 /// Optional `label` can be provided to ensure that message is added only once.
 /// If `important` is true, a notification will be sent.
-pub async fn add_device_msg_with_importance(
-    context: &Context,
-    label: Option<&str>,
-    msg: Option<&mut Message>,
-    important: bool,
-) -> Result<MsgId> {
-    add_device_msg_with_timestamp(context, label, msg, important, time()).await
-}
-
-/// Adds a message to device chat.
-///
-/// Similar to add_device_msg_with_importance(),
-/// with an additional timestamp that will be shown on the device message.
-/// The timestamp does not affect ordering, it is still sorted as the last message of the device chat.
+/// `timestamp_sent` is the time shown on the message; it does not affect ordering.
 #[expect(clippy::arithmetic_side_effects)]
-pub(crate) async fn add_device_msg_with_timestamp(
+pub async fn add_device_msg_with_importance(
     context: &Context,
     label: Option<&str>,
     msg: Option<&mut Message>,
@@ -4906,7 +4893,7 @@ pub async fn add_device_msg(
     label: Option<&str>,
     msg: Option<&mut Message>,
 ) -> Result<MsgId> {
-    add_device_msg_with_importance(context, label, msg, false).await
+    add_device_msg_with_importance(context, label, msg, false, time()).await
 }
 
 /// Returns true if device message with a given label was ever added to the device chat.

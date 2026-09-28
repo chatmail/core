@@ -220,6 +220,7 @@ async fn maybe_warn_on_bad_time(context: &Context, now: i64, known_past_timestam
                 ),
                 Some(&mut msg),
                 true,
+                time(),
             )
             .await
             .ok();

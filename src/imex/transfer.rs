@@ -40,7 +40,7 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::EventType;
-use crate::chat::add_device_msg_with_timestamp;
+use crate::chat::add_device_msg_with_importance;
 use crate::config::Config;
 use crate::context::Context;
 use crate::imex::BlobDirContents;
@@ -96,7 +96,7 @@ pub(crate) async fn maybe_readd_backup_transfer_msg(context: &Context) -> Result
         .is_none()
     {
         let mut msg = Message::new_text(backup_transfer_msg_body(context));
-        add_device_msg_with_timestamp(context, None, Some(&mut msg), false, timestamp).await?;
+        add_device_msg_with_importance(context, None, Some(&mut msg), false, timestamp).await?;
     }
 
     Ok(())
@@ -262,7 +262,8 @@ impl BackupProvider {
         let timestamp = time();
         let mut msg = Message::new_text(backup_transfer_msg_body(&context));
         let msg_id =
-            add_device_msg_with_timestamp(&context, None, Some(&mut msg), false, timestamp).await?;
+            add_device_msg_with_importance(&context, None, Some(&mut msg), false, timestamp)
+                .await?;
         context
             .set_config_internal(
                 Config::BackupTransferTimestamp,
