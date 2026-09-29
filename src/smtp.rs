@@ -651,6 +651,24 @@ pub(crate) async fn send_smtp_messages(context: &Context, connection: &mut Smtp)
     Ok(())
 }
 
+async fn delete_mdns_by_rfc724_mid(
+    context: &Context,
+    rfc724_mid: &str,
+    additional_rfc724_mids: Vec<String>,
+) -> Result<()> {
+    context
+        .sql
+        .transaction(|transaction| {
+            let mut stmt = transaction.prepare("DELETE FROM smtp_mdns WHERE rfc724_mid = ?")?;
+            stmt.execute((rfc724_mid,))?;
+            for additional_rfc724_mid in additional_rfc724_mids {
+                stmt.execute((additional_rfc724_mid,))?;
+            }
+            Ok(())
+        })
+        .await
+}
+
 /// Tries to send MDN for message identified by `rfc724_mdn` to `contact_id`.
 ///
 /// Attempts to aggregate additional MDNs for `contact_id` into sent MDN.
@@ -727,18 +745,7 @@ async fn send_mdn_rfc724_mid(
             if !recipients.is_empty() {
                 info!(context, "Successfully sent MDN for {rfc724_mid}.");
             }
-            context
-                .sql
-                .transaction(|transaction| {
-                    let mut stmt =
-                        transaction.prepare("DELETE FROM smtp_mdns WHERE rfc724_mid = ?")?;
-                    stmt.execute((rfc724_mid,))?;
-                    for additional_rfc724_mid in additional_rfc724_mids {
-                        stmt.execute((additional_rfc724_mid,))?;
-                    }
-                    Ok(())
-                })
-                .await?;
+            delete_mdns_by_rfc724_mid(context, rfc724_mid, additional_rfc724_mids).await?;
             Ok(true)
         }
         SendResult::Retry => {
