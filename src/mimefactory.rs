@@ -511,11 +511,6 @@ impl MimeFactory {
         let mut member_fingerprints = Vec::new();
         let mut member_timestamps = Vec::new();
         let mut recipient_ids = HashSet::new();
-        let req_mdn = !chat.is_self_talk()
-            && !msg.is_system_message()
-            && msg.param.get_int(Param::Reaction).unwrap_or_default() == 0
-            && context.should_request_mdns().await?;
-
         let self_fingerprint = self_fingerprint(context).await?;
 
         let encryption = if chat.is_self_talk() {
@@ -795,6 +790,12 @@ impl MimeFactory {
                 }
             }
         };
+
+        let req_mdn = encryption.is_encrypted()
+            && !chat.is_self_talk()
+            && !msg.is_system_message()
+            && msg.param.get_int(Param::Reaction).unwrap_or_default() == 0
+            && context.should_request_mdns().await?;
 
         let (in_reply_to, references) = context
             .sql
