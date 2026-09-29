@@ -862,11 +862,8 @@ impl MimeFactory {
     /// and will likely re-gossip it to group chats.
     async fn update_mdn_pubkey_attachment(
         context: &Context,
-        encryption: &QueuedEncryption,
+        encryption_pubkeys: &[SignedPublicKey],
     ) -> Result<bool> {
-        let QueuedEncryption::Asymmetric { encryption_pubkeys } = &encryption else {
-            return Ok(false);
-        };
         debug_assert!(
             encryption_pubkeys.len() <= 1,
             "MDNs have at most one recipient key; own key is only added at encryption time"
@@ -2300,26 +2297,18 @@ pub(crate) async fn mdn(
 
     let addr = contact.get_addr().to_string();
     let recipients: Vec<String>;
-    let encryption = if contact_id == ContactId::SELF {
+    let encryption_pubkeys = if contact_id == ContactId::SELF {
         recipients = Vec::new();
-        QueuedEncryption::Asymmetric {
-            encryption_pubkeys: Vec::new(),
-        }
-    } else if contact.is_key_contact() {
-        let encryption_pubkeys = if let Some(key) = contact.public_key(context).await? {
-            recipients = relay_addrs(&key, &addr);
-            vec![key]
-        } else {
-            // Encryption key for the contact is not available, sending MDN to self only.
-            recipients = Vec::new();
-            Vec::new()
-        };
-        QueuedEncryption::Asymmetric { encryption_pubkeys }
+        Vec::new()
+    } else if let Some(key) = contact.public_key(context).await? {
+        recipients = relay_addrs(&key, &addr);
+        vec![key]
     } else {
-        recipients = vec![addr.clone()];
-        QueuedEncryption::No
+        warn!(context, "Contact {contact_id} has no key, sending to self.");
+        // Encryption key for the contact is not available, sending MDN to self only.
+        recipients = Vec::new();
+        Vec::new()
     };
-
     let bcc_self = context.get_config_bool(Config::BccSelf).await?;
 
     let date = chrono::DateTime::<chrono::Utc>::from_timestamp(timestamp, 0)
@@ -2353,14 +2342,11 @@ pub(crate) async fn mdn(
 
     let message = mdn_body(rfc724_mid, additional_rfc724_mids);
     let should_attach_pubkey =
-        MimeFactory::update_mdn_pubkey_attachment(context, &encryption).await?;
-    let message = if encryption.is_encrypted() {
-        add_headers_to_encrypted_part(message, headers)
-    } else {
-        add_headers_to_part(message, headers)
-    };
+        MimeFactory::update_mdn_pubkey_attachment(context, &encryption_pubkeys).await?;
+    let message = add_headers_to_encrypted_part(message, headers);
     let raw_message = part_to_bytes(message);
 
+    let encryption = QueuedEncryption::Asymmetric { encryption_pubkeys };
     let queued_mdn = QueuedMail {
         raw_message,
         rfc724_mid: create_outgoing_rfc724_mid(),

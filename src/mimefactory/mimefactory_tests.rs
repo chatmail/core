@@ -281,10 +281,12 @@ async fn test_subject_mdn() {
     assert_eq!("Re: Hello, Bob", mf.subject_str(t).await.unwrap());
 }
 
-/// Tests that MDNs sent in reply to encrypted messages are encrypted
-/// and MDNs sent to unencrypted messages are not.
+/// Tests that MDN for unencrypted message can be created without throwing an error.
+///
+/// We do not send unencrypted MDNs, but do not want SMTP loop to get stuck
+/// if we somehow request the creation of unencrypted MDN.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_mdn_create_encrypted() -> Result<()> {
+async fn test_mdn_create_unencrypted() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
     alice.allow_unencrypted().await?;
@@ -299,7 +301,8 @@ async fn test_mdn_create_encrypted() -> Result<()> {
         .await?;
     bob.set_config_bool(Config::MdnsEnabled, true).await?;
 
-    // MDN for unencrypted message is not encrypted.
+    // MDN for unencrypted message.
+    // Should not happen, but should also not throw an error.
     let mut msg = Message::new(Viewtype::Text);
     let chat_alice = alice.create_email_chat(&bob).await.id;
     let sent = alice.send_msg(chat_alice, &mut msg).await;
@@ -307,15 +310,33 @@ async fn test_mdn_create_encrypted() -> Result<()> {
     let rcvd = bob.recv_msg(&sent).await;
     message::markseen_msgs(&bob, vec![rcvd.id]).await?;
     let queued_mdn = mdn(&bob, rcvd.from_id, &rcvd.rfc724_mid, vec![]).await?;
-    assert!(!queued_mdn.encryption.is_encrypted());
-    let rendered_msg = render_queued_mail_with_context(queued_mdn, &bob).await?;
 
-    assert!(!rendered_msg.message.contains("Bob Examplenet"));
-    assert!(!rendered_msg.message.contains("Alice Exampleorg"));
+    // Only sending MDN to self (if BCC-self is enabled) because address-contact recipient has no key.
+    assert!(queued_mdn.recipients.is_empty());
 
-    // Unencrypted MDNs have a Date header.
-    // This is a regression test, the Date header was missing in chatmail core 2.62.0.
-    assert!(rendered_msg.message.contains("Date: "));
+    // MDNs are always encrypted, even if requested for unencrypted message.
+    assert!(queued_mdn.encryption.is_encrypted());
+
+    bob.assert_warn("has no key, sending to self").await;
+
+    Ok(())
+}
+
+/// Tests that MDNs sent in reply to encrypted messages are encrypted
+/// and MDNs for unencrypted messages are not created.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_mdn_create_encrypted() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = tcm.alice().await;
+    alice
+        .set_config(Config::Displayname, Some("Alice Exampleorg"))
+        .await?;
+    let bob = tcm.bob().await;
+    bob.set_config(Config::Displayname, Some("Bob Examplenet"))
+        .await?;
+    bob.set_config(Config::Selfstatus, Some("Bob Examplenet"))
+        .await?;
+    bob.set_config_bool(Config::MdnsEnabled, true).await?;
 
     let bob_alice_contact = bob.add_or_lookup_contact(&alice).await;
     assert_eq!(bob_alice_contact.get_authname(), "Alice Exampleorg");
