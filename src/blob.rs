@@ -289,6 +289,7 @@ impl<'a> BlobObject<'a> {
         name: Option<String>,
         viewtype: &mut Viewtype,
     ) -> Result<String> {
+        debug_assert!(matches!(viewtype, Viewtype::File | Viewtype::Image));
         let (max_wh, max_bytes) =
             match MediaQuality::from_i32(context.get_config_int(Config::MediaQuality).await?)
                 .unwrap_or_default()
@@ -326,6 +327,7 @@ impl<'a> BlobObject<'a> {
         max_bytes: usize,
         is_avatar: bool,
     ) -> Result<String> {
+        debug_assert!(matches!(viewtype, Viewtype::File | Viewtype::Image));
         // Add white background only to avatars to spare the CPU.
         let mut add_white_bg = is_avatar;
         let mut no_exif = false;
@@ -363,22 +365,6 @@ impl<'a> BlobObject<'a> {
                 .unwrap_or(Orientation::NoTransforms);
             let mut encoded = Vec::new();
 
-            if *vt == Viewtype::Sticker {
-                let x_max = img.width().saturating_sub(1);
-                let y_max = img.height().saturating_sub(1);
-                if !img.in_bounds(x_max, y_max)
-                    || !(img.get_pixel(0, 0).0[3] == 0
-                        || img.get_pixel(x_max, 0).0[3] == 0
-                        || img.get_pixel(0, y_max).0[3] == 0
-                        || img.get_pixel(x_max, y_max).0[3] == 0)
-                {
-                    *vt = Viewtype::Image;
-                } else {
-                    // Core doesn't auto-assign `Viewtype::Sticker` to messages and stickers coming
-                    // from UIs shouldn't contain sensitive Exif info.
-                    return Ok(name);
-                }
-            }
             img.apply_orientation(orientation);
 
             // max_wh is the maximum image width and height, i.e. the resolution-limit,
