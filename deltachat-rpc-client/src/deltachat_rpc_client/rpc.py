@@ -149,7 +149,10 @@ class Rpc:
     def close(self) -> None:
         """Terminate RPC server process and wait until the reader loop finishes."""
         self.closing = True
-        self.stop_io_for_all_accounts()
+        # JSON-RPC error may happen if RPC server process has crashed already.
+        # We still want to shutdown all threads in this case.
+        with contextlib.suppress(JsonRpcError):
+            self.stop_io_for_all_accounts()
         # Let `events_loop` stop cleanly on `closing` before the pipe goes away,
         # otherwise it might exit through an "RPC server closed" error instead.
         self.events_thread.join()
