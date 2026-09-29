@@ -35,6 +35,19 @@ def test_sleep(rpc) -> None:
         assert sleep_5_future in pending
 
 
+def test_shutdown(rpc) -> None:
+    """Test RPC client shutdown if RPC server process is terminated.
+
+    This is a regression test, at the time of adding it RPC client
+    did not terminate all threads and python process did not exit.
+    Shutting down all threads is tested implicitly by pytest-timeout.
+    """
+    rpc.process.kill()
+    rpc.process.wait()
+    with pytest.raises(JsonRpcError):
+        rpc.get_system_info()
+
+
 def test_email_address_validity(rpc) -> None:
     valid_addresses = [
         "email@example.com",
