@@ -36,7 +36,6 @@ strip = true
 
 [dependencies]
 deltachat_derive = { path = "./deltachat_derive" }
-deltachat-time = { path = "./deltachat-time" }
 deltachat-contact-tools = { workspace = true }
 format-flowed = { path = "./format-flowed" }
 ratelimit = { path = "./deltachat-ratelimit" }
@@ -114,6 +113,7 @@ webpki-roots = "0.26.8"
 [dev-dependencies]
 anyhow = { workspace = true, features = ["backtrace"] } # Enable `backtrace` feature in tests.
 criterion = { version = "0.8.1", features = ["async_tokio"] }
+deltachat-time = { path = "./deltachat-time" }
 futures-lite = { workspace = true }
 log = { workspace = true }
 nu-ansi-term = { workspace = true }
