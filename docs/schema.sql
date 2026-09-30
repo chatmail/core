@@ -456,6 +456,17 @@ CREATE TABLE smtp_status_updates (
     descr TEXT NOT NULL -- text to send along with the updates
 );
 
+-- Table to record the time when the transport was most recently used for sending.
+-- It is used to prefer transports that were recently successfully used
+-- and avoid spending time waiting for not working transports to timeout.
+CREATE TABLE smtp_success (
+    -- ID of the transport that was used to send a message.
+    transport_id INTEGER UNIQUE NOT NULL,
+
+    -- Timestamp of the last successful message sending.
+    timestamp INTEGER NOT NULL
+) STRICT;
+
 -- Table of "sync items" to be grouped into sync messages
 -- and sent to own devices.
 CREATE TABLE multi_device_sync (

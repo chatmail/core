@@ -27,6 +27,7 @@ use crate::net::session::SessionBufStream;
 use crate::scheduler::connectivity::ConnectivityStore;
 use crate::smtp::queue::QueuedMail;
 use crate::stock_str::unencrypted_email;
+use crate::tools::time;
 use crate::tools::{self, time_elapsed};
 use crate::transport::{
     ConfiguredLoginParam, ConfiguredServerLoginParam, prioritize_server_login_params,
@@ -52,6 +53,37 @@ pub(crate) struct Smtp {
 
     /// If sending the last message failed, contains the error message.
     pub(crate) last_send_error: Option<String>,
+}
+
+/// Returns transports with their IDs in the order in which they should be tried.
+async fn sorted_transports(context: &Context) -> Result<Vec<(u32, ConfiguredLoginParam)>> {
+    context
+        .sql
+        .query_map_vec(
+            "SELECT id, configured_param FROM transports
+             LEFT JOIN smtp_success ON smtp_success.transport_id=transports.id
+             ORDER BY IFNULL(timestamp, 0) DESC, id ASC",
+            (),
+            |row| {
+                let id: u32 = row.get(0)?;
+                let json: String = row.get(1)?;
+                let param = ConfiguredLoginParam::from_json(&json)?;
+                Ok((id, param))
+            },
+        )
+        .await
+}
+
+/// Updates the timestamp of the last success using the transport for sending a message.
+async fn record_success(context: &Context, now: i64, transport_id: u32) -> Result<()> {
+    context
+        .sql
+        .execute(
+            "INSERT OR REPLACE INTO smtp_success (transport_id, timestamp) VALUES (?, ?)",
+            (transport_id, now),
+        )
+        .await?;
+    Ok(())
 }
 
 impl Smtp {
@@ -99,13 +131,7 @@ impl Smtp {
 
         self.connectivity.set_connecting(context);
         let proxy_config = ProxyConfig::load(context).await?;
-        let transports = ConfiguredLoginParam::load_all(context).await?;
-
-        // Try to connect to the newest transport first. If sending is unreliable,
-        // user can configure a new transport and it will be the one used.
-        // Conversely, if user just added a new transport and sending got less reliable,
-        // user can restore old state by removing the just added transport.
-        for (transport_id, lp) in transports.into_iter().rev() {
+        for (transport_id, lp) in sorted_transports(context).await? {
             info!(context, "Trying to connect to transport {transport_id}.");
             match self
                 .connect(
@@ -324,6 +350,19 @@ pub(crate) async fn smtp_send(
         }
         Ok(()) => SendResult::Success,
     };
+
+    debug_assert!(smtp.transport_id.is_some());
+    if matches!(status, SendResult::Success)
+        && let Some(transport_id) = smtp.transport_id
+    {
+        let now = time();
+        if let Err(err) = record_success(context, now, transport_id).await {
+            warn!(
+                context,
+                "Failed to update the timestamp in smtp_success table: {err:#}."
+            );
+        }
+    }
 
     if let SendResult::Failure(err) = &status
         && let Some(msg_id) = msg_id
@@ -856,3 +895,6 @@ pub(crate) async fn add_self_recipients(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod smtp_tests;
