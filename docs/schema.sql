@@ -456,6 +456,21 @@ CREATE TABLE smtp_status_updates (
     descr TEXT NOT NULL -- text to send along with the updates
 );
 
+-- Table to record the successful usage transports for sending.
+-- Sorting the table by rowid in descending order
+-- returns most recently successfully used transport first.
+CREATE TABLE smtp_success (
+    -- Sequentially increasing ID of the success.
+    -- Transport with the highest ID is to be used first.
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+
+    -- ID of the transport that was used to send a message.
+    transport_id INTEGER UNIQUE NOT NULL,
+
+    -- Delete `smtp_success` rows when the transport is deleted.
+    FOREIGN KEY(transport_id) REFERENCES transports(id) ON DELETE CASCADE
+) STRICT;
+
 -- Table of "sync items" to be grouped into sync messages
 -- and sent to own devices.
 CREATE TABLE multi_device_sync (

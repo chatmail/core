@@ -54,6 +54,39 @@ pub(crate) struct Smtp {
     pub(crate) last_send_error: Option<String>,
 }
 
+/// Returns transports with their IDs in the order in which they should be tried.
+async fn sorted_transports(context: &Context) -> Result<Vec<(u32, ConfiguredLoginParam)>> {
+    context
+        .sql
+        .query_map_vec(
+            "SELECT transports.id, configured_param FROM transports
+             LEFT JOIN smtp_success ON smtp_success.transport_id=transports.id
+             ORDER BY IFNULL(smtp_success.id, 0) DESC, transports.id ASC",
+            (),
+            |row| {
+                let id: u32 = row.get(0)?;
+                let json: String = row.get(1)?;
+                let param = ConfiguredLoginParam::from_json(&json)?;
+                Ok((id, param))
+            },
+        )
+        .await
+}
+
+/// Records successful use of SMTP transport so it is tried first next time we connect to SMTP.
+async fn record_success(context: &Context, transport_id: u32) -> Result<()> {
+    // INSERT OR REPLACE essentially replaces rowid of the row
+    // if the row exists already, so it becomes the highest rowid in the table.
+    context
+        .sql
+        .execute(
+            "INSERT OR REPLACE INTO smtp_success (transport_id) VALUES (?)",
+            (transport_id,),
+        )
+        .await?;
+    Ok(())
+}
+
 impl Smtp {
     /// Create a new Smtp instances.
     pub fn new() -> Self {
@@ -101,13 +134,7 @@ impl Smtp {
 
         self.connectivity.set_connecting(context);
         let proxy_config = ProxyConfig::load(context).await?;
-        let transports = ConfiguredLoginParam::load_all(context).await?;
-
-        // Try to connect to the newest transport first. If sending is unreliable,
-        // user can configure a new transport and it will be the one used.
-        // Conversely, if user just added a new transport and sending got less reliable,
-        // user can restore old state by removing the just added transport.
-        for (transport_id, lp) in transports.into_iter().rev() {
+        for (transport_id, lp) in sorted_transports(context).await? {
             info!(context, "Trying to connect to transport {transport_id}.");
             match self
                 .connect(
@@ -326,6 +353,18 @@ pub(crate) async fn smtp_send(
         }
         Ok(()) => SendResult::Success,
     };
+
+    if matches!(status, SendResult::Success) {
+        debug_assert!(smtp.transport_id.is_some());
+        if let Some(transport_id) = smtp.transport_id
+            && let Err(err) = record_success(context, transport_id).await
+        {
+            warn!(
+                context,
+                "Failed to record successful use of transport {transport_id} in smtp_success table: {err:#}."
+            );
+        }
+    }
 
     if let SendResult::Failure(err) = &status
         && let Some(msg_id) = msg_id
@@ -858,3 +897,6 @@ pub(crate) async fn add_self_recipients(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod smtp_tests;
