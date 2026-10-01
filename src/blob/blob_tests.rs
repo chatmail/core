@@ -4,7 +4,9 @@ use super::*;
 use crate::message::{Message, Viewtype};
 use crate::param::Param;
 use crate::sql;
-use crate::test_utils::{self, AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, TestContext};
+use crate::test_utils::{
+    self, AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, TestContext, TestContextManager,
+};
 use crate::tools::SystemTime;
 
 fn check_image_size(path: impl AsRef<Path>, width: u32, height: u32) -> image::DynamicImage {
@@ -735,6 +737,40 @@ async fn test_send_gif_as_sticker() -> Result<()> {
     let sent = alice.send_msg(chat.id, &mut msg).await;
     let msg = Message::load_from_db(alice, sent.sender_msg_id).await?;
     assert_eq!(msg.get_viewtype(), Viewtype::Sticker);
+    Ok(())
+}
+
+/// Tests that animated WebP is sent without reencoding.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_send_animated_webp_as_image() -> Result<()> {
+    let bytes = include_bytes!("../../test-data/image/animated.webp");
+    let (width, height) = (1280u32, 531u32);
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    alice
+        .set_config(
+            Config::MediaQuality,
+            Some(&(MediaQuality::Worse as i32).to_string()),
+        )
+        .await?;
+    let file = alice.get_blobdir().join("file").with_extension("gif");
+    fs::write(&file, &bytes)
+        .await
+        .context("Failed to write file")?;
+    let mut msg = Message::new(Viewtype::Image);
+    msg.set_file_and_deduplicate(alice, &file, Some("file.webp"), None)?;
+
+    let chat = alice.create_chat(bob).await;
+    let sent = alice.send_msg(chat.id, &mut msg).await;
+    let bob_msg = bob.recv_msg(&sent).await;
+    assert_eq!(bob_msg.get_viewtype(), Viewtype::Image);
+    assert_eq!(bob_msg.get_width() as u32, width);
+    assert_eq!(bob_msg.get_height() as u32, height);
+    assert_eq!(
+        bob_msg.get_filebytes(bob).await?.unwrap(),
+        bytes.len() as u64
+    );
     Ok(())
 }
 
