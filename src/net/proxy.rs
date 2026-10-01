@@ -410,7 +410,8 @@ impl ProxyConfig {
                 };
                 let tcp_stream =
                     crate::net::connect_tcp(context, &hostname, http_config.port, load_cache)
-                        .await?;
+                        .await
+                        .context("Failed to connect to HTTP proxy")?;
                 let auth = if let Some((username, password)) = &http_config.user_password {
                     Some((username.as_str(), password.as_str()))
                 } else {
@@ -429,7 +430,8 @@ impl ProxyConfig {
 
                 let tcp_stream =
                     crate::net::connect_tcp(context, &hostname, https_config.port, load_cache)
-                        .await?;
+                        .await
+                        .context("Failed to connect to HTTPS proxy")?;
                 let use_sni = true;
                 let tls_stream = wrap_rustls(
                     &hostname,
