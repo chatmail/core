@@ -342,17 +342,9 @@ impl<'a> BlobObject<'a> {
             // It's strange that BufReader modifies a file position while it takes a non-mut
             // reference. Ok, just rewind it.
             file.rewind()?;
-            let imgreader = ImageReader::new(std::io::BufReader::new(&file)).with_guessed_format();
-            let imgreader = match imgreader {
-                Ok(ir) => ir,
-                _ => {
-                    file.rewind()?;
-                    ImageReader::with_format(
-                        std::io::BufReader::new(&file),
-                        ImageFormat::from_path(self.to_abs_path())?,
-                    )
-                }
-            };
+            let imgreader = ImageReader::new(std::io::BufReader::new(&file))
+                .with_guessed_format()
+                .context("Failed to guess image format due to I/O error")?;
             let fmt = imgreader.format().context("Unknown format")?;
             if *vt == Viewtype::File {
                 *vt = Viewtype::Image;
