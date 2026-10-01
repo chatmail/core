@@ -13,8 +13,6 @@ use anyhow::{Error, bail};
 use deltachat::EventType;
 use deltachat::chat::ChatId;
 use deltachat::context::*;
-use deltachat::qr_code_generator::get_securejoin_qr_svg;
-use deltachat::securejoin::*;
 use log::{error, info, warn};
 use nu_ansi_term::Color;
 use rustyline::completion::{Completer, FilenameCompleter, Pair};
@@ -25,7 +23,6 @@ use rustyline::validate::Validator;
 use rustyline::{
     Cmd, CompletionType, Config, Context as RustyContext, EditMode, Editor, Helper, KeyEvent,
 };
-use tokio::fs;
 use tokio::runtime::Handle;
 use tracing_subscriber::EnvFilter;
 
@@ -352,22 +349,15 @@ async fn start(args: Vec<String>) -> Result<(), Error> {
                 Ok(line) => {
                     // TODO: ignore "set mail_pw"
                     rl.add_history_entry(line.as_str())?;
-                    let should_continue = Handle::current().block_on(async {
-                        match handle_cmd(line.trim(), ctx.clone(), &mut selected_chat).await {
-                            Ok(ExitResult::Continue) => true,
-                            Ok(ExitResult::Exit) => {
-                                println!("Exiting ...");
-                                false
-                            }
-                            Err(err) => {
-                                eprintln!("Error: {err:#}");
-                                true
-                            }
-                        }
-                    });
-
-                    if !should_continue {
+                    let line = line.trim();
+                    if matches!(line, "exit" | "quit") {
+                        println!("Exiting ...");
                         break;
+                    }
+                    if let Err(err) =
+                        Handle::current().block_on(cmdline(ctx.clone(), line, &mut selected_chat))
+                    {
+                        eprintln!("Error: {err:#}");
                     }
                 }
                 Err(ReadlineError::Interrupted) | Err(ReadlineError::Eof) => {
@@ -390,77 +380,6 @@ async fn start(args: Vec<String>) -> Result<(), Error> {
     input_loop.await??;
 
     Ok(())
-}
-
-#[derive(Debug)]
-enum ExitResult {
-    Continue,
-    Exit,
-}
-
-async fn handle_cmd(
-    line: &str,
-    ctx: Context,
-    selected_chat: &mut ChatId,
-) -> Result<ExitResult, Error> {
-    let mut args = line.splitn(2, ' ');
-    let arg0 = args.next().unwrap_or_default();
-    let arg1 = args.next().unwrap_or_default();
-
-    match arg0 {
-        "connect" => {
-            ctx.start_io().await;
-        }
-        "disconnect" => {
-            ctx.stop_io().await;
-        }
-        "fetch" => {
-            ctx.background_fetch().await?;
-        }
-        "configure" => {
-            ctx.configure().await?;
-        }
-        "clear" => {
-            println!("\n\n\n");
-            print!("\x1b[1;1H\x1b[2J");
-        }
-        "getqr" | "getbadqr" => {
-            ctx.start_io().await;
-            let group = arg1.parse::<u32>().ok().map(ChatId::new);
-            let mut qr = get_securejoin_qr(&ctx, group).await?;
-            if !qr.is_empty() {
-                if arg0 == "getbadqr" && qr.len() > 40 {
-                    qr.replace_range(12..22, "0000000000")
-                }
-                println!("{qr}");
-                qr2term::print_qr(qr.as_str())?;
-            }
-        }
-        "getqrsvg" => {
-            ctx.start_io().await;
-            let group = arg1.parse::<u32>().ok().map(ChatId::new);
-            let file = dirs::home_dir().unwrap_or_default().join("qr.svg");
-            match get_securejoin_qr_svg(&ctx, group).await {
-                Ok(svg) => {
-                    fs::write(&file, svg).await?;
-                    println!("QR code svg written to: {file:#?}");
-                }
-                Err(err) => {
-                    bail!("Failed to get QR code svg: {err}");
-                }
-            }
-        }
-        "joinqr" => {
-            ctx.start_io().await;
-            if !arg0.is_empty() {
-                join_securejoin(&ctx, arg1).await?;
-            }
-        }
-        "exit" | "quit" => return Ok(ExitResult::Exit),
-        _ => cmdline(ctx.clone(), line, selected_chat).await?,
-    }
-
-    Ok(ExitResult::Continue)
 }
 
 #[tokio::main]
