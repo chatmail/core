@@ -4,7 +4,9 @@ use super::*;
 use crate::message::{Message, Viewtype};
 use crate::param::Param;
 use crate::sql;
-use crate::test_utils::{self, AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, TestContext};
+use crate::test_utils::{
+    self, AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, TestContext, TestContextManager,
+};
 use crate::tools::SystemTime;
 
 fn check_image_size(path: impl AsRef<Path>, width: u32, height: u32) -> image::DynamicImage {
@@ -735,6 +737,70 @@ async fn test_send_gif_as_sticker() -> Result<()> {
     let sent = alice.send_msg(chat.id, &mut msg).await;
     let msg = Message::load_from_db(alice, sent.sender_msg_id).await?;
     assert_eq!(msg.get_viewtype(), Viewtype::Sticker);
+    Ok(())
+}
+
+/// Tests that animated WebP is sent without reencoding.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_send_animated_webp_as_image() -> Result<()> {
+    let bytes = include_bytes!("../../test-data/image/animated.webp");
+    assert!(
+        bytes.len() > constants::WORSE_IMAGE_SIZE as usize,
+        "Animated WebP should be large enough to trigger reencoding"
+    );
+    let (width, height) = (900u32, 900u32);
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    alice
+        .set_config(
+            Config::MediaQuality,
+            Some(&(MediaQuality::Worse as i32).to_string()),
+        )
+        .await?;
+    let file = alice.get_blobdir().join("file").with_extension("webp");
+    fs::write(&file, &bytes)
+        .await
+        .context("Failed to write file")?;
+    let mut msg = Message::new(Viewtype::Image);
+    msg.set_file_and_deduplicate(alice, &file, Some("file.webp"), None)?;
+
+    let chat = alice.create_chat(bob).await;
+    let sent = alice.send_msg(chat.id, &mut msg).await;
+    let bob_msg = bob.recv_msg(&sent).await;
+    assert_eq!(bob_msg.get_viewtype(), Viewtype::Image);
+    assert_eq!(bob_msg.get_width() as u32, width);
+    assert_eq!(bob_msg.get_height() as u32, height);
+    assert_eq!(
+        bob_msg.get_filebytes(bob).await?.unwrap(),
+        bytes.len() as u64
+    );
+    Ok(())
+}
+
+/// Tests that if user sets animated WebP as an avatar, it may be recoded.
+///
+/// We don't want to recode animated WebPs into JPEG and lose animation,
+/// but for avatars we don't want animation and transparency anyway.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_recode_animated_webp_avatar() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+
+    let avatar_src = t.dir.path().join("avatar.webp");
+    let avatar_bytes = include_bytes!("../../test-data/image/animated.webp");
+    fs::write(&avatar_src, avatar_bytes).await.unwrap();
+
+    t.set_config(Config::Selfavatar, Some(avatar_src.to_str().unwrap()))
+        .await?;
+    let avatar_blob = t.get_config(Config::Selfavatar).await?.unwrap();
+    assert!(avatar_blob.ends_with(".jpg"));
+
+    let scaled_avatar_size = fs::metadata(&avatar_blob).await.unwrap().len();
+    assert!(
+        scaled_avatar_size < avatar_bytes.len() as u64,
+        "Animated WebP avatar must be recoded"
+    );
     Ok(())
 }
 
