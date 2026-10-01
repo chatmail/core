@@ -20,7 +20,7 @@ use deltachat::message::{self, Message, MessageState, MsgId, Viewtype};
 use deltachat::mimeparser::SystemMessage;
 use deltachat::peer_channels::{send_webxdc_realtime_advertisement, send_webxdc_realtime_data};
 use deltachat::qr::*;
-use deltachat::qr_code_generator::create_qr_svg;
+use deltachat::qr_code_generator::{create_qr_svg, get_securejoin_qr_svg};
 use deltachat::reaction::send_reaction;
 use deltachat::receive_imf::*;
 use deltachat::sql;
@@ -346,8 +346,56 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                  ============================================="
             ),
         },
+        "connect" => {
+            context.start_io().await;
+        }
+        "disconnect" => {
+            context.stop_io().await;
+        }
+        "fetch" => {
+            context.background_fetch().await?;
+        }
+        "configure" => {
+            context.configure().await?;
+        }
         "has-backup" => {
             has_backup(&context, blobdir).await?;
+        }
+        "clear" => {
+            println!("\n\n\n");
+            print!("\x1b[1;1H\x1b[2J");
+        }
+        "getqr" | "getbadqr" => {
+            context.start_io().await;
+            let group = arg1.parse::<u32>().ok().map(ChatId::new);
+            let mut qr = deltachat::securejoin::get_securejoin_qr(&context, group).await?;
+            if !qr.is_empty() {
+                if arg0 == "getbadqr" && qr.len() > 40 {
+                    qr.replace_range(12..22, "0000000000")
+                }
+                println!("{qr}");
+                qr2term::print_qr(qr.as_str())?;
+            }
+        }
+        "getqrsvg" => {
+            context.start_io().await;
+            let group = arg1.parse::<u32>().ok().map(ChatId::new);
+            let file = dirs::home_dir().unwrap_or_default().join("qr.svg");
+            match get_securejoin_qr_svg(&context, group).await {
+                Ok(svg) => {
+                    fs::write(&file, svg).await?;
+                    println!("QR code svg written to: {file:#?}");
+                }
+                Err(err) => {
+                    bail!("Failed to get QR code svg: {err}");
+                }
+            }
+        }
+        "joinqr" => {
+            context.start_io().await;
+            if !arg0.is_empty() {
+                deltachat::securejoin::join_securejoin(&context, arg1).await?;
+            }
         }
         "export-backup" => {
             let dir = dirs::home_dir().unwrap_or_default();
