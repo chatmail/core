@@ -355,13 +355,12 @@ pub(crate) async fn smtp_send(
     debug_assert!(smtp.transport_id.is_some());
     if matches!(status, SendResult::Success)
         && let Some(transport_id) = smtp.transport_id
+        && let Err(err) = record_success(context, transport_id).await
     {
-        if let Err(err) = record_success(context, transport_id).await {
-            warn!(
-                context,
-                "Failed to record successful use of transport {transport_id} in smtp_success table: {err:#}."
-            );
-        }
+        warn!(
+            context,
+            "Failed to record successful use of transport {transport_id} in smtp_success table: {err:#}."
+        );
     }
 
     if let SendResult::Failure(err) = &status
