@@ -69,6 +69,7 @@ impl Smtp {
             task::spawn(async move { transport.quit().await });
         }
         self.transport_id = None;
+        self.from = None;
         self.last_success = None;
     }
 
