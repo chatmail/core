@@ -68,6 +68,7 @@ impl Smtp {
             // separate task to avoid waiting for reply or timeout.
             task::spawn(async move { transport.quit().await });
         }
+        self.transport_id = None;
         self.last_success = None;
     }
 
