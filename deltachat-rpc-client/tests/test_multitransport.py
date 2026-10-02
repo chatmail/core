@@ -351,12 +351,11 @@ def test_qr_works_after_removing_primary_transport(acf, log) -> None:
     log.section("Alice creates a QR code")
     chat_qr = alice.get_qr_code()
     chat_qr_unquoted = urllib.parse.unquote(chat_qr)
-    assert f"&a={first_addr}" in chat_qr_unquoted
-    assert f"&r={third_addr},{second_addr}" in chat_qr_unquoted
+    assert f"&a={third_addr}" in chat_qr_unquoted
+    assert f"&r={second_addr},{first_addr}" in chat_qr_unquoted
 
-    log.section("Alice removes first and second transport")
-    alice.set_config("configured_addr", third_addr)
-    alice.delete_transport(first_addr)
+    log.section("Alice removes the transport named by the a= parameter")
+    alice.delete_transport(third_addr)
     alice.delete_transport(second_addr)
 
     log.section("Bob scans the QR code, which still works")

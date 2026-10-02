@@ -119,16 +119,12 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
 
     let fingerprint = self_fingerprint(context).await?;
 
-    let self_addr = context.get_primary_self_addr().await?;
-    let self_addr_urlencoded = utf8_percent_encode(&self_addr, DISALLOWED_CHARACTERS).to_string();
-
-    let encoded_extra_relays: Vec<String> = context
-        .get_self_addrs()
-        .await?
-        .into_iter()
-        .filter(|addr| *addr != self_addr)
-        .map(|addr| utf8_percent_encode(&addr, DISALLOWED_CHARACTERS).to_string())
-        .collect();
+    let self_addrs = context.get_self_addrs().await?;
+    let mut encoded_addrs = self_addrs
+        .iter()
+        .map(|addr| utf8_percent_encode(addr, DISALLOWED_CHARACTERS).to_string());
+    let self_addr_urlencoded = encoded_addrs.next().context("No self addr configured")?;
+    let encoded_extra_relays: Vec<String> = encoded_addrs.collect();
 
     let r_param = if encoded_extra_relays.is_empty() {
         "".to_string()
