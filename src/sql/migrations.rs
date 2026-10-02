@@ -2677,8 +2677,9 @@ CREATE TABLE smtp2 (
         sql.execute_migration(
             "
 CREATE TABLE smtp_success (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     transport_id INTEGER UNIQUE NOT NULL,
-    timestamp INTEGER NOT NULL
+    FOREIGN KEY(transport_id) REFERENCES transports(id) ON DELETE CASCADE
 ) STRICT;
 ",
             migration_version,

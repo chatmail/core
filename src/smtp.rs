@@ -27,7 +27,6 @@ use crate::net::session::SessionBufStream;
 use crate::scheduler::connectivity::ConnectivityStore;
 use crate::smtp::queue::QueuedMail;
 use crate::stock_str::unencrypted_email;
-use crate::tools::time;
 use crate::tools::{self, time_elapsed};
 use crate::transport::{
     ConfiguredLoginParam, ConfiguredServerLoginParam, prioritize_server_login_params,
@@ -60,9 +59,9 @@ async fn sorted_transports(context: &Context) -> Result<Vec<(u32, ConfiguredLogi
     context
         .sql
         .query_map_vec(
-            "SELECT id, configured_param FROM transports
+            "SELECT transports.id, configured_param FROM transports
              LEFT JOIN smtp_success ON smtp_success.transport_id=transports.id
-             ORDER BY IFNULL(timestamp, 0) DESC, id ASC",
+             ORDER BY IFNULL(smtp_success.id, 0) DESC, transports.id ASC",
             (),
             |row| {
                 let id: u32 = row.get(0)?;
@@ -74,13 +73,15 @@ async fn sorted_transports(context: &Context) -> Result<Vec<(u32, ConfiguredLogi
         .await
 }
 
-/// Updates the timestamp of the last success using the transport for sending a message.
-async fn record_success(context: &Context, now: i64, transport_id: u32) -> Result<()> {
+/// Records successful use of SMTP transport so it is tried first next time we connect to SMTP.
+async fn record_success(context: &Context, transport_id: u32) -> Result<()> {
+    // INSERT OR REPLACE essentially replaces rowid of the row
+    // if the row exists already, so it becomes the highest rowid in the table.
     context
         .sql
         .execute(
-            "INSERT OR REPLACE INTO smtp_success (transport_id, timestamp) VALUES (?, ?)",
-            (transport_id, now),
+            "INSERT OR REPLACE INTO smtp_success (transport_id) VALUES (?)",
+            (transport_id,),
         )
         .await?;
     Ok(())
@@ -355,11 +356,10 @@ pub(crate) async fn smtp_send(
     if matches!(status, SendResult::Success)
         && let Some(transport_id) = smtp.transport_id
     {
-        let now = time();
-        if let Err(err) = record_success(context, now, transport_id).await {
+        if let Err(err) = record_success(context, transport_id).await {
             warn!(
                 context,
-                "Failed to update the timestamp in smtp_success table: {err:#}."
+                "Failed to record successful use of transport {transport_id} in smtp_success table: {err:#}."
             );
         }
     }
