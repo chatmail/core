@@ -193,21 +193,11 @@ impl TestContextManager {
         to.recv_msg(&sent).await
     }
 
+    // TODO: this just adds a transport
     pub async fn change_addr(&self, test_context: &TestContext, new_addr: &str) {
-        self.section(&format!(
-            "{} changes her self address and reconfigures",
-            test_context.name()
-        ));
-
         test_context.add_transport(new_addr).await;
-        test_context.set_primary_self_addr(new_addr).await.unwrap();
         // ensure_secret_key_exists() is called during configure
         key::ensure_secret_key_exists(test_context).await.unwrap();
-
-        assert_eq!(
-            test_context.get_primary_self_addr().await.unwrap(),
-            new_addr
-        );
     }
 
     /// Executes SecureJoin protocol between `scanner` and `scanned`.

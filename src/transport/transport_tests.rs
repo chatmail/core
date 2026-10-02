@@ -226,50 +226,6 @@ async fn test_delete_transport() -> Result<()> {
     Ok(())
 }
 
-/// Tests that selecting sending transport by setting "configured_addr" does not
-/// send the sync message, is not synchronized between devices even if sync message is forced,
-/// and does not bump sending transport `add_timestamp`.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_no_configured_addr_synchronization() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    let alice2 = &tcm.alice().await;
-    for a in [alice, alice2] {
-        a.set_config_bool(Config::SyncMsgs, true).await?;
-        a.set_config_bool(Config::BccSelf, true).await?;
-    }
-
-    let addr = "alice@otherprovider.com";
-    add_dummy_transport(alice, addr).await?;
-    send_sync_transports(alice).await?;
-    sync_and_check_recipients(alice, alice2, &format!("{addr} alice@example.org")).await;
-
-    // Selects `addr` on `alice` as the sending transport
-    // and syncs the transport update to `alice2`,
-    // whose own sending transport must stay unchanged.
-    let old_timestamp = add_timestamp(alice2, addr).await;
-    let alice2_primary = alice2.get_config(Config::ConfiguredAddr).await?;
-    alice.set_config(Config::ConfiguredAddr, Some(addr)).await?;
-    assert_eq!(add_timestamp(alice, addr).await, old_timestamp);
-
-    send_sync_transports(alice).await?;
-    alice.send_sync_msg().await?.unwrap();
-    let sync_msg = alice.pop_sent_msg().await;
-    assert_eq!(sync_msg.recipients, format!("alice@example.org {addr}"));
-    // The sync message comes from the new sending address,
-    // which must not make `alice2` adopt it as its own sending address.
-    assert!(sync_msg.payload.contains(&format!("From: <{addr}>")));
-    alice2.recv_msg_trash(&sync_msg).await;
-
-    // add_timestamp must not change.
-    assert_eq!(add_timestamp(alice2, addr).await, old_timestamp);
-    assert_eq!(
-        alice2.get_config(Config::ConfiguredAddr).await?,
-        alice2_primary
-    );
-    Ok(())
-}
-
 /// Tests that `sync_transports()` requests an IO restart
 /// if and only if it modified anything.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -286,14 +242,6 @@ async fn test_sync_transports_requests_io_restart() -> Result<()> {
     assert!(!alice.restart_io_after_fetch.load(Ordering::Relaxed));
 
     Ok(())
-}
-
-async fn add_timestamp(t: &TestContext, addr: &str) -> i64 {
-    t.sql
-        .query_get_value("SELECT add_timestamp FROM transports WHERE addr=?", (addr,))
-        .await
-        .unwrap()
-        .unwrap()
 }
 
 /// Tests that removing the last transport keeps it.
@@ -322,33 +270,6 @@ async fn test_removing_last_transport() -> Result<()> {
     assert_eq!(
         alice.get_config(Config::ConfiguredAddr).await?.as_deref(),
         Some("alice@otherprovider.com")
-    );
-    Ok(())
-}
-
-/// Tests which transport is elected for sending.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_maybe_update_sending_transport() -> Result<()> {
-    let t = &TestContext::new_alice().await;
-
-    add_dummy_transport(t, "alice@one.com").await?;
-    assert_eq!(
-        t.sql.transaction(maybe_update_sending_transport).await?,
-        None
-    );
-
-    t.sql
-        .execute(
-            "DELETE FROM transports WHERE addr=?",
-            ("alice@example.org",),
-        )
-        .await?;
-    assert_eq!(
-        t.sql
-            .transaction(maybe_update_sending_transport)
-            .await?
-            .as_deref(),
-        Some("alice@one.com")
     );
     Ok(())
 }

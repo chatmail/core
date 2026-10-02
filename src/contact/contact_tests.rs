@@ -887,11 +887,11 @@ async fn test_contact_get_encrinfo() -> Result<()> {
         "Messages are end-to-end encrypted.
 Fingerprints:
 
-Me (alice@example.org):
+Me:
 2E6F A2CB 23B5 32D7 2863
 4B58 64B0 8F61 A9ED 9443
 
-bob@example.net (bob@example.net):
+bob@example.net:
 CCCB 5AA9 F6E1 141C 9431
 65F1 DB18 B18C BCF7 0487
 
@@ -908,11 +908,11 @@ bob@example.net"
         "No encryption.
 Fingerprints:
 
-Me (alice@example.org):
+Me:
 2E6F A2CB 23B5 32D7 2863
 4B58 64B0 8F61 A9ED 9443
 
-bob@example.net (bob@example.net):
+bob@example.net:
 CCCB 5AA9 F6E1 141C 9431
 65F1 DB18 B18C BCF7 0487"
     );
