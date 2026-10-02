@@ -2672,6 +2672,21 @@ CREATE TABLE smtp2 (
             .await?;
     }
 
+    inc_and_check(&mut migration_version, 168)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "
+CREATE TABLE smtp_success (
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    transport_id INTEGER UNIQUE NOT NULL,
+    FOREIGN KEY(transport_id) REFERENCES transports(id) ON DELETE CASCADE
+) STRICT;
+",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
