@@ -5,7 +5,7 @@ use pgp::armor;
 use pgp::packet::{Packet, PacketParser};
 use pretty_assertions::assert_eq;
 use regex::regex;
-use std::io::BufReader;
+use std::io::{BufReader, Cursor};
 use std::str;
 use std::time::Duration;
 
@@ -30,8 +30,7 @@ fn render_email_address(display_name: &str, addr: &str) -> String {
     let mut output = Vec::<u8>::new();
     new_address_with_name(display_name, addr.to_string())
         .unwrap_address()
-        .write_header(&mut output, 0)
-        .unwrap();
+        .write_header(&mut output, 0);
 
     String::from_utf8(output).unwrap()
 }
@@ -50,9 +49,7 @@ fn test_render_email_address() {
 
     let s = render_email_address(display_name, addr);
 
-    println!("{s}");
-
-    assert_eq!(s, "=?utf-8?B?w6Qgc3BhY2U=?= <x@y.org>");
+    assert_eq!(s, "=?utf-8?B?w6Qgc3BhY2U=?= <x@y.org>\r\n");
 }
 
 #[test]
@@ -70,14 +67,14 @@ fn test_render_email_address_noescape() {
     let s = render_email_address(display_name, addr);
 
     // Addresses should not be unnecessarily be encoded, see <https://github.com/deltachat/deltachat-core-rust/issues/1575>:
-    assert_eq!(s, r#""a space" <x@y.org>"#);
+    assert_eq!(s, "\"a space\" <x@y.org>\r\n");
 }
 
 #[test]
 fn test_render_email_address_duplicated_as_name() {
     let addr = "x@y.org";
     let s = render_email_address(addr, addr);
-    assert_eq!(s, "<x@y.org>");
+    assert_eq!(s, "<x@y.org>\r\n");
 }
 
 #[test]
@@ -102,8 +99,7 @@ fn render_header_text(text: &str) -> String {
     // Some non-zero length of the header name.
     let bytes_written = 20;
     mail_builder::headers::text::Text::new(text.to_string())
-        .write_header(&mut output, bytes_written)
-        .unwrap();
+        .write_header(&mut output, bytes_written);
 
     String::from_utf8(output).unwrap()
 }
@@ -955,7 +951,7 @@ async fn test_no_empty_to_header() -> Result<()> {
     assert!(
         // It would be equally fine if the payload contained `To: alice@example.org` or similar,
         // as long as it's a valid header
-        payload.contains("To: \"hidden-recipients\": ;"),
+        payload.contains("To: \"hidden-recipients\":;"),
         "Payload doesn't contain correct To: header: {payload}"
     );
 
@@ -1064,8 +1060,8 @@ MIME-Version: 1.0
 To: "hidden-recipients": ;
 Subject: [...]
 Chat-Version: 1.0
-Content-Type: multipart/encrypted; protocol="application/pgp-encrypted"; 
-	boundary="BOUNDARY"
+Content-Type: multipart/encrypted; protocol="application/pgp-encrypted";
+ boundary="BOUNDARY"
 
 
 --BOUNDARY
@@ -1106,17 +1102,18 @@ async fn test_render_unencrypted_msg_basic() -> Result<()> {
     let expected = r#"From: <alice@example.org>
 Message-ID: <MESSAGE_ID@localhost>
 MIME-Version: 1.0
-Autocrypt: addr=alice@example.org; prefer-encrypt=mutual; keydata=mDMEXlh13RYJKwYBBAHaRw8BAQdAzfVIAleCXMJrq8VeLlEVof6ITCviMktKjmcBKAu4m5
-	 DCtAQfFggAZgUCXlh13RYhBC5vossjtTLXKGNLWGSwj2Gp7ZRDAhsDAh4JBAsJCAcFFQgJCgsDFgIB
-	 AycJAgIZASwUgAAAAAASABFyZWxheXNAY2hhdG1haWwuYXRhbGljZUBleGFtcGxlLm9yZwAAb1QA/0
-	 HbvPN3/Vn02Gk1dcQMEcyGyETld9dSsRo8uwHAyW35AQCrFJjAQFLTud7XK61uYt9BC/QHipCfIGbq
-	 X1FjMbTUC80TPGFsaWNlQGV4YW1wbGUub3JnPsKRBBMWCAA5BQJeWHXdFiEELm+iyyO1MtcoY0tYZL
-	 CPYantlEMCGwMCHgkECwkIBwUVCAkKCwMWAgEDJwkCAhkBAAoJEGSwj2Gp7ZRD1m4A/iOifEzIOiP8
-	 wW0O8I/sg69gQtG8Czn4MsVV6Ea1EyIqAP4uByHaUJdy8MSQPfv/Usr09KsidNgy2Jh37yg82fKUBr
-	 g4BF5Ydd0SCisGAQQBl1UBBQEBB0AG7cjWy2SFAU8KnltlubVW67rFiyfp01JrRe6Xqy22HQMBCAeI
-	 eAQYFggAIBYhBC5vossjtTLXKGNLWGSwj2Gp7ZRDBQJeWHXdAhsMAAoJEGSwj2Gp7ZRDLo8BAObE8G
-	 nsGVwKzNqCvHeWgJsqhjS3C6gvSlV3tEm9XmF6AQDXucIyVfoBwoyMh2h6cSn/ATn5QJb35pgo+ivp
-	 3jsMAg==
+Autocrypt: addr=alice@example.org; prefer-encrypt=mutual;
+ keydata=mDMEXlh13RYJKwYBBAHaRw8BAQdAzfVIAleCXMJrq8VeLlEVof6ITCviMktKjmcBKAu4m5
+ DCtAQfFggAZgUCXlh13RYhBC5vossjtTLXKGNLWGSwj2Gp7ZRDAhsDAh4JBAsJCAcFFQgJCgsDFgIB
+ AycJAgIZASwUgAAAAAASABFyZWxheXNAY2hhdG1haWwuYXRhbGljZUBleGFtcGxlLm9yZwAAb1QA/0
+ HbvPN3/Vn02Gk1dcQMEcyGyETld9dSsRo8uwHAyW35AQCrFJjAQFLTud7XK61uYt9BC/QHipCfIGbq
+ X1FjMbTUC80TPGFsaWNlQGV4YW1wbGUub3JnPsKRBBMWCAA5BQJeWHXdFiEELm+iyyO1MtcoY0tYZL
+ CPYantlEMCGwMCHgkECwkIBwUVCAkKCwMWAgEDJwkCAhkBAAoJEGSwj2Gp7ZRD1m4A/iOifEzIOiP8
+ wW0O8I/sg69gQtG8Czn4MsVV6Ea1EyIqAP4uByHaUJdy8MSQPfv/Usr09KsidNgy2Jh37yg82fKUBr
+ g4BF5Ydd0SCisGAQQBl1UBBQEBB0AG7cjWy2SFAU8KnltlubVW67rFiyfp01JrRe6Xqy22HQMBCAeI
+ eAQYFggAIBYhBC5vossjtTLXKGNLWGSwj2Gp7ZRDBQJeWHXdAhsMAAoJEGSwj2Gp7ZRDLo8BAObE8G
+ nsGVwKzNqCvHeWgJsqhjS3C6gvSlV3tEm9XmF6AQDXucIyVfoBwoyMh2h6cSn/ATn5QJb35pgo+ivp
+ 3jsMAg==
 Content-Type: text/plain; charset="utf-8"
 Date: DATE
 To: <bob@example.net>
@@ -1126,7 +1123,7 @@ Chat-Version: 1.0
 Content-Transfer-Encoding: 7bit
 
 Hello!"#
-    .replace("\n", "\r\n");
+        .replace("\n", "\r\n");
     assert_eq!(
         unencrypted, expected,
         "---------------- Actual: ----------------
@@ -1156,19 +1153,20 @@ async fn test_render_unencrypted_msg_with_attachment() -> Result<()> {
     let expected = r#"From: <alice@example.org>
 Message-ID: <MESSAGE_ID@localhost>
 MIME-Version: 1.0
-Autocrypt: addr=alice@example.org; prefer-encrypt=mutual; keydata=mDMEXlh13RYJKwYBBAHaRw8BAQdAzfVIAleCXMJrq8VeLlEVof6ITCviMktKjmcBKAu4m5
-	 DCtAQfFggAZgUCXlh13RYhBC5vossjtTLXKGNLWGSwj2Gp7ZRDAhsDAh4JBAsJCAcFFQgJCgsDFgIB
-	 AycJAgIZASwUgAAAAAASABFyZWxheXNAY2hhdG1haWwuYXRhbGljZUBleGFtcGxlLm9yZwAAb1QA/0
-	 HbvPN3/Vn02Gk1dcQMEcyGyETld9dSsRo8uwHAyW35AQCrFJjAQFLTud7XK61uYt9BC/QHipCfIGbq
-	 X1FjMbTUC80TPGFsaWNlQGV4YW1wbGUub3JnPsKRBBMWCAA5BQJeWHXdFiEELm+iyyO1MtcoY0tYZL
-	 CPYantlEMCGwMCHgkECwkIBwUVCAkKCwMWAgEDJwkCAhkBAAoJEGSwj2Gp7ZRD1m4A/iOifEzIOiP8
-	 wW0O8I/sg69gQtG8Czn4MsVV6Ea1EyIqAP4uByHaUJdy8MSQPfv/Usr09KsidNgy2Jh37yg82fKUBr
-	 g4BF5Ydd0SCisGAQQBl1UBBQEBB0AG7cjWy2SFAU8KnltlubVW67rFiyfp01JrRe6Xqy22HQMBCAeI
-	 eAQYFggAIBYhBC5vossjtTLXKGNLWGSwj2Gp7ZRDBQJeWHXdAhsMAAoJEGSwj2Gp7ZRDLo8BAObE8G
-	 nsGVwKzNqCvHeWgJsqhjS3C6gvSlV3tEm9XmF6AQDXucIyVfoBwoyMh2h6cSn/ATn5QJb35pgo+ivp
-	 3jsMAg==
-Content-Type: multipart/mixed; 
-	boundary="BOUNDARY"
+Autocrypt: addr=alice@example.org; prefer-encrypt=mutual;
+ keydata=mDMEXlh13RYJKwYBBAHaRw8BAQdAzfVIAleCXMJrq8VeLlEVof6ITCviMktKjmcBKAu4m5
+ DCtAQfFggAZgUCXlh13RYhBC5vossjtTLXKGNLWGSwj2Gp7ZRDAhsDAh4JBAsJCAcFFQgJCgsDFgIB
+ AycJAgIZASwUgAAAAAASABFyZWxheXNAY2hhdG1haWwuYXRhbGljZUBleGFtcGxlLm9yZwAAb1QA/0
+ HbvPN3/Vn02Gk1dcQMEcyGyETld9dSsRo8uwHAyW35AQCrFJjAQFLTud7XK61uYt9BC/QHipCfIGbq
+ X1FjMbTUC80TPGFsaWNlQGV4YW1wbGUub3JnPsKRBBMWCAA5BQJeWHXdFiEELm+iyyO1MtcoY0tYZL
+ CPYantlEMCGwMCHgkECwkIBwUVCAkKCwMWAgEDJwkCAhkBAAoJEGSwj2Gp7ZRD1m4A/iOifEzIOiP8
+ wW0O8I/sg69gQtG8Czn4MsVV6Ea1EyIqAP4uByHaUJdy8MSQPfv/Usr09KsidNgy2Jh37yg82fKUBr
+ g4BF5Ydd0SCisGAQQBl1UBBQEBB0AG7cjWy2SFAU8KnltlubVW67rFiyfp01JrRe6Xqy22HQMBCAeI
+ eAQYFggAIBYhBC5vossjtTLXKGNLWGSwj2Gp7ZRDBQJeWHXdAhsMAAoJEGSwj2Gp7ZRDLo8BAObE8G
+ nsGVwKzNqCvHeWgJsqhjS3C6gvSlV3tEm9XmF6AQDXucIyVfoBwoyMh2h6cSn/ATn5QJb35pgo+ivp
+ 3jsMAg==
+Content-Type: multipart/mixed;
+ boundary="BOUNDARY"
 Date: DATE
 To: <bob@example.net>
 Subject: Message from alice@example.org

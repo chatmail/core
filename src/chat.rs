@@ -3,7 +3,6 @@
 use std::cmp;
 use std::collections::{BTreeSet, HashMap};
 use std::fmt;
-use std::io::Cursor;
 use std::marker::Sync;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -1918,8 +1917,7 @@ impl Chat {
         let new_mime_headers: Option<String> = new_mime_headers.map(|s| {
             let html_part = MimePart::new("text/html", s);
             let mut buffer = Vec::new();
-            let cursor = Cursor::new(&mut buffer);
-            html_part.write_part(cursor).ok();
+            html_part.write_part(&mut buffer);
             String::from_utf8_lossy(&buffer).to_string()
         });
         let new_mime_headers = new_mime_headers.or_else(|| match was_truncated {
