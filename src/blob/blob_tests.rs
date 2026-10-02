@@ -774,6 +774,32 @@ async fn test_send_animated_webp_as_image() -> Result<()> {
     Ok(())
 }
 
+/// Tests that if user sets animated WebP as an avatar, it may be recoded.
+///
+/// We don't want to recode animated WebPs into JPEG and lose animation,
+/// but for avatars we don't want animation and transparency anyway.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_recode_animated_webp_avatar() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+
+    let avatar_src = t.dir.path().join("avatar.webp");
+    let avatar_bytes = include_bytes!("../../test-data/image/animated.webp");
+    fs::write(&avatar_src, avatar_bytes).await.unwrap();
+
+    t.set_config(Config::Selfavatar, Some(avatar_src.to_str().unwrap()))
+        .await?;
+    let avatar_blob = t.get_config(Config::Selfavatar).await?.unwrap();
+    assert!(avatar_blob.ends_with(".jpg"));
+
+    let scaled_avatar_size = fs::metadata(&avatar_blob).await.unwrap().len();
+    assert!(
+        scaled_avatar_size < avatar_bytes.len() as u64,
+        "Animated WebP avatar must be recoded"
+    );
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_create_and_deduplicate() -> Result<()> {
     let t = TestContext::new().await;

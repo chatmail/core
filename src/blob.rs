@@ -361,7 +361,7 @@ impl<'a> BlobObject<'a> {
 
                     // If WebP has animation, do not try to recode it.
                     // Recoding into JPEG will result in losing the animation.
-                    if webp_decoder.has_animation() {
+                    if !is_avatar && webp_decoder.has_animation() {
                         return Ok(name);
                     }
                     DynamicImage::from_decoder(webp_decoder)?
