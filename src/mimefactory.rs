@@ -1,7 +1,6 @@
 //! # MIME message production.
 
 use std::collections::{BTreeSet, HashSet};
-use std::io::Cursor;
 
 use anyhow::{Context as _, Result, bail, format_err};
 use base64::Engine as _;
@@ -245,25 +244,20 @@ pub(crate) fn render_queued_mail(
 
     let is_encrypted = encryption.is_encrypted();
 
-    fn add_header(
-        name: &[u8],
-        value: &impl mail_builder::headers::Header,
-        headers: &mut Vec<u8>,
-    ) -> Result<()> {
+    fn add_header(name: &[u8], value: &impl mail_builder::headers::Header, headers: &mut Vec<u8>) {
         headers.extend(name);
-        value.write_header(headers, name.len())?;
-        Ok(())
+        value.write_header(headers, name.len());
     }
 
     let from_header = new_address_with_name(&display_name, from_addr.clone());
-    add_header(b"From: ", &from_header, &mut inner_headers)?;
+    add_header(b"From: ", &from_header, &mut inner_headers);
 
     if is_encrypted {
         let unencrypted_from = Address::new_address(None::<&'static str>, from_addr.clone());
-        add_header(b"From: ", &unencrypted_from, &mut outer_headers)?;
-        add_header(b"HP-Outer: From: ", &unencrypted_from, &mut inner_headers)?;
+        add_header(b"From: ", &unencrypted_from, &mut outer_headers);
+        add_header(b"HP-Outer: From: ", &unencrypted_from, &mut inner_headers);
     } else {
-        add_header(b"From: ", &from_header, &mut outer_headers)?;
+        add_header(b"From: ", &from_header, &mut outer_headers);
     }
 
     if is_encrypted {
@@ -334,7 +328,7 @@ pub(crate) fn render_queued_mail(
             } else {
                 &mut outer_headers
             },
-        )?;
+        );
     }
 
     if is_encrypted {
@@ -2433,8 +2427,7 @@ pub(crate) async fn keyupdate_message(
 /// Renders MIME part into a vector of bytes.
 pub(crate) fn part_to_bytes(message: MimePart<'static>) -> Vec<u8> {
     let mut raw_message = Vec::new();
-    let cursor = Cursor::new(&mut raw_message);
-    message.write_part(cursor).ok();
+    message.write_part(&mut raw_message);
     raw_message
 }
 
