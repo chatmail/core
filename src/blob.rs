@@ -350,7 +350,24 @@ impl<'a> BlobObject<'a> {
                 *vt = Viewtype::Image;
                 return Ok(name);
             }
-            let mut img = imgreader.decode().context("image decode failure")?;
+
+            let mut img = match fmt {
+                image::ImageFormat::WebP => {
+                    // `with_guessed_format()` restores file position,
+                    // so `buf_reader` is at the beginning of the file.
+                    let buf_reader = imgreader.into_inner();
+                    let webp_decoder = image::codecs::webp::WebPDecoder::new(buf_reader)
+                        .context("Failed to create WebP decoder")?;
+
+                    // If WebP has animation, do not try to recode it.
+                    // Recoding into JPEG will result in losing the animation.
+                    if !is_avatar && webp_decoder.has_animation() {
+                        return Ok(name);
+                    }
+                    DynamicImage::from_decoder(webp_decoder)?
+                }
+                _ => imgreader.decode().context("Failed to decode image")?,
+            };
             let orientation = exif
                 .as_ref()
                 .map(|exif| exif_orientation(exif, context))
