@@ -1485,6 +1485,7 @@ dependencies = [
  "deltachat",
  "deltachat-jsonrpc",
  "futures-lite",
+ "libc",
  "log",
  "serde",
  "serde_json",
