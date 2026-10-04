@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tokio::task::{JoinHandle, JoinSet};
+use tracing::{Level, event};
 use uuid::Uuid;
 
 #[cfg(not(target_os = "ios"))]
@@ -82,6 +83,11 @@ impl Accounts {
     /// which is not used by any accounts.
     fn get_id(&self) -> u32 {
         0
+    }
+
+    fn log_info(&self, file: &str, line: u32, msg: String) {
+        event!(Level::INFO, account_id = self.get_id(), "{msg}");
+        self.emit_event(EventType::Info(format!("{file}:{line}: {msg}")));
     }
 
     /// Ensures the accounts directory and config file exist.
