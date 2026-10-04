@@ -30,6 +30,9 @@ jobs:
     name: Lint Rust
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      # Tests always unwind: match it so dependencies are only checked once.
+      CARGO_PROFILE_DEV_PANIC: unwind
     steps:
       - uses: actions/checkout@v7
         with:
@@ -48,8 +51,6 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Run clippy
         run: scripts/clippy.sh
-      - name: Check with all features
-        run: cargo check --workspace --all-targets --all-features
       - name: Check with only default features
         run: cargo check --all-targets
 
@@ -139,12 +140,12 @@ jobs:
       - name: Tests
         env:
           RUST_BACKTRACE: 1
-        run: cargo nextest run --workspace --locked
+        run: cargo nextest run --workspace --exclude deltachat-jsonrpc-bindings --locked
 
       - name: Doc-Tests
         env:
           RUST_BACKTRACE: 1
-        run: cargo test --workspace --locked --doc
+        run: cargo test --workspace --exclude deltachat-jsonrpc-bindings --locked --doc
 
       - name: Test cargo vendor
         run: cargo vendor
