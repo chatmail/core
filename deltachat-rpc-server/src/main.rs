@@ -22,8 +22,32 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use yerpc::{RpcClient, RpcSession};
 
+/// Pins Linux glibc's mmap threshold so that freed message buffers go back to the kernel.
+///
+/// See M_MMAP_THRESHOLD in <https://man7.org/linux/man-pages/man3/mallopt.3.html>:
+/// glibc by default starts with a M_MMAP_THRESHOLD threshold of 128 KiB
+/// but raises it to the size of every freed block that exceeds it,
+/// up to 32 MiB on 64-bit systems,
+/// and trims the heap only from its top end once twice that much is free.
+/// Fixating the threshold disables the adjustment: allocations at or above it
+/// that the free list cannot satisfy are mmapped and unmapped on free,
+/// at the price of the kernel zeroing each such buffer after unmap.
+/// Large message processing (allocations above 128KiB) very slightly slows
+/// down to the kernel zeroing the buffers, but it's hardly measurable,
+/// while overall process memory allocation behaviour significantly improves.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn tune_malloc() {
+    unsafe {
+        libc::mallopt(libc::M_MMAP_THRESHOLD, 128 * 1024);
+    }
+}
+
+#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+fn tune_malloc() {}
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
+    tune_malloc();
     // Logs from `log` crate and traces from `tracing` crate
     // are configurable with `RUST_LOG` environment variable
     // and go to stderr to avoid interfering with JSON-RPC using stdout.
