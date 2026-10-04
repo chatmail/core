@@ -3,6 +3,7 @@
 #![allow(missing_docs)]
 
 use crate::context::Context;
+use crate::events::EventType;
 
 mod stream;
 
@@ -12,15 +13,9 @@ macro_rules! info {
     ($ctx:expr,  $msg:expr) => {
         info!($ctx, $msg,)
     };
-    ($ctx:expr, $msg:expr, $($args:expr),* $(,)?) => {{
-        let formatted = format!($msg, $($args),*);
-        let full = format!("{file}:{line}: {msg}",
-                           file = file!(),
-                           line = line!(),
-                           msg = &formatted);
-        ::tracing::event!(::tracing::Level::INFO, account_id = $ctx.get_id(), "{}", &formatted);
-        $ctx.emit_event($crate::EventType::Info(full));
-    }};
+    ($ctx:expr, $msg:expr, $($args:expr),* $(,)?) => {
+        $ctx.log_info(file!(), line!(), format!($msg, $($args),*))
+    };
 }
 
 // Workaround for <https://github.com/rust-lang/rust/issues/133708>.
@@ -30,15 +25,9 @@ mod warn_macro_mod {
         ($ctx:expr, $msg:expr) => {
             warn_macro!($ctx, $msg,)
         };
-        ($ctx:expr, $msg:expr, $($args:expr),* $(,)?) => {{
-            let formatted = format!($msg, $($args),*);
-            let full = format!("{file}:{line}: {msg}",
-                               file = file!(),
-                               line = line!(),
-                               msg = &formatted);
-            ::tracing::event!(::tracing::Level::WARN, account_id = $ctx.get_id(), "{}", &formatted);
-            $ctx.emit_event($crate::EventType::Warning(full));
-        }};
+        ($ctx:expr, $msg:expr, $($args:expr),* $(,)?) => {
+            $ctx.log_warn(file!(), line!(), format!($msg, $($args),*))
+        };
     }
 
     pub(crate) use warn_macro;
@@ -50,15 +39,25 @@ macro_rules! error {
     ($ctx:expr, $msg:expr) => {
         error!($ctx, $msg,)
     };
-    ($ctx:expr, $msg:expr, $($args:expr),* $(,)?) => {{
-        let formatted = format!($msg, $($args),*);
-        ::tracing::event!(::tracing::Level::ERROR, account_id = $ctx.get_id(), "{}", &formatted);
-        $ctx.set_last_error(&formatted);
-        $ctx.emit_event($crate::EventType::Error(formatted));
-    }};
+    ($ctx:expr, $msg:expr, $($args:expr),* $(,)?) => {
+        $ctx.log_error(format!($msg, $($args),*))
+    };
 }
 
 impl Context {
+    pub(crate) fn log_info(&self, file: &str, line: u32, msg: String) {
+        self.emit_event(EventType::Info(format!("{file}:{line}: {msg}")));
+    }
+
+    pub(crate) fn log_warn(&self, file: &str, line: u32, msg: String) {
+        self.emit_event(EventType::Warning(format!("{file}:{line}: {msg}")));
+    }
+
+    pub(crate) fn log_error(&self, msg: String) {
+        self.set_last_error(&msg);
+        self.emit_event(EventType::Error(msg));
+    }
+
     /// Set last error string.
     /// Implemented as blocking as used from macros in different, not always async blocks.
     pub fn set_last_error(&self, error: &str) {
@@ -116,12 +115,6 @@ impl<T, E: std::fmt::Display> LogExt<T, E> for Result<T, E> {
             );
             // We can't use the warn!() macro here as the file!() and line!() macros
             // don't work with #[track_caller]
-            tracing::event!(
-                ::tracing::Level::WARN,
-                account_id = context.get_id(),
-                "{}",
-                &full
-            );
             context.emit_event(crate::EventType::Warning(full));
         };
         self

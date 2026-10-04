@@ -1406,7 +1406,6 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "toml",
- "tracing",
  "url",
  "uuid",
  "walkdir",
