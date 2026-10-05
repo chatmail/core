@@ -755,9 +755,9 @@ async fn export_database(context: &Context, dest: &Path, passphrase: String) -> 
     context
         .sql
         .call_write(|conn| {
-            conn.execute("VACUUM;", ())
-                .map_err(|err| warn!(context, "Vacuum failed, exporting anyway {err}"))
-                .ok();
+            // conn.execute("VACUUM;", ())
+            //     .map_err(|err| warn!(context, "Vacuum failed, exporting anyway {err}"))
+            //     .ok();
             conn.execute("ATTACH DATABASE ? AS backup KEY ?", (dest, passphrase))
                 .context("failed to attach backup database")?;
             let res = conn
