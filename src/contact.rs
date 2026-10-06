@@ -992,8 +992,8 @@ impl Contact {
         let mut sth_modified = Modifier::None;
 
         ensure!(
-            !addr.is_empty() || !fingerprint.is_empty(),
-            "Can not add_or_lookup empty address"
+            !fingerprint.is_empty(),
+            "Can not add_or_lookup empty fingerprint"
         );
         ensure!(origin != Origin::Unknown, "Missing valid origin");
 
@@ -1001,7 +1001,7 @@ impl Contact {
             return Ok((ContactId::SELF, sth_modified));
         }
 
-        if !fingerprint.is_empty() && context.is_configured().await? {
+        if context.is_configured().await? {
             let fingerprint_self = self_fingerprint(context)
                 .await
                 .context("self_fingerprint")?;
@@ -1136,14 +1136,11 @@ VALUES (?, ?, ?, ?, ?, ?)
 
                     sth_modified = Modifier::Created;
                     row_id = u32::try_from(transaction.last_insert_rowid())?;
-                    if fingerprint.is_empty() {
-                        info!(context, "Added contact id={row_id} addr={addr}.");
-                    } else {
+                    debug_assert!(!fingerprint.is_empty());
                         info!(
                             context,
                             "Added contact id={row_id} fpr={fingerprint} addr={addr}."
                         );
-                    }
                 }
                 Ok(row_id)
             })
