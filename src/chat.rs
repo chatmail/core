@@ -1522,7 +1522,7 @@ impl Chat {
             let contact_ids = get_chat_contacts(context, self.id).await?;
             if let Some(contact_id) = contact_ids.first() {
                 let contact = Contact::get_by_id(context, *contact_id).await?;
-                if contact.is_key_contact() && contact.public_key(context).await?.is_none() {
+                if contact.public_key(context).await?.is_none() {
                     return Ok(Some(reason));
                 }
             }
