@@ -513,6 +513,8 @@ pub(crate) async fn configure(
         let smtp_password = configured_param.smtp_password.clone();
         let smtp_addr = configured_param.addr.clone();
 
+        let transport_id = 0;
+
         let proxy_config2 = proxy_config.clone();
         let smtp_config_task = task::spawn(async move {
             let mut smtp = Smtp::new();
@@ -522,6 +524,7 @@ pub(crate) async fn configure(
                 &smtp_password,
                 &proxy_config2,
                 &smtp_addr,
+                transport_id,
                 strict_tls,
             )
             .await?;
@@ -533,7 +536,6 @@ pub(crate) async fn configure(
 
         // Configure IMAP
 
-        let transport_id = 0;
         let (_s, r) = async_channel::bounded(1);
         let mut imap = Imap::new(ctx, transport_id, configured_param.clone(), r).await?;
         let imap_session = match imap.connect(ctx).await {
