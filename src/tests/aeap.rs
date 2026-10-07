@@ -105,7 +105,10 @@ async fn check_aeap_transition(chat_for_transition: ChatForTransition) {
     check_that_transition_worked(bob, &groups, alice_contact, ALICE_NEW_ADDR).await;
 
     tcm.section("Test switching back");
-    tcm.change_addr(alice, "alice@example.org").await;
+    alice
+        .set_primary_self_addr("alice@example.org")
+        .await
+        .unwrap();
     let sent = alice
         .send_text(chat_to_send, "Hello from my old addr!")
         .await;
