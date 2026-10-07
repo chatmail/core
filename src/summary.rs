@@ -149,7 +149,7 @@ impl Message {
     }
 
     /// Returns a summary text with emoji prefixes but without "Forwarded:" prefix.
-    /// Used for shorter reaction summaries as "USER reactes 👋 to SUMMARY"
+    /// Used for shorter reaction summaries as "USER reacts 👋 to SUMMARY"
     async fn get_summary_text_without_prefix(&self, context: &Context) -> String {
         let approx_chars = 0;
         let with_forwarded = false;

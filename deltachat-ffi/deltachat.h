@@ -4294,7 +4294,7 @@ dc_lot_t*       dc_msg_get_summary            (const dc_msg_t* msg, const dc_cha
  * @param msg The message object.
  * @param approx_characters A rough length of the expected string.
  *     values <=0 skip truncation.
- * @return A summary for the given messages.
+ * @return A summary for the given message.
  *     The returned string must be released using dc_str_unref().
  *     Returns an empty string on errors, never returns NULL.
  */
@@ -4307,7 +4307,7 @@ char*           dc_msg_get_summarytext        (const dc_msg_t* msg, int approx_c
  *
  * @memberof dc_msg_t
  * @param msg The message object.
- * @return A summary for the given messages.
+ * @return A summary for the given message.
  *     The returned string must be released using dc_str_unref().
  *     Returns an empty string on errors, never returns NULL.
  */
