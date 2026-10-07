@@ -3485,7 +3485,7 @@ pub unsafe extern "C" fn dc_msg_get_summarytext(
 
     block_on(ffi_msg.message.get_summary_text_ext(
         &ffi_msg.context,
-        approx_characters as usize,
+        usize::try_from(approx_characters).unwrap_or_default(),
         true,
         true,
     ))
