@@ -3544,28 +3544,6 @@ dc_lot_t*        dc_chatlist_get_summary     (const dc_chatlist_t* chatlist, siz
 
 
 /**
- * Create a chatlist summary item when the chatlist object is already unref()'d.
- *
- * This function is similar to dc_chatlist_get_summary(), however,
- * it takes the chat ID and the message ID as returned by dc_chatlist_get_chat_id() and dc_chatlist_get_msg_id()
- * as arguments. The chatlist object itself is not needed directly.
- *
- * This maybe useful if you convert the complete object into a different representation
- * as done e.g. in the node-bindings.
- * If you have access to the chatlist object in some way, using this function is not recommended,
- * use dc_chatlist_get_summary() in this case instead.
- *
- * @memberof dc_context_t
- * @param context The context object.
- * @param chat_id The chat ID to get a summary for.
- * @param msg_id The message ID to get a summary for.
- * @return The summary as an dc_lot_t object, see dc_chatlist_get_summary() for details.
- *     Must be freed using dc_lot_unref(). NULL is never returned.
- */
-dc_lot_t*        dc_chatlist_get_summary2    (dc_context_t* context, uint32_t chat_id, uint32_t msg_id);
-
-
-/**
  * Get info summary for a chat, in JSON format.
  *
  * @deprecated 2026-08-13, use dedicated dc_chat_get_*() getters or jsonrpc
