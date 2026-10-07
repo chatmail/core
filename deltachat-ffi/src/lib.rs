@@ -47,7 +47,6 @@ mod dc_array;
 mod lot;
 
 mod string;
-use deltachat::chatlist::Chatlist;
 
 use self::string::*;
 
