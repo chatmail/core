@@ -56,9 +56,6 @@ pub struct Summary {
 
     /// Message state.
     pub state: MessageState,
-
-    /// Message preview image path
-    pub thumbnail_path: Option<String>,
 }
 
 impl Summary {
@@ -83,7 +80,6 @@ impl Summary {
                 text: msg_reacted(context, reaction_contact_id, &reaction, &summary).await,
                 timestamp: msg.get_timestamp(), // message timestamp (not reaction) to make timestamps more consistent with chats ordering
                 state: msg.state, // message state (not reaction) - indicating if it was me sending the last message
-                thumbnail_path: None,
             });
         }
         Self::new(context, msg, chat, contact).await
@@ -127,24 +123,11 @@ impl Summary {
             text = stock_str::reply_noun(context)
         }
 
-        let thumbnail_path = if msg.viewtype == Viewtype::Image
-            || msg.viewtype == Viewtype::Gif
-            || msg.viewtype == Viewtype::Sticker
-        {
-            msg.get_file(context)
-                .and_then(|path| path.to_str().map(|p| p.to_owned()))
-        } else if msg.viewtype == Viewtype::Webxdc {
-            Some("webxdc-icon://last-msg-id".to_string())
-        } else {
-            None
-        };
-
         Ok(Summary {
             prefix,
             text,
             timestamp: msg.get_timestamp(),
             state: msg.state,
-            thumbnail_path,
         })
     }
 
