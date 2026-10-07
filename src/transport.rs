@@ -740,14 +740,14 @@ pub(crate) fn maybe_update_sending_transport(
 pub async fn add_pseudo_transport(context: &Context, addr: &str) -> Result<()> {
     context.sql
         .execute(
-            "INSERT OR IGNORE INTO transports (addr, entered_param, configured_param) VALUES (?, ?, ?)",
+            "INSERT INTO transports (addr, entered_param, configured_param) VALUES (?, ?, ?)",
             (
                 addr,
                 serde_json::to_string(&EnteredLoginParam{addr: addr.to_string(), ..Default::default()})?,
                 format!(r#"{{"addr":"{addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#)
             ),
         )
-        .await?;
+        .await.with_context(|| format!("Failed to insert pseudo transport for {addr:?}"))?;
     Ok(())
 }
 
