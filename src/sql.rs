@@ -684,6 +684,17 @@ impl Sql {
     }
 }
 
+pub(crate) trait TransactionExt {
+    fn count(&self, query: &str, params: impl rusqlite::Params + Send) -> Result<usize>;
+}
+
+impl TransactionExt for rusqlite::Transaction<'_> {
+    fn count(&self, query: &str, params: impl rusqlite::Params + Send) -> Result<usize> {
+        let count: isize = self.query_row(query, params, |row| row.get(0))?;
+        Ok(usize::try_from(count)?)
+    }
+}
+
 /// Creates a new SQLite connection.
 ///
 /// `path` is the database path.
