@@ -471,6 +471,19 @@ CREATE TABLE smtp_success (
     FOREIGN KEY(transport_id) REFERENCES transports(id) ON DELETE CASCADE
 ) STRICT;
 
+-- Similar to smtp_success, but records failures.
+CREATE TABLE smtp_failure (
+    -- Sequentially increasing ID of the failure
+    -- Transport with the highest ID is to be used last.
+    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+
+    -- ID of the transport that was used to attempt sending a message.
+    transport_id INTEGER UNIQUE NOT NULL,
+
+    -- Delete `smtp_failure` rows when the transport is deleted.
+    FOREIGN KEY(transport_id) REFERENCES transports(id) ON DELETE CASCADE
+) STRICT;
+
 -- Table of "sync items" to be grouped into sync messages
 -- and sent to own devices.
 CREATE TABLE multi_device_sync (
