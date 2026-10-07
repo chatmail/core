@@ -16,6 +16,7 @@ use crate::key::DcKey;
 use crate::log::warn;
 
 use crate::sql::Sql;
+use crate::sql::TransactionExt as _;
 use crate::tools::{self, Time, inc_and_check, time_elapsed};
 use crate::transport::ConfiguredLoginParam;
 
@@ -2725,7 +2726,6 @@ fn unencrypted_chats_migration(
     // - all unencrypted (i.e. ad-hoc) groups into regular groups with 0 members.
     // - all unencrypted 1:1 chats into a group with 0 members. (probably unnecessary, not implemented right now)
     // - all chats of type Mailinglist into a group with 0 members.
-    // ...and set the fake, gray avatar.
     transaction.execute_batch(
         "
 -- Save the rewritten chats in a table in case the migration is faulty
@@ -2757,20 +2757,6 @@ WHERE id IN (SELECT chat_id FROM legacy_unencrypted_chats);
     //     hex(randomblob(16))
     // )
     // WHERE id IN (SELECT chat_id FROM legacy_unencrypted_chats) AND grpid='';
-
-    // TODO maybe we should inline create_and_deduplicate_from_bytes?
-    // Overwrite existing params; it should just be a plain read-only chat,
-    // no need for params except for the avatar.
-    let blob = crate::blob::BlobObject::create_and_deduplicate_from_bytes(
-        context,
-        include_bytes!("../../assets/icon-unencrypted.png"),
-        "icon-unencrypted.png",
-    )?;
-    let new_param = &format!("i={}", blob.as_name());
-    transaction.execute(
-        "UPDATE chats SET param=? WHERE id IN (SELECT chat_id FROM legacy_unencrypted_chats)",
-        (new_param,),
-    )?;
 
     // Rewrite all address-contacts into a key-contact with "Hidden" origin (and with a fake key fingerprint?).
     // We still need the contacts because we want to keep the messages, and every message needs a sender.
@@ -2805,10 +2791,32 @@ WHERE fingerprint='' AND id>9 AND name='' AND authname=''
 ",
     )?;
 
-    transaction.execute(
-        "UPDATE contacts SET param=? WHERE fingerprint='' AND id>9",
-        (new_param,),
+    // Set the gray letter avatar for all legacy chats:
+    let legacy_chats = transaction.count("SELECT COUNT(*) FROM legacy_unencrypted_chats", ())?;
+    let legacy_contacts = transaction.count(
+        "SELECT COUNT(*) FROM contacts WHERE fingerprint='' AND id>9",
+        (),
     )?;
+    if legacy_chats > 0 || legacy_contacts > 0 {
+        // TODO maybe we should inline create_and_deduplicate_from_bytes?
+        // Overwrite existing params; it should just be a plain read-only chat,
+        // no need for params except for the avatar.
+        let blob = crate::blob::BlobObject::create_and_deduplicate_from_bytes(
+            context,
+            include_bytes!("../../assets/icon-unencrypted.png"),
+            "icon-unencrypted.png",
+        )?;
+        let new_param = &format!("i={}", blob.as_name());
+        transaction.execute(
+            "UPDATE chats SET param=? WHERE id IN (SELECT chat_id FROM legacy_unencrypted_chats)",
+            (new_param,),
+        )?;
+
+        transaction.execute(
+            "UPDATE contacts SET param=? WHERE fingerprint='' AND id>9",
+            (new_param,),
+        )?;
+    }
 
     Ok(())
 }
