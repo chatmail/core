@@ -145,7 +145,8 @@ async fn test_key_contacts_migration_email1() -> Result<()> {
         .unwrap();
     let email_bob = Contact::get_by_id(&t, email_bob_id).await?;
     assert_eq!(email_bob.is_key_contact(), false);
-    assert_eq!(email_bob.origin, Origin::OutgoingTo);
+    // All email address contacts are hidden now:
+    assert_eq!(email_bob.origin, Origin::Hidden);
     assert_eq!(email_bob.e2ee_avail(&t).await?, false);
     assert_eq!(email_bob.fingerprint(), None);
 
@@ -178,7 +179,8 @@ async fn test_key_contacts_migration_email2() -> Result<()> {
         .unwrap();
     let email_bob = Contact::get_by_id(&t, email_bob_id).await?;
     assert_eq!(email_bob.is_key_contact(), false);
-    assert_eq!(email_bob.origin, Origin::OutgoingTo);
+    // All email address contacts are hidden now:
+    assert_eq!(email_bob.origin, Origin::Hidden);
     assert_eq!(email_bob.e2ee_avail(&t).await?, false);
     assert_eq!(email_bob.fingerprint(), None);
 
