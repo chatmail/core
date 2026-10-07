@@ -12,7 +12,6 @@
 extern crate human_panic;
 
 use std::collections::BTreeMap;
-use std::convert::TryFrom;
 use std::fmt::Write;
 use std::future::Future;
 use std::mem::ManuallyDrop;
@@ -3474,24 +3473,24 @@ pub unsafe extern "C" fn dc_msg_get_summary(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn dc_msg_get_summarytext(
+pub unsafe extern "C" fn dc_msg_get_summary_text(
     msg: *mut dc_msg_t,
     approx_characters: libc::c_int,
+    full_summary: libc::c_int,
 ) -> *mut libc::c_char {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_summarytext()");
+        eprintln!("ignoring careless call to dc_msg_get_summary_text()");
         return "".strdup();
     }
     let ffi_msg = unsafe { &mut *msg };
 
-    let summary = block_on(ffi_msg.message.get_summary(&ffi_msg.context, None))
-        .context("dc_msg_get_summarytext failed")
-        .log_err(&ffi_msg.context)
-        .unwrap_or_default();
-    match usize::try_from(approx_characters) {
-        Ok(chars) => summary.truncated_text(chars).strdup(),
-        Err(_) => summary.text.strdup(),
-    }
+    block_on(ffi_msg.message.get_summary_text_ext(
+        &ffi_msg.context,
+        approx_characters as usize,
+        full_summary != 0,
+        full_summary != 0,
+    ))
+    .strdup()
 }
 
 #[unsafe(no_mangle)]

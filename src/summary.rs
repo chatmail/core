@@ -138,19 +138,35 @@ impl Summary {
 }
 
 impl Message {
-    /// Returns a summary text.
+    /// Returns a summary text with emoji and "Forwarded:" prefixes.
+    /// This is the standard summary to be used in chatlists, notifications etc.
     pub(crate) async fn get_summary_text(&self, context: &Context) -> String {
-        let summary = self.get_summary_text_without_prefix(context).await;
-
-        if self.is_forwarded() {
-            format!("{}: {}", stock_str::forwarded(context), summary)
-        } else {
-            summary
-        }
+        let approx_chars = 0;
+        let with_forwarded = true;
+        let with_emoji = true;
+        self.get_summary_text_ext(context, approx_chars, with_forwarded, with_emoji)
+            .await
     }
 
-    /// Returns a summary text without "Forwarded:" prefix.
+    /// Returns a summary text with emoji prefixes but without "Forwarded:" prefix.
+    /// Used for shorter reaction summaries as "USER reactes 👋 to SUMMARY"
     async fn get_summary_text_without_prefix(&self, context: &Context) -> String {
+        let approx_chars = 0;
+        let with_forwarded = false;
+        let with_emoji = true;
+        self.get_summary_text_ext(context, approx_chars, with_forwarded, with_emoji)
+            .await
+    }
+
+    /// Returns a summary text with optional "Forwarded:" and emoji prefixes.
+    /// If approx_chars is >0, the string is truncated at about that position.
+    pub async fn get_summary_text_ext(
+        &self,
+        context: &Context,
+        approx_chars: usize,
+        with_forwarded: bool,
+        with_emoji: bool,
+    ) -> String {
         let (emoji, type_name, type_file, append_text);
         let viewtype = match self
             .param
@@ -264,7 +280,11 @@ impl Message {
             }
         };
 
-        let text = self.text.clone();
+        let text = if approx_chars > 0 {
+            truncate(&self.text, approx_chars).to_string()
+        } else {
+            self.text.clone()
+        };
 
         let summary = if let Some(type_file) = type_file {
             if append_text && !text.is_empty() {
@@ -286,8 +306,15 @@ impl Message {
             "".to_string()
         };
 
+        let emoji = emoji.filter(|_| with_emoji);
         let summary = if let Some(emoji) = emoji {
             format!("{emoji} {summary}")
+        } else {
+            summary
+        };
+
+        let summary = if with_forwarded && self.is_forwarded() {
+            format!("{}: {}", stock_str::forwarded(context), summary)
         } else {
             summary
         };
@@ -336,6 +363,10 @@ mod tests {
         msg.set_file_and_deduplicate(&d, &file, Some("foo.jpg"), None)
             .unwrap();
         assert_summary_texts(&msg, ctx, "📷 Image").await; // file names are not added for images
+        assert_eq!(
+            msg.get_summary_text_ext(ctx, 500, false, false).await,
+            "Image"
+        );
 
         let file = write_file_to_blobdir(&d).await;
         let mut msg = Message::new(Viewtype::Image);
@@ -343,6 +374,10 @@ mod tests {
         msg.set_file_and_deduplicate(&d, &file, Some("foo.jpg"), None)
             .unwrap();
         assert_summary_texts(&msg, ctx, "📷 bla bla").await; // type is visible by emoji if text is set
+        assert_eq!(
+            msg.get_summary_text_ext(ctx, 500, false, false).await,
+            "bla bla"
+        );
 
         let file = write_file_to_blobdir(&d).await;
         let mut msg = Message::new(Viewtype::Video);
@@ -473,6 +508,10 @@ mod tests {
             msg.get_summary_text_without_prefix(ctx).await,
             "📎 foo.bar \u{2013} bla bla"
         ); // skipping prefix used for reactions summaries
+        assert_eq!(
+            msg.get_summary_text_ext(ctx, 500, false, false).await,
+            "foo.bar \u{2013} bla bla"
+        );
         d.assert_warn("Not a valid DeltaChat vCard").await;
     }
 }
