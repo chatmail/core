@@ -276,7 +276,7 @@ impl Message {
         let text = if one_line {
             truncate(&self.text, 2000).to_string()
         } else {
-            self.text.clone()
+            self.text.trim().to_string()
         };
 
         let summary = if let Some(type_file) = type_file {
