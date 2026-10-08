@@ -4287,31 +4287,31 @@ dc_lot_t*       dc_msg_get_summary            (const dc_msg_t* msg, const dc_cha
 
 
 /**
- * Get a message summary as a single line of text. Typically used for
- * notifications.
+ * Get a message summary.
+ * Used for notifications, pinned messages and for copying texts to clipboard.
  *
  * @memberof dc_msg_t
  * @param msg The message object.
- * @param approx_characters A rough length of the expected string.
- *     values <=0 skip truncation.
+ * @param add_forwarded 1=add a hint if a message was forwarded.
+ *     0=do not add the hint;
+ *     this is allowed only if the message is shown without a username otherwise, e.g. for pinned messages.
+ * @param add_type_emoji 1=add the type of the message as an emoji prefix.
+ *     0=do not add type emoji;
+ *     this is allowed only if the message type is visible otherwise,
+ *     close to where the emoji would be displayed otherwise
+ *     (eg. images in pinned messages preceding summary)
+ * @param one_line 1=convert linebreaks to spaces;
+ *     although the text might be truncated, UI needs to add an end ellipsis on rendering e.g. pinned messages or notifications.
+ *     0=leave linebreaks as is and do not truncate the text, useful e.g. for copying to clipboard.
  * @return A summary for the given message.
  *     The returned string must be released using dc_str_unref().
  *     Returns an empty string on errors, never returns NULL.
  */
-char*           dc_msg_get_summarytext        (const dc_msg_t* msg, int approx_characters);
+char*           dc_msg_get_summary_text       (const dc_msg_t* msg, int add_forwarded, int add_type_emoji, int one_line);
 
 
-/**
- * Get a message summary as a single line of text, skipping emoji or "Forwarded" prefixes.
- * Used for pinned messages that show e.g. an image and do not need the type in the summary therefore.
- *
- * @memberof dc_msg_t
- * @param msg The message object.
- * @return A summary for the given message.
- *     The returned string must be released using dc_str_unref().
- *     Returns an empty string on errors, never returns NULL.
- */
-char*           dc_msg_get_summarytext_without_prefix  (const dc_msg_t* msg);
+// deprecated 2026-10-07, the old variant took a string length as second parameter, which is converted to "one line" by checking real world usages.
+#define dc_msg_get_summarytext(msg, approx_chars) dc_msg_get_summary_text((msg), 1, 1, ((approx_chars)>10000) ? 0 : 1)
 
 
 /**

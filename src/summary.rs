@@ -117,15 +117,9 @@ impl Summary {
             None
         };
 
-        let mut text = msg.get_summary_text(context).await;
-
-        if text.is_empty() && msg.quoted_text().is_some() {
-            text = stock_str::reply_noun(context)
-        }
-
         Ok(Summary {
             prefix,
-            text,
+            text: msg.get_summary_text(context).await,
             timestamp: msg.get_timestamp(),
             state: msg.state,
         })
@@ -141,31 +135,30 @@ impl Message {
     /// Returns a summary text with emoji and "Forwarded:" prefixes.
     /// This is the standard summary to be used in chatlists, notifications etc.
     pub(crate) async fn get_summary_text(&self, context: &Context) -> String {
-        let approx_chars = 0;
-        let with_forwarded = true;
-        let with_emoji = true;
-        self.get_summary_text_ext(context, approx_chars, with_forwarded, with_emoji)
+        let add_forwarded = true;
+        let add_type_emoji = true;
+        let one_line = true;
+        self.get_summary_text_ext(context, add_forwarded, add_type_emoji, one_line)
             .await
     }
 
     /// Returns a summary text with emoji prefixes but without "Forwarded:" prefix.
     /// Used for shorter reaction summaries as "USER reacts 👋 to SUMMARY"
     async fn get_summary_text_without_prefix(&self, context: &Context) -> String {
-        let approx_chars = 0;
-        let with_forwarded = false;
-        let with_emoji = true;
-        self.get_summary_text_ext(context, approx_chars, with_forwarded, with_emoji)
+        let add_forwarded = false;
+        let add_type_emoji = true;
+        let one_line = true;
+        self.get_summary_text_ext(context, add_forwarded, add_type_emoji, one_line)
             .await
     }
 
-    /// Returns a summary text with optional "Forwarded:" and emoji prefixes.
-    /// If approx_chars is >0, the string is truncated at about that position.
+    /// Returns a summary text with optional "Forwarded:" and emoji prefixes and optionally converting to one line.
     pub async fn get_summary_text_ext(
         &self,
         context: &Context,
-        approx_chars: usize,
-        with_forwarded: bool,
-        with_emoji: bool,
+        add_forwarded: bool,
+        add_type_emoji: bool,
+        one_line: bool,
     ) -> String {
         let (emoji, type_name, type_file, append_text);
         let viewtype = match self
@@ -280,8 +273,8 @@ impl Message {
             }
         };
 
-        let text = if approx_chars > 0 {
-            truncate(&self.text, approx_chars).to_string()
+        let text = if one_line {
+            truncate(&self.text, 2000).to_string()
         } else {
             self.text.clone()
         };
@@ -306,20 +299,30 @@ impl Message {
             "".to_string()
         };
 
-        let emoji = emoji.filter(|_| with_emoji);
+        let emoji = emoji.filter(|_| add_type_emoji);
         let summary = if let Some(emoji) = emoji {
             format!("{emoji} {summary}")
         } else {
             summary
         };
 
-        let summary = if with_forwarded && self.is_forwarded() {
+        let summary = if summary.is_empty() && self.quoted_text().is_some() {
+            stock_str::reply_noun(context)
+        } else {
+            summary
+        };
+
+        let summary = if add_forwarded && self.is_forwarded() {
             format!("{}: {}", stock_str::forwarded(context), summary)
         } else {
             summary
         };
 
-        summary.split_whitespace().collect::<Vec<&str>>().join(" ")
+        if one_line {
+            summary.split_whitespace().collect::<Vec<&str>>().join(" ")
+        } else {
+            summary
+        }
     }
 }
 
@@ -364,7 +367,7 @@ mod tests {
             .unwrap();
         assert_summary_texts(&msg, ctx, "📷 Image").await; // file names are not added for images
         assert_eq!(
-            msg.get_summary_text_ext(ctx, 500, false, false).await,
+            msg.get_summary_text_ext(ctx, false, false, true).await,
             "Image"
         );
 
@@ -375,7 +378,7 @@ mod tests {
             .unwrap();
         assert_summary_texts(&msg, ctx, "📷 bla bla").await; // type is visible by emoji if text is set
         assert_eq!(
-            msg.get_summary_text_ext(ctx, 500, false, false).await,
+            msg.get_summary_text_ext(ctx, false, false, true).await,
             "bla bla"
         );
 
@@ -509,7 +512,7 @@ mod tests {
             "📎 foo.bar \u{2013} bla bla"
         ); // skipping prefix used for reactions summaries
         assert_eq!(
-            msg.get_summary_text_ext(ctx, 500, false, false).await,
+            msg.get_summary_text_ext(ctx, false, false, true).await,
             "foo.bar \u{2013} bla bla"
         );
         d.assert_warn("Not a valid DeltaChat vCard").await;

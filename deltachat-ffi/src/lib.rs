@@ -3473,40 +3473,24 @@ pub unsafe extern "C" fn dc_msg_get_summary(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn dc_msg_get_summarytext(
+pub unsafe extern "C" fn dc_msg_get_summary_text(
     msg: *mut dc_msg_t,
-    approx_characters: libc::c_int,
+    add_forwarded: libc::c_int,
+    add_type_emoji: libc::c_int,
+    one_line: libc::c_int,
 ) -> *mut libc::c_char {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_summarytext()");
+        eprintln!("ignoring careless call to dc_msg_get_summary_text()");
         return "".strdup();
     }
     let ffi_msg = unsafe { &mut *msg };
 
     block_on(ffi_msg.message.get_summary_text_ext(
         &ffi_msg.context,
-        usize::try_from(approx_characters).unwrap_or_default(),
-        true,
-        true,
+        add_forwarded != 0,
+        add_type_emoji != 0,
+        one_line != 0,
     ))
-    .strdup()
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn dc_msg_get_summarytext_without_prefix(
-    msg: *mut dc_msg_t,
-) -> *mut libc::c_char {
-    if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_summarytext_without_prefix()");
-        return "".strdup();
-    }
-    let ffi_msg = unsafe { &mut *msg };
-
-    block_on(
-        ffi_msg
-            .message
-            .get_summary_text_ext(&ffi_msg.context, 2000, false, false),
-    )
     .strdup()
 }
 
