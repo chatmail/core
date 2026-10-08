@@ -4300,18 +4300,19 @@ dc_lot_t*       dc_msg_get_summary            (const dc_msg_t* msg, const dc_cha
  *     this is allowed only if the message type is visible otherwise,
  *     close to where the emoji would be displayed otherwise
  *     (eg. images in pinned messages preceding summary)
- * @param one_line 1=convert linebreaks to spaces, for single-line UI elements such as pinned messages or notifications;
- *     the UI is expected to clip the text to the available space on its own.
+ * @param approx_chars >0=convert linebreaks to spaces and truncate the line at about the given number of characters;
+ *     for single-line UI elements such as pinned messages or notifications;
+ *     additionally, UIs will most times clip the text to the available space.
  *     0=leave linebreaks as is and return the full text, useful e.g. for copying to clipboard.
  * @return A summary for the given message.
  *     The returned string must be released using dc_str_unref().
  *     Returns an empty string on errors, never returns NULL.
  */
-char*           dc_msg_get_summary_text       (const dc_msg_t* msg, int add_forwarded, int add_type_emoji, int one_line);
+char*           dc_msg_get_summary_text       (const dc_msg_t* msg, int add_forwarded, int add_type_emoji, int approx_chars);
 
 
 // deprecated 2026-10-07, the old variant took a string length as second parameter, which is converted to "one line" by checking real world usages.
-#define dc_msg_get_summarytext(msg, approx_chars) dc_msg_get_summary_text((msg), 1, 1, ((approx_chars)>10000) ? 0 : 1)
+#define dc_msg_get_summarytext(msg, approx_chars) dc_msg_get_summary_text((msg), 1, 1, (approx_chars))
 
 
 /**

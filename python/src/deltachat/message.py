@@ -188,8 +188,7 @@ class Message:
 
     def get_summarytext(self, width: int) -> str:
         """Get a message summary as a single line of text. Typically used for notifications."""
-        one_line = int(width <= 10000)  # same as the compatibility macro in deltachat.h
-        return from_dc_charpointer(lib.dc_msg_get_summary_text(self._dc_msg, 1, 1, one_line))
+        return from_dc_charpointer(lib.dc_msg_get_summary_text(self._dc_msg, 1, 1, width))
 
     @props.with_doc
     def time_sent(self):

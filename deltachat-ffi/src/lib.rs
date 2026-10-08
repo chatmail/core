@@ -3477,7 +3477,7 @@ pub unsafe extern "C" fn dc_msg_get_summary_text(
     msg: *mut dc_msg_t,
     add_forwarded: libc::c_int,
     add_type_emoji: libc::c_int,
-    one_line: libc::c_int,
+    approx_chars: libc::c_int,
 ) -> *mut libc::c_char {
     if msg.is_null() {
         eprintln!("ignoring careless call to dc_msg_get_summary_text()");
@@ -3489,7 +3489,7 @@ pub unsafe extern "C" fn dc_msg_get_summary_text(
         &ffi_msg.context,
         add_forwarded != 0,
         add_type_emoji != 0,
-        one_line != 0,
+        usize::try_from(approx_chars).unwrap_or_default(),
     ))
     .strdup()
 }

@@ -10,6 +10,7 @@ use num_traits::FromPrimitive;
 use crate::calls::{CallState, call_state};
 use crate::chat::Chat;
 use crate::constants::Chattype;
+use crate::constants::DC_DESIRED_TEXT_LEN;
 use crate::contact::{Contact, ContactId};
 use crate::context::Context;
 use crate::message::{Message, MessageState, Viewtype};
@@ -137,8 +138,7 @@ impl Message {
     pub(crate) async fn get_summary_text(&self, context: &Context) -> String {
         let add_forwarded = true;
         let add_type_emoji = true;
-        let one_line = true;
-        self.get_summary_text_ext(context, add_forwarded, add_type_emoji, one_line)
+        self.get_summary_text_ext(context, add_forwarded, add_type_emoji, DC_DESIRED_TEXT_LEN)
             .await
     }
 
@@ -147,8 +147,7 @@ impl Message {
     async fn get_summary_text_without_prefix(&self, context: &Context) -> String {
         let add_forwarded = false;
         let add_type_emoji = true;
-        let one_line = true;
-        self.get_summary_text_ext(context, add_forwarded, add_type_emoji, one_line)
+        self.get_summary_text_ext(context, add_forwarded, add_type_emoji, DC_DESIRED_TEXT_LEN)
             .await
     }
 
@@ -158,7 +157,7 @@ impl Message {
         context: &Context,
         add_forwarded: bool,
         add_type_emoji: bool,
-        one_line: bool,
+        approx_chars: usize,
     ) -> String {
         let (emoji, type_name, type_file, append_text);
         let viewtype = match self
@@ -273,8 +272,8 @@ impl Message {
             }
         };
 
-        let text = if one_line {
-            truncate(self.text.trim(), 2000).to_string()
+        let text = if approx_chars > 0 {
+            truncate(self.text.trim(), approx_chars).to_string()
         } else {
             self.text.trim().to_string()
         };
@@ -318,7 +317,7 @@ impl Message {
             summary
         };
 
-        if one_line {
+        if approx_chars > 0 {
             summary.split_whitespace().collect::<Vec<&str>>().join(" ")
         } else {
             summary
@@ -346,10 +345,10 @@ mod tests {
     async fn test_get_summary_text() {
         let forwarded = true;
         let emoji = true;
-        let one_line = true;
+        let one_line = 2000;
         let no_forwarded = false;
         let no_emoji = false;
-        let multi_line = false;
+        let multi_line = 0;
 
         let d = TestContext::new_alice().await;
         let ctx = &d.ctx;
