@@ -274,7 +274,7 @@ impl Message {
         };
 
         let text = if one_line {
-            truncate(&self.text, 2000).to_string()
+            truncate(self.text.trim(), 2000).to_string()
         } else {
             self.text.trim().to_string()
         };
