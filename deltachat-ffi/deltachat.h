@@ -4300,9 +4300,9 @@ dc_lot_t*       dc_msg_get_summary            (const dc_msg_t* msg, const dc_cha
  *     this is allowed only if the message type is visible otherwise,
  *     close to where the emoji would be displayed otherwise
  *     (eg. images in pinned messages preceding summary)
- * @param one_line 1=convert linebreaks to spaces;
- *     although the text might be truncated, UI needs to add an end ellipsis on rendering e.g. pinned messages or notifications.
- *     0=leave linebreaks as is and do not truncate the text, useful e.g. for copying to clipboard.
+ * @param one_line 1=convert linebreaks to spaces, for single-line UI elements such as pinned messages or notifications;
+ *     the UI is expected to clip the text to the available space on its own.
+ *     0=leave linebreaks as is and return the full text, useful e.g. for copying to clipboard.
  * @return A summary for the given message.
  *     The returned string must be released using dc_str_unref().
  *     Returns an empty string on errors, never returns NULL.

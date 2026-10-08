@@ -552,7 +552,7 @@ mod tests {
             "Reply"
         );
 
-        // If there is nothing, there summary is empty
+        // If there is nothing, the summary is empty
         let msg = Message::new_text("".to_string());
         assert_summary_texts(&msg, ctx, "").await;
     }
