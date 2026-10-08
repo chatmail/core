@@ -717,7 +717,9 @@ pub(crate) async fn msgs_to_key_contacts(context: &Context) -> Result<()> {
 fn unencrypted_chats_migration(
     context: &Context,
     transaction: &mut rusqlite::Transaction<'_>,
-) -> Result<()> {
+) -> Result<bool> {
+    let mut show_unencrypted_device_msg = false;
+
     // Migrate:
     // - all unencrypted (i.e. ad-hoc) groups to have 0 members
     // - all chats of type Mailinglist into a group with 0 members
@@ -780,7 +782,6 @@ AND EXISTS (
 ",
     )?;
 
-    // Set the gray letter avatar for all legacy chats:
     let legacy_chats =
         transaction.count("SELECT COUNT(*) FROM temp.legacy_unencrypted_chats", ())?;
     let legacy_contacts = transaction.count(
@@ -788,6 +789,7 @@ AND EXISTS (
         (),
     )?;
     if legacy_chats > 0 || legacy_contacts > 0 {
+        // Set the gray letter avatar for all legacy chats:
         let blob = crate::blob::BlobObject::create_and_deduplicate_from_bytes(
             context,
             include_bytes!("../../assets/icon-unencrypted.png"),
@@ -798,16 +800,23 @@ AND EXISTS (
             "UPDATE chats SET param=? WHERE id IN (SELECT chat_id FROM temp.legacy_unencrypted_chats)",
             (new_param,),
         )?;
-
         transaction.execute(
             "UPDATE contacts SET param=? WHERE fingerprint='' AND id>9",
             (new_param,),
         )?;
+
+        let force_encryption: Option<String> = transaction.query_get_value(
+            "SELECT value FROM config WHERE keyname='force_encryption'",
+            (),
+        )?;
+        if force_encryption == Some("0".to_string()) {
+            show_unencrypted_device_msg = true;
+        }
     }
 
     transaction.execute("DROP TABLE temp.legacy_unencrypted_chats", ())?;
 
-    Ok(())
+    Ok(show_unencrypted_device_msg)
 }
 
 impl Sql {
@@ -909,7 +918,7 @@ pub async fn run(context: &Context, sql: &Sql) -> Result<bool> {
     }
 
     let dbversion = dbversion_before_update;
-    let mut recode_avatar = false;
+    let mut show_unencrypted_device_msg = false;
 
     if dbversion < 1 {
         sql.execute_migration(
@@ -1284,7 +1293,7 @@ CREATE TABLE imap_sync (folder TEXT PRIMARY KEY, uidvalidity INTEGER DEFAULT 0, 
             .await?;
     }
     if dbversion < 77 {
-        recode_avatar = true;
+        // removed
         sql.set_db_version(77).await?;
     }
     if dbversion < 78 {
@@ -2788,7 +2797,7 @@ CREATE TABLE smtp_success (
     if dbversion < migration_version {
         sql.execute_migration_transaction(
             |transaction| {
-                unencrypted_chats_migration(context, transaction)?;
+                show_unencrypted_device_msg = unencrypted_chats_migration(context, transaction)?;
 
                 Ok(())
             },
@@ -2811,7 +2820,7 @@ CREATE TABLE smtp_success (
     }
     info!(context, "Database version: v{new_version}.");
 
-    Ok(recode_avatar)
+    Ok(show_unencrypted_device_msg)
 }
 
 #[cfg(test)]
