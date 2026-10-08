@@ -344,6 +344,13 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_get_summary_text() {
+        let forwarded = true;
+        let emoji = true;
+        let one_line = true;
+        let no_forwarded = false;
+        let no_emoji = false;
+        let multi_line = false;
+
         let d = TestContext::new_alice().await;
         let ctx = &d.ctx;
         let chat_id = ChatId::create_for_contact(ctx, ContactId::SELF)
@@ -360,6 +367,11 @@ mod tests {
 
         let msg = Message::new_text(some_text.to_string());
         assert_summary_texts(&msg, ctx, "bla bla").await; // for simple text, the type is not added to the summary
+        assert_eq!(
+            msg.get_summary_text_ext(ctx, forwarded, emoji, multi_line)
+                .await,
+            "bla \t\n\tbla" // lineends are preserved, but text is still trimmed
+        );
 
         let file = write_file_to_blobdir(&d).await;
         let mut msg = Message::new(Viewtype::Image);
@@ -367,7 +379,8 @@ mod tests {
             .unwrap();
         assert_summary_texts(&msg, ctx, "📷 Image").await; // file names are not added for images
         assert_eq!(
-            msg.get_summary_text_ext(ctx, false, false, true).await,
+            msg.get_summary_text_ext(ctx, no_forwarded, no_emoji, one_line)
+                .await,
             "Image"
         );
 
@@ -378,8 +391,14 @@ mod tests {
             .unwrap();
         assert_summary_texts(&msg, ctx, "📷 bla bla").await; // type is visible by emoji if text is set
         assert_eq!(
-            msg.get_summary_text_ext(ctx, false, false, true).await,
+            msg.get_summary_text_ext(ctx, no_forwarded, no_emoji, one_line)
+                .await,
             "bla bla"
+        );
+        assert_eq!(
+            msg.get_summary_text_ext(ctx, forwarded, emoji, multi_line)
+                .await,
+            "📷 bla \t\n\tbla"
         );
 
         let file = write_file_to_blobdir(&d).await;
@@ -512,9 +531,29 @@ mod tests {
             "📎 foo.bar \u{2013} bla bla"
         ); // skipping prefix used for reactions summaries
         assert_eq!(
-            msg.get_summary_text_ext(ctx, false, false, true).await,
+            msg.get_summary_text_ext(ctx, no_forwarded, no_emoji, one_line)
+                .await,
             "foo.bar \u{2013} bla bla"
         );
+        assert_eq!(
+            msg.get_summary_text_ext(ctx, forwarded, no_emoji, one_line)
+                .await,
+            "Forwarded: foo.bar \u{2013} bla bla"
+        );
         d.assert_warn("Not a valid DeltaChat vCard").await;
+
+        // If nothing else is present, but the message is a reply, we say so. needed for summary of draft
+        let mut msg = Message::new_text("".to_string());
+        msg.set_quote_text(Some(("blubb".to_string(), true)));
+        assert_summary_texts(&msg, ctx, "Reply").await;
+        assert_eq!(
+            msg.get_summary_text_ext(ctx, no_forwarded, no_emoji, multi_line)
+                .await,
+            "Reply"
+        );
+
+        // If there is nothing, there summary is empty
+        let msg = Message::new_text("".to_string());
+        assert_summary_texts(&msg, ctx, "").await;
     }
 }
