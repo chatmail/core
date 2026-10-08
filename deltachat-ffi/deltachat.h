@@ -4287,6 +4287,21 @@ dc_lot_t*       dc_msg_get_summary            (const dc_msg_t* msg, const dc_cha
 
 
 /**
+ * Get a message summary as a single line of text. Typically used for
+ * notifications.
+ *
+ * @memberof dc_msg_t
+ * @deprecated 2026-10-08, use dc_msg_get_summary_text(msg, 1, 1, approx_chars) instead
+ * @param msg The message object.
+ * @param approx_characters A rough length of the expected string.
+ * @return A summary for the given messages.
+ *     The returned string must be released using dc_str_unref().
+ *     Returns an empty string on errors, never returns NULL.
+ */
+char*           dc_msg_get_summarytext        (const dc_msg_t* msg, int approx_characters);
+
+
+/**
  * Get a message summary.
  * Used for notifications, pinned messages and for copying texts to clipboard.
  *
@@ -4311,8 +4326,7 @@ dc_lot_t*       dc_msg_get_summary            (const dc_msg_t* msg, const dc_cha
 char*           dc_msg_get_summary_text       (const dc_msg_t* msg, int add_forwarded, int add_type_emoji, int approx_chars);
 
 
-// deprecated 2026-10-07, the old variant took a string length as second parameter, which is converted to "one line" by checking real world usages.
-#define dc_msg_get_summarytext(msg, approx_chars) dc_msg_get_summary_text((msg), 1, 1, (approx_chars))
+
 
 
 /**

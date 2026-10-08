@@ -3472,6 +3472,29 @@ pub unsafe extern "C" fn dc_msg_get_summary(
     Box::into_raw(Box::new(summary.into()))
 }
 
+// deprecated, use dc_msg_get_summary_text instead
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dc_msg_get_summarytext(
+    msg: *mut dc_msg_t,
+    approx_characters: libc::c_int,
+) -> *mut libc::c_char {
+    if msg.is_null() {
+        eprintln!("ignoring careless call to dc_msg_get_summarytext()");
+        return "".strdup();
+    }
+    let ffi_msg = unsafe { &mut *msg };
+
+    let add_forwarded = true;
+    let add_type_emoji = true;
+    block_on(ffi_msg.message.get_summary_text_ext(
+        &ffi_msg.context,
+        add_forwarded,
+        add_type_emoji,
+        usize::try_from(approx_characters).unwrap_or_default(),
+    ))
+    .strdup()
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn dc_msg_get_summary_text(
     msg: *mut dc_msg_t,
