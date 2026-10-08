@@ -270,10 +270,10 @@ async fn test_ephemeral_delete_msgs() -> Result<()> {
         .unwrap();
 
     // Send a saved message which will be deleted after 3600s
-    let now = time();
     let msg = t.send_text(self_chat.id, "Message text").await;
+    let now = msg.load_from_db().await.timestamp_sort;
 
-    check_msg_will_be_deleted(t, msg.sender_msg_id, &self_chat, now + 3599, time() + 3601)
+    check_msg_will_be_deleted(t, msg.sender_msg_id, &self_chat, now + 3599, now + 3601)
         .await
         .unwrap();
 
@@ -283,20 +283,31 @@ async fn test_ephemeral_delete_msgs() -> Result<()> {
     t.set_config(Config::DeleteDeviceAfter, Some("1800"))
         .await?;
 
-    let now = time();
     let msg = t.send_text(self_chat.id, "Message text").await;
+    let now = msg.load_from_db().await.timestamp_sort;
 
     assert_eq!(estimate_deletion_cnt(t, false, 1800).await.unwrap(), 0);
-    check_msg_will_be_deleted(t, msg.sender_msg_id, &self_chat, now + 3559, time() + 3601)
+    check_msg_will_be_deleted(t, msg.sender_msg_id, &self_chat, now + 3559, now + 3601)
+        .await
+        .unwrap();
+
+    // Create a new chat with Bob.
+    // This adds "Messages are end-to-end encrypted." notice
+    // that will be deleted 1800 seconds later because of DeleteDeviceAfter.
+    let bob_chat = t.create_chat(bob).await;
+    let e2ee_notice = t.get_last_msg_in(bob_chat.id).await;
+    assert_eq!(e2ee_notice.text, "Messages are end-to-end encrypted.");
+    assert_eq!(e2ee_notice.timestamp_sort, 0);
+    let now = e2ee_notice.timestamp_sent;
+    check_msg_will_be_deleted(t, e2ee_notice.id, &bob_chat, now + 1799, now + 1801)
         .await
         .unwrap();
 
     // Send a message to Bob which will be deleted after 1800s because of DeleteDeviceAfter.
-    let bob_chat = t.create_chat(bob).await;
-    let now = time();
     let msg = t.send_text(bob_chat.id, "Message text").await;
+    let now = msg.load_from_db().await.timestamp_sort;
 
-    check_msg_will_be_deleted(t, msg.sender_msg_id, &bob_chat, now + 1799, time() + 1801)
+    check_msg_will_be_deleted(t, msg.sender_msg_id, &bob_chat, now + 1799, now + 1801)
         .await
         .unwrap();
 
@@ -304,8 +315,8 @@ async fn test_ephemeral_delete_msgs() -> Result<()> {
     // This tests that the message is deleted at min(ephemeral deletion time, DeleteDeviceAfter deletion time).
     bob_chat.id.set_ephemeral_timer(t, enabled(60)).await?;
 
-    let now = time();
     let msg = t.send_text(bob_chat.id, "Message text").await;
+    let now = msg.load_from_db().await.timestamp_sort;
 
     check_msg_will_be_deleted(t, msg.sender_msg_id, &bob_chat, now + 59, time() + 61)
         .await
