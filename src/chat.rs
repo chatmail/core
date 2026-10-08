@@ -25,7 +25,6 @@ use crate::constants::{
 use crate::contact::{self, Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::download::{DownloadState, PRE_MSG_ATTACHMENT_SIZE_THRESHOLD};
-use crate::ensure_and_debug_assert_eq;
 use crate::ephemeral::{Timer as EphemeralTimer, start_chat_ephemeral_timers};
 use crate::events::EventType;
 use crate::key::{Fingerprint, self_fingerprint};
@@ -48,6 +47,7 @@ use crate::tools::{
     truncate_msg_text,
 };
 use crate::webxdc::StatusUpdateSerial;
+use crate::{ensure_and_debug_assert_eq, ensure_and_debug_assert_ne};
 
 pub(crate) const PARAM_BROADCAST_SECRET: Param = Param::Arg3;
 
@@ -1904,7 +1904,11 @@ impl Chat {
         };
         let ephemeral_timestamp = match ephemeral_timer {
             EphemeralTimer::Disabled => 0,
-            EphemeralTimer::Enabled { duration } => time().saturating_add(duration.get().into()),
+            EphemeralTimer::Enabled { duration } => {
+                let now = msg.timestamp_sort;
+                ensure_and_debug_assert_ne!(now, 0, "Message sorting timestamp must not be zero");
+                now.saturating_add(i64::from(duration.get()))
+            }
         };
 
         let (msg_text, was_truncated) = truncate_msg_text(context, msg.text.clone()).await?;
