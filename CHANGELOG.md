@@ -1,5 +1,84 @@
 # Changelog
 
+## [2.63.0] - 2026-10-09
+
+### API-Changes
+
+- add `PinnedMessagesChanged` event.
+- [**breaking**]: remove unused `dc_chatlist_get_summary2()` ([#8812](https://github.com/chatmail/core/pull/8812))
+- new `dc_msg_get_summary_text()` ([#8813](https://github.com/chatmail/core/pull/8813)).
+
+### Features / Changes
+
+- connect to the most recently successfully used SMTP transport first.
+- re-add "second device added" message if deleted soon after transfer ([#8758](https://github.com/chatmail/core/pull/8758)).
+- do not request MDNs for unencrypted messages.
+- do not send unencrypted MDNs.
+- add context to HTTP(S) proxy connection errors.
+- deltachat-repl: remove "reset" command.
+
+### Fixes
+
+- Correctly percent-encode addresses in securejoin invite codes ([#8747](https://github.com/chatmail/core/pull/8747)).
+- regenerate deltachat.pc if env changed ([#8752](https://github.com/chatmail/core/pull/8752)).
+- delete handled securejoin messages on all relays.
+- add headers to unencrypted MDNs.
+- In SMTP loop, reset `transport_id` and `from` when disconnecting ([#8797](https://github.com/chatmail/core/pull/8797)).
+- deltachat-rpc-client: shutdown all threads after RPC server crash.
+- (linux-only) make sure large attachments return memory to kernel.
+- do not reencode animated WebPs into JPEG.
+
+### CI
+
+- update Rust to 1.99.0.
+- speedup lint job and the Rust test builds
+
+### Refactor
+
+- [**breaking**] stop saving legacy config values when configuring a transport.
+  - core does not set deprecated config values `addr`, `mail_pw` etc. Use `list_transports()` API instead.
+- get rid of dead sticker-related code in check_or_recode_to_size().
+- factor add_headers_to_part() out of mimefactory::add_headers_to_protected_part().
+- replace MimeFactory::from_mdn() with a standalone mimefactory::mdn().
+- take securejoin addresses from transport list.
+- deltachat-repl: move all commands to cmdline.rs.
+- do not guess image format from file extension on I/O error.
+- reduce macro-generated lines by >70%, and drop tracing.
+- stop excluding `COPYUID` responses from the logs.
+
+### Tests
+
+- move pinned messages tests into pinned_messages_tests module.
+- Add basic tests for rendering unencrypted messages ([#8736](https://github.com/chatmail/core/pull/8736)).
+- do not ignore errors in add_pseudo_transport().
+- test sending and receiving long filename with emojis.
+
+### Miscellaneous Tasks
+
+- update rPGP from 0.20.0 to 0.21.0.
+- reduce noise created by key-contact migration.
+- enable `clippy::unnecessary_wraps`, fix `clippy::redundant_clone` and `clippy::string_lit_as_bytes` suggestions.
+- add chatmail.au.
+- add chatmail.cc ([#8756](https://github.com/chatmail/core/pull/8756)).
+- remove some `unwrap()` calls.
+- remove unused "sdp" dependency.
+- cargo: bump smallvec from 1.15.2 to 1.16.1.
+- cargo: bump syn from 3.0.4 to 3.0.6.
+- deps: bump zizmorcore/zizmor-action from 0.6.2 to 0.6.4.
+- cargo: bump mailparse from 0.16.1 to 0.17.0.
+- cargo: bump uuid from 1.25.0 to 1.26.1.
+- deps: bump cachix/install-nix-action from 31.11.0 to 31.11.1.
+- cargo: bump hyper from 1.10.1 to 1.11.1.
+- cargo: bump tokio-rustls from 0.26.4 to 0.26.5.
+- cargo: bump thiserror from 2.0.20 to 2.0.21.
+- deps: bump taiki-e/install-action from 2.86.7 to 2.87.20.
+- cargo: bump hyper-util from 0.1.20 to 0.1.21.
+- cargo: bump dirs from 6.0.0 to 7.0.0.
+- move deltachat-time to dev dependencies.
+- update astral-tokio-tar from 0.6.4 to 0.7.0.
+- update async-imap to 0.12.0.
+- update mail-builder to 1.0.
+
 ## [2.62.0] - 2026-09-22
 
 ### API-Changes
@@ -8903,3 +8982,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.60.0]: https://github.com/chatmail/core/compare/v2.59.0..v2.60.0
 [2.61.0]: https://github.com/chatmail/core/compare/v2.60.0..v2.61.0
 [2.62.0]: https://github.com/chatmail/core/compare/v2.61.0..v2.62.0
+[2.63.0]: https://github.com/chatmail/core/compare/v2.62.0..v2.63.0
