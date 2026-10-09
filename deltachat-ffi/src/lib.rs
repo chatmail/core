@@ -12,7 +12,6 @@
 extern crate human_panic;
 
 use std::collections::BTreeMap;
-use std::convert::TryFrom;
 use std::fmt::Write;
 use std::future::Future;
 use std::mem::ManuallyDrop;
@@ -3473,6 +3472,7 @@ pub unsafe extern "C" fn dc_msg_get_summary(
     Box::into_raw(Box::new(summary.into()))
 }
 
+// deprecated, use dc_msg_get_summary_text instead
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn dc_msg_get_summarytext(
     msg: *mut dc_msg_t,
@@ -3484,14 +3484,37 @@ pub unsafe extern "C" fn dc_msg_get_summarytext(
     }
     let ffi_msg = unsafe { &mut *msg };
 
-    let summary = block_on(ffi_msg.message.get_summary(&ffi_msg.context, None))
-        .context("dc_msg_get_summarytext failed")
-        .log_err(&ffi_msg.context)
-        .unwrap_or_default();
-    match usize::try_from(approx_characters) {
-        Ok(chars) => summary.truncated_text(chars).strdup(),
-        Err(_) => summary.text.strdup(),
+    let add_forwarded = true;
+    let add_type_emoji = true;
+    block_on(ffi_msg.message.get_summary_text_ext(
+        &ffi_msg.context,
+        add_forwarded,
+        add_type_emoji,
+        usize::try_from(approx_characters).unwrap_or_default(),
+    ))
+    .strdup()
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dc_msg_get_summary_text(
+    msg: *mut dc_msg_t,
+    add_forwarded: libc::c_int,
+    add_type_emoji: libc::c_int,
+    approx_chars: libc::c_int,
+) -> *mut libc::c_char {
+    if msg.is_null() {
+        eprintln!("ignoring careless call to dc_msg_get_summary_text()");
+        return "".strdup();
     }
+    let ffi_msg = unsafe { &mut *msg };
+
+    block_on(ffi_msg.message.get_summary_text_ext(
+        &ffi_msg.context,
+        add_forwarded != 0,
+        add_type_emoji != 0,
+        usize::try_from(approx_chars).unwrap_or(0),
+    ))
+    .strdup()
 }
 
 #[unsafe(no_mangle)]
