@@ -3512,7 +3512,7 @@ pub unsafe extern "C" fn dc_msg_get_summary_text(
         &ffi_msg.context,
         add_forwarded != 0,
         add_type_emoji != 0,
-        usize::try_from(approx_chars).unwrap_or_default(),
+        usize::try_from(approx_chars).unwrap_or(0),
     ))
     .strdup()
 }
