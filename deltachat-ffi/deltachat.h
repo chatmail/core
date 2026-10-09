@@ -4309,7 +4309,7 @@ char*           dc_msg_get_summarytext        (const dc_msg_t* msg, int approx_c
  * @param msg The message object.
  * @param add_forwarded 1=add a hint if a message was forwarded.
  *     0=do not add the hint;
- *     this is allowed only if the message is shown without a username otherwise, e.g. for pinned messages.
+ *     this is allowed only if the message is shown without a username, e.g. for pinned messages.
  * @param add_type_emoji 1=add the type of the message as an emoji prefix.
  *     0=do not add type emoji;
  *     this is allowed only if the message type is visible otherwise,
