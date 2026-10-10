@@ -1,8 +1,10 @@
 use super::*;
 use crate::chat;
+use crate::chat::Chat;
 use crate::chat::ChatId;
 use crate::config::Config;
 use crate::constants;
+use crate::constants::Chattype;
 use crate::contact::Contact;
 use crate::contact::ContactId;
 use crate::contact::Origin;
@@ -145,7 +147,8 @@ async fn test_key_contacts_migration_email1() -> Result<()> {
         .unwrap();
     let email_bob = Contact::get_by_id(&t, email_bob_id).await?;
     assert_eq!(email_bob.is_key_contact(), false);
-    assert_eq!(email_bob.origin, Origin::OutgoingTo);
+    // All email address contacts are hidden now:
+    assert_eq!(email_bob.origin, Origin::Hidden);
     assert_eq!(email_bob.e2ee_avail(&t).await?, false);
     assert_eq!(email_bob.fingerprint(), None);
 
@@ -178,7 +181,8 @@ async fn test_key_contacts_migration_email2() -> Result<()> {
         .unwrap();
     let email_bob = Contact::get_by_id(&t, email_bob_id).await?;
     assert_eq!(email_bob.is_key_contact(), false);
-    assert_eq!(email_bob.origin, Origin::OutgoingTo);
+    // All email address contacts are hidden now:
+    assert_eq!(email_bob.origin, Origin::Hidden);
     assert_eq!(email_bob.e2ee_avail(&t).await?, false);
     assert_eq!(email_bob.fingerprint(), None);
 
@@ -225,5 +229,100 @@ async fn test_key_contacts_migration_verified() -> Result<()> {
         pgp_bob.public_key(&t).await?.unwrap().dc_fingerprint()
     );
 
+    Ok(())
+}
+
+/// Creates a context right before the unencrypted-chats migration (v169).
+async fn context_before_unencrypted_migration() -> TestContext {
+    STOP_MIGRATIONS_AT
+        .scope(168, async move { TestContext::new_alice().await })
+        .await
+}
+
+/// Adds legacy data: a 1:1 chat (chat 10), an ad-hoc group (chat 11),
+/// a mailing list (chat 12) and an address-contact (contact 10).
+async fn add_legacy_data(t: &TestContext) -> Result<()> {
+    t.sql
+        .call_write(|conn| {
+            conn.execute_batch(
+                r#"
+INSERT INTO contacts (id, name, addr, origin, fingerprint)
+    VALUES (10, 'Bob', 'bob@example.net', 16384, '');
+INSERT INTO chats (id, type, name, grpid) VALUES
+    (10, 100, 'Bob', ''),
+    (11, 120, 'Thread', ''),
+    (12, 140, 'List', 'list.example.org');
+INSERT INTO chats_contacts (chat_id, contact_id) VALUES
+    (10, 10), (11, 1), (11, 10), (12, 10);"#,
+            )?;
+            Ok(())
+        })
+        .await
+}
+
+/// Legacy unencrypted 1:1 chats get the email address put into the name,
+/// and get the "unencrypted" avatar.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_unencrypted_chats_migration_1to1_chat() -> Result<()> {
+    let t = &context_before_unencrypted_migration().await;
+    add_legacy_data(t).await?;
+    t.sql.run_migrations(t).await?;
+
+    let bob = Contact::get_by_id(t, ContactId::new(10)).await?;
+    assert_eq!(bob.get_display_name(), "Bob (bob@example.net)");
+    assert!(bob.get_profile_image(t).await?.unwrap().exists());
+
+    let chat = Chat::load_from_db(t, ChatId::new(10)).await?;
+    assert_eq!(chat.get_name(), "Bob (bob@example.net)");
+    assert!(chat.get_profile_image(t).await?.unwrap().exists());
+
+    Ok(())
+}
+
+/// Legacy ad-hoc groups and mailing lists become read-only groups without members
+/// and get the "unencrypted" avatar.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_unencrypted_chats_migration_readonly_groups() -> Result<()> {
+    let t = &context_before_unencrypted_migration().await;
+    add_legacy_data(t).await?;
+    t.sql.run_migrations(t).await?;
+
+    for chat_id in [11, 12] {
+        let chat_id = ChatId::new(chat_id);
+        let chat = Chat::load_from_db(t, chat_id).await?;
+        assert_eq!(chat.typ, Chattype::Group);
+        assert!(chat::get_chat_contacts(t, chat_id).await?.is_empty());
+        assert_eq!(chat.can_send(t).await?, false);
+        assert!(chat.get_profile_image(t).await?.unwrap().exists());
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_unencrypted_chats_migration_device_msg() -> Result<()> {
+    for (force_encryption, has_legacy_data, expect_device_msg) in [
+        (Some("0"), true, true),
+        (Some("1"), true, false),
+        (None, true, false),
+        (Some("0"), false, false),
+    ] {
+        let t = &context_before_unencrypted_migration().await;
+        t.sql
+            .set_raw_config("force_encryption", force_encryption)
+            .await?;
+        if has_legacy_data {
+            add_legacy_data(t).await?;
+        }
+        t.sql.run_migrations(t).await?;
+
+        let shown = chat::was_device_msg_ever_added(t, "unencrypted-device-msg").await?;
+        assert_eq!(shown, expect_device_msg);
+
+        // This assert will need to be removed once we remove the ForceEncryption config,
+        // but it is useful for now to check that the logic is implemented correctly:
+        let allow_unencrypted = !t.get_config_bool(Config::ForceEncryption).await?;
+        assert_eq!(shown, allow_unencrypted && has_legacy_data);
+    }
     Ok(())
 }

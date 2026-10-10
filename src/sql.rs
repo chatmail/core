@@ -8,8 +8,7 @@ use anyhow::{Context as _, Result, bail};
 use rusqlite::{Connection, OpenFlags, Row, config::DbConfig, types::ValueRef};
 use tokio::sync::RwLock;
 
-use crate::blob::BlobObject;
-use crate::chat::ChatId;
+use crate::chat::{ChatId, add_device_msg};
 use crate::config::Config;
 use crate::context::Context;
 use crate::debug_logging::set_debug_logging_xdc;
@@ -214,32 +213,23 @@ impl Sql {
         // this should be done before updates that use high-level objects that
         // rely themselves on the low-level structure.
 
-        let recode_avatar = migrations::run(context, self)
+        let show_unencrypted_device_msg = migrations::run(context, self)
             .await
             .context("failed to run migrations")?;
 
         // (2) updates that require high-level objects
         // the structure is complete now and all objects are usable
 
-        if recode_avatar && let Some(avatar) = context.get_config(Config::Selfavatar).await? {
-            let mut blob = BlobObject::from_path(context, Path::new(&avatar))?;
-            match blob.recode_to_avatar_size(context).await {
-                Ok(()) => {
-                    if let Some(path) = blob.to_abs_path().to_str() {
-                        context
-                            .set_config_internal(Config::Selfavatar, Some(path))
-                            .await?;
-                    } else {
-                        warn!(context, "Setting selfavatar failed: non-UTF-8 filename");
-                    }
-                }
-                Err(e) => {
-                    warn!(context, "Migrations can't recode avatar, removing. {:#}", e);
-                    context
-                        .set_config_internal(Config::Selfavatar, None)
-                        .await?
-                }
-            }
+        if show_unencrypted_device_msg {
+            let txt = r#"To keep Delta Chat simpler and more secure, it no longer sends or receives messages that aren't end-to-end encrypted.
+
+Nothing is lost: your encrypted chats work as before, and old unencrypted chats remain readable.
+
+To keep sending and receiving unencrypted email, use a regular email app. You can find your email password in Delta Chat under "Settings → Advanced → Relays": tap (or right-click) your address and choose "Edit Relay".
+
+More details: https://..."#;
+            let mut msg = crate::message::Message::new_text(txt.to_string());
+            add_device_msg(context, Some("unencrypted-device-msg"), Some(&mut msg)).await?;
         }
 
         Ok(())
@@ -681,6 +671,43 @@ impl Sql {
             "wal_checkpoint: Total time: {total_duration:?}. Writers blocked for: {writers_blocked_duration:?}. Readers blocked for: {readers_blocked_duration:?}."
         );
         Ok(())
+    }
+}
+
+pub(crate) trait TransactionExt {
+    /// Used for executing `SELECT COUNT` statements only. Returns the resulting count.
+    fn count(&self, query: &str, params: impl rusqlite::Params + Send) -> Result<usize>;
+
+    /// Executes a query which is expected to return one row and one
+    /// column. If the query does not return any rows, returns `Ok(None)`.
+    fn query_get_value<T>(
+        &self,
+        query: &str,
+        params: impl rusqlite::Params + Send,
+    ) -> Result<Option<T>>
+    where
+        T: rusqlite::types::FromSql + Send + 'static;
+}
+
+impl TransactionExt for rusqlite::Transaction<'_> {
+    fn count(&self, query: &str, params: impl rusqlite::Params + Send) -> Result<usize> {
+        let count: isize = self.query_row(query, params, |row| row.get(0))?;
+        Ok(usize::try_from(count)?)
+    }
+
+    fn query_get_value<T>(
+        &self,
+        query: &str,
+        params: impl rusqlite::Params + Send,
+    ) -> Result<Option<T>>
+    where
+        T: rusqlite::types::FromSql + Send + 'static,
+    {
+        match self.query_row(query, params, |row| row.get::<_, T>(0)) {
+            Ok(res) => Ok(Some(res)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(err) => Err(err.into()),
+        }
     }
 }
 
