@@ -1,31 +1,27 @@
 //! # SMTP message sending
 
+use anyhow::Context as _;
 use async_smtp::{EmailAddress, Envelope, SendableEmail};
 
-use super::Smtp;
+use super::Connection;
 use crate::config::Config;
 use crate::context::Context;
-use crate::log::warn;
 use crate::tools;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Envelope error: {}", _0)]
-    Envelope(anyhow::Error),
     #[error("Send error: {}", _0)]
     SmtpSend(async_smtp::error::Error),
-    #[error("SMTP has no transport")]
-    NoTransport,
     #[error("{}", _0)]
     Other(#[from] anyhow::Error),
 }
 
-impl Smtp {
+impl Connection {
     /// Send a prepared mail to recipients.
     /// On successful send out Ok() is returned.
-    pub async fn send(
+    pub(super) async fn send(
         &mut self,
         context: &Context,
         recipients: &[EmailAddress],
@@ -38,21 +34,13 @@ impl Smtp {
             context.ratelimit.write().await.send();
         }
 
-        let envelope =
-            Envelope::new(self.from.clone(), recipients.to_vec()).map_err(Error::Envelope)?;
+        let envelope = Envelope::new(Some(self.from.clone()), recipients.to_vec())
+            .context("Envelope error")?;
         let mail = SendableEmail::new(envelope, message);
 
-        let Some(ref mut transport) = self.transport else {
-            warn!(
-                context,
-                "Failed to send a message because SMTP client has no SmtpTransport."
-            );
-            return Err(Error::NoTransport);
-        };
+        self.transport.send(mail).await.map_err(Error::SmtpSend)?;
 
-        transport.send(mail).await.map_err(Error::SmtpSend)?;
-
-        self.last_success = Some(tools::Time::now());
+        self.last_success = tools::Time::now();
         Ok(())
     }
 }
