@@ -4158,15 +4158,10 @@ async fn lookup_key_contact_by_fingerprint(
     context: &Context,
     fingerprint: &str,
 ) -> Result<Option<ContactId>> {
-    logged_debug_assert!(
-        context,
+    ensure!(
         !fingerprint.is_empty(),
         "lookup_key_contact_by_fingerprint: fingerprint is empty."
     );
-    if fingerprint.is_empty() {
-        // Avoid accidentally looking up a non-key-contact.
-        return Ok(None);
-    }
     if let Some(contact_id) = context
         .sql
         .query_row_optional(

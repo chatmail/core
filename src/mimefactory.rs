@@ -596,20 +596,37 @@ impl MimeFactory {
                         let add_timestamp: i64 = row.get(4)?;
                         let remove_timestamp: i64 = row.get(5)?;
                         let public_key_bytes_opt: Option<Vec<u8>> = row.get(6)?;
-                        Ok((authname, addr, fingerprint, id, add_timestamp, remove_timestamp, public_key_bytes_opt))
+                        Ok((
+                            authname,
+                            addr,
+                            fingerprint,
+                            id,
+                            add_timestamp,
+                            remove_timestamp,
+                            public_key_bytes_opt,
+                        ))
                     },
                     |rows| {
                         let mut past_member_timestamps = Vec::new();
                         let mut past_member_fingerprints = Vec::new();
 
                         for row in rows {
-                            let (authname, addr, fingerprint, id, add_timestamp, remove_timestamp, public_key_bytes_opt) = row?;
+                            let (
+                                authname,
+                                addr,
+                                fingerprint,
+                                id,
+                                add_timestamp,
+                                remove_timestamp,
+                                public_key_bytes_opt,
+                            ) = row?;
 
-                            let public_key_opt = if let Some(public_key_bytes) = &public_key_bytes_opt {
-                                Some(SignedPublicKey::from_slice(public_key_bytes)?)
-                            } else {
-                                None
-                            };
+                            let public_key_opt =
+                                if let Some(public_key_bytes) = &public_key_bytes_opt {
+                                    Some(SignedPublicKey::from_slice(public_key_bytes)?)
+                                } else {
+                                    None
+                                };
 
                             let addr = if id == ContactId::SELF {
                                 from_addr.to_string()
@@ -625,7 +642,9 @@ impl MimeFactory {
                                     let addrs = addresses_from_public_key(&public_key);
                                     keys.push((addr.clone(), public_key));
                                     addrs
-                                } else if id != ContactId::SELF && !should_encrypt_symmetrically(&msg, &chat) {
+                                } else if id != ContactId::SELF
+                                    && !should_encrypt_symmetrically(&msg, &chat)
+                                {
                                     missing_key_addresses.insert(addr.clone());
                                     if is_encrypted {
                                         warn!(context, "Missing key for {addr}");
@@ -633,7 +652,8 @@ impl MimeFactory {
                                     None
                                 } else {
                                     None
-                                }.unwrap_or_else(|| vec![addr.clone()]);
+                                }
+                                .unwrap_or_else(|| vec![addr.clone()]);
 
                                 if !recipients_contain_addr(&to, &addr) {
                                     if id != ContactId::SELF {
@@ -645,10 +665,13 @@ impl MimeFactory {
                                         if is_encrypted {
                                             if !fingerprint.is_empty() {
                                                 member_fingerprints.push(fingerprint);
-                                            } else if id == ContactId::SELF {
-                                                member_fingerprints.push(self_fingerprint.to_string());
                                             } else {
-                                                ensure_and_debug_assert!(member_fingerprints.is_empty(), "If some member is a key-contact, all other members should be key-contacts too");
+                                                ensure_and_debug_assert!(
+                                                    id == ContactId::SELF,
+                                                    "Member fingerprint missing"
+                                                );
+                                                member_fingerprints
+                                                    .push(self_fingerprint.to_string());
                                             }
                                         }
                                         member_timestamps.push(add_timestamp);
@@ -660,28 +683,32 @@ impl MimeFactory {
                                 // member is not actually part of the group.
                                 if !recipients_contain_addr(&past_members, &addr) {
                                     if let Some(email_to_remove) = email_to_remove
-                                        && email_to_remove == addr {
-                                            let relays = if let Some(public_key) = public_key_opt {
-                                                let addrs = addresses_from_public_key(&public_key);
-                                                keys.push((addr.clone(), public_key));
-                                                addrs
-                                            } else if id != ContactId::SELF && !should_encrypt_symmetrically(&msg, &chat)  {
-                                                missing_key_addresses.insert(addr.clone());
-                                                if is_encrypted {
-                                                    warn!(context, "Missing key for {addr}");
-                                                }
-                                                None
-                                            } else {
-                                                None
-                                            }.unwrap_or_else(|| vec![addr.clone()]);
-
-                                            // This is a "member removed" message,
-                                            // we need to notify removed member
-                                            // that it was removed.
-                                            if id != ContactId::SELF {
-                                                recipients.extend(relays);
+                                        && email_to_remove == addr
+                                    {
+                                        let relays = if let Some(public_key) = public_key_opt {
+                                            let addrs = addresses_from_public_key(&public_key);
+                                            keys.push((addr.clone(), public_key));
+                                            addrs
+                                        } else if id != ContactId::SELF
+                                            && !should_encrypt_symmetrically(&msg, &chat)
+                                        {
+                                            missing_key_addresses.insert(addr.clone());
+                                            if is_encrypted {
+                                                warn!(context, "Missing key for {addr}");
                                             }
+                                            None
+                                        } else {
+                                            None
                                         }
+                                        .unwrap_or_else(|| vec![addr.clone()]);
+
+                                        // This is a "member removed" message,
+                                        // we need to notify removed member
+                                        // that it was removed.
+                                        if id != ContactId::SELF {
+                                            recipients.extend(relays);
+                                        }
+                                    }
                                     if !undisclosed_recipients {
                                         past_members.push((name, addr.clone()));
                                         past_member_timestamps.push(remove_timestamp);
@@ -689,12 +716,15 @@ impl MimeFactory {
                                         if is_encrypted {
                                             if !fingerprint.is_empty() {
                                                 past_member_fingerprints.push(fingerprint);
-                                            } else if id == ContactId::SELF {
+                                            } else {
+                                                ensure_and_debug_assert!(
+                                                    id == ContactId::SELF,
+                                                    "Member fingerprint missing"
+                                                );
                                                 // It's fine to have self in past members
                                                 // if we are leaving the group.
-                                                past_member_fingerprints.push(self_fingerprint.to_string());
-                                            } else {
-                                                ensure_and_debug_assert!(past_member_fingerprints.is_empty(), "If some past member is a key-contact, all other past members should be key-contacts too");
+                                                past_member_fingerprints
+                                                    .push(self_fingerprint.to_string());
                                             }
                                         }
                                     }
@@ -705,20 +735,25 @@ impl MimeFactory {
                         ensure_and_debug_assert!(
                             member_timestamps.len() >= to.len(),
                             "member_timestamps.len() ({}) < to.len() ({})",
-                            member_timestamps.len(), to.len());
+                            member_timestamps.len(),
+                            to.len()
+                        );
                         ensure_and_debug_assert!(
                             member_fingerprints.is_empty() || member_fingerprints.len() >= to.len(),
                             "member_fingerprints.len() ({}) < to.len() ({})",
-                            member_fingerprints.len(), to.len());
+                            member_fingerprints.len(),
+                            to.len()
+                        );
 
                         if to.len() > 1
-                            && let Some(position) = to.iter().position(|(_, x)| x == &from_addr) {
-                                to.remove(position);
-                                member_timestamps.remove(position);
-                                if is_encrypted {
-                                    member_fingerprints.remove(position);
-                                }
+                            && let Some(position) = to.iter().position(|(_, x)| x == &from_addr)
+                        {
+                            to.remove(position);
+                            member_timestamps.remove(position);
+                            if is_encrypted {
+                                member_fingerprints.remove(position);
                             }
+                        }
 
                         member_timestamps.extend(past_member_timestamps);
                         if is_encrypted {

@@ -16,6 +16,7 @@ use crate::key::DcKey;
 use crate::log::warn;
 
 use crate::sql::Sql;
+use crate::sql::TransactionExt as _;
 use crate::tools::{self, Time, inc_and_check, time_elapsed};
 use crate::transport::ConfiguredLoginParam;
 
@@ -2687,6 +2688,19 @@ CREATE TABLE smtp_success (
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 169)?;
+    if dbversion < migration_version {
+        sql.execute_migration_transaction(
+            |transaction| {
+                unencrypted_chats_migration(context, transaction)?;
+
+                Ok(())
+            },
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
@@ -2702,6 +2716,109 @@ CREATE TABLE smtp_success (
     info!(context, "Database version: v{new_version}.");
 
     Ok(recode_avatar)
+}
+
+fn unencrypted_chats_migration(
+    context: &Context,
+    transaction: &mut rusqlite::Transaction<'_>,
+) -> Result<()> {
+    // Migrate:
+    // - all unencrypted (i.e. ad-hoc) groups into regular groups with 0 members.
+    // - all unencrypted 1:1 chats into a group with 0 members. (probably unnecessary, not implemented right now)
+    // - all chats of type Mailinglist into a group with 0 members.
+    transaction.execute_batch(
+        "
+-- Save the rewritten chats in a table in case the migration is faulty
+-- and we need to fix something later:
+CREATE TABLE legacy_unencrypted_chats(chat_id INTEGER PRIMARY KEY, type INTEGER) STRICT;
+
+INSERT INTO legacy_unencrypted_chats(chat_id, type)
+SELECT id, type FROM chats
+WHERE ((type=120 AND grpid='') OR type=140) -- Ad-hoc groups and mailinglists
+  AND id>9;
+
+DELETE FROM chats_contacts
+WHERE chat_id IN (SELECT chat_id FROM legacy_unencrypted_chats)
+-- AND contact_id=1 -- ContactID::SELF (TODO: maybe we just need to remove self)
+;
+
+UPDATE chats SET type=120
+WHERE id IN (SELECT chat_id FROM legacy_unencrypted_chats);
+",
+    )?;
+
+    // -- TODO: Do we want to set a fake group ID, so that future code can use the grpid as a unique identifier of groups?
+    // -- If not, we will forever need to write code that accomodates the possibility of empty group ids.
+    // -- TODO: Test what happens if it's not the same, and then the user pins the chat on one of the devices
+    // -- E.g. we might use the newest msgid as an identifier, which will often/sometimes be the same on different devices:
+    // UPDATE chats
+    // SET grpid='legacy_group_' || coalesce(
+    //     (SELECT NULLIF(rfc724_mid, '') FROM msgs WHERE chat_id=chats.id ORDER BY id DESC LIMIT 1),
+    //     hex(randomblob(16))
+    // )
+    // WHERE id IN (SELECT chat_id FROM legacy_unencrypted_chats) AND grpid='';
+
+    // Rewrite all address-contacts into a key-contact with "Hidden" origin (and with a fake key fingerprint?).
+    // We still need the contacts because we want to keep the messages, and every message needs a sender.
+
+    // We should make sure that the address is available somewhere,
+    // e.g. by explicitly setting the name of these contacts to their email address
+    // (or appending the email address if there is a name already)
+    // Users can try and send a message to these contacts or add them to a group,
+    // but it will fail since there is no key (we should test that this is actually the case).
+    // If this turns out to be hard, we try something else, like rewriting the messages to all come from some "ghost" contact.
+
+    // TODO right now, groups get a fake-ID but contacts retain their empty fingerprint. Not sure if we should change this,
+    // e.g. address-contacts could get a hashed address as their 'fingerprint'.
+
+    transaction.execute_batch(
+        "
+UPDATE contacts
+SET origin=8 -- Origin::Hidden
+WHERE fingerprint='' AND id>9;
+
+UPDATE contacts
+SET name=name || ' (' || addr || ')'
+WHERE fingerprint='' AND id>9 AND name!='';
+
+UPDATE contacts
+SET authname=authname || ' (' || addr || ')'
+WHERE fingerprint='' AND id>9 AND name='' AND authname!='';
+
+UPDATE contacts
+SET authname=addr
+WHERE fingerprint='' AND id>9 AND name='' AND authname=''
+",
+    )?;
+
+    // Set the gray letter avatar for all legacy chats:
+    let legacy_chats = transaction.count("SELECT COUNT(*) FROM legacy_unencrypted_chats", ())?;
+    let legacy_contacts = transaction.count(
+        "SELECT COUNT(*) FROM contacts WHERE fingerprint='' AND id>9",
+        (),
+    )?;
+    if legacy_chats > 0 || legacy_contacts > 0 {
+        // TODO maybe we should inline create_and_deduplicate_from_bytes?
+        // Overwrite existing params; it should just be a plain read-only chat,
+        // no need for params except for the avatar.
+        let blob = crate::blob::BlobObject::create_and_deduplicate_from_bytes(
+            context,
+            include_bytes!("../../assets/icon-unencrypted.png"),
+            "icon-unencrypted.png",
+        )?;
+        let new_param = &format!("i={}", blob.as_name());
+        transaction.execute(
+            "UPDATE chats SET param=? WHERE id IN (SELECT chat_id FROM legacy_unencrypted_chats)",
+            (new_param,),
+        )?;
+
+        transaction.execute(
+            "UPDATE contacts SET param=? WHERE fingerprint='' AND id>9",
+            (new_param,),
+        )?;
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
