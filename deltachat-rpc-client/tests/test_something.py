@@ -100,7 +100,7 @@ def test_lowercase_address(acf) -> None:
     )
     assert account.is_configured()
     assert addr_upper != addr
-    assert account.get_config("configured_addr") == addr
+
     assert account.list_transports()[0]["addr"] == addr
 
     param = account.get_info()["used_transport_settings"]
@@ -168,7 +168,7 @@ def test_list_transports(acf) -> None:
 def test_account(acf) -> None:
     alice, bob = acf.get_online_accounts(2)
 
-    bob_addr = bob.get_config("configured_addr")
+    bob_addr = bob.list_transports()[0]["addr"]
     alice_contact_bob = alice.create_contact(bob, "Bob")
     alice_chat_bob = alice_contact_bob.create_chat()
     alice_chat_bob.send_text("Hello!")
@@ -331,7 +331,7 @@ def test_chat(acf) -> None:
 def test_contact(acf) -> None:
     alice, bob = acf.get_online_accounts(2)
 
-    bob_addr = bob.get_config("configured_addr")
+    bob_addr = bob.list_transports()[0]["addr"]
     alice_contact_bob = alice.create_contact(bob, "Bob")
 
     assert alice_contact_bob == alice.get_contact_by_id(alice_contact_bob.id)

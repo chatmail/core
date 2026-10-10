@@ -20,13 +20,14 @@ use crate::test_utils::TestContextManager;
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_change_primary_self_addr() -> Result<()> {
     let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
+    let mut alice = tcm.alice().await;
     let bob = tcm.bob().await;
 
     tcm.send_recv_accept(&alice, &bob, "Hi").await;
     let bob_alice_chat = bob.create_chat(&alice).await;
 
-    tcm.change_addr(&alice, "alice@someotherdomain.xyz").await;
+    tcm.change_addr(&mut alice, "alice@someotherdomain.xyz")
+        .await;
 
     tcm.section("Bob sends a message to Alice, encrypting to her previous key");
     let sent = bob.send_text(bob_alice_chat.id, "hi back").await;
@@ -63,7 +64,7 @@ async fn check_aeap_transition(chat_for_transition: ChatForTransition) {
     const ALICE_NEW_ADDR: &str = "alice2@example.net";
 
     let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
+    let alice = &mut tcm.alice().await;
     let bob = &tcm.bob().await;
 
     tcm.send_recv_accept(alice, bob, "Hi").await;
@@ -105,10 +106,7 @@ async fn check_aeap_transition(chat_for_transition: ChatForTransition) {
     check_that_transition_worked(bob, &groups, alice_contact, ALICE_NEW_ADDR).await;
 
     tcm.section("Test switching back");
-    alice
-        .set_primary_self_addr("alice@example.org")
-        .await
-        .unwrap();
+    alice.set_sending_addr("alice@example.org");
     let sent = alice
         .send_text(chat_to_send, "Hello from my old addr!")
         .await;
@@ -205,7 +203,7 @@ async fn test_aeap_replay_attack() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_write_to_alice_after_aeap() -> Result<()> {
     let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
+    let alice = &mut tcm.alice().await;
     let bob = &tcm.bob().await;
 
     let alice_grp_id = chat::create_group(alice, "Group").await?;

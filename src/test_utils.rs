@@ -193,21 +193,11 @@ impl TestContextManager {
         to.recv_msg(&sent).await
     }
 
-    pub async fn change_addr(&self, test_context: &TestContext, new_addr: &str) {
-        self.section(&format!(
-            "{} changes her self address and reconfigures",
-            test_context.name()
-        ));
-
+    pub async fn change_addr(&self, test_context: &mut TestContext, new_addr: &str) {
         test_context.add_transport(new_addr).await;
-        test_context.set_primary_self_addr(new_addr).await.unwrap();
+        test_context.set_sending_addr(new_addr);
         // ensure_secret_key_exists() is called during configure
         key::ensure_secret_key_exists(test_context).await.unwrap();
-
-        assert_eq!(
-            test_context.get_primary_self_addr().await.unwrap(),
-            new_addr
-        );
     }
 
     /// Executes SecureJoin protocol between `scanner` and `scanned`.
@@ -252,10 +242,9 @@ impl TestContextManager {
         qr: &str,
     ) -> ChatId {
         assert!(joiner.pop_sent_msg_opt().await.is_none());
-        let inviter_addr = inviters[0].get_primary_self_addr().await.unwrap();
+        let inviter_addr = inviters[0].sending_addr().await;
         for inviter in inviters {
             assert!(inviter.pop_sent_msg_opt().await.is_none());
-            assert_eq!(inviter.get_primary_self_addr().await.unwrap(), inviter_addr);
         }
 
         let chat_id = join_securejoin(&joiner.ctx, qr).await.unwrap();
@@ -435,6 +424,9 @@ pub struct TestContext {
     pub evtracker: EventTracker,
 
     log_sink: LogSink,
+
+    /// From address to be used when emulating sending.
+    from: Option<String>,
 }
 
 impl TestContext {
@@ -530,6 +522,7 @@ impl TestContext {
             dir,
             evtracker: EventTracker::new(evtracker_receiver),
             log_sink,
+            from: None,
         }
     }
 
@@ -560,10 +553,6 @@ impl TestContext {
         add_pseudo_transport(&self.ctx, addr)
             .await
             .expect("Failed to add pseudo transport");
-        self.ctx
-            .set_config(Config::ConfiguredAddr, Some(addr))
-            .await
-            .expect("Failed to configure address");
 
         if let Some(name) = addr.split('@').next() {
             self.set_name(name);
@@ -584,6 +573,21 @@ impl TestContext {
             .unwrap();
         // Invalidate the cached self key so that it is regenerated with the new list.
         self.self_public_key.lock().await.take();
+    }
+
+    pub fn set_sending_addr(&mut self, addr: &str) {
+        // TODO: check if the address is configured
+        self.from = Some(addr.to_string());
+    }
+
+    pub async fn sending_addr(&self) -> String {
+        if let Some(ref from) = self.from {
+            from.clone()
+        } else {
+            self.get_primary_self_addr()
+                .await
+                .expect("Cannot get From address")
+        }
     }
 
     /// Retrieves a sent message from the jobs table.
@@ -632,10 +636,7 @@ ORDER BY id"
             .await
             .expect("Failed to load queued mail");
         if queued_mail.bcc_self {
-            let from = self
-                .get_primary_self_addr()
-                .await
-                .expect("Cannot get From address");
+            let from = self.sending_addr().await;
             smtp::add_self_recipients(
                 &self.ctx,
                 &mut queued_mail.recipients,
@@ -734,10 +735,7 @@ ORDER BY id"
                 .await
                 .expect("Failed to load queued mail");
             if queued_mail.bcc_self {
-                let from = self
-                    .get_primary_self_addr()
-                    .await
-                    .expect("Cannot get self address");
+                let from = self.sending_addr().await;
                 smtp::add_self_recipients(
                     &self.ctx,
                     &mut queued_mail.recipients,
@@ -897,7 +895,7 @@ ORDER BY id"
 
     /// Returns the [`ContactId`] for the other [`TestContext`], creating a contact if necessary.
     pub async fn add_or_lookup_address_contact_id(&self, other: &TestContext) -> ContactId {
-        let primary_self_addr = other.ctx.get_primary_self_addr().await.unwrap();
+        let primary_self_addr = other.sending_addr().await;
         let addr = ContactAddress::new(&primary_self_addr).unwrap();
         // MailinglistAddress is the lowest allowed origin, we'd prefer to not modify the
         // origin when creating this contact.
@@ -952,7 +950,7 @@ ORDER BY id"
     /// If the contact does not exist yet, a new contact will be created
     /// with the correct fingerprint, but without the public key.
     pub async fn add_or_lookup_contact_id_no_key(&self, other: &TestContext) -> ContactId {
-        let primary_self_addr = other.ctx.get_primary_self_addr().await.unwrap();
+        let primary_self_addr = other.sending_addr().await;
         let addr = ContactAddress::new(&primary_self_addr).unwrap();
         let fingerprint = self_fingerprint(other).await.unwrap();
 
@@ -1242,13 +1240,14 @@ ORDER BY id"
 }
 
 pub async fn encrypt_raw_message(
-    context: &Context,
+    context: &TestContext,
     receivers: &[&TestContext],
     payload: &[u8],
 ) -> Result<String> {
     let public_key = key::load_self_public_key(context).await?;
+    let from = context.sending_addr().await;
     let aheader = Aheader {
-        addr: context.get_primary_self_addr().await?,
+        addr: from.clone(),
         public_key: public_key.clone(),
         prefer_encrypt: EncryptPreference::Mutual,
     };
@@ -1259,7 +1258,6 @@ pub async fn encrypt_raw_message(
         encryption_keyring.push(key::load_self_public_key(receiver).await?);
     }
 
-    let from = context.get_primary_self_addr().await?;
     let compress = false;
 
     let mut cleartext = format!("Autocrypt: {aheader}").into_bytes();

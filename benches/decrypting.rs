@@ -31,7 +31,7 @@ use deltachat::internals_for_benches::create_broadcast_secret;
 use deltachat::internals_for_benches::save_broadcast_secret;
 use deltachat::securejoin::get_securejoin_qr;
 use deltachat::{
-    Events, chat::ChatId, config::Config, context::Context, internals_for_benches::key_from_asc,
+    Events, chat::ChatId, context::Context, internals_for_benches::key_from_asc,
     internals_for_benches::parse_and_get_text, internals_for_benches::store_self_keypair,
     stock_str::StockStrings,
 };
@@ -57,10 +57,7 @@ async fn create_context() -> Context {
         .await
         .unwrap();
 
-    context
-        .set_config(Config::ConfiguredAddr, Some("bob@example.net"))
-        .await
-        .unwrap();
+    // FIXME add_pseudo_transport
     let secret = key_from_asc(include_str!("../test-data/key/bob-secret.asc")).unwrap();
     store_self_keypair(&context, &secret)
         .await

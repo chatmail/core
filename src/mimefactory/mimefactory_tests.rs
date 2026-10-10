@@ -185,7 +185,7 @@ async fn test_subject_outgoing() {
     let t = TestContext::new_alice().await;
     t.allow_unencrypted().await.unwrap();
 
-    assert_eq!(first_subject_str(t).await, "Message from alice@example.org");
+    assert_eq!(first_subject_str(t).await, "Message from ...");
 
     let t = TestContext::new_alice().await;
     t.allow_unencrypted().await.unwrap();
@@ -732,9 +732,9 @@ async fn test_remove_member_bcc() -> Result<()> {
     let charlie = &tcm.charlie().await;
     alice.allow_unencrypted().await?;
 
-    let alice_addr = alice.get_config(Config::ConfiguredAddr).await?.unwrap();
-    let bob_addr = bob.get_config(Config::ConfiguredAddr).await?.unwrap();
-    let charlie_addr = charlie.get_config(Config::ConfiguredAddr).await?.unwrap();
+    let alice_addr = alice.get_primary_self_addr().await?;
+    let bob_addr = bob.get_primary_self_addr().await?;
+    let charlie_addr = charlie.get_primary_self_addr().await?;
 
     let bob_id = alice.add_or_lookup_address_contact_id(bob).await;
     let charlie_id = alice.add_or_lookup_address_contact_id(charlie).await;
@@ -897,7 +897,7 @@ async fn test_new_member_is_first_recipient() -> Result<()> {
     assert!(
         sent_msg
             .recipients
-            .starts_with(&charlie.get_config(Config::ConfiguredAddr).await?.unwrap())
+            .starts_with(&charlie.get_primary_self_addr().await?)
     );
 
     remove_contact_from_chat(alice, group, bob_id).await?;
@@ -905,11 +905,8 @@ async fn test_new_member_is_first_recipient() -> Result<()> {
     SystemTime::shift(Duration::from_secs(60));
     add_contact_to_chat(alice, group, bob_id).await?;
     let sent_msg = alice.pop_sent_msg().await;
-    assert!(
-        sent_msg
-            .recipients
-            .starts_with(&bob.get_config(Config::ConfiguredAddr).await?.unwrap())
-    );
+    let bob_addr = bob.get_primary_self_addr().await?;
+    assert!(sent_msg.recipients.starts_with(&bob_addr));
     Ok(())
 }
 
@@ -1117,7 +1114,7 @@ Autocrypt: addr=alice@example.org; prefer-encrypt=mutual;
 Content-Type: text/plain; charset="utf-8"
 Date: DATE
 To: <bob@example.net>
-Subject: Message from alice@example.org
+Subject: Message from ...
 References: <MESSAGE_ID@localhost>
 Chat-Version: 1.0
 Content-Transfer-Encoding: 7bit
@@ -1169,7 +1166,7 @@ Content-Type: multipart/mixed;
  boundary="BOUNDARY"
 Date: DATE
 To: <bob@example.net>
-Subject: Message from alice@example.org
+Subject: Message from ...
 References: <MESSAGE_ID@localhost>
 Chat-Version: 1.0
 

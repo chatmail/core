@@ -104,7 +104,6 @@ def test_keyupdate_against_core_2_48_march_2026(acf, alice_and_remote_bob, repla
     # an accepted chat alone is not enough, a message must have flowed.
     alice_chat = alice_contact_bob.create_chat()
     alice.set_config("keyupdate_debounce", "1")
-    old_addr = alice.get_config("configured_addr")
     alice_chat.send_text("hi")
     assert remote_eval("bob.wait_for_incoming_msg().get_snapshot().text") == "hi"
     before = bob_sees()
@@ -113,8 +112,9 @@ def test_keyupdate_against_core_2_48_march_2026(acf, alice_and_remote_bob, repla
     # and signature timestamps have one-second resolution:
     # without waiting, the re-signed key can tie with the copy Bob holds, keeping his.
     time.sleep(2)
+    old_addr = alice.list_transports()[0]["addr"]
     alice.add_transport_from_qr(acf.get_account_qr())
-    (new_addr,) = [t["addr"] for t in alice.list_transports() if t["addr"] != old_addr]
+    new_addr = alice.list_transports()[1]["addr"]
     if replace_relay:
         alice.delete_transport(old_addr)
     alice.bring_online()
