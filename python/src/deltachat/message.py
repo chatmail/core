@@ -188,7 +188,7 @@ class Message:
 
     def get_summarytext(self, width: int) -> str:
         """Get a message summary as a single line of text. Typically used for notifications."""
-        return from_dc_charpointer(lib.dc_msg_get_summarytext(self._dc_msg, width))
+        return from_dc_charpointer(lib.dc_msg_get_summary_text(self._dc_msg, 1, 1, width))
 
     @props.with_doc
     def time_sent(self):

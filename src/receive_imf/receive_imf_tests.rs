@@ -2957,6 +2957,7 @@ async fn test_weird_and_duplicated_filenames() -> Result<()> {
         "a.tar.gz",
         "a.a..a.a.a.a.tar.gz",
         "a. tar.tar.gz",
+        "very long filename with emoji \u{1F600} very long file name with emoji \u{1FAE0} very long file name with emoji.tar.gz",
     ] {
         let attachment = alice.blobdir.join(filename_sent);
         let content = "File content of tar.gz archive".to_string();

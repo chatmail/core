@@ -4291,6 +4291,7 @@ dc_lot_t*       dc_msg_get_summary            (const dc_msg_t* msg, const dc_cha
  * notifications.
  *
  * @memberof dc_msg_t
+ * @deprecated 2026-10-08, use dc_msg_get_summary_text(msg, 1, 1, approx_chars) instead
  * @param msg The message object.
  * @param approx_characters A rough length of the expected string.
  * @return A summary for the given messages.
@@ -4298,6 +4299,34 @@ dc_lot_t*       dc_msg_get_summary            (const dc_msg_t* msg, const dc_cha
  *     Returns an empty string on errors, never returns NULL.
  */
 char*           dc_msg_get_summarytext        (const dc_msg_t* msg, int approx_characters);
+
+
+/**
+ * Get a message summary.
+ * Used for notifications, pinned messages and for copying texts to clipboard.
+ *
+ * @memberof dc_msg_t
+ * @param msg The message object.
+ * @param add_forwarded 1=add a hint if a message was forwarded.
+ *     0=do not add the hint;
+ *     this is allowed only if the message is shown without a username, e.g. for pinned messages.
+ * @param add_type_emoji 1=add the type of the message as an emoji prefix.
+ *     0=do not add type emoji;
+ *     this is allowed only if the message type is visible otherwise,
+ *     close to where the emoji would be displayed otherwise
+ *     (eg. images in pinned messages preceding summary)
+ * @param approx_chars >0=convert linebreaks to spaces and truncate the line at about the given number of characters;
+ *     for single-line UI elements such as pinned messages or notifications;
+ *     additionally, UIs will most times clip the text to the available space.
+ *     0=leave linebreaks as is and return the full text, useful e.g. for copying to clipboard.
+ * @return A summary for the given message.
+ *     The returned string must be released using dc_str_unref().
+ *     Returns an empty string on errors, never returns NULL.
+ */
+char*           dc_msg_get_summary_text       (const dc_msg_t* msg, int add_forwarded, int add_type_emoji, int approx_chars);
+
+
+
 
 
 /**

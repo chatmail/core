@@ -1457,7 +1457,6 @@ impl Session {
     fn drain_unsolicited_responses(&self, context: &Context) -> bool {
         use UnsolicitedResponse::*;
         use async_imap::imap_proto::Response;
-        use async_imap::imap_proto::ResponseCode;
 
         let folder = self.selected_folder.as_deref().unwrap_or_default();
         let mut should_refetch = false;
@@ -1472,28 +1471,19 @@ impl Session {
                 }
 
                 Expunge(_) | Recent(_) => {}
-                Other(ref response_data) => {
-                    match response_data.parsed() {
-                        Response::Fetch { .. } => {
-                            info!(
-                                context,
-                                "Need to refetch {folder:?}, got unsolicited FETCH {response:?}"
-                            );
-                            should_refetch = true;
-                        }
-
-                        // We are not interested in the following responses and they are are
-                        // sent quite frequently, so, we ignore them without logging them.
-                        Response::Done {
-                            code: Some(ResponseCode::CopyUid(_, _, _)),
-                            ..
-                        } => {}
-
-                        _ => {
-                            info!(context, "{folder:?}: got unsolicited response {response:?}")
-                        }
+                Other(ref response_data) => match response_data.parsed() {
+                    Response::Fetch { .. } => {
+                        info!(
+                            context,
+                            "Need to refetch {folder:?}, got unsolicited FETCH {response:?}"
+                        );
+                        should_refetch = true;
                     }
-                }
+
+                    _ => {
+                        info!(context, "{folder:?}: got unsolicited response {response:?}")
+                    }
+                },
                 _ => {
                     info!(context, "{folder:?}: got unsolicited response {response:?}")
                 }
