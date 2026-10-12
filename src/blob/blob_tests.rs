@@ -609,7 +609,7 @@ impl SendImageCheckMediaquality<'_> {
         assert_eq!(alice_msg.get_height() as u32, compressed_height);
         let file_saved = alice
             .get_blobdir()
-            .join("saved-".to_string() + &alice_msg.get_filename().unwrap());
+            .join("saved-".to_string() + alice_msg.get_filename().unwrap().as_str());
         alice_msg.save_file(&alice, &file_saved).await?;
         check_image_size(file_saved, compressed_width, compressed_height);
 
@@ -625,7 +625,7 @@ impl SendImageCheckMediaquality<'_> {
         assert_eq!(bob_msg.get_height() as u32, compressed_height);
         let file_saved = bob
             .get_blobdir()
-            .join("saved-".to_string() + &bob_msg.get_filename().unwrap());
+            .join("saved-".to_string() + bob_msg.get_filename().unwrap().as_str());
         bob_msg.save_file(&bob, &file_saved).await?;
         if viewtype == Viewtype::File {
             assert_eq!(file_saved.extension().unwrap(), extension);
@@ -713,7 +713,7 @@ async fn test_send_big_gif_as_image() -> Result<()> {
     assert_eq!(bob_msg.get_height() as u32, height);
     let file_saved = bob
         .get_blobdir()
-        .join("saved-".to_string() + &bob_msg.get_filename().unwrap());
+        .join("saved-".to_string() + bob_msg.get_filename().unwrap().as_str());
     bob_msg.save_file(&bob, &file_saved).await?;
     let (file_size, _) = image_metadata(&std::fs::File::open(&file_saved)?)?;
     assert_eq!(file_size, bytes.len() as u64);

@@ -53,6 +53,7 @@ use types::events::Event;
 use types::http::HttpResponse;
 use types::message::{MessageData, MessageObject, MessageReadReceipt};
 use types::reactions::JsonrpcReactions;
+use types::relay_selector::RelaySelector;
 use types::webxdc::WebxdcMessageInfo;
 
 use self::types::message::{MessageInfo, MessageLoadResult};
@@ -581,6 +582,35 @@ impl CommandApi {
     async fn delete_transport(&self, account_id: u32, addr: String) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
         ctx.delete_transport(&addr).await
+    }
+
+    /// Installs, replaces or removes the relay selector script.
+    ///
+    /// Passing `None` or an empty string removes the selector script entirely.
+    /// Replacing the script with a different source resets its persistent
+    /// state; installing a byte-for-byte identical source keeps the state.
+    async fn set_relay_selector(&self, account_id: u32, script: Option<String>) -> Result<()> {
+        let ctx = self.get_context(account_id).await?;
+        ctx.set_relay_selector(script.as_deref()).await
+    }
+
+    /// Returns the installed relay selector script together with its
+    /// persistent state, or `None` if no selector script is installed.
+    async fn get_relay_selector(&self, account_id: u32) -> Result<Option<RelaySelector>> {
+        let ctx = self.get_context(account_id).await?;
+        Ok(ctx
+            .get_relay_selector()
+            .await?
+            .map(|info| RelaySelector {
+                script: info.script,
+                state: info.state.to_string(),
+            }))
+    }
+
+    /// Clears the persistent state of the relay selector script.
+    async fn reset_relay_selector_state(&self, account_id: u32) -> Result<()> {
+        let ctx = self.get_context(account_id).await?;
+        ctx.reset_relay_selector_state().await
     }
 
     /// Signal an ongoing process to stop.

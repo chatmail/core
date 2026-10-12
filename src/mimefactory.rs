@@ -2266,11 +2266,12 @@ fn mdn_body(rfc724_mid: &str, additional_msg_ids: Vec<String>) -> MimePart<'stat
         "".to_string()
     } else {
         "Additional-Message-IDs: ".to_string()
-            + &additional_msg_ids
+            + additional_msg_ids
                 .iter()
                 .map(|mid| render_rfc724_mid(mid))
                 .collect::<Vec<String>>()
                 .join(" ")
+                .as_str()
             + "\r\n"
     };
 
@@ -2280,7 +2281,7 @@ fn mdn_body(rfc724_mid: &str, additional_msg_ids: Vec<String>) -> MimePart<'stat
             text_part,
             MimePart::new(
                 "message/disposition-notification",
-                message_text2 + &extension_fields,
+                message_text2 + extension_fields.as_str(),
             ),
         ],
     )

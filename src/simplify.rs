@@ -11,7 +11,7 @@ use crate::tools::IsNoneOrEmpty;
 /// (to be only compatible with delta, only "[\r\n|\n]-- {0,2}[\r\n|\n]" needs to be replaced)
 pub fn escape_message_footer_marks(text: &str) -> String {
     if let Some(text) = text.strip_prefix("-- ") {
-        "-\u{200B}- ".to_string() + &text.replace("\n-- ", "\n-\u{200B}- ")
+        "-\u{200B}- ".to_string() + text.replace("\n-- ", "\n-\u{200B}- ").as_str()
     } else {
         text.replace("\n-- ", "\n-\u{200B}- ")
     }
@@ -28,7 +28,7 @@ pub fn escape_message_footer_marks(text: &str) -> String {
 /// doesn't require the final space to be present.
 pub fn unescape_message_footer_marks(text: &str) -> String {
     if let Some(text) = text.strip_prefix("-\u{200B}-") {
-        "--".to_string() + &text.replace("\n-\u{200B}-", "\n--")
+        "--".to_string() + text.replace("\n-\u{200B}-", "\n--").as_str()
     } else {
         text.replace("\n-\u{200B}-", "\n--")
     }

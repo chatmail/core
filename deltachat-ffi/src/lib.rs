@@ -430,6 +430,56 @@ pub unsafe extern "C" fn dc_add_pseudo_transport(
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn dc_set_relay_selector(
+    context: *mut dc_context_t,
+    script: *const libc::c_char,
+) -> libc::c_int {
+    if context.is_null() {
+        eprintln!("ignoring careless call to dc_set_relay_selector()");
+        return 0;
+    }
+
+    let ctx = unsafe { &*context };
+    let script = to_opt_string_lossy(script);
+    block_on(async move {
+        ctx.set_relay_selector(script.as_deref())
+            .await
+            .with_context(|| "dc_set_relay_selector() failed")
+            .log_err(ctx)
+            .is_ok() as libc::c_int
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dc_get_relay_selector(context: *mut dc_context_t) -> *mut libc::c_char {
+    if context.is_null() {
+        eprintln!("ignoring careless call to dc_get_relay_selector()");
+        return "".strdup();
+    }
+
+    let ctx = unsafe { &*context };
+    block_on(async move {
+        match ctx.get_relay_selector().await.log_err(ctx) {
+            Ok(Some(info)) => serde_json::to_string(&info).unwrap_or_default().strdup(),
+            _ => "".strdup(),
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dc_reset_relay_selector_state(context: *mut dc_context_t) {
+    if context.is_null() {
+        eprintln!("ignoring careless call to dc_reset_relay_selector_state()");
+        return;
+    }
+
+    let ctx = unsafe { &*context };
+    block_on(ctx.reset_relay_selector_state())
+        .log_err(ctx)
+        .ok();
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn dc_is_configured(context: *mut dc_context_t) -> libc::c_int {
     if context.is_null() {
         eprintln!("ignoring careless call to dc_is_configured()");

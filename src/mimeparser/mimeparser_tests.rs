@@ -2049,7 +2049,7 @@ async fn test_chat_edit_imf_header() -> Result<()> {
             s1 = mem::take(&mut s0);
         }
     }
-    sent2.payload = s1 + &s0;
+    sent2.payload = s1 + s0.as_str();
 
     // Bob receives both messages, the edit request with "Chat-Edit" in IMF headers is
     // received as text message.

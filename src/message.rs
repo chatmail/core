@@ -828,7 +828,7 @@ impl Message {
     /// Currently this includes `additional_text`, but this may change in future, when the UIs show
     /// the necessary info themselves.
     pub fn get_text(&self) -> String {
-        self.text.clone() + &self.additional_text
+        self.text.clone() + self.additional_text.as_str()
     }
 
     /// Returns message subject.

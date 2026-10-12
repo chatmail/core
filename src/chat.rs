@@ -1926,7 +1926,7 @@ impl Chat {
             // We need to add some headers so that they are stripped before formatting HTML by
             // `MsgId::get_html()`, not a part of the actual text. Let's add "Content-Type", it's
             // anyway a useful metadata about the stored text.
-            true => Some("Content-Type: text/plain; charset=utf-8\r\n\r\n".to_string() + &msg.text),
+            true => Some("Content-Type: text/plain; charset=utf-8\r\n\r\n".to_string() + msg.text.as_str()),
             false => None,
         });
         let new_mime_headers = match new_mime_headers {
@@ -3019,7 +3019,7 @@ pub async fn send_edit_request(context: &Context, msg_id: MsgId, new_text: Strin
 
     save_text_edit_to_db(context, &mut original_msg, &new_text, &[]).await?;
 
-    let mut edit_msg = Message::new_text(EDITED_PREFIX.to_owned() + &new_text); // prefix only set for nicer display in Non-Delta-MUAs
+    let mut edit_msg = Message::new_text(EDITED_PREFIX.to_owned() + new_text.as_str()); // prefix only set for nicer display in Non-Delta-MUAs
     edit_msg.set_quote(context, Some(&original_msg)).await?; // quote only set for nicer display in Non-Delta-MUAs
     if original_msg.get_showpadlock() {
         edit_msg.param.set_int(Param::GuaranteeE2ee, 1);

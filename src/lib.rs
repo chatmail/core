@@ -92,6 +92,7 @@ pub mod quota;
 pub mod release;
 mod scheduler;
 pub mod securejoin;
+pub mod selector;
 mod simplify;
 mod smtp;
 pub mod stock_str;

@@ -70,9 +70,9 @@ impl PlainText {
                 // flowed text as of RFC 3676 -
                 // a leading space shall be removed
                 // and is only there to allow > at the beginning of a line that is no quote.
-                line = line.strip_prefix(' ').unwrap_or(&line).to_string();
                 if is_quote {
-                    line = "<em>".to_owned() + &line + "</em>";
+                    line = line.strip_prefix(' ').unwrap_or(&line).to_string();
+                    line = "<em>".to_owned() + line.as_str() + "</em>";
                 }
 
                 // a trailing space indicates that the line can be merged with the next one;
@@ -88,7 +88,7 @@ impl PlainText {
             } else {
                 // normal, fixed text
                 if is_quote {
-                    line = "<em>".to_owned() + &line + "</em>";
+                    line = "<em>".to_owned() + line.as_str() + "</em>";
                 }
                 line += "<br/>\n";
             }

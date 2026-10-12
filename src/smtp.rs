@@ -25,6 +25,7 @@ use crate::mimefactory;
 use crate::net::proxy::ProxyConfig;
 use crate::net::session::SessionBufStream;
 use crate::scheduler::connectivity::ConnectivityStore;
+use crate::selector;
 use crate::smtp::queue::QueuedMail;
 use crate::stock_str::unencrypted_email;
 use crate::tools::{self, time_elapsed};
@@ -134,6 +135,52 @@ impl Smtp {
 
         self.connectivity.set_connecting(context);
         let proxy_config = ProxyConfig::load(context).await?;
+
+        match selector::choose_active_relay(context).await? {
+            selector::RelayChoice::Disabled => {}
+            selector::RelayChoice::None => {
+                bail!("Relay selector script did not select any relay");
+            }
+            selector::RelayChoice::Selected(addr) => {
+                let transports = ConfiguredLoginParam::load_all(context).await?;
+                if let Some((transport_id, lp)) = transports.into_iter().find(|(_, lp)| lp.addr == addr)
+                {
+                    info!(
+                        context,
+                        "Relay selector selected transport {transport_id} ({addr})."
+                    );
+                    match self
+                        .connect(
+                            context,
+                            &lp.smtp,
+                            &lp.smtp_password,
+                            &proxy_config,
+                            &lp.addr,
+                            lp.strict_tls(proxy_config.is_some())?,
+                        )
+                        .await
+                    {
+                        Ok(()) => {
+                            self.transport_id = Some(transport_id);
+                            return Ok(());
+                        }
+                        Err(err) => {
+                            warn!(
+                                context,
+                                "Failed to connect to selected SMTP transport {transport_id} ({addr}): {err:#}."
+                            );
+                        }
+                    }
+                } else {
+                    warn!(
+                        context,
+                        "Relay selector selected unknown relay {addr}."
+                    );
+                }
+                bail!("Failed to connect to the relay selected by the selector script");
+            }
+        }
+
         for (transport_id, lp) in sorted_transports(context).await? {
             info!(context, "Trying to connect to transport {transport_id}.");
             match self

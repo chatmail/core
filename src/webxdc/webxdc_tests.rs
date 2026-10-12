@@ -793,7 +793,7 @@ async fn test_send_big_webxdc_status_update() -> Result<()> {
     assert!(!sent1.payload().contains("report-type=status-update"));
 
     let update1_str = r#"{"payload":{"foo":""#.to_string()
-        + &String::from_utf8(vec![b'a'; STATUS_UPDATE_SIZE_MAX])?
+        + String::from_utf8(vec![b'a'; STATUS_UPDATE_SIZE_MAX])?.as_str()
         + r#""}"#;
     alice
         .send_webxdc_status_update(alice_instance.id, &(update1_str.clone() + "}"))
@@ -828,7 +828,7 @@ async fn test_send_big_webxdc_status_update() -> Result<()> {
     assert_eq!(
         bob.get_webxdc_status_updates(bob_instance.id, StatusUpdateSerial(0))
             .await?,
-        "[".to_string() + &update1_str + r#","serial":1,"max_serial":1}]"#
+        "[".to_string() + update1_str.as_str() + r#","serial":1,"max_serial":1}]"#
     );
     bob.recv_msg_trash(sent3).await;
     for _ in 0..2 {

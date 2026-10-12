@@ -2687,6 +2687,22 @@ CREATE TABLE smtp_success (
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 169)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "
+CREATE TABLE relay_selector (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    script TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    state TEXT NOT NULL DEFAULT '{}'
+) STRICT;
+",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?

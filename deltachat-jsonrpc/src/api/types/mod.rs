@@ -11,6 +11,7 @@ pub mod login_param;
 pub mod message;
 pub mod qr;
 pub mod reactions;
+pub mod relay_selector;
 pub mod webxdc;
 
 pub fn color_int_to_hex_string(color: u32) -> String {

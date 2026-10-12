@@ -155,6 +155,21 @@ class Account:
         """Delete a transport."""
         self._rpc.delete_transport(self.id, addr)
 
+    def set_relay_selector(self, script: Optional[str] = None):
+        """Install, replace or remove the relay selector script.
+
+        Passing ``None`` or an empty string removes the selector script.
+        """
+        self._rpc.set_relay_selector(self.id, script)
+
+    def get_relay_selector(self):
+        """Return the relay selector script and its persistent state."""
+        return self._rpc.get_relay_selector(self.id)
+
+    def reset_relay_selector_state(self):
+        """Clear the persistent state of the relay selector script."""
+        self._rpc.reset_relay_selector_state(self.id)
+
     @futuremethod
     def list_transports(self):
         """Return the list of all email accounts that are used as a transport in the current profile."""

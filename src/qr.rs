@@ -1006,7 +1006,7 @@ async fn decode_mailto(context: &Context, qr: &str) -> Result<Qr> {
     } else {
         "".to_string()
     };
-    let draft = if let Some(body) = param.get("body") {
+    let draft = if let Some(&body) = param.get("body") {
         if subject.is_empty() {
             body.to_string()
         } else {

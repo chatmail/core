@@ -471,6 +471,24 @@ CREATE TABLE smtp_success (
     FOREIGN KEY(transport_id) REFERENCES transports(id) ON DELETE CASCADE
 ) STRICT;
 
+-- User-supplied relay selector script (Rhai) and its persistent state.
+-- The script decides which relay is activated for sending.
+-- This is device-local and is not synchronized between devices.
+CREATE TABLE relay_selector (
+    -- Always 1, as there is at most one selector script.
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+
+    -- Source code of the selector script defining `fn select_relay(relays)`.
+    script TEXT NOT NULL,
+
+    -- Whether the selector script is enabled.
+    enabled INTEGER NOT NULL DEFAULT 0,
+
+    -- JSON serialization of the script's persistent state.
+    -- Reset to '{}' when the script source changes.
+    state TEXT NOT NULL DEFAULT '{}'
+) STRICT;
+
 -- Table of "sync items" to be grouped into sync messages
 -- and sent to own devices.
 CREATE TABLE multi_device_sync (
