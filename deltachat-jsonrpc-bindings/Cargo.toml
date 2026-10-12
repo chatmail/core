@@ -6,6 +6,11 @@ edition = "2024"
 license = "MPL-2.0"
 repository = "https://github.com/chatmail/core"
 
+# Workaround: Add a dummy cdylib so that cargo-lipo can build this for iOS
+[lib]
+name = "dummy"
+crate-type = ["cdylib", "staticlib"]
+
 [build-dependencies]
 deltachat-jsonrpc = { workspace = true }
 
