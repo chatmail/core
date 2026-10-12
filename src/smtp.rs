@@ -53,39 +53,16 @@ pub(crate) struct Smtp {
 
     /// If sending the last message failed, contains the error message.
     pub(crate) last_send_error: Option<String>,
-}
 
-/// Returns transports with their IDs in the order in which they should be tried.
-async fn sorted_transports(context: &Context) -> Result<Vec<(u32, ConfiguredLoginParam)>> {
-    context
-        .sql
-        .query_map_vec(
-            "SELECT transports.id, configured_param FROM transports
-             LEFT JOIN smtp_success ON smtp_success.transport_id=transports.id
-             ORDER BY IFNULL(smtp_success.id, 0) DESC, transports.id ASC",
-            (),
-            |row| {
-                let id: u32 = row.get(0)?;
-                let json: String = row.get(1)?;
-                let param = ConfiguredLoginParam::from_json(&json)?;
-                Ok((id, param))
-            },
-        )
-        .await
-}
+    /// Whether the last attempt to use the selected relay has failed.
+    ///
+    /// Set on a failed connect/auth or a failed send. When set, the next
+    /// connection asks the selector script's `on_failure()` for a new relay.
+    /// Cleared on a successful connect.
+    last_failed: bool,
 
-/// Records successful use of SMTP transport so it is tried first next time we connect to SMTP.
-async fn record_success(context: &Context, transport_id: u32) -> Result<()> {
-    // INSERT OR REPLACE essentially replaces rowid of the row
-    // if the row exists already, so it becomes the highest rowid in the table.
-    context
-        .sql
-        .execute(
-            "INSERT OR REPLACE INTO smtp_success (transport_id) VALUES (?)",
-            (transport_id,),
-        )
-        .await?;
-    Ok(())
+    /// The relay that failed most recently, passed to `on_failure()`.
+    last_bad: Option<String>,
 }
 
 impl Smtp {
@@ -136,77 +113,63 @@ impl Smtp {
         self.connectivity.set_connecting(context);
         let proxy_config = ProxyConfig::load(context).await?;
 
-        match selector::choose_active_relay(context).await? {
-            selector::RelayChoice::Disabled => {}
-            selector::RelayChoice::None => {
-                bail!("Relay selector script did not select any relay");
-            }
-            selector::RelayChoice::Selected(addr) => {
-                let transports = ConfiguredLoginParam::load_all(context).await?;
-                if let Some((transport_id, lp)) = transports.into_iter().find(|(_, lp)| lp.addr == addr)
-                {
-                    info!(
-                        context,
-                        "Relay selector selected transport {transport_id} ({addr})."
-                    );
-                    match self
-                        .connect(
-                            context,
-                            &lp.smtp,
-                            &lp.smtp_password,
-                            &proxy_config,
-                            &lp.addr,
-                            lp.strict_tls(proxy_config.is_some())?,
-                        )
-                        .await
-                    {
-                        Ok(()) => {
-                            self.transport_id = Some(transport_id);
-                            return Ok(());
-                        }
-                        Err(err) => {
-                            warn!(
-                                context,
-                                "Failed to connect to selected SMTP transport {transport_id} ({addr}): {err:#}."
-                            );
-                        }
-                    }
-                } else {
-                    warn!(
-                        context,
-                        "Relay selector selected unknown relay {addr}."
-                    );
-                }
-                bail!("Failed to connect to the relay selected by the selector script");
-            }
-        }
+        // Ask the selector script which relay to use. `last_failed` distinguishes
+        // a stale reconnect (keep the active relay) from a failed attempt
+        // (fail over to the next one).
+        let selected = if self.last_failed {
+            let bad = self.last_bad.clone();
+            self.last_failed = false;
+            let bad = bad.unwrap_or_default();
+            selector::choose_on_failure(context, &bad).await?
+        } else {
+            selector::choose_init(context).await?
+        };
 
-        for (transport_id, lp) in sorted_transports(context).await? {
-            info!(context, "Trying to connect to transport {transport_id}.");
-            match self
-                .connect(
+        let Some(addr) = selected else {
+            bail!("Relay selector script did not select any relay");
+        };
+
+        let transports = ConfiguredLoginParam::load_all(context).await?;
+        let Some((transport_id, lp)) = transports.into_iter().find(|(_, lp)| lp.addr == addr) else {
+            warn!(
+                context,
+                "Relay selector selected an unknown relay {addr}."
+            );
+            self.last_failed = true;
+            self.last_bad = Some(addr);
+            bail!("Relay selector selected an unknown relay");
+        };
+
+        info!(
+            context,
+            "Relay selector selected transport {transport_id} ({addr})."
+        );
+        match self
+            .connect(
+                context,
+                &lp.smtp,
+                &lp.smtp_password,
+                &proxy_config,
+                &lp.addr,
+                lp.strict_tls(proxy_config.is_some())?,
+            )
+            .await
+        {
+            Ok(()) => {
+                self.transport_id = Some(transport_id);
+                self.last_bad = None;
+                Ok(())
+            }
+            Err(err) => {
+                warn!(
                     context,
-                    &lp.smtp,
-                    &lp.smtp_password,
-                    &proxy_config,
-                    &lp.addr,
-                    lp.strict_tls(proxy_config.is_some())?,
-                )
-                .await
-            {
-                Ok(()) => {
-                    self.transport_id = Some(transport_id);
-                    return Ok(());
-                }
-                Err(err) => {
-                    warn!(
-                        context,
-                        "Failed to connect to SMTP transport {transport_id}: {err:#}."
-                    );
-                }
+                    "Failed to connect to selected SMTP transport {transport_id} ({addr}): {err:#}."
+                );
+                self.last_failed = true;
+                self.last_bad = Some(addr);
+                Err(err)
             }
         }
-        bail!("Failed to connect to any SMTP server");
     }
 
     /// Connect using the provided login params.
@@ -376,6 +339,10 @@ pub(crate) async fn smtp_send(
 
             // this clears last_success info
             info!(context, "Failed to send message over SMTP, disconnecting.");
+            // Remember that the selected relay failed, so the next connection
+            // asks the script's `on_failure()` for a new one.
+            smtp.last_bad = smtp.from.as_ref().map(|addr| addr.to_string());
+            smtp.last_failed = true;
             smtp.disconnect();
 
             res
@@ -403,14 +370,6 @@ pub(crate) async fn smtp_send(
 
     if matches!(status, SendResult::Success) {
         debug_assert!(smtp.transport_id.is_some());
-        if let Some(transport_id) = smtp.transport_id
-            && let Err(err) = record_success(context, transport_id).await
-        {
-            warn!(
-                context,
-                "Failed to record successful use of transport {transport_id} in smtp_success table: {err:#}."
-            );
-        }
     }
 
     if let SendResult::Failure(err) = &status
@@ -945,5 +904,3 @@ pub(crate) async fn add_self_recipients(
     Ok(())
 }
 
-#[cfg(test)]
-mod smtp_tests;

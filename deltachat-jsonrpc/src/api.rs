@@ -595,16 +595,16 @@ impl CommandApi {
     }
 
     /// Returns the installed relay selector script together with its
-    /// persistent state, or `None` if no selector script is installed.
-    async fn get_relay_selector(&self, account_id: u32) -> Result<Option<RelaySelector>> {
+    /// persistent state. If no user script is installed, the built-in
+    /// default script is returned with `isDefault` set to `true`.
+    async fn get_relay_selector(&self, account_id: u32) -> Result<RelaySelector> {
         let ctx = self.get_context(account_id).await?;
-        Ok(ctx
-            .get_relay_selector()
-            .await?
-            .map(|info| RelaySelector {
-                script: info.script,
-                state: info.state.to_string(),
-            }))
+        let info = ctx.get_relay_selector().await?;
+        Ok(RelaySelector {
+            script: info.script,
+            is_default: info.is_default,
+            state: info.state.to_string(),
+        })
     }
 
     /// Clears the persistent state of the relay selector script.

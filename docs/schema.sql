@@ -456,36 +456,21 @@ CREATE TABLE smtp_status_updates (
     descr TEXT NOT NULL -- text to send along with the updates
 );
 
--- Table to record the successful usage transports for sending.
--- Sorting the table by rowid in descending order
--- returns most recently successfully used transport first.
-CREATE TABLE smtp_success (
-    -- Sequentially increasing ID of the success.
-    -- Transport with the highest ID is to be used first.
-    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-
-    -- ID of the transport that was used to send a message.
-    transport_id INTEGER UNIQUE NOT NULL,
-
-    -- Delete `smtp_success` rows when the transport is deleted.
-    FOREIGN KEY(transport_id) REFERENCES transports(id) ON DELETE CASCADE
-) STRICT;
-
--- User-supplied relay selector script (Rhai) and its persistent state.
+-- Relay selector script (Rhai) and its persistent state.
 -- The script decides which relay is activated for sending.
+-- When no user script is installed, the built-in default script is used.
 -- This is device-local and is not synchronized between devices.
 CREATE TABLE relay_selector (
     -- Always 1, as there is at most one selector script.
     id INTEGER PRIMARY KEY CHECK (id = 1),
 
-    -- Source code of the selector script defining `fn select_relay(relays)`.
+    -- Source code of the user script. Empty for the built-in default script.
     script TEXT NOT NULL,
 
-    -- Whether the selector script is enabled.
-    enabled INTEGER NOT NULL DEFAULT 0,
+    -- Whether the built-in default script is active (1) or a user script is installed (0).
+    is_default INTEGER NOT NULL DEFAULT 1,
 
     -- JSON serialization of the script's persistent state.
-    -- Reset to '{}' when the script source changes.
     state TEXT NOT NULL DEFAULT '{}'
 ) STRICT;
 

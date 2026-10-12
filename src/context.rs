@@ -331,6 +331,20 @@ pub struct InnerContext {
     /// see [`Context::get_connectivity()`].
     pub(crate) connectivities: parking_lot::Mutex<Vec<ConnectivityStore>>,
 
+    /// Volatile (in-memory, per-process) state of the relay selector script.
+    ///
+    /// Unlike the persisted selector state stored in the `relay_selector` table,
+    /// this is cleared when the process restarts.
+    pub(crate) relay_selector_mem: Arc<parking_lot::Mutex<rhai::Map>>,
+
+    /// Test-only override for the relay selector `ping()` behavior.
+    ///
+    /// When `true` (the default), `ping()` returns a fixed value without doing
+    /// any network I/O; when `false`, it always fails. This keeps tests
+    /// deterministic and offline.
+    #[cfg(test)]
+    pub(crate) relay_selector_ping_succeeds: AtomicBool,
+
     /// Timestamp after which the SMTP loop checks for a keyupdate to send, or 0 if none is due.
     pub(crate) next_keyupdate_check: AtomicI64,
 }
@@ -509,6 +523,9 @@ impl Context {
             self_fingerprint: OnceLock::new(),
             self_public_key: Mutex::new(None),
             connectivities: parking_lot::Mutex::new(Vec::new()),
+            relay_selector_mem: Arc::new(parking_lot::Mutex::new(rhai::Map::new())),
+            #[cfg(test)]
+            relay_selector_ping_succeeds: AtomicBool::new(true),
             next_keyupdate_check: AtomicI64::new(0),
         };
 

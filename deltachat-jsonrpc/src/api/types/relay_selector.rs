@@ -5,9 +5,14 @@ use typescript_type_def::TypeDef;
 #[derive(Serialize, TypeDef, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RelaySelector {
-    /// Source code of the relay selector script, if one is installed.
-    pub script: Option<String>,
+    /// Source code of the installed selector script.
+    ///
+    /// This is the built-in default script when `isDefault` is `true`.
+    pub script: String,
 
-    /// Persistent state of the relay selector script, as a JSON string.
+    /// Whether the built-in default script is active.
+    pub is_default: bool,
+
+    /// Persistent state of the selector script, as a JSON string.
     pub state: String,
 }

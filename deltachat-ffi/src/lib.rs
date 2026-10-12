@@ -459,8 +459,8 @@ pub unsafe extern "C" fn dc_get_relay_selector(context: *mut dc_context_t) -> *m
     let ctx = unsafe { &*context };
     block_on(async move {
         match ctx.get_relay_selector().await.log_err(ctx) {
-            Ok(Some(info)) => serde_json::to_string(&info).unwrap_or_default().strdup(),
-            _ => "".strdup(),
+            Ok(info) => serde_json::to_string(&info).unwrap_or_default().strdup(),
+            Err(_) => "".strdup(),
         }
     })
 }

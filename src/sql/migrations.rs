@@ -2703,6 +2703,22 @@ CREATE TABLE relay_selector (
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 170)?;
+    if dbversion < migration_version {
+        // The relay selector now always has a script (the built-in default
+        // when no user script is installed), and the SMTP success tracking
+        // was replaced by the selector script's own state.
+        sql.execute_migration(
+            "
+DROP TABLE smtp_success;
+ALTER TABLE relay_selector DROP COLUMN enabled;
+ALTER TABLE relay_selector ADD COLUMN is_default INTEGER NOT NULL DEFAULT 1;
+",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
