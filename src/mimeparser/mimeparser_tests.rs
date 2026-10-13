@@ -2228,3 +2228,27 @@ async fn test_load_shared_secrets_with_legacy_state() -> Result<()> {
 
     Ok(())
 }
+
+/// Tests that MIME parts with html/* MIME type are ignored.
+///
+/// HTML parts should have a text/html MIME type.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_ignore_html_mime_parts() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let encrypted_msg = test_utils::encrypt_raw_message(
+        bob,
+        &[alice],
+        include_bytes!("../../test-data/message/html_html_mime.eml"),
+    )
+    .await?;
+
+    let msg = MimeMessage::from_bytes(alice, encrypted_msg.as_bytes()).await?;
+    assert_eq!(msg.parts.len(), 1);
+    assert_eq!(msg.parts[0].typ, Viewtype::Text);
+    assert_eq!(msg.parts[0].mimetype, Some(mime::TEXT_PLAIN));
+    assert_eq!(msg.parts[0].msg, "Here is a text part.");
+
+    Ok(())
+}
