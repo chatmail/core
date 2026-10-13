@@ -1,0 +1,31 @@
+From: Bob <bob@example.net>
+Subject: Message with invalid HTML mime types
+To: alice@example.org
+Message-ID: <html-html-test@localhost>
+Date: Thu, 17 Dec 2020 15:38:45 +0100
+MIME-Version: 1.0
+Content-Type: multipart/mixed;
+ boundary="------------MESSAGE_BOUNDARY"
+Content-Language: en-US
+Chat-Version: 1.0
+
+This is a multi-part message in MIME format.
+--------------MESSAGE_BOUNDARY
+Content-Type: html/plain; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+This should be ignored.
+
+--------------MESSAGE_BOUNDARY
+Content-Type: html/html; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+And this should be ignored too.
+
+--------------MESSAGE_BOUNDARY
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+Here is a text part.
+
+--------------MESSAGE_BOUNDARY--
