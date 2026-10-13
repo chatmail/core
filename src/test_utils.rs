@@ -1228,8 +1228,7 @@ ORDER BY id"
 
     /// Allow reception of unencrypted messages.
     pub async fn allow_unencrypted(&self) -> Result<()> {
-        self.set_config_bool(Config::ForceEncryption, false).await?;
-        Ok(())
+        todo!("We want to remove unencrypted messages, tests must not depend on them anymore")
     }
 
     /// Asserts a warning containing `pat` should be logged.
