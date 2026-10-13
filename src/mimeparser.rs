@@ -1505,10 +1505,7 @@ impl MimeMessage {
             return Ok(());
         }
         let mut part = Part::default();
-        let msg_type = if context
-            .is_webxdc_file(filename, decoded_data)
-            .await
-            .unwrap_or(false)
+        let msg_type = if filename.ends_with(".xdc") && mime_type.essence_str() == "application/webxdc+zip"
         {
             Viewtype::Webxdc
         } else if filename.ends_with(".kml") {
