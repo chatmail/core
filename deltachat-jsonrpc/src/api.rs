@@ -1451,6 +1451,36 @@ impl CommandApi {
         MsgId::new(message_id).get_html(&ctx).await
     }
 
+    /// Returns a message summary.
+    /// Used for notifications, pinned messages and for copying texts to clipboard.
+    ///
+    /// - `add_forwarded`: `true`=add a hint if a message was forwarded.
+    ///    `false`=do not add the hint;
+    ///    this is allowed only if the message is shown without a username, e.g. for pinned messages.
+    /// - `add_type_emoji`: `true`=add the type of the message as an emoji prefix.
+    ///    `false`=do not add type emoji;
+    ///    this is allowed only if the message type is visible otherwise,
+    ///    close to where the emoji would be displayed otherwise
+    ///    (eg. images in pinned messages preceding summary)
+    /// - `approx_chars`: `>0`=convert linebreaks to spaces and truncate the line at about the given number of characters;
+    ///    for single-line UI elements such as pinned messages or notifications;
+    ///    additionally, UIs will most times clip the text to the available space.
+    ///    `0`=leave linebreaks as is and return the full text, useful e.g. for copying to clipboard.
+    async fn get_message_summary_text(
+        &self,
+        account_id: u32,
+        message_id: u32,
+        add_forwarded: bool,
+        add_type_emoji: bool,
+        approx_chars: u32,
+    ) -> Result<String> {
+        let ctx = self.get_context(account_id).await?;
+        let msg = Message::load_from_db(&ctx, MsgId::new(message_id)).await?;
+        Ok(msg
+            .get_summary_text_ext(&ctx, add_forwarded, add_type_emoji, approx_chars as usize)
+            .await)
+    }
+
     /// get multiple messages in one call,
     /// if loading one message fails the error is stored in the result object in it's place.
     ///
