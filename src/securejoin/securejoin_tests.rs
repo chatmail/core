@@ -1160,12 +1160,12 @@ async fn test_get_securejoin_qr_encoding() -> Result<()> {
 
     let qr = get_securejoin_qr(alice, None).await?;
     assert!(
-        qr.contains("a=jk%25l@example.net"),
-        "{qr} doesn't contain 'a=jk%25l@example.net'"
+        qr.contains("a=jk%25l%40example.net"),
+        "{qr} doesn't contain 'a=jk%25l%40example.net'"
     );
     assert!(
-        qr.contains("r=asdf@example.org,alice@example.org"),
-        "{qr} doesn't contain 'r=asdf@example.org,alice@example.org'"
+        qr.contains("r=asdf%40example.org,alice%40example.org"),
+        "{qr} doesn't contain 'r=asdf%40example.org,alice%40example.org'"
     );
 
     let qr = check_qr(bob, &qr).await?;
