@@ -33,7 +33,7 @@ pub(crate) use qrinvite::QrInvite;
 
 use crate::token::Namespace;
 
-const DISALLOWED_CHARACTERS: &AsciiSet = &NON_ALPHANUMERIC_WITHOUT_DOT.remove(b'_').remove(b'@');
+const DISALLOWED_CHARACTERS: &AsciiSet = &NON_ALPHANUMERIC_WITHOUT_DOT.remove(b'_');
 
 fn inviter_progress(
     context: &Context,
