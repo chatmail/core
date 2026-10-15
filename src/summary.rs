@@ -68,20 +68,22 @@ impl Summary {
         chat: &Chat,
         contact: Option<&Contact>,
     ) -> Result<Summary> {
-        if let Some((reaction_msg, reaction_contact_id, reaction)) = chat
-            .get_last_reaction_if_newer_than(context, msg.timestamp_sort)
-            .await?
-        {
-            // there is a reaction newer than the latest message, show that.
-            // sorting and therefore date is still the one of the last message,
-            // the reaction is is more sth. that overlays temporarily.
-            let summary = reaction_msg.get_summary_text_without_prefix(context).await;
-            return Ok(Summary {
-                prefix: None,
-                text: msg_reacted(context, reaction_contact_id, &reaction, &summary).await,
-                timestamp: msg.get_timestamp(), // message timestamp (not reaction) to make timestamps more consistent with chats ordering
-                state: msg.state, // message state (not reaction) - indicating if it was me sending the last message
-            });
+        if chat.typ != Chattype::InBroadcast && chat.typ != Chattype::OutBroadcast {
+            if let Some((reaction_msg, reaction_contact_id, reaction)) = chat
+                .get_last_reaction_if_newer_than(context, msg.timestamp_sort)
+                .await?
+            {
+                // there is a reaction newer than the latest message, show that.
+                // sorting and therefore date is still the one of the last message,
+                // the reaction is is more sth. that overlays temporarily.
+                let summary = reaction_msg.get_summary_text_without_prefix(context).await;
+                return Ok(Summary {
+                    prefix: None,
+                    text: msg_reacted(context, reaction_contact_id, &reaction, &summary).await,
+                    timestamp: msg.get_timestamp(), // message timestamp (not reaction) to make timestamps more consistent with chats ordering
+                    state: msg.state, // message state (not reaction) - indicating if it was me sending the last message
+                });
+            }
         }
         Self::new(context, msg, chat, contact).await
     }
