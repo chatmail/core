@@ -508,10 +508,10 @@ impl Context {
         Ok(self.load_call_by_message(call))
     }
 
-    // Loads information about the call given the `Message`.
-    //
-    // If the `Message` is not a call message, returns `None`
-    fn load_call_by_message(&self, call: Message) -> Option<CallInfo> {
+    /// Loads information about the call given the `Message`.
+    ///
+    /// If the `Message` is not a call message, returns `None`
+    pub fn load_call_by_message(&self, call: Message) -> Option<CallInfo> {
         if call.viewtype != Viewtype::Call {
             // This can happen e.g. if a "call accepted"
             // or "call ended" message is received
@@ -581,7 +581,11 @@ pub async fn call_state(context: &Context, msg_id: MsgId) -> Result<CallState> {
         .load_call_by_id(msg_id)
         .await?
         .with_context(|| format!("{msg_id} is not a call message"))?;
-    let state = if call.is_incoming() {
+    Ok(call_state_ext(&call))
+}
+/// Returns call state.
+pub fn call_state_ext(call: &CallInfo) -> CallState {
+    if call.is_incoming() {
         if call.is_accepted() {
             if call.is_ended() {
                 CallState::Completed {
@@ -615,8 +619,7 @@ pub async fn call_state(context: &Context, msg_id: MsgId) -> Result<CallState> {
         CallState::Declined
     } else {
         CallState::Alerting
-    };
-    Ok(state)
+    }
 }
 
 /// ICE server for JSON serialization.
