@@ -433,9 +433,9 @@ pub(crate) fn render_queued_mail(
 #[cfg(test)]
 pub(crate) async fn render_queued_mail_with_context(
     queued_mail: QueuedMail,
-    context: &Context,
+    context: &crate::test_utils::TestContext,
 ) -> Result<RenderedEmail> {
-    let from_addr = context.get_primary_self_addr().await?;
+    let from_addr = context.sending_addr().await;
     let public_key = crate::key::load_self_public_key(context).await?;
     let secret_key = crate::key::load_self_secret_key(context).await?;
 
@@ -999,14 +999,10 @@ impl MimeFactory {
             true => context.get_config(Config::Displayname).await?,
             false => None,
         };
-        let self_name = &match self_name {
-            Some(name) => name,
-            None => context
-                .get_config(Config::ConfiguredAddr)
-                .await?
-                .unwrap_or_default(),
-        };
-        Ok(stock_str::subject_for_new_contact(context, self_name))
+        Ok(stock_str::subject_for_new_contact(
+            context,
+            self_name.as_deref().unwrap_or("..."),
+        ))
     }
 
     pub fn recipients(&self) -> Vec<String> {
@@ -1228,7 +1224,7 @@ impl MimeFactory {
     ///
     /// Used only for tests.
     #[cfg(test)]
-    pub async fn render(self, context: &Context) -> Result<RenderedEmail> {
+    pub async fn render(self, context: &crate::test_utils::TestContext) -> Result<RenderedEmail> {
         // Does not matter, we are not going to return the QueuedMail.
         let bcc_self = false;
         let (queued_mail, _side_effects) =

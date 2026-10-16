@@ -5,7 +5,6 @@ use std::path::PathBuf;
 use criterion::{Criterion, criterion_group, criterion_main};
 use deltachat::{
     Events,
-    config::Config,
     context::Context,
     imex::{ImexMode, imex},
     receive_imf::receive_imf,
@@ -109,16 +108,6 @@ async fn create_context() -> Context {
             .unwrap();
     }
 
-    let addr = "alice@example.com";
-    context.set_config(Config::Addr, Some(addr)).await.unwrap();
-    context
-        .set_config(Config::ConfiguredAddr, Some(addr))
-        .await
-        .unwrap();
-    context
-        .set_config(Config::Configured, Some("1"))
-        .await
-        .unwrap();
     context
 }
 

@@ -51,7 +51,6 @@ class TestGroupStressTests:
 
         lp.sec("ac2: receiving system message about contact addition")
         sysmsg = ac2._evtracker.wait_next_incoming_message()
-        assert ac5.get_config("configured_addr") in sysmsg.text
         assert sysmsg.chat.num_contacts() == 4
 
         lp.sec("ac5: waiting for message about addition to the chat")
