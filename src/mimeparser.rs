@@ -2071,18 +2071,17 @@ impl MimeMessage {
     }
 }
 
+/// Removes RFC 9788 legacy display element from plain text.
+///
+/// LF newlines are expected.
+/// CRLF newlines should be converted to LF before calling this function.
 fn rm_legacy_display_elements(text: &str) -> String {
-    let mut res = None;
-    for l in text.lines() {
-        res = res.map(|r: String| match r.is_empty() {
-            true => l.to_string(),
-            false => r + "\r\n" + l,
-        });
-        if l.is_empty() {
-            res = Some(String::new());
-        }
-    }
-    res.unwrap_or_default()
+    // "Discard the leading lines of the content of the MIME part
+    // up to and including the first entirely blank line."
+    // (from <https://www.rfc-editor.org/rfc/rfc9788.html#section-4.5.3.2-2.1.1>)
+    text.split_once("\n\n")
+        .map_or(text, |(_legacy_display, rest)| rest)
+        .to_string()
 }
 
 fn remove_header(
