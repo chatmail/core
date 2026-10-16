@@ -123,6 +123,45 @@ impl CallInfo {
         Ok(())
     }
 
+    /// Returns call state.
+    pub fn call_state(&self) -> CallState {
+        if self.is_incoming() {
+            if self.is_accepted() {
+                if self.is_ended() {
+                    CallState::Completed {
+                        duration: self.duration_seconds(),
+                    }
+                } else {
+                    CallState::Active
+                }
+            } else if self.is_canceled() {
+                // Call was explicitly canceled
+                // by the caller before we picked it up.
+                CallState::Missed
+            } else if self.is_ended() {
+                CallState::Declined
+            } else if self.is_stale() {
+                CallState::Missed
+            } else {
+                CallState::Alerting
+            }
+        } else if self.is_accepted() {
+            if self.is_ended() {
+                CallState::Completed {
+                    duration: self.duration_seconds(),
+                }
+            } else {
+                CallState::Active
+            }
+        } else if self.is_canceled() {
+            CallState::Canceled
+        } else if self.is_ended() || self.is_stale() {
+            CallState::Declined
+        } else {
+            CallState::Alerting
+        }
+    }
+
     /// Returns true if the call is accepted.
     pub fn is_accepted(&self) -> bool {
         self.msg.param.exists(CALL_ACCEPTED_TIMESTAMP)
@@ -581,45 +620,7 @@ pub async fn call_state(context: &Context, msg_id: MsgId) -> Result<CallState> {
         .load_call_by_id(msg_id)
         .await?
         .with_context(|| format!("{msg_id} is not a call message"))?;
-    Ok(call_state_ext(&call))
-}
-/// Returns call state.
-pub fn call_state_ext(call: &CallInfo) -> CallState {
-    if call.is_incoming() {
-        if call.is_accepted() {
-            if call.is_ended() {
-                CallState::Completed {
-                    duration: call.duration_seconds(),
-                }
-            } else {
-                CallState::Active
-            }
-        } else if call.is_canceled() {
-            // Call was explicitly canceled
-            // by the caller before we picked it up.
-            CallState::Missed
-        } else if call.is_ended() {
-            CallState::Declined
-        } else if call.is_stale() {
-            CallState::Missed
-        } else {
-            CallState::Alerting
-        }
-    } else if call.is_accepted() {
-        if call.is_ended() {
-            CallState::Completed {
-                duration: call.duration_seconds(),
-            }
-        } else {
-            CallState::Active
-        }
-    } else if call.is_canceled() {
-        CallState::Canceled
-    } else if call.is_ended() || call.is_stale() {
-        CallState::Declined
-    } else {
-        CallState::Alerting
-    }
+    Ok(call.call_state())
 }
 
 /// ICE server for JSON serialization.
