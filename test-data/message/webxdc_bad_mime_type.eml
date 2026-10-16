@@ -10,9 +10,8 @@ Content-Type: multipart/mixed; boundary="==BREAK=="
 --==BREAK==
 Content-Type: text/plain; charset=utf-8
 
-webxdc with good extension;
-the mimetype is ignored then,
-content is checked.
+webxdc with bad mime type,
+not detected as a webxdc
 
 --==BREAK==
 Content-Type: text/html

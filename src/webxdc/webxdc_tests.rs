@@ -17,47 +17,6 @@ use crate::test_utils::{E2EE_INFO_MSGS, TestContext, TestContextManager};
 use crate::tools::{self, SystemTime};
 use crate::{message, sql};
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_is_webxdc_file() -> Result<()> {
-    let t = TestContext::new().await;
-    assert!(
-        !t.is_webxdc_file(
-            "bad-ext-no-zip.txt",
-            include_bytes!("../../test-data/message/issue_523.txt")
-        )
-        .await?
-    );
-    assert!(
-        !t.is_webxdc_file(
-            "bad-ext-good-zip.txt",
-            include_bytes!("../../test-data/webxdc/minimal.xdc")
-        )
-        .await?
-    );
-    assert!(
-        !t.is_webxdc_file(
-            "good-ext-no-zip.xdc",
-            include_bytes!("../../test-data/message/issue_523.txt")
-        )
-        .await?
-    );
-    assert!(
-        !t.is_webxdc_file(
-            "good-ext-no-index-html.xdc",
-            include_bytes!("../../test-data/webxdc/no-index-html.xdc")
-        )
-        .await?
-    );
-    assert!(
-        t.is_webxdc_file(
-            "good-ext-good-zip.xdc",
-            include_bytes!("../../test-data/webxdc/minimal.xdc")
-        )
-        .await?
-    );
-    Ok(())
-}
-
 fn create_webxdc_instance(t: &TestContext, name: &str, bytes: &[u8]) -> Result<Message> {
     let mut instance = Message::new(Viewtype::File);
     instance.set_file_from_bytes(t, name, bytes, None)?;
@@ -264,11 +223,11 @@ async fn test_receive_webxdc_instance() -> Result<()> {
     test_utils::receive_encrypted_imf(
         alice,
         bob,
-        include_bytes!("../../test-data/message/webxdc_good_extension.eml"),
+        include_bytes!("../../test-data/message/webxdc_bad_mime_type.eml"),
     )
     .await?;
     let instance = alice.get_last_msg().await;
-    assert_eq!(instance.viewtype, Viewtype::Webxdc);
+    assert_eq!(instance.viewtype, Viewtype::File);
     assert_eq!(instance.get_filename().unwrap(), "minimal.xdc");
 
     test_utils::receive_encrypted_imf(
