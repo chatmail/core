@@ -317,10 +317,6 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
             vec![IpAddr::V4(Ipv4Addr::new(200, 40, 115, 74))],
         ),
         (
-            "daleth.cafe",
-            vec![IpAddr::V4(Ipv4Addr::new(37, 27, 6, 204))],
-        ),
-        (
             "disroot.org",
             vec![IpAddr::V4(Ipv4Addr::new(178, 21, 23, 139))],
         ),
@@ -680,6 +676,7 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
             ],
         ),
         // Known public chatmail relays from https://chatmail.at/relays
+        // and default onboarding relays.
         (
             "mehl.cloud",
             vec![IpAddr::V4(Ipv4Addr::new(95, 217, 223, 172))],
@@ -687,6 +684,10 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
         (
             "mailchat.pl",
             vec![IpAddr::V4(Ipv4Addr::new(46, 62, 144, 137))],
+        ),
+        (
+            "nchrcht.la10cy.net",
+            vec![IpAddr::V4(Ipv4Addr::new(217, 197, 86, 157))],
         ),
         (
             "chatmail.woodpeckersnest.space",
@@ -703,6 +704,10 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
         (
             "chat.adminforge.de",
             vec![IpAddr::V4(Ipv4Addr::new(94, 130, 17, 142))],
+        ),
+        (
+            "chat.me.ke",
+            vec![IpAddr::V4(Ipv4Addr::new(169, 255, 58, 122))],
         ),
         (
             "chika.aangat.lahat.computer",
@@ -725,8 +730,20 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
             vec![IpAddr::V4(Ipv4Addr::new(45, 124, 54, 79))],
         ),
         (
-            "sombras.chat",
-            vec![IpAddr::V4(Ipv4Addr::new(82, 25, 70, 154))],
+            "chatmail.cc",
+            vec![IpAddr::V4(Ipv4Addr::new(15, 235, 198, 20))],
+        ),
+        (
+            "deltachat.me",
+            vec![IpAddr::V4(Ipv4Addr::new(102, 68, 86, 134))],
+        ),
+        (
+            "e2e.sus.fr",
+            vec![IpAddr::V4(Ipv4Addr::new(93, 95, 231, 235))],
+        ),
+        (
+            "chatmail.uk",
+            vec![IpAddr::V4(Ipv4Addr::new(213, 165, 89, 146))],
         ),
         (
             "e2ee.wang",
@@ -736,7 +753,7 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
             "chat.privittytech.com",
             vec![IpAddr::V4(Ipv4Addr::new(35, 154, 144, 0))],
         ),
-        ("e2ee.im", vec![IpAddr::V4(Ipv4Addr::new(45, 137, 99, 57))]),
+        ("e2ee.im", vec![IpAddr::V4(Ipv4Addr::new(45, 137, 99, 156))]),
         (
             "chatmail.email",
             vec![IpAddr::V4(Ipv4Addr::new(57, 128, 220, 120))],
@@ -754,16 +771,16 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
             vec![IpAddr::V4(Ipv4Addr::new(178, 238, 38, 165))],
         ),
         (
+            "chat.tinydispatch.org",
+            vec![IpAddr::V4(Ipv4Addr::new(88, 198, 181, 62))],
+        ),
+        (
             "nibblehole.com",
             vec![IpAddr::V4(Ipv4Addr::new(94, 247, 42, 209))],
         ),
         (
             "chat.zashm.org",
             vec![IpAddr::V4(Ipv4Addr::new(91, 245, 76, 39))],
-        ),
-        (
-            "chat.sus.fr",
-            vec![IpAddr::V4(Ipv4Addr::new(152, 67, 76, 190))],
         ),
         (
             "delta.thelab.uno",
@@ -779,15 +796,11 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
         ),
         (
             "sweetfern.net",
-            vec![IpAddr::V4(Ipv4Addr::new(178, 156, 228, 133))],
+            vec![IpAddr::V4(Ipv4Addr::new(51, 81, 78, 167))],
         ),
         (
             "delta.disobey.net",
             vec![IpAddr::V4(Ipv4Addr::new(37, 74, 102, 44))],
-        ),
-        (
-            "darkrun.dev",
-            vec![IpAddr::V4(Ipv4Addr::new(72, 11, 149, 146))],
         ),
     ])
 });
