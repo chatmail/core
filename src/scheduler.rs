@@ -858,7 +858,7 @@ impl Scheduler {
                     .await
                     .is_err()
                 {
-                    warn!(context, "IMAP shutdown timed out; aborting task");
+                    warn!(context, "IMAP shutdown timed out; aborting task.");
                     b.handle.abort();
                     b.handle.await.ok();
                 }
@@ -872,7 +872,7 @@ impl Scheduler {
                     .await
                     .is_err()
                 {
-                    warn!(context, "SMTP shutdown timed out; aborting task");
+                    warn!(context, "SMTP shutdown timed out; aborting task.");
                     handle.abort();
                     handle.await.ok();
                 }
