@@ -701,7 +701,6 @@ impl MimeMessage {
         Ok(parser)
     }
 
-    #[expect(clippy::arithmetic_side_effects)]
     fn get_timestamp_sent(
         hdrs: &[mailparse::MailHeader<'_>],
         default: i64,
@@ -710,7 +709,10 @@ impl MimeMessage {
         hdrs.get_header_value(HeaderDef::Date)
             .and_then(|v| mailparse::dateparse(&v).ok())
             .map_or(default, |value| {
-                min(value, timestamp_rcvd + constants::TIMESTAMP_SENT_TOLERANCE)
+                min(
+                    value,
+                    timestamp_rcvd.saturating_add(constants::TIMESTAMP_SENT_TOLERANCE),
+                )
             })
     }
 
@@ -970,7 +972,6 @@ impl MimeMessage {
         Ok(())
     }
 
-    #[expect(clippy::arithmetic_side_effects)]
     fn avatar_action_from_header(
         &mut self,
         context: &Context,
@@ -990,23 +991,19 @@ impl MimeMessage {
                     None
                 }
             }
+        } else if let Some(i) = self
+            .parts
+            .iter()
+            .position(|part| part.org_filename.as_ref() == Some(&header_value))
+        {
+            // Previous versions of Delta Chat sent avatars as attachments
+            // with the filename of the attachment sent in the Chat-User-Avatar header.
+            self.parts
+                .remove(i)
+                .param
+                .get(Param::File)
+                .map(|blob| AvatarAction::Change(blob.to_string()))
         } else {
-            // Avatar sent in attachment, as previous versions of Delta Chat did.
-
-            let mut i = 0;
-            while let Some(part) = self.parts.get_mut(i) {
-                if let Some(part_filename) = &part.org_filename
-                    && part_filename == &header_value
-                {
-                    if let Some(blob) = part.param.get(Param::File) {
-                        let res = Some(AvatarAction::Change(blob.to_string()));
-                        self.parts.remove(i);
-                        return Ok(res);
-                    }
-                    break;
-                }
-                i += 1;
-            }
             None
         };
         Ok(res)
@@ -1490,7 +1487,6 @@ impl MimeMessage {
     }
 
     #[expect(clippy::too_many_arguments)]
-    #[expect(clippy::arithmetic_side_effects)]
     async fn do_add_single_file_part(
         &mut self,
         context: &Context,
@@ -1565,7 +1561,11 @@ impl MimeMessage {
         {
             match get_filemeta(decoded_data) {
                 // image size is known, not too big, keep msg_type:
-                Ok((width, height)) if width * height <= constants::MAX_RCVD_IMAGE_PIXELS => {
+                Ok((width, height))
+                    if width
+                        .checked_mul(height)
+                        .is_some_and(|pixels| pixels <= constants::MAX_RCVD_IMAGE_PIXELS) =>
+                {
                     part.param.set_i64(Param::Width, width.into());
                     part.param.set_i64(Param::Height, height.into());
                     msg_type
@@ -2045,9 +2045,8 @@ impl MimeMessage {
     /// Returns parsed `Chat-Group-Member-Timestamps` header contents.
     ///
     /// Returns `None` if there is no such header.
-    #[expect(clippy::arithmetic_side_effects)]
     pub fn chat_group_member_timestamps(&self) -> Option<Vec<i64>> {
-        let now = time() + constants::TIMESTAMP_SENT_TOLERANCE;
+        let now = time().saturating_add(constants::TIMESTAMP_SENT_TOLERANCE);
         self.get_header(HeaderDef::ChatGroupMemberTimestamps)
             .map(|h| {
                 h.split_ascii_whitespace()
