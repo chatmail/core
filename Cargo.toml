@@ -201,7 +201,7 @@ thiserror = "2"
 tokio = "1"
 tokio-util = "0.7.18"
 tracing-subscriber = "0.3"
-yerpc = "0.7"
+yerpc = { git = "https://github.com/chatmail/yerpc.git", branch = "d2weber/swift" }
 
 [features]
 default = ["vendored"]

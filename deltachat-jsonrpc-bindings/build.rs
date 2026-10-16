@@ -1,7 +1,8 @@
-use deltachat_jsonrpc::api::{write_qt_bindings, write_ts_bindings};
+use deltachat_jsonrpc::api::{write_qt_bindings, write_swift_bindings, write_ts_bindings};
 use std::path::Path;
 
 fn main() {
     write_ts_bindings(Path::new("typescript/generated"));
+    write_swift_bindings(Path::new("swift/generated"));
     write_qt_bindings(Path::new("qt/generated"), "deltachat");
 }
