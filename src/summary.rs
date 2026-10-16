@@ -7,7 +7,7 @@ use std::str;
 use anyhow::Result;
 use num_traits::FromPrimitive;
 
-use crate::calls::{CallState, call_state_ext};
+use crate::calls::CallState;
 use crate::chat::Chat;
 use crate::constants::Chattype;
 use crate::constants::DC_DESIRED_TEXT_LEN;
@@ -241,7 +241,7 @@ impl Message {
                 let has_video = call_info.as_ref().is_some_and(|c| c.has_video_initially());
                 let call_state = call_info
                     .as_ref()
-                    .map_or(CallState::Alerting, call_state_ext);
+                    .map_or(CallState::Alerting, |c| c.call_state());
                 emoji = Some(if has_video { "🎥" } else { "📞" });
                 type_name = Some(match call_state {
                     CallState::Alerting | CallState::Active | CallState::Completed { .. } => {
