@@ -851,20 +851,31 @@ impl Scheduler {
         let timeout_duration = std::time::Duration::from_secs(30);
 
         let tracker = TaskTracker::new();
-        for b in self.inboxes {
+        for mut b in self.inboxes {
             let context = context.clone();
             tracker.spawn(async move {
-                tokio::time::timeout(timeout_duration, b.handle)
+                if tokio::time::timeout(timeout_duration, &mut b.handle)
                     .await
-                    .log_err(&context)
+                    .is_err()
+                {
+                    warn!(context, "IMAP shutdown timed out; aborting task.");
+                    b.handle.abort();
+                    b.handle.await.ok();
+                }
             });
         }
         {
             let context = context.clone();
             tracker.spawn(async move {
-                tokio::time::timeout(timeout_duration, self.smtp_handle)
+                let mut handle = self.smtp_handle;
+                if tokio::time::timeout(timeout_duration, &mut handle)
                     .await
-                    .log_err(&context)
+                    .is_err()
+                {
+                    warn!(context, "SMTP shutdown timed out; aborting task.");
+                    handle.abort();
+                    handle.await.ok();
+                }
             });
         }
         tracker.close();
