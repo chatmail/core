@@ -38,33 +38,27 @@ Run `deltachat-rpc-server --openrpc` to get [OpenRPC](https://open-rpc.org/) spe
 
 ## Windows ARM64 builds
 
-The `Windows ARM64 RPC server` workflow builds and tests a native
-`aarch64-pc-windows-msvc` release executable on `windows-11-arm`. It runs on pull
-requests and pushes to `main`, and can also be started with **Run workflow**.
-Download the `deltachat-rpc-server-win-arm64` artifact and extract
-`deltachat-rpc-server.exe`. The executable includes vendored OpenSSL/SQLCipher
-and a statically linked Visual C++ runtime.
+Windows ARM64 release binaries are cross-compiled on Linux with Nix, using
+`aarch64-pc-windows-gnullvm` and the LLVM/MinGW UCRT toolchain from the pinned
+Nixpkgs revision. OpenSSL is built by Nix and linked statically, alongside bundled
+SQLCipher. No Visual Studio tools or Windows runner are needed to produce the
+release binary, Python wheel, or npm prebuild.
 
-The binary release workflow also includes this build and publishes
-`deltachat-rpc-server-win-arm64.exe`, a `py3-none-win_arm64` Python wheel, and a
-`@deltachat/stdio-rpc-server-win32-arm64` npm prebuild. In the `trufae/core` fork,
-GitHub release assets are available from <https://github.com/trufae/core/releases>.
-Publishing to the upstream PyPI and npm registries is restricted to `chatmail/core`;
-fork releases still receive all binaries and packages as GitHub assets.
-
-For a Parla Windows ARM64 bundle, place the artifact's `deltachat-rpc-server.exe`
-in the same `bin` directory as `parla.exe`. Parla discovers this bundled server
-automatically. When using the release asset, rename it to
-`deltachat-rpc-server.exe` first. Parla's Windows auto-downloader currently
-selects the upstream x64 asset; bundle this ARM64 server for the native port.
-
-To build locally, install Rust and the Visual Studio ARM64 C++ tools, open an
-ARM64 developer shell, and run:
-
-```powershell
-$env:RUSTFLAGS = '-C target-feature=+crt-static'
-rustup target add aarch64-pc-windows-msvc
-cargo build --release --locked -p deltachat-rpc-server --target aarch64-pc-windows-msvc --features vendored
+```sh
+nix build .#deltachat-rpc-server-win-arm64
+nix build .#deltachat-rpc-server-win-arm64-wheel --out-link wheel
 ```
 
-Vendored OpenSSL also requires Perl and `nmake`, as supplied by the CI runner.
+The `Windows ARM64 RPC server` workflow runs on pull requests, pushes to `main`,
+and manual dispatch. It cross-compiles the binary and wheel on Linux, then tests
+those same artifacts on `windows-11-arm`: executable architecture, JSON-RPC
+account creation, and the installed wheel entry point. This runtime test is
+separate from the release workflow, which builds all Windows targets on Linux.
+
+Releases include `deltachat-rpc-server-win-arm64.exe`, a `py3-none-win_arm64`
+Python wheel, and a `@deltachat/stdio-rpc-server-win32-arm64` npm prebuild.
+Publishing to PyPI and npm is restricted to `chatmail/core`; fork releases still
+receive the binaries and packages as GitHub assets.
+
+For a Parla Windows ARM64 bundle, rename the release executable to
+`deltachat-rpc-server.exe` and put it in the same `bin` directory as `parla.exe`.

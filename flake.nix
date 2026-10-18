@@ -89,8 +89,28 @@
             doCheck = false; # Disable test as it requires network access.
           };
 
-        mkWin64RustPackage = pkgs.callPackage ./nix/win64-package.nix {
-          inherit naersk system fenixPkgs version;
+        mkWin64RustPackage = pkgs.callPackage ./nix/windows-package.nix {
+          inherit naersk fenixPkgs version;
+          pkgsWindows = pkgs.pkgsCross.mingwW64;
+        };
+
+        mkWinArm64RustPackage = pkgs.callPackage ./nix/windows-package.nix {
+          inherit naersk fenixPkgs version;
+          pkgsWindows = import nixpkgs {
+            inherit system;
+            crossSystem = pkgs.lib.systems.examples.mingw-ucrt-aarch64;
+            overlays = [
+              (_: prev: {
+                llvmPackages_21 = prev.llvmPackages_21.overrideScope (_: llvmPrev:
+                  # Bootstrap before the Windows CRT and winpthreads exist.
+                  pkgs.lib.genAttrs [ "compiler-rt-libc" "compiler-rt-no-libc" ] (name:
+                    llvmPrev.${name}.override {
+                      withAtomicsPthread = false;
+                      withAtomicsLib = false;
+                    }));
+              })
+            ];
+          };
         };
 
         mkWin32RustPackage = pkgs.callPackage ./nix/win32-package.nix {
@@ -151,6 +171,10 @@
             deltachat-rpc-server-win64 = mkWin64RustPackage "deltachat-rpc-server";
             deltachat-rpc-server-win64-wheel =
               mkWheel { rpc-server = deltachat-rpc-server-win64; arch = "win64"; binaryName = "deltachat-rpc-server.exe"; };
+
+            deltachat-rpc-server-win-arm64 = mkWinArm64RustPackage "deltachat-rpc-server";
+            deltachat-rpc-server-win-arm64-wheel =
+              mkWheel { rpc-server = deltachat-rpc-server-win-arm64; arch = "win-arm64"; binaryName = "deltachat-rpc-server.exe"; };
 
             deltachat-repl-win32 = mkWin32RustPackage "deltachat-repl";
             deltachat-rpc-server-win32 = mkWin32RustPackage "deltachat-rpc-server";
