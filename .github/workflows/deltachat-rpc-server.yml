@@ -94,6 +94,12 @@ jobs:
           path: result/bin/deltachat-rpc-server.exe
           if-no-files-found: error
 
+  build_windows_arm64:
+    name: Windows ARM64
+    uses: ./.github/workflows/windows-arm64.yml
+    permissions:
+      contents: read
+
   build_windows_wheel:
     name: Windows wheel
     strategy:
@@ -195,7 +201,7 @@ jobs:
 
   publish:
     name: Build wheels and upload binaries to the release
-    needs: ["build_linux", "build_linux_wheel", "build_windows", "build_windows_wheel", "build_macos", "build_android", "build_android_wheel"]
+    needs: ["build_linux", "build_linux_wheel", "build_windows", "build_windows_arm64", "build_windows_wheel", "build_macos", "build_android", "build_android_wheel"]
     environment:
       name: pypi
       url: https://pypi.org/p/deltachat-rpc-server
@@ -282,11 +288,23 @@ jobs:
           name: deltachat-rpc-server-win32-wheel
           path: deltachat-rpc-server-win32-wheel.d
 
+      - name: Download Windows ARM64 binary
+        uses: actions/download-artifact@v7
+        with:
+          name: deltachat-rpc-server-win-arm64
+          path: deltachat-rpc-server-win-arm64.d
+
       - name: Download Win64 binary
         uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-win64
           path: deltachat-rpc-server-win64.d
+
+      - name: Download Windows ARM64 wheel
+        uses: actions/download-artifact@v7
+        with:
+          name: deltachat-rpc-server-win-arm64-wheel
+          path: deltachat-rpc-server-win-arm64-wheel.d
 
       - name: Download Win64 wheel
         uses: actions/download-artifact@v7
@@ -340,6 +358,7 @@ jobs:
           mv deltachat-rpc-server-x86_64-linux.d/deltachat-rpc-server bin/deltachat-rpc-server-x86_64-linux
           mv deltachat-rpc-server-win32.d/deltachat-rpc-server.exe bin/deltachat-rpc-server-win32.exe
           mv deltachat-rpc-server-win64.d/deltachat-rpc-server.exe bin/deltachat-rpc-server-win64.exe
+          mv deltachat-rpc-server-win-arm64.d/deltachat-rpc-server.exe bin/deltachat-rpc-server-win-arm64.exe
           mv deltachat-rpc-server-x86_64-macos.d/deltachat-rpc-server bin/deltachat-rpc-server-x86_64-macos
           mv deltachat-rpc-server-aarch64-macos.d/deltachat-rpc-server bin/deltachat-rpc-server-aarch64-macos
           mv deltachat-rpc-server-arm64-v8a-android.d/deltachat-rpc-server bin/deltachat-rpc-server-arm64-v8a-android
@@ -360,6 +379,7 @@ jobs:
           mv deltachat-rpc-server-i686-linux-wheel.d/*.whl dist/
           mv deltachat-rpc-server-x86_64-linux-wheel.d/*.whl dist/
           mv deltachat-rpc-server-win64-wheel.d/*.whl dist/
+          mv deltachat-rpc-server-win-arm64-wheel.d/*.whl dist/
           mv deltachat-rpc-server-win32-wheel.d/*.whl dist/
           mv deltachat-rpc-server-arm64-v8a-android-wheel.d/*.whl dist/
           mv deltachat-rpc-server-armeabi-v7a-android-wheel.d/*.whl dist/
@@ -394,7 +414,7 @@ jobs:
 
   publish_npm_package:
     name: Build & Publish npm prebuilds and deltachat-rpc-server
-    needs: ["build_linux", "build_windows", "build_macos"]
+    needs: ["build_linux", "build_windows", "build_windows_arm64", "build_macos"]
     runs-on: "ubuntu-latest"
     environment:
       name: npm-stdio-rpc-server
@@ -449,6 +469,12 @@ jobs:
           name: deltachat-rpc-server-win32
           path: deltachat-rpc-server-win32.d
 
+      - name: Download Windows ARM64 binary
+        uses: actions/download-artifact@v7
+        with:
+          name: deltachat-rpc-server-win-arm64
+          path: deltachat-rpc-server-win-arm64.d
+
       - name: Download Win64 binary
         uses: actions/download-artifact@v7
         with:
@@ -492,6 +518,7 @@ jobs:
           python scripts/pack_binary_for_platform.py x86_64-unknown-linux-musl      ../../deltachat-rpc-server-x86_64-linux.d/deltachat-rpc-server
           python scripts/pack_binary_for_platform.py i686-pc-windows-gnu            ../../deltachat-rpc-server-win32.d/deltachat-rpc-server.exe 
           python scripts/pack_binary_for_platform.py x86_64-pc-windows-gnu          ../../deltachat-rpc-server-win64.d/deltachat-rpc-server.exe 
+          python scripts/pack_binary_for_platform.py aarch64-pc-windows-msvc       ../../deltachat-rpc-server-win-arm64.d/deltachat-rpc-server.exe
           python scripts/pack_binary_for_platform.py x86_64-apple-darwin            ../../deltachat-rpc-server-x86_64-macos.d/deltachat-rpc-server 
           python scripts/pack_binary_for_platform.py aarch64-apple-darwin           ../../deltachat-rpc-server-aarch64-macos.d/deltachat-rpc-server 
           python scripts/pack_binary_for_platform.py aarch64-linux-android          ../../deltachat-rpc-server-arm64-v8a-android.d/deltachat-rpc-server

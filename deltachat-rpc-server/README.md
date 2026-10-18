@@ -35,3 +35,34 @@ languages other than Rust, for example:
 
 Run `deltachat-rpc-server --version` to check the version of the server.
 Run `deltachat-rpc-server --openrpc` to get [OpenRPC](https://open-rpc.org/) specification of the provided JSON-RPC API.
+
+## Windows ARM64 builds
+
+The `Windows ARM64 RPC server` workflow builds and tests a native
+`aarch64-pc-windows-msvc` release executable on `windows-11-arm`. It runs on pull
+requests and pushes to `main`, and can also be started with **Run workflow**.
+Download the `deltachat-rpc-server-win-arm64` artifact and extract
+`deltachat-rpc-server.exe`. The executable includes vendored OpenSSL/SQLCipher
+and a statically linked Visual C++ runtime.
+
+The binary release workflow also includes this build and publishes
+`deltachat-rpc-server-win-arm64.exe`, a `py3-none-win_arm64` Python wheel, and a
+`@deltachat/stdio-rpc-server-win32-arm64` npm prebuild. In the `trufae/core` fork,
+GitHub release assets are available from <https://github.com/trufae/core/releases>.
+
+For a Parla Windows ARM64 bundle, place the artifact's `deltachat-rpc-server.exe`
+in the same `bin` directory as `parla.exe`. Parla discovers this bundled server
+automatically. When using the release asset, rename it to
+`deltachat-rpc-server.exe` first. Parla's Windows auto-downloader currently
+selects the upstream x64 asset; bundle this ARM64 server for the native port.
+
+To build locally, install Rust and the Visual Studio ARM64 C++ tools, open an
+ARM64 developer shell, and run:
+
+```powershell
+$env:RUSTFLAGS = '-C target-feature=+crt-static'
+rustup target add aarch64-pc-windows-msvc
+cargo build --release --locked -p deltachat-rpc-server --target aarch64-pc-windows-msvc --features vendored
+```
+
+Vendored OpenSSL also requires Perl and `nmake`, as supplied by the CI runner.

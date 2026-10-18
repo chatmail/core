@@ -1,0 +1,70 @@
+name: Windows ARM64 RPC server
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test Windows ARM64
+    runs-on: windows-11-arm
+    timeout-minutes: 60
+    env:
+      # Ship a standalone executable without a Visual C++ runtime dependency.
+      RUSTFLAGS: -C target-feature=+crt-static
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          show-progress: false
+          persist-credentials: false
+
+      - name: Set up ARM64 MSVC tools
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
+        with:
+          arch: arm64
+
+      - name: Install native Rust toolchain
+        run: rustup toolchain install stable-aarch64-pc-windows-msvc --profile minimal
+
+      - name: Build standalone RPC server
+        run: cargo +stable-aarch64-pc-windows-msvc build --release --locked --package deltachat-rpc-server --target aarch64-pc-windows-msvc --features vendored
+
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Check ARM64 executable and JSON-RPC account creation
+        run: python scripts/test-rpc-server-windows-arm64.py target/aarch64-pc-windows-msvc/release/deltachat-rpc-server.exe
+
+      - name: Build Python wheel
+        run: |
+          python -m pip install wheel
+          python scripts/wheel-rpc-server.py win-arm64 target/aarch64-pc-windows-msvc/release/deltachat-rpc-server.exe
+
+      - name: Test installed wheel entry point
+        shell: pwsh
+        run: |
+          $wheel = Get-ChildItem deltachat_rpc_server-*-py3-none-win_arm64.whl
+          python -m pip install --no-deps $wheel.FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          deltachat-rpc-server --version
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: deltachat-rpc-server-win-arm64
+          path: target/aarch64-pc-windows-msvc/release/deltachat-rpc-server.exe
+          if-no-files-found: error
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v7
+        with:
+          name: deltachat-rpc-server-win-arm64-wheel
+          path: deltachat_rpc_server-*-py3-none-win_arm64.whl
+          if-no-files-found: error
