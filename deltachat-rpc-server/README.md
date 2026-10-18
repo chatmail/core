@@ -49,6 +49,8 @@ The binary release workflow also includes this build and publishes
 `deltachat-rpc-server-win-arm64.exe`, a `py3-none-win_arm64` Python wheel, and a
 `@deltachat/stdio-rpc-server-win32-arm64` npm prebuild. In the `trufae/core` fork,
 GitHub release assets are available from <https://github.com/trufae/core/releases>.
+Publishing to the upstream PyPI and npm registries is restricted to `chatmail/core`;
+fork releases still receive all binaries and packages as GitHub assets.
 
 For a Parla Windows ARM64 bundle, place the artifact's `deltachat-rpc-server.exe`
 in the same `bin` directory as `parla.exe`. Parla discovers this bundled server

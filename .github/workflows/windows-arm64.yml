@@ -7,6 +7,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-windows-arm64
+  cancel-in-progress: true
+
 permissions:
   contents: read
 

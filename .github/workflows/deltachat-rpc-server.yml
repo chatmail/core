@@ -409,7 +409,7 @@ jobs:
             bin/* dist/*
 
       - name: Publish deltachat-rpc-server to PyPI
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' && github.repository == 'chatmail/core'
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33
 
   publish_npm_package:
@@ -556,7 +556,7 @@ jobs:
           package-manager-cache: false  # never use caching in release builds
 
       - name: Publish npm packets for prebuilds and `@deltachat/stdio-rpc-server`
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' && github.repository == 'chatmail/core'
         working-directory: deltachat-rpc-server/npm-package
         run: |
           ls -lah platform_package
