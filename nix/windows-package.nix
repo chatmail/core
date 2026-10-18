@@ -13,9 +13,13 @@ let
   };
   targetCc = "${pkgsWindows.stdenv.cc}/bin/${pkgsWindows.stdenv.cc.targetPrefix}cc";
   isArm64 = pkgsWindows.stdenv.hostPlatform.isAarch64;
+  rcFlags = "-I${pkgsWindows.windows.mingw_w64_headers}/include";
+  pthreads = pkgsWindows.windows.pthreads.overrideAttrs (_:
+    pkgs.lib.optionalAttrs isArm64 { RCFLAGS = rcFlags; });
   # openssl-src does not support aarch64-pc-windows-gnullvm yet.
   openssl = (pkgsWindows.openssl_3_6.override { static = true; }).overrideAttrs {
     configureScript = "./Configure mingwarm64";
+    RCFLAGS = rcFlags;
   };
 in
 naerskWin.buildPackage ({
@@ -31,19 +35,19 @@ naerskWin.buildPackage ({
     pkgsWindows.stdenv.cc
   ];
   buildInputs = [
-    pkgsWindows.windows.pthreads
+    pthreads
   ];
   auditable = false; # Avoid cargo-auditable failures.
   doCheck = false; # Disable test as it requires network access.
 
   CARGO_BUILD_TARGET = rustTarget;
   TARGET_CC = "${targetCc}";
-  "CFLAGS_${builtins.replaceStrings [ "-" ] [ "_" ] rustTarget}" = "-I${pkgsWindows.windows.pthreads}/include";
+  "CFLAGS_${builtins.replaceStrings [ "-" ] [ "_" ] rustTarget}" = "-I${pthreads}/include";
   CARGO_BUILD_RUSTFLAGS = [
     "-C"
     "linker=${targetCc}"
     "-L"
-    "native=${pkgsWindows.windows.pthreads}/lib"
+    "native=${pthreads}/lib"
   ] ++ pkgs.lib.optionals isArm64 [
     "-C"
     "target-feature=+crt-static"
