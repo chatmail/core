@@ -440,6 +440,12 @@ async fn inbox_loop(
                             ctx,
                             "Transport {transport_id}: Failed to prepare inbox connection: {err:#}."
                         );
+
+                        // Make sure the loop is cancellable even if `prepare` always fails
+                        // immediately without yielding control to the executor.
+                        // This happened at least once when I/O was started in the test
+                        // with a pseudo configured transport without any connection candidates.
+                        tokio::task::yield_now().await;
                         continue;
                     }
                     Ok(session) => {
