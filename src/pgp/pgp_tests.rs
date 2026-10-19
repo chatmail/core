@@ -5,7 +5,6 @@ use super::*;
 use crate::key::secret_key_to_public_key;
 use crate::transport::add_pseudo_transport;
 use crate::{
-    config::Config,
     decrypt,
     key::{load_self_public_key, self_fingerprint, store_self_keypair},
     mimefactory::{part_to_bytes, wrap_encrypted_part},
@@ -25,9 +24,6 @@ async fn decrypt_bytes(
     add_pseudo_transport(t, "alice@example.org")
         .await
         .expect("Failed to add pseudo transport");
-    t.set_config(Config::ConfiguredAddr, Some("alice@example.org"))
-        .await
-        .expect("Failed to configure address");
 
     for secret in auth_tokens_for_decryption {
         token::save(t, token::Namespace::Auth, None, secret, 0).await?;

@@ -389,9 +389,6 @@ char*           dc_get_blobdir               (const dc_context_t* context);
 /**
  * Configure the context. The configuration is handled by key=value pairs as:
  *
- * - `configured_addr` = Email address in use.
- *                    Unless for testing, do not set this value using dc_set_config().
- *                    Instead, set `addr` and call dc_configure().
  * - `displayname`  = Own name to use when sending messages. MUAs are allowed to spread this way e.g. using CC, defaults to empty
  * - `selfstatus`   = Own status to display, e.g. in e-mail footers, defaults to empty
  * - `selfavatar`   = File containing avatar. Will immediately be copied to the 
@@ -478,8 +475,6 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  * if you want to use the deprecated dc_configure() API, such as:
  *
  * - `addr`         = Email address to use for configuration.
- *                    If dc_configure() fails this is not the email address actually in use.
- *                    Use `configured_addr` to find out the email address actually in use.
  * - `mail_server`  = IMAP-server, guessed if left out
  * - `mail_user`    = IMAP-username, guessed if left out
  * - `mail_pw`      = IMAP-password (always needed)
@@ -6471,7 +6466,7 @@ void dc_event_unref(dc_event_t* event);
  * The event is emitted on the device modifying the transports
  * as well as on other devices applying the synced change,
  * for the JSON-RPC calls `add_or_update_transport`, `add_transport_from_qr`,
- * `delete_transport` or `set_config(configured_addr)`.
+ * `delete_transport`.
  */
 #define DC_EVENT_TRANSPORTS_MODIFIED           2600
 
