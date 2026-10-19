@@ -45,10 +45,8 @@ def test_add_second_address(acf) -> None:
     second_addr = account.list_transports()[1]["addr"]
     third_addr = account.list_transports()[2]["addr"]
 
-    assert account.get_config("configured_addr") == first_addr
     account.delete_transport(first_addr)
     assert len(account.list_transports()) == 2
-    assert account.get_config("configured_addr") != first_addr
 
     account.delete_transport(second_addr)
     assert len(account.list_transports()) == 1
@@ -187,9 +185,6 @@ def test_transport_synchronization(acf, log) -> None:
     wait_for_io_started(ac1)
     [transport1, transport3] = ac1.list_transports()
 
-    log.section("ac1 changes the sending transport")
-    ac1.set_config("configured_addr", transport3["addr"])
-
     log.section("ac1 removes the first transport")
     ac1.delete_transport(transport1["addr"])
 
@@ -197,7 +192,6 @@ def test_transport_synchronization(acf, log) -> None:
     wait_for_io_started(ac1_clone)
     [transport3] = ac1_clone.list_transports()
     assert transport3["addr"] == addr3
-    assert ac1_clone.get_config("configured_addr") == addr3
 
     ac2_chat = ac2.create_chat(ac1)
     ac2_chat.send_text("Hello!")
@@ -221,10 +215,6 @@ def test_transport_sync_new_as_primary(acf, log) -> None:
     [transport1, transport2] = ac1_transports
     ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
     assert len(ac1_clone.list_transports()) == 2
-    assert ac1_clone.get_config("configured_addr") == transport1["addr"]
-
-    log.section("ac1 changes the primary transport")
-    ac1.set_config("configured_addr", transport2["addr"])
 
     log.section("ac1_clone receives a message via the new transport")
     ac1_chat = ac1.create_chat(bob)
@@ -234,22 +224,6 @@ def test_transport_sync_new_as_primary(acf, log) -> None:
     bob_chat.accept()
     bob_chat.send_text("hello back")
     assert ac1_clone.wait_for_incoming_msg().get_snapshot().text == "hello back"
-
-
-def test_recognize_self_address(acf) -> None:
-    alice, bob = acf.get_online_accounts(2)
-
-    bob_chat = bob.create_chat(alice)
-
-    qr = acf.get_account_qr()
-    alice.add_transport_from_qr(qr)
-
-    new_alice_addr = alice.list_transports()[1]["addr"]
-    alice.set_config("configured_addr", new_alice_addr)
-
-    bob_chat.send_text("Hello!")
-    msg = alice.wait_for_incoming_msg().get_snapshot()
-    assert msg.chat == alice.create_chat(bob)
 
 
 def test_transport_limit(acf) -> None:
@@ -294,7 +268,6 @@ def test_message_info_imap_urls(acf) -> None:
 
     # Alice switches to another transport and removes the rest of the transports.
     new_alice_addr = alice.list_transports()[1]["addr"]
-    alice.set_config("configured_addr", new_alice_addr)
     removed_addrs = []
     for transport in alice.list_transports():
         if transport["addr"] != new_alice_addr:
@@ -326,7 +299,6 @@ def test_remove_primary_transport(acf, log) -> None:
 
     log.section("Alice removes the primary relay")
     alice.delete_transport(transport1["addr"])
-    assert alice.get_config("configured_addr") == transport2["addr"]
     alice.stop_io()
     alice.start_io()
 
@@ -369,7 +341,6 @@ def test_qr_works_after_removing_primary_transport(acf, log) -> None:
 def test_background_fetch_from_second_transport(acf, direct_imap, dc):
     alice, alice_chat, bob_chat = alice_with_two_transports_and_bob(acf)
     [transport1, transport2] = alice.list_transports()
-    assert alice.get_config("configured_addr") == transport1["addr"]
 
     alice.stop_io()
     bob_chat.send_text("hello")

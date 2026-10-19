@@ -276,14 +276,15 @@ impl ConfiguredLoginParam {
             .await
     }
 
-    /// Loads legacy configured param. Only used for tests and the migration.
+    /// Loads legacy configured param. Only used for tests and migration 131.
     pub(crate) async fn load_legacy(context: &Context) -> Result<Option<Self>> {
         if !context.get_config_bool(Config::Configured).await? {
             return Ok(None);
         }
 
         let addr = context
-            .get_config(Config::ConfiguredAddr)
+            .sql
+            .get_raw_config("configured_addr")
             .await?
             .unwrap_or_default()
             .trim()
@@ -480,11 +481,11 @@ pub(crate) async fn save_transport(
     );
 
     let addr = addr_normalize(&configured.addr);
-    let configured_addr = context.get_config(Config::ConfiguredAddr).await?;
-    let mut modified = context
+    let modified = context
         .sql
-        .execute(
-            "INSERT INTO transports (addr, entered_param, configured_param, add_timestamp)
+        .transaction(|transaction| {
+            let modified = transaction.execute(
+                "INSERT INTO transports (addr, entered_param, configured_param, add_timestamp)
              VALUES (?, ?, ?, ?)
              ON CONFLICT (addr)
              DO UPDATE SET entered_param=excluded.entered_param,
@@ -493,24 +494,18 @@ pub(crate) async fn save_transport(
              WHERE entered_param != excluded.entered_param
                  OR configured_param != excluded.configured_param
                  OR add_timestamp < excluded.add_timestamp",
-            (
-                &addr,
-                serde_json::to_string(entered_param)?,
-                serde_json::to_string(configured)?,
-                add_timestamp,
-            ),
-        )
-        .await?
-        > 0;
+                (
+                    &addr,
+                    serde_json::to_string(entered_param)?,
+                    serde_json::to_string(configured)?,
+                    add_timestamp,
+                ),
+            )? > 0;
+            update_configured_addr(transaction)?;
+            Ok(modified)
+        })
+        .await?;
 
-    if configured_addr.is_none() {
-        // If there is no transport yet, use the new transport for sending
-        context
-            .sql
-            .set_raw_config(Config::ConfiguredAddr.as_ref(), Some(&addr))
-            .await?;
-        modified = true;
-    }
     Ok(modified)
 }
 
@@ -625,7 +620,7 @@ pub(crate) async fn sync_transports(
         )
         .collect();
 
-    let (deleted_ids, reelected) = context
+    let deleted_ids = context
         .sql
         .transaction(|transaction| {
             let mut deleted_ids = Vec::new();
@@ -636,21 +631,15 @@ pub(crate) async fn sync_transports(
                 }
                 deleted_ids.extend(delete_transport_row(transaction, addr, *timestamp)?);
             }
+            update_configured_addr(transaction)?;
             modified |= !deleted_ids.is_empty();
 
-            let reelected = maybe_update_sending_transport(transaction)?;
-            Ok((deleted_ids, reelected))
+            Ok(deleted_ids)
         })
         .await?;
 
     for transport_id in &deleted_ids {
         purge_transport_caches(context, *transport_id).await;
-    }
-
-    if let Some(new_addr) = reelected {
-        info!(context, "Re-elected sending transport {new_addr:?}.");
-        context.sql.uncache_raw_config("configured_addr").await;
-        modified = true;
     }
 
     if modified {
@@ -711,34 +700,10 @@ pub(crate) async fn purge_transport_caches(context: &Context, transport_id: u32)
     context.metadata.write().await.remove(&transport_id);
 }
 
-/// Elects another transport for sending if the current one vanished.
-/// Any remaining transport works and selection is anyway moving
-/// to the authority of the SMTP loop, see <https://github.com/chatmail/core/pull/8619>
-pub(crate) fn maybe_update_sending_transport(
-    transaction: &mut rusqlite::Transaction,
-) -> Result<Option<String>> {
-    let configured_addr: String = transaction.query_row(
-        "SELECT value FROM config WHERE keyname='configured_addr'",
-        (),
-        |row| row.get(0),
-    )?;
-    let addrs = transport_addrs(transaction)?;
-    if addrs.contains(&configured_addr) {
-        return Ok(None);
-    }
-    let Some(new_addr) = addrs.into_iter().next() else {
-        return Ok(None);
-    };
-    transaction.execute(
-        "UPDATE config SET value=? WHERE keyname='configured_addr'",
-        (&new_addr,),
-    )?;
-    Ok(Some(new_addr))
-}
-
 /// Adds transport entry to the `transports` table with empty configuration.
 pub async fn add_pseudo_transport(context: &Context, addr: &str) -> Result<()> {
-    context.sql
+    context.sql.transaction(|transaction| {
+        transaction
         .execute(
             "INSERT INTO transports (addr, entered_param, configured_param) VALUES (?, ?, ?)",
             (
@@ -746,8 +711,25 @@ pub async fn add_pseudo_transport(context: &Context, addr: &str) -> Result<()> {
                 serde_json::to_string(&EnteredLoginParam{addr: addr.to_string(), ..Default::default()})?,
                 format!(r#"{{"addr":"{addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#)
             ),
+        ).with_context(|| format!("Failed to insert pseudo transport for {addr:?}"))?;
+        update_configured_addr(transaction)?;
+        Ok(())
+    }).await
+}
+
+/// Update deprecated `configured_addr` config so it points to the first transport.
+///
+/// `configured_addr` is not used anymore, but old core fails when importing a backup without it,
+/// so we need to set it for backwards compatibility.
+pub fn update_configured_addr(transaction: &rusqlite::Transaction) -> Result<()> {
+    transaction
+        .execute(
+            "INSERT OR REPLACE INTO config (keyname, value)
+         SELECT 'configured_addr', addr
+         FROM transports ORDER BY id LIMIT 1",
+            (),
         )
-        .await.with_context(|| format!("Failed to insert pseudo transport for {addr:?}"))?;
+        .context("Failed to update configured_addr")?;
     Ok(())
 }
 
