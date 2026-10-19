@@ -354,9 +354,12 @@ pub(crate) fn refine_frequencies(
 mod tests {
     use super::*;
     use crate::chat::create_broadcast;
+    use crate::chatlist::Chatlist;
     use crate::reaction::send_reaction;
     use crate::securejoin::get_securejoin_qr;
     use crate::test_utils::TestContextManager;
+    use crate::tools::SystemTime;
+    use std::time::Duration;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_broadcast_reaction_wire_format() {
@@ -581,6 +584,34 @@ mod tests {
         assert_eq!(result[1].reaction.as_str(), "❤️");
         assert_eq!(result[1].count, 1);
         assert_eq!(result[1].is_from_self, true);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_broadcast_reactions_not_in_chatlist_summary() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+
+        let alice_chat_id = create_broadcast(alice, "Channel".to_string()).await?;
+        let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
+        let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
+        bob_chat_id.accept(bob).await?;
+
+        let sent_msg = alice.send_text(alice_chat_id, "hi channel!").await;
+        let bob_msg = bob.recv_msg(&sent_msg).await;
+
+        // reactions show up in the summary only if newer than the message; make sure that is the case.
+        SystemTime::shift(Duration::from_secs(10));
+
+        send_reaction(bob, bob_msg.id, "❤️").await?;
+        alice.recv_msg_hidden(&bob.pop_sent_msg().await).await;
+
+        for t in [alice, bob] {
+            let chatlist = Chatlist::try_load(t, 0, None, None).await?;
+            let summary = chatlist.get_summary(t, 0, None).await?;
+            assert_eq!(summary.text, "hi channel!");
+        }
+        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

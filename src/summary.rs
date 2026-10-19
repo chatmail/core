@@ -68,9 +68,11 @@ impl Summary {
         chat: &Chat,
         contact: Option<&Contact>,
     ) -> Result<Summary> {
-        if let Some((reaction_msg, reaction_contact_id, reaction)) = chat
-            .get_last_reaction_if_newer_than(context, msg.timestamp_sort)
-            .await?
+        let is_broadcast = matches!(chat.typ, Chattype::InBroadcast | Chattype::OutBroadcast);
+        if !is_broadcast
+            && let Some((reaction_msg, reaction_contact_id, reaction)) = chat
+                .get_last_reaction_if_newer_than(context, msg.timestamp_sort)
+                .await?
         {
             // there is a reaction newer than the latest message, show that.
             // sorting and therefore date is still the one of the last message,
