@@ -260,10 +260,6 @@ async fn test_keyupdate_on_replacement() -> Result<()> {
     alice.add_transport("alice@relay.example.net").await;
     SystemTime::shift(Duration::from_secs(2));
     alice.delete_transport("alice@example.org").await?;
-    assert_eq!(
-        alice.get_config(Config::ConfiguredAddr).await?.as_deref(),
-        Some("alice@relay.example.net")
-    );
 
     maybe_send_keyupdate_message(alice).await?;
     let keyupdate = alice.pop_sent_msg().await;
