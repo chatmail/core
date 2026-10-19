@@ -495,6 +495,15 @@ impl CommandApi {
         Ok(())
     }
 
+    /// Adds fake transport that cannot be used to connect.
+    ///
+    /// Used for offline tests only.
+    async fn add_pseudo_transport(&self, account_id: u32, addr: String) -> Result<()> {
+        let context = self.get_context(account_id).await?;
+        deltachat::transport::add_pseudo_transport(&context, &addr).await?;
+        Ok(())
+    }
+
     /// Configures a new email account using the provided parameters
     /// and adds it as a transport.
     ///

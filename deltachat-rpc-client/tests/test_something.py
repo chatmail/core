@@ -1489,3 +1489,19 @@ def test_is_sending_finished(dc, acf) -> None:
     bob.wait_for_event(EventType.SMTP_MESSAGE_SENT)
 
     assert dc.is_sending_finished()
+
+
+def test_pseudo_transport_start_stop_io(acf):
+    """
+    Test that I/O can be started and stopped for pseudo transport.
+
+    Pseudo transport has no connection candidates,
+    so in the past this resulted in IMAP busy looping
+    and stop_io() failing to even cancel the loop sometimes.
+    This is a regression test for this bug.
+    """
+    for i in range(10):
+        alice = acf.get_unconfigured_account()
+        alice.add_pseudo_transport(f"alice{i}@example.net")
+        alice.start_io()
+        alice.stop_io()
