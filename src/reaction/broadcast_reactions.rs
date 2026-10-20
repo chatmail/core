@@ -357,7 +357,7 @@ mod tests {
     use crate::chatlist::Chatlist;
     use crate::reaction::send_reaction;
     use crate::securejoin::get_securejoin_qr;
-    use crate::test_utils::TestContextManager;
+    use crate::test_utils::{TestContextManager, sync};
     use crate::tools::SystemTime;
     use std::time::Duration;
 
@@ -748,6 +748,67 @@ mod tests {
         assert_eq!(bob_msg.get_text(), "hi channel!");
         assert_eq!(reactions.to_string(), "👍1");
         assert_eq!(reactions.frequencies.len(), 1);
+
+        Ok(())
+    }
+
+    /// The channel owner has two devices.
+    /// A reaction summary sent by one device must not make the other device
+    /// broadcast the summary again, otherwise the devices send summaries to each other
+    /// (and to all subscribers) every `REACTION_BROADCAST_PERIOD` forever.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_broadcast_reactions_multidevice_no_loop() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice1 = &tcm.alice().await;
+        let alice2 = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+        for a in [alice1, alice2] {
+            a.set_config_bool(Config::SyncMsgs, true).await?;
+        }
+
+        let alice1_chat_id = create_broadcast(alice1, "Channel".to_string()).await?;
+        sync(alice1, alice2).await;
+        let qr = get_securejoin_qr(alice1, Some(alice1_chat_id)).await?;
+        let bob_chat_id = tcm.exec_securejoin_qr(bob, alice1, &qr).await;
+        bob_chat_id.accept(bob).await?;
+
+        tcm.section("Alice1 posts, Alice2 and Bob receive the post");
+        let sent_msg = alice1.send_text(alice1_chat_id, "hi channel!").await;
+        let alice1_msg_id = sent_msg.load_from_db().await.id;
+        let alice2_msg = alice2.recv_msg(&sent_msg).await;
+        let bob_msg = bob.recv_msg(&sent_msg).await;
+
+        tcm.section("Alice2 reacts to her own post, Alice1 learns about it");
+        send_reaction(alice2, alice2_msg.id, "👍").await?;
+        alice1.recv_msg_hidden(&alice2.pop_sent_msg().await).await;
+        assert_eq!(
+            get_msg_reactions(alice1, alice1_msg_id).await?.to_string(),
+            "👍1"
+        );
+        broadcast_reactions_for_all_chats(alice2).await?; // bypass timer
+        let summary = alice2.pop_sent_msg().await;
+        alice1.recv_msg_hidden(&summary).await;
+        bob.recv_msg_hidden(&summary).await;
+
+        tcm.section("Bob reacts, Alice1 broadcasts the summary");
+        send_reaction(bob, bob_msg.id, "❤️").await?;
+        alice1.recv_msg_hidden(&bob.pop_sent_msg().await).await;
+        broadcast_reactions_for_all_chats(alice1).await?; // bypass timer
+        let summary = alice1.pop_sent_msg().await;
+        bob.recv_msg_hidden(&summary).await;
+        assert_eq!(
+            get_msg_reactions(bob, bob_msg.id).await?.to_string(),
+            "❤️1 👍1"
+        );
+
+        tcm.section("Alice2 receives Alice1's summary and must not broadcast it again");
+        alice2.recv_msg_hidden(&summary).await;
+        broadcast_reactions_for_all_chats(alice2).await?;
+        assert!(alice2.pop_sent_msg_opt().await.is_none());
+
+        tcm.section("The summary must not remove Alice's own reaction on Alice2");
+        let reactions = get_msg_reactions(alice2, alice2_msg.id).await?;
+        assert_eq!(reactions.to_string(), "👍1");
 
         Ok(())
     }
