@@ -98,6 +98,7 @@ skip = [
      { name = "thiserror", version = "1.0.69" },
      { name = "toml_datetime", version = "0.6.11" },
      { name = "wasi", version = "0.11.0+wasi-snapshot-preview1" },
+     { name = "webpki-roots", version = "0.26.8" },
      { name = "windows" },
      { name = "windows_aarch64_gnullvm" },
      { name = "windows_aarch64_msvc" },
@@ -127,6 +128,7 @@ allow = [
     "BSD-3-Clause",
     "BSL-1.0", # Boost Software License 1.0
     "CC0-1.0",
+    "CDLA-Permissive-2.0",
     "ISC",
     "MIT",
     "MPL-2.0",
