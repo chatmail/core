@@ -382,6 +382,8 @@ pub fn symm_encrypt_message(
 /// or even have some packets maliciously dropped
 /// (for example, all encryption subkeys dropped)
 /// or restored from some older version of the certificate.
+///
+/// In case of ties, i.e. same timestamps, data from the new certificate is preferred.
 pub fn merge_openpgp_certificates(
     old_certificate: SignedPublicKey,
     new_certificate: SignedPublicKey,
