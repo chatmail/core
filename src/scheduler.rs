@@ -661,11 +661,11 @@ async fn smtp_loop(ctx: Context, smtp_handlers: SmtpConnectionHandlers) {
                     "SMTP has messages to retry, planning to retry {t} seconds later."
                 );
                 let duration = std::time::Duration::from_secs(t);
-                tokio::time::timeout(duration, async {
-                    idle_interrupt_receiver.recv().await.unwrap_or_default()
-                })
-                .await
-                .unwrap_or_default();
+                if let Ok(Err(async_channel::RecvError)) =
+                    tokio::time::timeout(duration, idle_interrupt_receiver.recv()).await
+                {
+                    break;
+                }
                 let slept = time_elapsed(&now).as_secs();
                 timeout = Some(cmp::max(
                     t,
@@ -689,11 +689,15 @@ async fn smtp_loop(ctx: Context, smtp_handlers: SmtpConnectionHandlers) {
                 info!(ctx, "SMTP has no messages to retry, waiting for interrupt.");
                 let interrupt = idle_interrupt_receiver.recv();
                 if next_check != 0 {
-                    tokio::time::timeout(std::time::Duration::from_secs(wait), interrupt)
-                        .await
-                        .ok();
+                    if let Ok(Err(async_channel::RecvError)) =
+                        tokio::time::timeout(std::time::Duration::from_secs(wait), interrupt).await
+                    {
+                        break;
+                    }
                 } else {
-                    interrupt.await.ok();
+                    if let Err(async_channel::RecvError) = interrupt.await {
+                        break;
+                    }
                 }
             };
 
