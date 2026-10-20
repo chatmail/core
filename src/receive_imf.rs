@@ -1825,16 +1825,17 @@ async fn add_parts(
         EphemeralTimer::Disabled
     };
 
+    // silent messages are added as "noticed" and do not bubble up in the chatlist
+    let silent =
+        group_changes.silent || mime_parser.is_system_message == SystemMessage::MessageUnpinned;
+
     let state = if !mime_parser.incoming {
         MessageState::OutDelivered
     } else if seen || !mime_parser.mdn_reports.is_empty() || chat_id_blocked == Blocked::Yes
     // No check for `hidden` because only reactions are such and they should be `InFresh`.
     {
         MessageState::InSeen
-    } else if mime_parser.from.addr == STATISTICS_BOT_EMAIL
-        || group_changes.silent
-        || mime_parser.is_system_message == SystemMessage::MessageUnpinned
-    {
+    } else if mime_parser.from.addr == STATISTICS_BOT_EMAIL || silent {
         MessageState::InNoticed
     } else {
         MessageState::InFresh
@@ -1953,14 +1954,8 @@ async fn add_parts(
 
     drop(chat); // Avoid using stale `chat` object.
 
-    let sort_timestamp = tweak_sort_timestamp(
-        context,
-        mime_parser,
-        group_changes.silent,
-        chat_id,
-        sort_timestamp,
-    )
-    .await?;
+    let sort_timestamp =
+        tweak_sort_timestamp(context, mime_parser, silent, chat_id, sort_timestamp).await?;
 
     let mime_in_reply_to = mime_parser
         .get_header(HeaderDef::InReplyTo)
