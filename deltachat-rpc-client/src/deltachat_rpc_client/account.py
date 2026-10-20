@@ -381,7 +381,6 @@ class Account:
 
         The function returns immediately and the handshake runs in background, sending
         and receiving several messages.
-        Subsequent calls of `secure_join()` will abort previous, unfinished handshakes.
         See https://securejoin.delta.chat/ for protocol details.
 
         :param qrdata: The text of the scanned QR code.

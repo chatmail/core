@@ -921,8 +921,6 @@ impl CommandApi {
     /// During the handshake, info messages are added to the chat,
     /// showing progress, success or errors.
     ///
-    /// Subsequent calls of `secure_join()` will abort previous, unfinished handshakes.
-    ///
     /// See https://securejoin.delta.chat/ for details about both protocols.
     ///
     /// **qr**: The text of the scanned QR code. Typically, the same string as given
