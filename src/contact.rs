@@ -372,7 +372,11 @@ pub(crate) async fn import_public_key(
         .await?
     {
         let old_public_key = SignedPublicKey::from_slice(&public_key_bytes)?;
-        merged_public_key = merge_openpgp_certificates(public_key.clone(), old_public_key)
+
+        // Order of merge_openpgp_certificates() arguments is important.
+        // Second argument is the new key, it is preferred in case of ties,
+        // i.e. same signature timestamps.
+        merged_public_key = merge_openpgp_certificates(old_public_key, public_key.clone())
             .context("Failed to merge public keys")?;
         &merged_public_key
     } else {
