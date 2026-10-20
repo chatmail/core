@@ -7273,6 +7273,12 @@ void dc_event_unref(dc_event_t* event);
 /// @deprecated 2026-08-31
 #define DC_STR_PHASING_OUT 245
 
+/// "You unpinned a message."
+#define DC_STR_MESSAGE_UNPINNED_BY_YOU 246
+
+/// "Message unpinned by %1$s."
+#define DC_STR_MESSAGE_UNPINNED_BY_OTHER 247
+
 /**
  * @}
  */

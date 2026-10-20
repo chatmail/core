@@ -1153,9 +1153,6 @@ async fn decide_chat_assignment(
     {
         info!(context, "Call state changed (TRASH).");
         true
-    } else if mime_parser.is_system_message == SystemMessage::MessageUnpinned {
-        info!(context, "Message unpinned (TRASH).");
-        true
     } else if let Some(ref decryption_error) = mime_parser.decryption_error
         && !mime_parser.incoming
     {
@@ -1944,7 +1941,9 @@ async fn add_parts(
 
         Some(better_msg)
     } else if mime_parser.is_system_message == SystemMessage::MessagePinned {
-        Some(stock_str::msg_pinned(context, from_id).await) // message unpinned info is trashed in decide_chat_assignment()
+        Some(stock_str::msg_pinned(context, from_id).await)
+    } else if mime_parser.is_system_message == SystemMessage::MessageUnpinned {
+        Some(stock_str::msg_unpinned(context, from_id).await)
     } else {
         None
     };
