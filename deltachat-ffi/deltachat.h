@@ -2613,8 +2613,6 @@ char*           dc_get_securejoin_qr_svg         (dc_context_t* context, uint32_
  * During the handshake, info messages are added to the chat,
  * showing progress, success or errors.
  *
- * Subsequent calls of dc_join_securejoin() will abort previous, unfinished handshakes.
- *
  * See https://securejoin.delta.chat/ for details about both protocols.
  *
  * @memberof dc_context_t
