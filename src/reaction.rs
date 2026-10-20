@@ -20,7 +20,7 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::fmt;
 
-use anyhow::{Result, bail};
+use anyhow::{Result, bail, ensure};
 use serde::{Deserialize, Serialize};
 
 use crate::chat::{Chat, ChatId, send_msg};
@@ -246,9 +246,12 @@ pub async fn send_reaction(context: &Context, msg_id: MsgId, reaction: &str) -> 
     let chat_id = msg.chat_id;
     let chat = Chat::load_from_db(context, chat_id).await?;
 
-    if matches!(chat.typ, Chattype::OutBroadcast | Chattype::InBroadcast)
-        && !is_allowed_reaction(&reaction)
-    {
+    ensure!(
+        chat.typ != Chattype::OutBroadcast,
+        "Cannot react to own messages in a channel"
+    );
+
+    if chat.typ == Chattype::InBroadcast && !is_allowed_reaction(&reaction) {
         bail!("Reaction not allowed: {}", reaction.as_str());
     }
 
