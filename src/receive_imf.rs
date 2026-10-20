@@ -1831,7 +1831,10 @@ async fn add_parts(
     // No check for `hidden` because only reactions are such and they should be `InFresh`.
     {
         MessageState::InSeen
-    } else if mime_parser.from.addr == STATISTICS_BOT_EMAIL || group_changes.silent {
+    } else if mime_parser.from.addr == STATISTICS_BOT_EMAIL
+        || group_changes.silent
+        || mime_parser.is_system_message == SystemMessage::MessageUnpinned
+    {
         MessageState::InNoticed
     } else {
         MessageState::InFresh
