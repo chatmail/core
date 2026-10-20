@@ -2106,7 +2106,11 @@ async fn add_parts(
     let mut parts = mime_parser.parts.iter().peekable();
     while let Some(part) = parts.next() {
         let hidden = part.is_reaction;
-        if part.is_reaction {
+        // A reaction summary of a broadcast channel (`Chat-Broadcast-States:`) is sent as an empty
+        // reaction to the latest channel message, but it is not a reaction of the sender.
+        // Applying it would remove the owner's own reaction and, on another device of the owner,
+        // queue the message for the next summary, so the devices would resend summaries forever.
+        if part.is_reaction && mime_parser.broadcast_reactions.is_none() {
             let reaction_str = simplify::remove_footers(part.msg.as_str());
             let is_incoming_fresh =
                 mime_parser.incoming && !seen && chat_id_blocked == Blocked::Not;
