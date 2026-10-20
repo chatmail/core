@@ -678,11 +678,18 @@ async fn smtp_loop(
                     "SMTP has messages to retry, planning to retry {t} seconds later."
                 );
                 let duration = std::time::Duration::from_secs(t);
-                tokio::time::timeout(duration, async {
-                    idle_interrupt_receiver.recv().await.unwrap_or_default()
-                })
-                .await
-                .unwrap_or_default();
+                match tokio::time::timeout(duration, idle_interrupt_receiver.recv()).await {
+                    Ok(Ok(())) => {
+                        // Interrupt.
+                    }
+                    Ok(Err(async_channel::RecvError)) => {
+                        // Interrupt channel is closed.
+                        break;
+                    }
+                    Err(_) => {
+                        // Timeout expired.
+                    }
+                }
                 let slept = time_elapsed(&now).as_secs();
                 timeout = Some(cmp::max(
                     t,
@@ -706,11 +713,30 @@ async fn smtp_loop(
                 info!(ctx, "SMTP has no messages to retry, waiting for interrupt.");
                 let interrupt = idle_interrupt_receiver.recv();
                 if next_check != 0 {
-                    tokio::time::timeout(std::time::Duration::from_secs(wait), interrupt)
+                    match tokio::time::timeout(std::time::Duration::from_secs(wait), interrupt)
                         .await
-                        .ok();
+                    {
+                        Ok(Ok(())) => {
+                            // Interrupt.
+                        }
+                        Ok(Err(async_channel::RecvError)) => {
+                            // Interrupt channel is closed.
+                            break;
+                        }
+                        Err(_) => {
+                            // Timeout.
+                        }
+                    }
                 } else {
-                    interrupt.await.ok();
+                    match interrupt.await {
+                        Ok(()) => {
+                            // Interrupt.
+                        }
+                        Err(async_channel::RecvError) => {
+                            // Interrupt channel is closed.
+                            break;
+                        }
+                    }
                 }
             };
 
