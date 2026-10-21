@@ -4476,6 +4476,7 @@ int             dc_msg_is_info                (const dc_msg_t* msg);
  * - DC_INFO_CHAT_E2EE (50) - Info-message for "Chat is end-to-end-encrypted"
  * - DC_INFO_GROUP_DESCRIPTION_CHANGED (70) - Info-message "Description changed", UI should open the profile with the description
  * - DC_INFO_MESSAGE_PINNED (71) - Message pinned, UI should scroll to the pinned message returned by dc_msg_get_parent()
+ * - DC_INFO_MESSAGE_UNPINNED (72) - Message unpinned, UI should scroll to the pinned message returned by dc_msg_get_parent()
  *
  * For the messages that refer to a CONTACT,
  * dc_msg_get_info_contact_id() returns the contact ID.
@@ -4536,6 +4537,7 @@ uint32_t        dc_msg_get_info_contact_id    (const dc_msg_t* msg);
 #define         DC_INFO_CHAT_E2EE                 50
 #define         DC_INFO_GROUP_DESCRIPTION_CHANGED 70
 #define         DC_INFO_MESSAGE_PINNED            71
+#define         DC_INFO_MESSAGE_UNPINNED          72
 
 
 /**
