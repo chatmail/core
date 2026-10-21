@@ -632,7 +632,7 @@ pub(crate) async fn msg_pinned(context: &Context, by_contact: ContactId) -> Stri
     }
 }
 
-/// Stock strings for unpinning a message; used in info messages, once tapped, UI scrolled to the pinned message.
+/// Stock strings for unpinning a message; used in info messages, once tapped, UI scrolled to the unpinned message.
 /// Unpinning messages are not notified, but still shown in the chat as otherwise the last message may read "USER pinned a message", but nothing is pinned.
 pub(crate) async fn msg_unpinned(context: &Context, by_contact: ContactId) -> String {
     if by_contact == ContactId::SELF {
