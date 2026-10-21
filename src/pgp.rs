@@ -162,12 +162,13 @@ pub enum SeipdVersion {
 /// encrypted to `public_keys_for_encryption`.
 #[expect(clippy::arithmetic_side_effects)]
 fn signature_subpackets(
+    now: pgp::types::Timestamp,
     private_key_for_signing: &SignedSecretKey,
     public_keys_for_encryption: &[SignedPublicKey],
 ) -> Result<SubpacketConfig> {
     let mut hashed = Vec::with_capacity(1 + public_keys_for_encryption.len() + 1);
     hashed.push(Subpacket::critical(SubpacketData::SignatureCreationTime(
-        pgp::types::Timestamp::now(),
+        now,
     ))?);
     for key in public_keys_for_encryption {
         let data = SubpacketData::IntendedRecipientFingerprint(key.fingerprint());
@@ -219,7 +220,8 @@ pub fn pk_encrypt(
                 }
 
                 if let Some(secret_key) = private_key_for_signing {
-                    let subpkts = signature_subpackets(secret_key, &public_keys_for_encryption)?;
+                    let subpkts =
+                        signature_subpackets(now, secret_key, &public_keys_for_encryption)?;
                     let hash_algorithm = secret_key.hash_alg();
                     msg.sign_with_subpackets(
                         &**secret_key,
@@ -247,7 +249,8 @@ pub fn pk_encrypt(
                 }
 
                 if let Some(secret_key) = private_key_for_signing {
-                    let subpkts = signature_subpackets(secret_key, &public_keys_for_encryption)?;
+                    let subpkts =
+                        signature_subpackets(now, secret_key, &public_keys_for_encryption)?;
                     let hash_algorithm = secret_key.hash_alg();
                     msg.sign_with_subpackets(
                         &**secret_key,
