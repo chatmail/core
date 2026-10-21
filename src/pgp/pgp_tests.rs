@@ -2,6 +2,7 @@ use std::sync::LazyLock;
 use tokio::sync::OnceCell;
 
 use super::*;
+use crate::key::secret_key_to_public_key;
 use crate::transport::add_pseudo_transport;
 use crate::{
     config::Config,
@@ -386,6 +387,31 @@ fn test_merge_openpgp_certificates() {
     // Cannot merge certificates with different primary key.
     assert!(merge_openpgp_certificates(alice.clone(), bob.clone()).is_err());
     assert!(merge_openpgp_certificates(bob, alice).is_err());
+}
+
+/// Tests that Direct Key Signature from the new certificate is preferred
+/// when the timestamp is the same.
+#[test]
+fn test_merge_openpgp_certificates_tiebreak() -> Result<()> {
+    let secret_key = alice_keypair();
+    let timestamp = pgp::types::Timestamp::now();
+
+    let addr = "alice@example.net";
+    let relays1 = "alice@example.net,alice@example.org";
+    let relays2 = "alice@example.net,alice@example.com";
+
+    let public_key1 =
+        secret_key_to_public_key(secret_key.clone(), timestamp.as_secs(), addr, relays1)?;
+    let public_key2 = secret_key_to_public_key(secret_key, timestamp.as_secs(), addr, relays2)?;
+
+    let merge12 = merge_openpgp_certificates(public_key1.clone(), public_key2.clone())?;
+    let merge21 = merge_openpgp_certificates(public_key2.clone(), public_key1.clone())?;
+
+    assert_eq!(merge12, public_key2);
+    assert_eq!(merge21, public_key1);
+    assert_ne!(merge12, merge21);
+
+    Ok(())
 }
 
 /// Test PQC support.
