@@ -30,9 +30,11 @@ ignore = [
     # <https://rustsec.org/advisories/RUSTSEC-2026-0049>
     # <https://rustsec.org/advisories/RUSTSEC-2026-0098>
     # <https://rustsec.org/advisories/RUSTSEC-2026-0099>
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0382>
     "RUSTSEC-2026-0049",
     "RUSTSEC-2026-0098",
     "RUSTSEC-2026-0099",
+    "RUSTSEC-2026-0382",
 
     # Panic in CRL signature checks.
     # We do not check CRL and cannot update rustls-webpki 0.102.8 
