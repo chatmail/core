@@ -76,21 +76,20 @@ async fn test_pinned_messages() -> Result<()> {
         assert!(set_pinned_state(alice, info_msg.id, true).await.is_err());
 
         // Unpin the initially pinned message.
-        // Before, send another message "Bar". To test, no visible info message is added this time,
-        let sent3 = alice.send_text(alice_chat_id, "Bar").await;
-
         set_pinned_state(alice, msg1.id, false).await?;
-        let sent4 = alice.pop_sent_msg().await;
+        let sent3 = alice.pop_sent_msg().await;
         assert!(!sent1.load_from_db().await.is_pinned());
         expect_pinned_message_event(alice, msg1.chat_id).await;
 
         let pinned = get_pinned_messages(alice, alice_chat_id).await?;
         assert!(pinned.is_empty());
 
-        let msg3 = sent3.load_from_db().await;
-        assert!(!msg3.is_info());
-        assert!(!msg3.is_pinned());
-        assert_eq!(alice.get_last_msg_id_in(msg3.chat_id).await, msg3.id); // last message is still "Bar", not an info message
+        let unpin_msg = sent3.load_from_db().await;
+        assert!(unpin_msg.is_info());
+        assert!(!unpin_msg.hidden);
+        assert_eq!(unpin_msg.get_info_type(), SystemMessage::MessageUnpinned);
+        assert_eq!(unpin_msg.text, "You unpinned a message.");
+        assert_eq!(alice.get_last_msg_id_in(msg1.chat_id).await, unpin_msg.id);
 
         if alice_chat_id != self_chat_id {
             // Bob receives message "Foo"
@@ -115,19 +114,19 @@ async fn test_pinned_messages() -> Result<()> {
             assert_eq!(info_msg.get_info_type(), SystemMessage::MessagePinned);
             assert!(info_msg.get_info_contact_id(bob).await?.is_none());
 
-            // Bob receives message "Bar" and hidden message to unpin message "Foo"
-            bob.recv_msg(&sent3).await;
-            bob.recv_msg_trash(&sent4).await;
+            // Bob receives the info message to unpin message "Foo"
+            let unpin_msg = bob.recv_msg(&sent3).await;
             expect_pinned_message_event(bob, msg1.chat_id).await;
             assert!(!Message::load_from_db(bob, msg1.id).await?.is_pinned());
 
             let pinned = get_pinned_messages(bob, msg1.chat_id).await?;
             assert!(pinned.is_empty());
 
-            let no_info_msg =
-                Message::load_from_db(bob, bob.get_last_msg_id_in(msg1.chat_id).await).await?;
-            assert!(!no_info_msg.is_info());
-            assert_eq!(no_info_msg.text, "Bar");
+            assert!(unpin_msg.is_info());
+            assert!(!unpin_msg.hidden);
+            assert_eq!(unpin_msg.get_info_type(), SystemMessage::MessageUnpinned);
+            assert_eq!(unpin_msg.state, MessageState::InNoticed); // no notification, no badge
+            assert_eq!(bob.get_last_msg_id_in(msg1.chat_id).await, unpin_msg.id);
         }
 
         // Alice's second device receives all four messages and ends up in the same state
@@ -136,15 +135,11 @@ async fn test_pinned_messages() -> Result<()> {
         expect_pinned_message_event(alice2, msg1.chat_id).await;
         assert!(Message::load_from_db(alice2, msg1.id).await?.is_pinned());
 
-        alice2.recv_msg(&sent3).await;
-        alice2.recv_msg_trash(&sent4).await;
+        let unpin_msg = alice2.recv_msg(&sent3).await;
         expect_pinned_message_event(alice2, msg1.chat_id).await;
         assert!(!Message::load_from_db(alice2, msg1.id).await?.is_pinned());
-
-        let no_info_msg =
-            Message::load_from_db(alice2, alice2.get_last_msg_id_in(msg1.chat_id).await).await?;
-        assert!(!no_info_msg.is_info());
-        assert_eq!(no_info_msg.text, "Bar");
+        assert_eq!(unpin_msg.get_info_type(), SystemMessage::MessageUnpinned);
+        assert_eq!(unpin_msg.text, "You unpinned a message.");
     }
 
     Ok(())

@@ -5,8 +5,9 @@
 //!
 //! Pinned messages are synchronized for all chat members by sending an info-message
 //! that refers the pinned message in the `In-Reply-To:` header.
-//! The info-message is only shown for pinning (not for unpinning).
-//! Unpinning is an action that does not require so much attention; internally it is a hidden info-message.
+//! Info-message are shown for both, pinning and unpinning;
+//! the latter is important as otherwise the message "Alice pinned a message." may look like a bug
+//! if there is nothing actually pinned as Bob unpinned for whatever reason afterwards.
 
 use anyhow::{Result, ensure};
 
@@ -50,9 +51,8 @@ pub async fn set_pinned_state(
     info_msg.text = if new_pinned_state {
         stock_str::msg_pinned(context, ContactId::SELF).await
     } else {
-        "Message unpinned.".to_string() // no need to localize, "unpinned" messages are not visible
+        stock_str::msg_unpinned(context, ContactId::SELF).await
     };
-    info_msg.hidden = !new_pinned_state;
     info_msg.in_reply_to = Some(msg.rfc724_mid.clone());
     info_msg.param.set_cmd(if new_pinned_state {
         SystemMessage::MessagePinned

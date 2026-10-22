@@ -431,6 +431,12 @@ https://delta.chat/donate"))]
 
     #[strum(props(fallback = "Message pinned by %1$s."))]
     MsgMessagePinnedBy = 244,
+
+    #[strum(props(fallback = "You unpinned a message."))]
+    MsgYouUnpinnedAMessage = 246,
+
+    #[strum(props(fallback = "Message unpinned by %1$s."))]
+    MsgMessageUnpinnedBy = 247,
 }
 
 impl StockMessage {
@@ -617,12 +623,22 @@ pub(crate) async fn msg_chat_description_changed(
 }
 
 /// Stock strings for pinning a message; used in info messages, once tapped, UI scrolled to the pinned message.
-/// For unpinning a message, we do not add a visible info message as this is of fewer interest.
 pub(crate) async fn msg_pinned(context: &Context, by_contact: ContactId) -> String {
     if by_contact == ContactId::SELF {
         translated(context, StockMessage::MsgYouPinnedAMessage)
     } else {
         translated(context, StockMessage::MsgMessagePinnedBy)
+            .replace1(&by_contact.get_stock_name(context).await)
+    }
+}
+
+/// Stock strings for unpinning a message; used in info messages, once tapped, UI scrolled to the unpinned message.
+/// Unpinning messages are not notified, but still shown in the chat as otherwise the last message may read "USER pinned a message", but nothing is pinned.
+pub(crate) async fn msg_unpinned(context: &Context, by_contact: ContactId) -> String {
+    if by_contact == ContactId::SELF {
+        translated(context, StockMessage::MsgYouUnpinnedAMessage)
+    } else {
+        translated(context, StockMessage::MsgMessageUnpinnedBy)
             .replace1(&by_contact.get_stock_name(context).await)
     }
 }

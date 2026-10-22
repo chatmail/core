@@ -1153,9 +1153,6 @@ async fn decide_chat_assignment(
     {
         info!(context, "Call state changed (TRASH).");
         true
-    } else if mime_parser.is_system_message == SystemMessage::MessageUnpinned {
-        info!(context, "Message unpinned (TRASH).");
-        true
     } else if let Some(ref decryption_error) = mime_parser.decryption_error
         && !mime_parser.incoming
     {
@@ -1828,13 +1825,17 @@ async fn add_parts(
         EphemeralTimer::Disabled
     };
 
+    // silent messages are added as "noticed" and do not bubble up in the chatlist
+    let silent =
+        group_changes.silent || mime_parser.is_system_message == SystemMessage::MessageUnpinned;
+
     let state = if !mime_parser.incoming {
         MessageState::OutDelivered
     } else if seen || !mime_parser.mdn_reports.is_empty() || chat_id_blocked == Blocked::Yes
     // No check for `hidden` because only reactions are such and they should be `InFresh`.
     {
         MessageState::InSeen
-    } else if mime_parser.from.addr == STATISTICS_BOT_EMAIL || group_changes.silent {
+    } else if mime_parser.from.addr == STATISTICS_BOT_EMAIL || silent {
         MessageState::InNoticed
     } else {
         MessageState::InFresh
@@ -1944,21 +1945,17 @@ async fn add_parts(
 
         Some(better_msg)
     } else if mime_parser.is_system_message == SystemMessage::MessagePinned {
-        Some(stock_str::msg_pinned(context, from_id).await) // message unpinned info is trashed in decide_chat_assignment()
+        Some(stock_str::msg_pinned(context, from_id).await)
+    } else if mime_parser.is_system_message == SystemMessage::MessageUnpinned {
+        Some(stock_str::msg_unpinned(context, from_id).await)
     } else {
         None
     };
 
     drop(chat); // Avoid using stale `chat` object.
 
-    let sort_timestamp = tweak_sort_timestamp(
-        context,
-        mime_parser,
-        group_changes.silent,
-        chat_id,
-        sort_timestamp,
-    )
-    .await?;
+    let sort_timestamp =
+        tweak_sort_timestamp(context, mime_parser, silent, chat_id, sort_timestamp).await?;
 
     let mime_in_reply_to = mime_parser
         .get_header(HeaderDef::InReplyTo)
