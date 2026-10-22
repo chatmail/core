@@ -543,7 +543,10 @@ pub(crate) async fn handle_securejoin_handshake(
             )
             .await?;
 
-            insert_into_smtp(context, &rfc724_mid, &queued_message).await?;
+            context
+                .sql
+                .transaction(|tx| insert_into_smtp(tx, &rfc724_mid, &queued_message))
+                .await?;
             context.scheduler.interrupt_smtp().await;
 
             Ok(HandshakeMessage::Done)
