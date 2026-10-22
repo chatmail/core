@@ -2020,18 +2020,16 @@ pub(crate) async fn set_msg_failed(
 /// With `on_server`, copies seen on IMAP later are deleted on the server.
 ///
 /// Returns tombstone database row ID.
-pub(crate) async fn insert_tombstone(
-    context: &Context,
+pub(crate) fn insert_tombstone(
+    tx: &mut rusqlite::Transaction<'_>,
     rfc724_mid: &str,
     on_server: bool,
 ) -> Result<MsgId> {
-    let row_id = context
-        .sql
-        .insert(
-            "INSERT INTO msgs(rfc724_mid, chat_id, deleted) VALUES (?,?,?)",
-            (rfc724_mid, ChatId::TRASH, on_server),
-        )
-        .await?;
+    tx.execute(
+        "INSERT INTO msgs(rfc724_mid, chat_id, deleted) VALUES (?,?,?)",
+        (rfc724_mid, ChatId::TRASH, on_server),
+    )?;
+    let row_id = tx.last_insert_rowid();
     let msg_id = MsgId::new(u32::try_from(row_id)?);
     Ok(msg_id)
 }

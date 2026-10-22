@@ -483,7 +483,12 @@ pub(crate) async fn receive_imf_inner(
     }
 
     let trash = || async {
-        let msg_ids = vec![insert_tombstone(context, rfc724_mid, false).await?];
+        let msg_ids = vec![
+            context
+                .sql
+                .transaction(|tx| insert_tombstone(tx, rfc724_mid, false))
+                .await?,
+        ];
         Ok(Some(ReceivedMsg {
             chat_id: ChatId::TRASH,
             state: MessageState::Undefined,
@@ -669,7 +674,10 @@ pub(crate) async fn receive_imf_inner(
         match res {
             securejoin::HandshakeMessage::Done | securejoin::HandshakeMessage::Ignore => {
                 let needs_delete_job = res == securejoin::HandshakeMessage::Done;
-                let msg_id = insert_tombstone(context, rfc724_mid, needs_delete_job).await?;
+                let msg_id = context
+                    .sql
+                    .transaction(|tx| insert_tombstone(tx, rfc724_mid, needs_delete_job))
+                    .await?;
                 received_msg = Some(ReceivedMsg {
                     chat_id: ChatId::TRASH,
                     state: MessageState::InSeen,
@@ -2403,7 +2411,10 @@ async fn handle_edit_delete(
             let Some(msg_id) = message::rfc724_mid_exists(context, rfc724_mid).await? else {
                 warn!(context, "Delete message: {rfc724_mid:?} not found.");
                 // Insert a tombstone so that the message will be ignored if it arrives later within a period specified in prune_tombstones().
-                insert_tombstone(context, rfc724_mid, false).await?;
+                context
+                    .sql
+                    .transaction(|tx| insert_tombstone(tx, rfc724_mid, false))
+                    .await?;
                 continue;
             };
 
