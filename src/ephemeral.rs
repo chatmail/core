@@ -293,32 +293,6 @@ impl MsgId {
     }
 }
 
-pub(crate) async fn start_ephemeral_timers_msgids(
-    context: &Context,
-    msg_ids: &[MsgId],
-) -> Result<()> {
-    let now = time();
-    let should_interrupt =
-    context
-        .sql
-        .transaction(move |transaction| {
-            let mut should_interrupt = false;
-            let mut stmt =
-                transaction.prepare(
-                    "UPDATE msgs SET ephemeral_timestamp = ?1 + ephemeral_timer
-                     WHERE (ephemeral_timestamp == 0 OR ephemeral_timestamp > ?1 + ephemeral_timer) AND ephemeral_timer > 0
-                     AND id=?2")?;
-            for msg_id in msg_ids {
-                should_interrupt |= stmt.execute((now, msg_id))? > 0;
-            }
-            Ok(should_interrupt)
-        }).await?;
-    if should_interrupt {
-        context.scheduler.interrupt_ephemeral_task().await;
-    }
-    Ok(())
-}
-
 /// Starts ephemeral timer for all messages in the chat.
 ///
 /// This should be called when chat is marked as noticed.
