@@ -25,7 +25,7 @@ use crate::debug_logging::set_debug_logging_xdc;
 use crate::download::DownloadState;
 use crate::ephemeral::{Timer as EphemeralTimer, start_ephemeral_timers_msgids};
 use crate::events::EventType;
-use crate::imap::markseen_on_imap_table;
+use crate::imap::insert_imap_markseen;
 use crate::location;
 use crate::log::warn;
 use crate::mimeparser::{SystemMessage, parse_message_id};
@@ -1837,31 +1837,37 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
             .context("failed to start ephemeral timers")?;
     }
 
+    let should_send_mdns = context.should_send_mdns().await?;
+    let bcc_self = context.get_config_bool(Config::BccSelf).await?;
     let mut updated_chat_ids = BTreeSet::new();
     let mut archived_chats_maybe_noticed = false;
-    for (
-        (
-            id,
-            curr_chat_id,
-            curr_state,
-            curr_param,
-            curr_from_id,
-            curr_rfc724_mid,
-            curr_hidden,
-            curr_visibility,
-            curr_blocked,
-        ),
-        _curr_ephemeral_timer,
-    ) in msgs
-    {
-        if curr_state == MessageState::InFresh || curr_state == MessageState::InNoticed {
-            context
-                .sql
-                .transaction(|tx| update_msg_state(tx, id, MessageState::InSeen))
-                .await?;
+    let mut trigger_imap_interrupt = false;
+    let mut trigger_smtp_interrupt = false;
+    let sql = &context.sql;
+    sql.transaction(|tx| {
+        for (
+            (
+                id,
+                curr_chat_id,
+                curr_state,
+                curr_param,
+                curr_from_id,
+                curr_rfc724_mid,
+                curr_hidden,
+                curr_visibility,
+                curr_blocked,
+            ),
+            _curr_ephemeral_timer,
+        ) in msgs
+        {
+            if !matches!(curr_state, MessageState::InFresh | MessageState::InNoticed) {
+                continue;
+            }
+            update_msg_state(tx, id, MessageState::InSeen)?;
             info!(context, "Seen message {}.", id);
 
-            markseen_on_imap_table(context, &curr_rfc724_mid).await?;
+            insert_imap_markseen(tx, &curr_rfc724_mid)?;
+            trigger_imap_interrupt = true;
 
             // Read receipts for system messages are never sent to contacts.
             // These messages have no place to display received read receipt
@@ -1878,21 +1884,18 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
                 && !curr_hidden
                 && wants_mdn
                 && curr_param.get_cmd() == SystemMessage::Unknown
-                && context.should_send_mdns().await?
+                && should_send_mdns
             {
                 // Clear WantsMdn to not handle a MDN twice
                 // if the state later is InFresh again as markfresh_chat() was called.
                 // BccSelf MDN messages in the next branch may be sent twice for syncing.
-                context
-                    .sql
-                    .execute(
-                        "UPDATE msgs SET param=? WHERE id=?",
-                        (curr_param.clone().remove(Param::WantsMdn).to_string(), id),
-                    )
-                    .await
-                    .context("failed to clear WantsMdn")?;
+                tx.execute(
+                    "UPDATE msgs SET param=? WHERE id=?",
+                    (curr_param.clone().remove(Param::WantsMdn).to_string(), id),
+                )
+                .context("failed to clear WantsMdn")?;
                 Some(curr_from_id)
-            } else if context.get_config_bool(Config::BccSelf).await? {
+            } else if bcc_self {
                 Some(ContactId::SELF)
             } else {
                 None
@@ -1903,24 +1906,29 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
                     "Queuing MDN to {to_id} for {id} from {curr_from_id}, wants_mdn={wants_mdn}, cmd={}.",
                     curr_param.get_cmd()
                 );
-                context
-                    .sql
-                    .execute(
-                        "INSERT INTO smtp_mdns (msg_id, from_id, rfc724_mid) VALUES(?, ?, ?)",
-                        (id, to_id, curr_rfc724_mid),
-                    )
-                    .await
-                    .context("failed to insert into smtp_mdns")?;
-                context.scheduler.interrupt_smtp().await;
+                tx.execute(
+                    "INSERT INTO smtp_mdns (msg_id, from_id, rfc724_mid) VALUES(?, ?, ?)",
+                    (id, to_id, curr_rfc724_mid),
+                )
+                .context("failed to insert into smtp_mdns")?;
+                trigger_smtp_interrupt = true;
             }
 
             if !curr_hidden {
                 updated_chat_ids.insert(curr_chat_id);
             }
+            archived_chats_maybe_noticed |= curr_state == MessageState::InFresh
+                && !curr_hidden
+                && curr_visibility == ChatVisibility::Archived;
         }
-        archived_chats_maybe_noticed |= curr_state == MessageState::InFresh
-            && !curr_hidden
-            && curr_visibility == ChatVisibility::Archived;
+        Ok(())
+    })
+    .await?;
+    if trigger_imap_interrupt {
+        context.scheduler.interrupt_inbox().await;
+    }
+    if trigger_smtp_interrupt {
+        context.scheduler.interrupt_smtp().await;
     }
 
     for updated_chat_id in updated_chat_ids {

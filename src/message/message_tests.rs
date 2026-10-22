@@ -316,6 +316,24 @@ async fn test_markseen_msgs() -> Result<()> {
     Ok(())
 }
 
+/// Tests that a read receipt failing to be queued is queued by the next `markseen_msgs()`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_markseen_msgs_failed_mdn_retried() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let msg = tcm.send_recv_accept(alice, bob, "hi").await;
+
+    let sql = &bob.sql;
+    sql.execute("ALTER TABLE smtp_mdns RENAME TO t", ()).await?;
+    assert!(markseen_msgs(bob, vec![msg.id]).await.is_err());
+    sql.execute("ALTER TABLE t RENAME TO smtp_mdns", ()).await?;
+
+    markseen_msgs(bob, vec![msg.id]).await?;
+    assert!(sql.exists("SELECT COUNT(*) FROM smtp_mdns", ()).await?);
+    Ok(())
+}
+
 /// Message has been seen on another device when fully downloaded. `state` should be updated.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_msg_seen_on_imap_when_downloaded() -> Result<()> {
