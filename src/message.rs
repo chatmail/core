@@ -10,6 +10,7 @@ use deltachat_derive::{FromSql, ToSql};
 use humansize::BINARY;
 use humansize::format_size;
 use num_traits::FromPrimitive;
+use rusqlite::Transaction;
 use serde::{Deserialize, Serialize};
 use tokio::{fs, io};
 
@@ -1854,7 +1855,10 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
     ) in msgs
     {
         if curr_state == MessageState::InFresh || curr_state == MessageState::InNoticed {
-            update_msg_state(context, id, MessageState::InSeen).await?;
+            context
+                .sql
+                .transaction(|tx| update_msg_state(tx, id, MessageState::InSeen))
+                .await?;
             info!(context, "Seen message {}.", id);
 
             markseen_on_imap_table(context, &curr_rfc724_mid).await?;
@@ -1957,11 +1961,7 @@ pub async fn get_existing_msg_ids(context: &Context, ids: &[MsgId]) -> Result<Ve
     Ok(res)
 }
 
-pub(crate) async fn update_msg_state(
-    context: &Context,
-    msg_id: MsgId,
-    state: MessageState,
-) -> Result<()> {
+pub(crate) fn update_msg_state(tx: &Transaction, msg_id: MsgId, state: MessageState) -> Result<()> {
     ensure!(
         state != MessageState::OutMdnRcvd,
         "Update msgs_mdns table instead!"
@@ -1971,13 +1971,10 @@ pub(crate) async fn update_msg_state(
         true => ", error=''",
         false => "",
     };
-    context
-        .sql
-        .execute(
-            &format!("UPDATE msgs SET state=? {error_subst} WHERE id=?"),
-            (state, msg_id),
-        )
-        .await?;
+    tx.execute(
+        &format!("UPDATE msgs SET state=? {error_subst} WHERE id=?"),
+        (state, msg_id),
+    )?;
     Ok(())
 }
 

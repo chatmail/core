@@ -941,7 +941,12 @@ pub(crate) async fn receive_imf_inner(
                         warn!(context, "MDN: Not encrypted. Ignoring.");
                         continue;
                     }
-                    message::update_msg_state(context, msg_id, MessageState::InSeen).await?;
+                    context
+                        .sql
+                        .transaction(|tx| {
+                            message::update_msg_state(tx, msg_id, MessageState::InSeen)
+                        })
+                        .await?;
                     if let Err(e) = msg_id.start_ephemeral_timer(context).await {
                         error!(context, "start_ephemeral_timer for {msg_id}: {e:#}.");
                     }
