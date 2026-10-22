@@ -941,14 +941,15 @@ pub(crate) async fn receive_imf_inner(
                         warn!(context, "MDN: Not encrypted. Ignoring.");
                         continue;
                     }
-                    context
+                    let trigger_ephemeral_interrupt = context
                         .sql
                         .transaction(|tx| {
-                            message::update_msg_state(tx, msg_id, MessageState::InSeen)
+                            message::update_msg_state(tx, msg_id, MessageState::InSeen)?;
+                            msg_id.start_ephemeral_timer(tx)
                         })
                         .await?;
-                    if let Err(e) = msg_id.start_ephemeral_timer(context).await {
-                        error!(context, "start_ephemeral_timer for {msg_id}: {e:#}.");
+                    if trigger_ephemeral_interrupt {
+                        context.scheduler.interrupt_ephemeral_task().await;
                     }
                     if !mime_parser.has_chat_version() {
                         continue;

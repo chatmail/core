@@ -279,36 +279,17 @@ pub(crate) async fn stock_ephemeral_timer_changed(
 }
 
 impl MsgId {
-    /// Returns ephemeral message timer value for the message.
-    pub(crate) async fn ephemeral_timer(self, context: &Context) -> Result<Timer> {
-        let res = match context
-            .sql
-            .query_get_value("SELECT ephemeral_timer FROM msgs WHERE id=?", (self,))
-            .await?
-        {
-            None => Timer::Disabled,
-            Some(duration) => Timer::from_u32(duration),
-        };
-        Ok(res)
-    }
-
     /// Starts ephemeral message timer for the message if it is not started yet.
-    pub(crate) async fn start_ephemeral_timer(self, context: &Context) -> Result<()> {
-        if let Timer::Enabled { duration } = self.ephemeral_timer(context).await? {
-            let ephemeral_timestamp = time().saturating_add(duration.get().into());
-
-            context
-                .sql
-                .execute(
-                    "UPDATE msgs SET ephemeral_timestamp = ? \
-                WHERE (ephemeral_timestamp == 0 OR ephemeral_timestamp > ?) \
-                AND id = ?",
-                    (ephemeral_timestamp, ephemeral_timestamp, self),
-                )
-                .await?;
-            context.scheduler.interrupt_ephemeral_task().await;
-        }
-        Ok(())
+    ///
+    /// Returns whether the timer was started.
+    pub(crate) fn start_ephemeral_timer(self, tx: &rusqlite::Transaction) -> Result<bool> {
+        let updated = tx.execute(
+            "UPDATE msgs SET ephemeral_timestamp = ?1 + ephemeral_timer
+             WHERE (ephemeral_timestamp == 0 OR ephemeral_timestamp > ?1 + ephemeral_timer)
+             AND ephemeral_timer > 0 AND id=?2",
+            (time(), self),
+        )?;
+        Ok(updated > 0)
     }
 }
 
