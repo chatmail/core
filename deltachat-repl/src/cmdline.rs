@@ -249,6 +249,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                 "====================Import/Export commands==\n\
                  has-backup\n\
                  export-backup\n\
+                 export-chat <chat-id> <zip-file>\n\
                  import-backup <backup-file>\n\
                  send-backup\n\
                  receive-backup <qr>\n\
@@ -407,6 +408,13 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             )
             .await?;
             println!("Exported to {}.", dir.to_string_lossy());
+        }
+        "export-chat" => {
+            ensure!(!arg1.is_empty(), "Argument <chat-id> missing.");
+            ensure!(!arg2.is_empty(), "Argument <zip-file> missing.");
+            let chat_id = ChatId::new(arg1.parse()?);
+            chat::export_chat(&context, chat_id, arg2.as_ref()).await?;
+            println!("Exported to {arg2}.");
         }
         "import-backup" => {
             ensure!(!arg1.is_empty(), "Argument <backup-file> missing.");

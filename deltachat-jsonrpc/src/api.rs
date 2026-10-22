@@ -1938,6 +1938,19 @@ impl CommandApi {
         Ok(chat_id.map(|id| id.to_u32()))
     }
 
+    /// Exports a chat as a ZIP-file.
+    ///
+    /// The ZIP-file contains `index.html`, with the messages in a layout similar to the UIs,
+    /// as well as images and files.
+    /// `index.html` is well-formed and can be processed with a simple XML parser as well.
+    ///
+    /// The UI is expected to let the user choose `dest`,
+    /// an existing file is overwritten.
+    async fn export_chat(&self, account_id: u32, chat_id: u32, dest: String) -> Result<()> {
+        let ctx = self.get_context(account_id).await?;
+        chat::export_chat(&ctx, ChatId::new(chat_id), dest.as_ref()).await
+    }
+
     /// Returns all message IDs of the given types in a chat.
     /// Typically used to show a gallery.
     ///

@@ -50,6 +50,9 @@ use crate::tools::{
 };
 use crate::webxdc::StatusUpdateSerial;
 
+mod export;
+pub use export::export_chat;
+
 pub(crate) const PARAM_BROADCAST_SECRET: Param = Param::Arg3;
 
 /// An chat item, such as a message or a marker.

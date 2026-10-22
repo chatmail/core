@@ -144,9 +144,10 @@ impl Completer for DcHelper {
     }
 }
 
-const IMEX_COMMANDS: [&str; 9] = [
+const IMEX_COMMANDS: [&str; 10] = [
     "has-backup",
     "export-backup",
+    "export-chat",
     "import-backup",
     "send-backup",
     "receive-backup",
