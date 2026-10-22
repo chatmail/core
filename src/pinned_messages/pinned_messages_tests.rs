@@ -114,7 +114,7 @@ async fn test_pinned_messages() -> Result<()> {
             assert_eq!(info_msg.get_info_type(), SystemMessage::MessagePinned);
             assert!(info_msg.get_info_contact_id(bob).await?.is_none());
 
-            // Bob receives message "Bar" and the info message to unpin message "Foo"
+            // Bob receives the info message to unpin message "Foo"
             let unpin_msg = bob.recv_msg(&sent3).await;
             expect_pinned_message_event(bob, msg1.chat_id).await;
             assert!(!Message::load_from_db(bob, msg1.id).await?.is_pinned());
