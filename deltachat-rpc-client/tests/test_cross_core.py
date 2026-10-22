@@ -87,6 +87,31 @@ def test_second_device(acf, alice_and_remote_bob) -> None:
     assert new_account.get_config("addr") == remote_eval("bob.get_config('addr')")
 
 
+def test_old_device_delete_transport(acf, alice_and_remote_bob) -> None:
+    """Test setting up old core as the second device for the new core and deleting a transport.
+
+    Old core unfortunately expects that deprecated configured_addr config value is set
+    and fails to delete a transport otherwise. The test makes sure new core sets some configured_addr
+    for backwards compatibility."""
+    alice, _alice_contact_bob, remote_eval = alice_and_remote_bob("2.62.0")
+
+    alice.set_config("displayname", "Alice123")
+    qr = acf.get_account_qr()
+    alice.add_transport_from_qr(qr)
+
+    alice_provide_backup_future = alice._rpc.provide_backup.future(alice.id)
+    qr = alice._rpc.get_backup_qr(alice.id)
+
+    remote_eval("locals().setdefault('new_account', bob.manager.add_account())")
+    remote_eval(f"new_account._rpc.get_backup(new_account.id, {qr!r})")
+    alice_provide_backup_future()
+
+    assert alice.get_config("displayname") == remote_eval("new_account.get_config('displayname')")
+
+    first_transport_addr = alice.list_transports()[0]["addr"]
+    remote_eval(f"new_account.delete_transport({first_transport_addr!r})")
+
+
 @pytest.mark.parametrize("replace_relay", [False, True], ids=["add", "replace"])
 def test_keyupdate_against_core_2_48_march_2026(acf, alice_and_remote_bob, replace_relay):
     """Test 2.48 Bob learns a relay change of Alice from a keyupdate, and is shown nothing."""
@@ -104,7 +129,6 @@ def test_keyupdate_against_core_2_48_march_2026(acf, alice_and_remote_bob, repla
     # an accepted chat alone is not enough, a message must have flowed.
     alice_chat = alice_contact_bob.create_chat()
     alice.set_config("keyupdate_debounce", "1")
-    old_addr = alice.get_config("configured_addr")
     alice_chat.send_text("hi")
     assert remote_eval("bob.wait_for_incoming_msg().get_snapshot().text") == "hi"
     before = bob_sees()
@@ -113,8 +137,9 @@ def test_keyupdate_against_core_2_48_march_2026(acf, alice_and_remote_bob, repla
     # and signature timestamps have one-second resolution:
     # without waiting, the re-signed key can tie with the copy Bob holds, keeping his.
     time.sleep(2)
+    old_addr = alice.list_transports()[0]["addr"]
     alice.add_transport_from_qr(acf.get_account_qr())
-    (new_addr,) = [t["addr"] for t in alice.list_transports() if t["addr"] != old_addr]
+    new_addr = alice.list_transports()[1]["addr"]
     if replace_relay:
         alice.delete_transport(old_addr)
     alice.bring_online()
