@@ -193,7 +193,10 @@ pub(crate) async fn maybe_send_keyupdate_message(context: &Context) -> Result<()
         let rfc724_mid = create_outgoing_rfc724_mid();
         let keys = chunk.iter().map(|r| r.public_key.clone()).collect();
         let queued_msg = keyupdate_message(context, &rfc724_mid, keys, envelope).await?;
-        insert_into_smtp(context, &rfc724_mid, &queued_msg).await?;
+        context
+            .sql
+            .transaction(|tx| insert_into_smtp(tx, &rfc724_mid, &queued_msg))
+            .await?;
     }
 
     // Record only after queueing, so failed queueing is retried by a later check.

@@ -339,7 +339,10 @@ pub(crate) async fn send_handshake_message(
             recipients.to_vec(),
         )
         .await?;
-        insert_into_smtp(context, &rfc724_mid, &queued_msg).await?;
+        context
+            .sql
+            .transaction(|tx| insert_into_smtp(tx, &rfc724_mid, &queued_msg))
+            .await?;
 
         context.scheduler.interrupt_smtp().await;
     } else {
