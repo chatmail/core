@@ -4692,7 +4692,11 @@ pub(crate) async fn resend_msgs_ext(
                 // Broadcast owners shouldn't see spinners on messages being auto-re-sent to new
                 // subscribers (otherwise big channel owners will see spinners most of the time).
                 if to_fingerprint.is_none() {
-                    message::update_msg_state(context, msg.id, MessageState::OutPending).await?;
+                    let sql = &context.sql;
+                    sql.transaction(|tx| {
+                        message::update_msg_state(tx, msg.id, MessageState::OutPending)
+                    })
+                    .await?;
                 }
             }
             msg_state => bail!("Unexpected message state {msg_state}"),
