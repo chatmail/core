@@ -2173,10 +2173,7 @@ fn b_encode(value: &str) -> String {
 
 /// Returns the headers to place into the encrypted part
 /// of messages that are not part of a chat.
-async fn non_chat_headers(
-    context: &Context,
-    subject: &str,
-) -> Result<Vec<(&'static str, HeaderType<'static>)>> {
+fn non_chat_headers(is_bot: bool, subject: &str) -> Vec<(&'static str, HeaderType<'static>)> {
     let date = chrono::DateTime::<chrono::Utc>::from_timestamp(time(), 0)
         .unwrap()
         .to_rfc2822();
@@ -2186,10 +2183,10 @@ async fn non_chat_headers(
         ("Subject", Text::new(subject.to_string()).into()),
     ];
     // Automatic Response headers <https://www.rfc-editor.org/rfc/rfc3834>
-    if context.get_config_bool(Config::Bot).await? {
+    if is_bot {
         headers.push(("Auto-Submitted", Raw::new("auto-generated").into()));
     }
-    Ok(headers)
+    headers
 }
 
 pub(crate) async fn symm_encrypted_securejoin_message(
@@ -2205,7 +2202,8 @@ pub(crate) async fn symm_encrypted_securejoin_message(
 
     let message: MimePart<'static> = MimePart::new("text/plain", "Secure-Join");
 
-    let mut headers = non_chat_headers(context, "Secure-Join").await?;
+    let is_bot = context.get_config_bool(Config::Bot).await?;
+    let mut headers = non_chat_headers(is_bot, "Secure-Join");
     headers.push(("Secure-Join", Raw::new(step.to_string()).into()));
     headers.push(("Secure-Join-Auth", Text::new(auth.to_string()).into()));
 
@@ -2396,7 +2394,8 @@ pub(crate) async fn keyupdate_message(
     );
     let message = keyupdate_body();
 
-    let headers = non_chat_headers(context, "Keyupdate").await?;
+    let is_bot = context.get_config_bool(Config::Bot).await?;
+    let headers = non_chat_headers(is_bot, "Keyupdate");
     let message = add_headers_to_encrypted_part(message, headers);
 
     let queued_mail = QueuedMail {
