@@ -1,5 +1,34 @@
 # Changelog
 
+## [2.65.0] - 2026-10-22
+
+### Features / Changes
+
+- show info message for unpinning ([#8852](https://github.com/chatmail/core/pull/8852)).
+
+### Fixes
+
+- don't ignore `join_next()` errors in `background_fetch_any()`.
+
+### Documentation
+
+- remove outdated sentence saying QR scan aborts started securejoin processes.
+
+### Miscellaneous Tasks
+
+- update webpki-roots to 1.0.10.
+- update webpki-roots 0.26.8 to 0.26.11.
+- update rustls-webpki 0.103.15 to 0.103.16.
+- add deny.toml exception for RUSTSEC-2026-0382.
+- remove unused broadcast icon.
+
+### Refactor
+
+- make `message::insert_tombstone()` synchronous.
+- make `insert_into_smtp()` synchronous.
+- make `non_chat_headers()` synchronous.
+- create all keyupdates in a single transaction.
+
 ## [2.64.0] - 2026-10-20
 
 ### API-Changes
@@ -9021,3 +9050,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.62.0]: https://github.com/chatmail/core/compare/v2.61.0..v2.62.0
 [2.63.0]: https://github.com/chatmail/core/compare/v2.62.0..v2.63.0
 [2.64.0]: https://github.com/chatmail/core/compare/v2.63.0..v2.64.0
+[2.65.0]: https://github.com/chatmail/core/compare/v2.64.0..v2.65.0
