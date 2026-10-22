@@ -188,16 +188,25 @@ pub(crate) async fn maybe_send_keyupdate_message(context: &Context) -> Result<()
     }
 
     let recipients = keyupdate_recipients(context, KEYUPDATE_MAX_RECIPIENTS).await?;
-    for chunk in recipients.chunks(KEYUPDATE_CHUNK_CONTACTS) {
-        let envelope = envelope_recipients(chunk);
-        let rfc724_mid = create_outgoing_rfc724_mid();
-        let keys = chunk.iter().map(|r| r.public_key.clone()).collect();
-        let queued_msg = keyupdate_message(context, &rfc724_mid, keys, envelope).await?;
-        context
-            .sql
-            .transaction(|tx| insert_into_smtp(tx, &rfc724_mid, &queued_msg))
-            .await?;
-    }
+    info!(
+        context,
+        "Sending keyupdate messages to {} recipients.",
+        recipients.len()
+    );
+    let is_bot = context.get_config_bool(Config::Bot).await?;
+    context
+        .sql
+        .transaction(|tx| {
+            for chunk in recipients.chunks(KEYUPDATE_CHUNK_CONTACTS) {
+                let envelope = envelope_recipients(chunk);
+                let rfc724_mid = create_outgoing_rfc724_mid();
+                let keys = chunk.iter().map(|r| r.public_key.clone()).collect();
+                let queued_msg = keyupdate_message(is_bot, &rfc724_mid, keys, envelope);
+                insert_into_smtp(tx, &rfc724_mid, &queued_msg)?;
+            }
+            Ok(())
+        })
+        .await?;
 
     // Record only after queueing, so failed queueing is retried by a later check.
     context
