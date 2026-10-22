@@ -1593,16 +1593,21 @@ pub(crate) async fn prefetch_should_download(
 /// Schedule marking the message as Seen on IMAP by adding all known IMAP messages corresponding to
 /// the given Message-ID to `imap_markseen` table.
 pub(crate) async fn markseen_on_imap_table(context: &Context, message_id: &str) -> Result<()> {
-    context
-        .sql
-        .execute(
-            "INSERT OR IGNORE INTO imap_markseen (id)
-             SELECT id FROM imap WHERE rfc724_mid=?",
-            (message_id,),
-        )
+    let sql = &context.sql;
+    sql.transaction(|tx| insert_imap_markseen(tx, message_id))
         .await?;
     context.scheduler.interrupt_inbox().await;
 
+    Ok(())
+}
+
+/// Like [`markseen_on_imap_table`], but leaves interrupting the inbox loop to the caller.
+pub(crate) fn insert_imap_markseen(tx: &rusqlite::Transaction, message_id: &str) -> Result<()> {
+    tx.execute(
+        "INSERT OR IGNORE INTO imap_markseen (id)
+         SELECT id FROM imap WHERE rfc724_mid=?",
+        (message_id,),
+    )?;
     Ok(())
 }
 
