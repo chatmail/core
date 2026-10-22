@@ -10,7 +10,7 @@ use deltachat_derive::{FromSql, ToSql};
 use humansize::BINARY;
 use humansize::format_size;
 use num_traits::FromPrimitive;
-use rusqlite::Transaction;
+use rusqlite::{OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, io};
 
@@ -23,7 +23,7 @@ use crate::contact::{self, Contact, ContactId};
 use crate::context::Context;
 use crate::debug_logging::set_debug_logging_xdc;
 use crate::download::DownloadState;
-use crate::ephemeral::{Timer as EphemeralTimer, start_ephemeral_timers_msgids};
+use crate::ephemeral::Timer as EphemeralTimer;
 use crate::events::EventType;
 use crate::imap::insert_imap_markseen;
 use crate::location;
@@ -1778,76 +1778,17 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
         .set_config_internal(Config::LastMsgId, Some(&last_msg_id.to_u32().to_string()))
         .await?;
 
-    let mut msgs = Vec::with_capacity(msg_ids.len());
-    for &id in &msg_ids {
-        if let Some(msg) = context
-            .sql
-            .query_row_optional(
-                "SELECT
-                    m.chat_id AS chat_id,
-                    m.state AS state,
-                    m.ephemeral_timer AS ephemeral_timer,
-                    m.param AS param,
-                    m.from_id AS from_id,
-                    m.rfc724_mid AS rfc724_mid,
-                    m.hidden AS hidden,
-                    c.archived AS archived,
-                    c.blocked AS blocked
-                 FROM msgs m LEFT JOIN chats c ON c.id=m.chat_id
-                 WHERE m.id=? AND m.chat_id>9",
-                (id,),
-                |row| {
-                    let chat_id: ChatId = row.get("chat_id")?;
-                    let state: MessageState = row.get("state")?;
-                    let param: Params = row.get::<_, String>("param")?.parse().unwrap_or_default();
-                    let from_id: ContactId = row.get("from_id")?;
-                    let rfc724_mid: String = row.get("rfc724_mid")?;
-                    let hidden: bool = row.get("hidden")?;
-                    let visibility: ChatVisibility = row.get("archived")?;
-                    let blocked: Option<Blocked> = row.get("blocked")?;
-                    let ephemeral_timer: EphemeralTimer = row.get("ephemeral_timer")?;
-                    Ok((
-                        (
-                            id,
-                            chat_id,
-                            state,
-                            param,
-                            from_id,
-                            rfc724_mid,
-                            hidden,
-                            visibility,
-                            blocked.unwrap_or_default(),
-                        ),
-                        ephemeral_timer,
-                    ))
-                },
-            )
-            .await?
-        {
-            msgs.push(msg);
-        }
-    }
-
-    if msgs
-        .iter()
-        .any(|(_, ephemeral_timer)| *ephemeral_timer != EphemeralTimer::Disabled)
-    {
-        start_ephemeral_timers_msgids(context, &msg_ids)
-            .await
-            .context("failed to start ephemeral timers")?;
-    }
-
     let should_send_mdns = context.should_send_mdns().await?;
     let bcc_self = context.get_config_bool(Config::BccSelf).await?;
     let mut updated_chat_ids = BTreeSet::new();
     let mut archived_chats_maybe_noticed = false;
     let mut trigger_imap_interrupt = false;
     let mut trigger_smtp_interrupt = false;
+    let mut trigger_ephemeral_interrupt = false;
     let sql = &context.sql;
     sql.transaction(|tx| {
-        for (
-            (
-                id,
+        for id in msg_ids {
+            let Some((
                 curr_chat_id,
                 curr_state,
                 curr_param,
@@ -1856,10 +1797,42 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
                 curr_hidden,
                 curr_visibility,
                 curr_blocked,
-            ),
-            _curr_ephemeral_timer,
-        ) in msgs
-        {
+            )) = tx
+                .query_row(
+                    "SELECT
+                        m.chat_id AS chat_id,
+                        m.state AS state,
+                        m.param AS param,
+                        m.from_id AS from_id,
+                        m.rfc724_mid AS rfc724_mid,
+                        m.hidden AS hidden,
+                        c.archived AS archived,
+                        c.blocked AS blocked
+                     FROM msgs m LEFT JOIN chats c ON c.id=m.chat_id
+                     WHERE m.id=? AND m.chat_id>9",
+                    (id,),
+                    |row| {
+                        let chat_id: ChatId = row.get("chat_id")?;
+                        let state: MessageState = row.get("state")?;
+                        let param: Params =
+                            row.get::<_, String>("param")?.parse().unwrap_or_default();
+                        let from_id: ContactId = row.get("from_id")?;
+                        let rfc724_mid: String = row.get("rfc724_mid")?;
+                        let hidden: bool = row.get("hidden")?;
+                        let visibility: ChatVisibility = row.get("archived")?;
+                        let blocked: Option<Blocked> = row.get("blocked")?;
+                        let blocked = blocked.unwrap_or_default();
+                        Ok((
+                            chat_id, state, param, from_id, rfc724_mid, hidden, visibility,
+                            blocked,
+                        ))
+                    },
+                )
+                .optional()?
+            else {
+                continue;
+            };
+            trigger_ephemeral_interrupt |= id.start_ephemeral_timer(tx)?;
             if !matches!(curr_state, MessageState::InFresh | MessageState::InNoticed) {
                 continue;
             }
@@ -1929,6 +1902,9 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
     }
     if trigger_smtp_interrupt {
         context.scheduler.interrupt_smtp().await;
+    }
+    if trigger_ephemeral_interrupt {
+        context.scheduler.interrupt_ephemeral_task().await;
     }
 
     for updated_chat_id in updated_chat_ids {
