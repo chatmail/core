@@ -2381,24 +2381,18 @@ fn keyupdate_body() -> MimePart<'static> {
 
 /// Returns a keyupdate message informing the owners of `recipient_keys`
 /// about the current key and relay list, see [`crate::keyupdate`].
-pub(crate) async fn keyupdate_message(
-    context: &Context,
+pub(crate) fn keyupdate_message(
+    is_bot: bool,
     rfc724_mid: &str,
     recipient_keys: Vec<SignedPublicKey>,
     recipients: Vec<String>,
-) -> Result<QueuedMail> {
-    info!(
-        context,
-        "Sending keyupdate message to {} recipients.",
-        recipient_keys.len()
-    );
+) -> QueuedMail {
     let message = keyupdate_body();
 
-    let is_bot = context.get_config_bool(Config::Bot).await?;
     let headers = non_chat_headers(is_bot, "Keyupdate");
     let message = add_headers_to_encrypted_part(message, headers);
 
-    let queued_mail = QueuedMail {
+    QueuedMail {
         raw_message: part_to_bytes(message),
         display_name: String::new(),
         rfc724_mid: rfc724_mid.to_string(),
@@ -2418,8 +2412,7 @@ pub(crate) async fn keyupdate_message(
         recipients,
         sent_to: Vec::new(),
         bcc_self: false,
-    };
-    Ok(queued_mail)
+    }
 }
 
 /// Renders MIME part into a vector of bytes.
