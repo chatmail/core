@@ -1938,6 +1938,38 @@ impl CommandApi {
         Ok(chat_id.map(|id| id.to_u32()))
     }
 
+    /// Exports a chat as a ZIP-file.
+    ///
+    /// The ZIP-file contains `index.html` with the messages as well as images and files.
+    /// `index.html` is well-formed and can be processed with a simple XML parser as well.
+    /// As browsers cannot handle arbitrary large pages,
+    /// large chats are continued in `index-2.html`, `index-3.html` and so on.
+    ///
+    /// The UI is expected to let the user choose `dest`,
+    /// an existing file is overwritten.
+    ///
+    /// `include_images` (images, sticker, gif)
+    /// and `include_files` (video, apps, files, vcards etc.) define what should be part of the export;
+    /// avatars are always added.
+    async fn export_chat(
+        &self,
+        account_id: u32,
+        chat_id: u32,
+        dest: String,
+        include_images: bool,
+        include_files: bool,
+    ) -> Result<()> {
+        let ctx = self.get_context(account_id).await?;
+        chat::export_chat(
+            &ctx,
+            ChatId::new(chat_id),
+            dest.as_ref(),
+            include_images,
+            include_files,
+        )
+        .await
+    }
+
     /// Returns all message IDs of the given types in a chat.
     /// Typically used to show a gallery.
     ///
