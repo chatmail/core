@@ -1472,9 +1472,7 @@ WHERE addr=?
             );
         }
 
-        if let Some(public_key) = contact.public_key(context).await?
-            && let Some(relay_addrs) = addresses_from_public_key(&public_key)
-        {
+        if let Some(relay_addrs) = contact.relay_addresses(context).await? {
             ret += "\n\nRelays:";
             for relay in &relay_addrs {
                 ret += "\n";
@@ -1599,6 +1597,17 @@ WHERE addr=?
             } else {
                 Ok(None)
             }
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Returns a list of relay addresses for the contact if it is distributed in the public key.
+    pub(crate) async fn relay_addresses(&self, context: &Context) -> Result<Option<Vec<String>>> {
+        if let Some(public_key) = self.public_key(context).await?
+            && let Some(relay_addrs) = addresses_from_public_key(&public_key)
+        {
+            Ok(Some(relay_addrs))
         } else {
             Ok(None)
         }
