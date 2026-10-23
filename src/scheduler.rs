@@ -4,9 +4,8 @@ use std::num::NonZeroUsize;
 use std::pin::Pin;
 use std::sync::atomic::Ordering;
 
-use anyhow::{Context as _, Error, Result, bail};
+use anyhow::{Context as _, Error, Result};
 use async_channel::{self as channel, Receiver, Sender};
-use futures::future::try_join_all;
 use futures_lite::FutureExt;
 use tokio::sync::{RwLock, oneshot};
 use tokio::task::{self, JoinSet};
@@ -403,11 +402,7 @@ pub(crate) struct Scheduler {
     recently_seen_loop: RecentlySeenLoop,
 }
 
-async fn inbox_loop(
-    ctx: Context,
-    started: oneshot::Sender<()>,
-    inbox_handlers: ImapConnectionHandlers,
-) {
+async fn inbox_loop(ctx: Context, inbox_handlers: ImapConnectionHandlers) {
     use futures::future::FutureExt;
 
     info!(ctx, "Starting inbox loop.");
@@ -420,10 +415,6 @@ async fn inbox_loop(
     let ctx1 = ctx.clone();
     let fut = async move {
         let ctx = ctx1;
-        if let Err(()) = started.send(()) {
-            warn!(ctx, "Inbox loop, missing started receiver.");
-            return;
-        };
 
         let mut old_session: Option<Session> = None;
         loop {
@@ -611,11 +602,7 @@ async fn fetch_idle(ctx: &Context, connection: &mut Imap, mut session: Session) 
     Ok(session)
 }
 
-async fn smtp_loop(
-    ctx: Context,
-    started: oneshot::Sender<()>,
-    smtp_handlers: SmtpConnectionHandlers,
-) {
+async fn smtp_loop(ctx: Context, smtp_handlers: SmtpConnectionHandlers) {
     use futures::future::FutureExt;
 
     info!(ctx, "Starting SMTP loop.");
@@ -628,10 +615,6 @@ async fn smtp_loop(
     let ctx1 = ctx.clone();
     let fut = async move {
         let ctx = ctx1;
-        if let Err(()) = started.send(()) {
-            warn!(&ctx, "SMTP loop, missing started receiver.");
-            return;
-        }
 
         // Reschedule the check to catch changes lost to a restart.
         schedule_keyupdate_check(&ctx).await.log_err(&ctx).ok();
@@ -732,20 +715,17 @@ impl Scheduler {
     pub async fn start(ctx: &Context) -> Result<Self> {
         let (smtp, smtp_handlers) = SmtpConnectionState::new();
 
-        let (smtp_start_send, smtp_start_recv) = oneshot::channel();
         let (ephemeral_interrupt_send, ephemeral_interrupt_recv) = channel::bounded(1);
         let (location_interrupt_send, location_interrupt_recv) = channel::bounded(1);
 
         let mut inboxes = Vec::new();
-        let mut start_recvs = Vec::new();
 
         for (transport_id, configured_login_param) in ConfiguredLoginParam::load_all(ctx).await? {
             let (conn_state, inbox_handlers) =
                 ImapConnectionState::new(ctx, transport_id, configured_login_param.clone()).await?;
-            let (inbox_start_send, inbox_start_recv) = oneshot::channel();
             let handle = {
                 let ctx = ctx.clone();
-                task::spawn(inbox_loop(ctx, inbox_start_send, inbox_handlers))
+                task::spawn(inbox_loop(ctx, inbox_handlers))
             };
             let addr = configured_login_param.addr.clone();
             let folder = configured_login_param
@@ -758,14 +738,12 @@ impl Scheduler {
                 handle,
             };
             inboxes.push(inbox);
-            start_recvs.push(inbox_start_recv);
         }
 
         let smtp_handle = {
             let ctx = ctx.clone();
-            task::spawn(smtp_loop(ctx, smtp_start_send, smtp_handlers))
+            task::spawn(smtp_loop(ctx, smtp_handlers))
         };
-        start_recvs.push(smtp_start_recv);
 
         let ephemeral_handle = {
             let ctx = ctx.clone();
@@ -793,11 +771,6 @@ impl Scheduler {
             location_interrupt_send,
             recently_seen_loop,
         };
-
-        // wait for all loops to be started
-        if let Err(err) = try_join_all(start_recvs).await {
-            bail!("failed to start scheduler: {err}");
-        }
 
         info!(ctx, "scheduler is running");
         Ok(res)
