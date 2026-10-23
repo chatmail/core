@@ -1859,6 +1859,29 @@ async fn test_hp_legacy_display() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_hp_legacy_display_multiple_paragraphs() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let bob = &tcm.bob().await;
+
+    let msg_id = receive_imf(
+        bob,
+        include_bytes!("../../test-data/message/hp_legacy_display-multiple-paragraphs.eml"),
+        false,
+    )
+    .await?
+    .unwrap()
+    .msg_ids[0];
+    let msg_bob = Message::load_from_db(bob, msg_id).await?;
+    assert_eq!(msg_bob.subject, "Dinner plans");
+
+    assert_eq!(
+        msg_bob.text,
+        "Let's eat!\n\nSecond paragraph,\nanother line."
+    );
+    Ok(())
+}
+
 /// Tests that subject is not prepended to the message
 /// when bot receives it.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
