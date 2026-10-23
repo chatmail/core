@@ -75,7 +75,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [win32, win64]
+        arch: [win32, win64, win-arm64]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -99,7 +99,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        arch: [win32, win64]
+        arch: [win32, win64, win-arm64]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -282,11 +282,23 @@ jobs:
           name: deltachat-rpc-server-win32-wheel
           path: deltachat-rpc-server-win32-wheel.d
 
+      - name: Download Windows ARM64 binary
+        uses: actions/download-artifact@v7
+        with:
+          name: deltachat-rpc-server-win-arm64
+          path: deltachat-rpc-server-win-arm64.d
+
       - name: Download Win64 binary
         uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-win64
           path: deltachat-rpc-server-win64.d
+
+      - name: Download Windows ARM64 wheel
+        uses: actions/download-artifact@v7
+        with:
+          name: deltachat-rpc-server-win-arm64-wheel
+          path: deltachat-rpc-server-win-arm64-wheel.d
 
       - name: Download Win64 wheel
         uses: actions/download-artifact@v7
@@ -340,6 +352,7 @@ jobs:
           mv deltachat-rpc-server-x86_64-linux.d/deltachat-rpc-server bin/deltachat-rpc-server-x86_64-linux
           mv deltachat-rpc-server-win32.d/deltachat-rpc-server.exe bin/deltachat-rpc-server-win32.exe
           mv deltachat-rpc-server-win64.d/deltachat-rpc-server.exe bin/deltachat-rpc-server-win64.exe
+          mv deltachat-rpc-server-win-arm64.d/deltachat-rpc-server.exe bin/deltachat-rpc-server-win-arm64.exe
           mv deltachat-rpc-server-x86_64-macos.d/deltachat-rpc-server bin/deltachat-rpc-server-x86_64-macos
           mv deltachat-rpc-server-aarch64-macos.d/deltachat-rpc-server bin/deltachat-rpc-server-aarch64-macos
           mv deltachat-rpc-server-arm64-v8a-android.d/deltachat-rpc-server bin/deltachat-rpc-server-arm64-v8a-android
@@ -360,6 +373,7 @@ jobs:
           mv deltachat-rpc-server-i686-linux-wheel.d/*.whl dist/
           mv deltachat-rpc-server-x86_64-linux-wheel.d/*.whl dist/
           mv deltachat-rpc-server-win64-wheel.d/*.whl dist/
+          mv deltachat-rpc-server-win-arm64-wheel.d/*.whl dist/
           mv deltachat-rpc-server-win32-wheel.d/*.whl dist/
           mv deltachat-rpc-server-arm64-v8a-android-wheel.d/*.whl dist/
           mv deltachat-rpc-server-armeabi-v7a-android-wheel.d/*.whl dist/
@@ -389,7 +403,7 @@ jobs:
             bin/* dist/*
 
       - name: Publish deltachat-rpc-server to PyPI
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' && github.repository == 'chatmail/core'
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33
 
   publish_npm_package:
@@ -449,6 +463,12 @@ jobs:
           name: deltachat-rpc-server-win32
           path: deltachat-rpc-server-win32.d
 
+      - name: Download Windows ARM64 binary
+        uses: actions/download-artifact@v7
+        with:
+          name: deltachat-rpc-server-win-arm64
+          path: deltachat-rpc-server-win-arm64.d
+
       - name: Download Win64 binary
         uses: actions/download-artifact@v7
         with:
@@ -492,6 +512,7 @@ jobs:
           python scripts/pack_binary_for_platform.py x86_64-unknown-linux-musl      ../../deltachat-rpc-server-x86_64-linux.d/deltachat-rpc-server
           python scripts/pack_binary_for_platform.py i686-pc-windows-gnu            ../../deltachat-rpc-server-win32.d/deltachat-rpc-server.exe 
           python scripts/pack_binary_for_platform.py x86_64-pc-windows-gnu          ../../deltachat-rpc-server-win64.d/deltachat-rpc-server.exe 
+          python scripts/pack_binary_for_platform.py aarch64-pc-windows-gnullvm    ../../deltachat-rpc-server-win-arm64.d/deltachat-rpc-server.exe
           python scripts/pack_binary_for_platform.py x86_64-apple-darwin            ../../deltachat-rpc-server-x86_64-macos.d/deltachat-rpc-server 
           python scripts/pack_binary_for_platform.py aarch64-apple-darwin           ../../deltachat-rpc-server-aarch64-macos.d/deltachat-rpc-server 
           python scripts/pack_binary_for_platform.py aarch64-linux-android          ../../deltachat-rpc-server-arm64-v8a-android.d/deltachat-rpc-server
@@ -529,7 +550,7 @@ jobs:
           package-manager-cache: false  # never use caching in release builds
 
       - name: Publish npm packets for prebuilds and `@deltachat/stdio-rpc-server`
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' && github.repository == 'chatmail/core'
         working-directory: deltachat-rpc-server/npm-package
         run: |
           ls -lah platform_package
