@@ -1364,7 +1364,7 @@ impl MimeMessage {
                         self.do_add_single_part(part);
                         return Ok(true);
                     }
-                    mime::TEXT | mime::HTML => {
+                    mime::TEXT => {
                         let decoded_data = match mail.get_body() {
                             Ok(decoded_data) => decoded_data,
                             Err(err) => {
