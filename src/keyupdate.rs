@@ -52,7 +52,7 @@ const KEYUPDATE_CHUNK_CONTACTS: usize = 200;
 const KEYUPDATE_MAX_SILENCE: i64 = 3 * 365 * 24 * 3600;
 
 /// Upper bound on the contacts informed after a relay list change, keeping the freshest.
-const KEYUPDATE_MAX_RECIPIENTS: usize = 5000;
+const KEYUPDATE_MAX_RECIPIENTS: u32 = 5000;
 
 /// A contact to inform: the relays to reach them at, and the key to encrypt to.
 struct KeyupdateRecipient {
@@ -63,7 +63,7 @@ struct KeyupdateRecipient {
 /// Returns at most `max_recipients` key-contacts to inform.
 async fn keyupdate_recipients(
     context: &Context,
-    max_recipients: usize,
+    max_recipients: u32,
 ) -> Result<Vec<KeyupdateRecipient>> {
     // Single chat contacts only become keyupdate recipient candidates
     // if we have a record of a sent message or `last_seen` is not 0.
