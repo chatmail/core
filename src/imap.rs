@@ -62,6 +62,19 @@ const RFC724MID_UID: &str = "(UID BODY.PEEK[HEADER.FIELDS (\
                              )])";
 const BODY_FULL: &str = "(FLAGS BODY.PEEK[])";
 
+const PENDING_DELETIONS: &str = "
+    SELECT id, uid, target FROM imap
+    WHERE folder = ?
+    AND transport_id = ?
+    AND target != folder
+    ORDER BY target, uid";
+
+const PENDING_SEEN_FLAGS: &str = "
+    SELECT imap.id, uid, folder FROM imap, imap_markseen
+    WHERE imap.id = imap_markseen.id
+    AND imap.transport_id=?
+    AND target = folder";
+
 #[derive(Debug)]
 pub(crate) struct Imap {
     /// ID of the transport configuration in the `transports` table.
@@ -868,20 +881,12 @@ impl Session {
         let transport_id = self.transport_id();
         let rows = context
             .sql
-            .query_map_vec(
-                "SELECT id, uid, target FROM imap
-                 WHERE folder = ?
-                 AND transport_id = ?
-                 AND target != folder
-                 ORDER BY target, uid",
-                (folder, transport_id),
-                |row| {
-                    let rowid: i64 = row.get(0)?;
-                    let uid: u32 = row.get(1)?;
-                    let target: String = row.get(2)?;
-                    Ok((rowid, uid, target))
-                },
-            )
+            .query_map_vec(PENDING_DELETIONS, (folder, transport_id), |row| {
+                let rowid: i64 = row.get(0)?;
+                let uid: u32 = row.get(1)?;
+                let target: String = row.get(2)?;
+                Ok((rowid, uid, target))
+            })
             .await?;
 
         for (target, rowid_set, uid_set) in UidGrouper::from(rows) {
@@ -930,19 +935,12 @@ impl Session {
         let transport_id = self.transport_id();
         let mut rows = context
             .sql
-            .query_map_vec(
-                "SELECT imap.id, uid, folder FROM imap, imap_markseen
-                 WHERE imap.id = imap_markseen.id
-                 AND imap.transport_id=?
-                 AND target = folder",
-                (transport_id,),
-                |row| {
-                    let rowid: i64 = row.get(0)?;
-                    let uid: u32 = row.get(1)?;
-                    let folder: String = row.get(2)?;
-                    Ok((rowid, uid, folder))
-                },
-            )
+            .query_map_vec(PENDING_SEEN_FLAGS, (transport_id,), |row| {
+                let rowid: i64 = row.get(0)?;
+                let uid: u32 = row.get(1)?;
+                let folder: String = row.get(2)?;
+                Ok((rowid, uid, folder))
+            })
             .await?;
 
         // Number of SQL results is expected to be low as
