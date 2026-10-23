@@ -2023,7 +2023,6 @@ impl Chat {
                     ],
                 )
                 .await?;
-            context.new_msgs_notify.notify_one();
             msg.id = MsgId::new(u32::try_from(raw_id)?);
 
             maybe_set_logging_xdc(context, msg, self.id).await?;
@@ -4861,7 +4860,6 @@ pub async fn add_device_msg_with_importance(
                 ),
             )
             .await?;
-        context.new_msgs_notify.notify_one();
 
         msg_id = MsgId::new(u32::try_from(row_id)?);
         if !msg.hidden {
@@ -4995,7 +4993,6 @@ pub(crate) async fn add_info_msg_with_cmd(
             parent.map(|msg|msg.rfc724_mid.clone()).unwrap_or_default()
         )
     ).await?;
-    context.new_msgs_notify.notify_one();
 
     let msg_id = MsgId::new(row_id.try_into()?);
     context.emit_msgs_changed(chat_id, msg_id);
