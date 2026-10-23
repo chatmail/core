@@ -1427,29 +1427,6 @@ pub unsafe extern "C" fn dc_get_next_msgs(context: *mut dc_context_t) -> *mut dc
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn dc_wait_next_msgs(
-    context: *mut dc_context_t,
-) -> *mut dc_array::dc_array_t {
-    if context.is_null() {
-        eprintln!("ignoring careless call to dc_wait_next_msgs()");
-        return ptr::null_mut();
-    }
-    let ctx = unsafe { &*context };
-
-    let msg_ids = block_on(ctx.wait_next_msgs())
-        .context("failed to wait for next messages")
-        .log_err(ctx)
-        .unwrap_or_default();
-    let arr = dc_array_t::from(
-        msg_ids
-            .iter()
-            .map(|msg_id| msg_id.to_u32())
-            .collect::<Vec<u32>>(),
-    );
-    Box::into_raw(Box::new(arr))
-}
-
-#[unsafe(no_mangle)]
 pub unsafe extern "C" fn dc_marknoticed_chat(context: *mut dc_context_t, chat_id: u32) {
     if context.is_null() {
         eprintln!("ignoring careless call to dc_marknoticed_chat()");

@@ -72,10 +72,6 @@ impl SchedulerState {
     async fn do_start(inner: &mut InnerSchedulerState, context: &Context) {
         info!(context, "starting IO");
 
-        // Notify message processing loop
-        // to allow processing old messages after restart.
-        context.new_msgs_notify.notify_one();
-
         match Scheduler::start(context).await {
             Ok(scheduler) => {
                 *inner = InnerSchedulerState::Started(scheduler);
@@ -112,10 +108,6 @@ impl SchedulerState {
         // to terminate on receiving the next event and then call stop_io()
         // which will emit the below event(s)
         info!(context, "stopping IO");
-
-        // Wake up message processing loop even if there are no messages
-        // to allow for clean shutdown.
-        context.new_msgs_notify.notify_one();
 
         let debug_logging = context
             .debug_logging
