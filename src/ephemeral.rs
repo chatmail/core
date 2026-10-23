@@ -560,6 +560,13 @@ async fn next_delete_device_after_timestamp(context: &Context) -> Result<Option<
     }
 }
 
+const NEXT_EPHEMERAL_TIMESTAMP: &str = "
+    SELECT min(ephemeral_timestamp)
+    FROM msgs
+    WHERE ephemeral_timestamp != 0
+      AND chat_id != ?
+    HAVING count(*) > 0";
+
 /// Calculates next timestamp when expiration of some message will happen.
 ///
 /// Expiration can happen either because user has set `delete_device_after` setting or because the
@@ -568,13 +575,7 @@ async fn next_expiration_timestamp(context: &Context) -> Option<i64> {
     let ephemeral_timestamp: Option<i64> = match context
         .sql
         .query_get_value(
-            r#"
-            SELECT min(ephemeral_timestamp)
-            FROM msgs
-            WHERE ephemeral_timestamp != 0
-              AND chat_id != ?
-            HAVING count(*) > 0
-            "#,
+            NEXT_EPHEMERAL_TIMESTAMP,
             (ChatId::TRASH,), // Trash contains already deleted messages, skip them
         )
         .await
@@ -661,6 +662,50 @@ pub(crate) async fn ephemeral_loop(context: &Context, interrupt_receiver: Receiv
     }
 }
 
+const MARK_DOWNLOADED_FOR_DELETION: &str = "
+    UPDATE imap
+    SET target=''
+    WHERE transport_id=?1
+    AND rfc724_mid IN (
+        SELECT rfc724_mid FROM msgs
+        WHERE ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR download_state=?3)
+            AND id>9
+        UNION
+        SELECT pre_rfc724_mid FROM msgs
+        WHERE pre_rfc724_mid!=''
+            AND id>9
+    )";
+
+const MARK_ENCRYPTED_FOR_DELETION: &str = "
+    UPDATE imap
+    SET target=''
+    WHERE transport_id=?1
+    AND rfc724_mid IN (
+        SELECT rfc724_mid FROM msgs
+        WHERE id>9
+          AND ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR
+               ((param GLOB '*\nc=1*' OR param GLOB 'c=1*') AND download_state=?3))
+        UNION
+        SELECT pre_rfc724_mid FROM msgs
+        WHERE pre_rfc724_mid!=''
+          AND id>9
+          AND ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR
+               (param GLOB '*\nc=1*' OR param GLOB 'c=1*'))
+    )";
+
+const MARK_EXPIRED_FOR_DELETION: &str = "
+    UPDATE imap
+    SET target=''
+    WHERE transport_id=?1
+    AND rfc724_mid IN (
+        SELECT rfc724_mid FROM msgs
+        WHERE ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9
+        UNION
+        SELECT pre_rfc724_mid FROM msgs
+        WHERE pre_rfc724_mid!=''
+            AND ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9
+    )";
+
 /// Schedules expired IMAP messages for deletion on the server.
 ///
 /// Also see [`delete_expired_messages`],
@@ -684,18 +729,7 @@ pub(crate) async fn delete_expired_imap_messages(
         context
             .sql
             .execute(
-                "UPDATE imap
-                SET target=''
-                WHERE transport_id=?1
-                AND rfc724_mid IN (
-                    SELECT rfc724_mid FROM msgs
-                    WHERE ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR download_state=?3)
-                        AND id>9
-                    UNION
-                    SELECT pre_rfc724_mid FROM msgs
-                    WHERE pre_rfc724_mid!=''
-                        AND id>9
-                )",
+                MARK_DOWNLOADED_FOR_DELETION,
                 (transport_id, now, DownloadState::Done),
             )
             .await?;
@@ -705,20 +739,7 @@ pub(crate) async fn delete_expired_imap_messages(
         // Only delete expired ephemeral messages.
         context
             .sql
-            .execute(
-                "UPDATE imap
-                SET target=''
-                WHERE transport_id=?1
-                AND rfc724_mid IN (
-                    SELECT rfc724_mid FROM msgs
-                    WHERE ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9
-                    UNION
-                    SELECT pre_rfc724_mid FROM msgs
-                    WHERE pre_rfc724_mid!=''
-                        AND ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9
-                )",
-                (transport_id, now),
-            )
+            .execute(MARK_EXPIRED_FOR_DELETION, (transport_id, now))
             .await?;
     } else {
         // Single device, but unencrypted messages are allowed.
@@ -726,21 +747,7 @@ pub(crate) async fn delete_expired_imap_messages(
         context
             .sql
             .execute(
-                "UPDATE imap
-                 SET target=''
-                 WHERE transport_id=?1
-                 AND rfc724_mid IN (
-                    SELECT rfc724_mid FROM msgs
-                    WHERE id>9
-                      AND ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR
-                           ((param GLOB '*\nc=1*' OR param GLOB 'c=1*') AND download_state=?3))
-                    UNION
-                    SELECT pre_rfc724_mid FROM msgs
-                    WHERE pre_rfc724_mid!=''
-                      AND id>9
-                      AND ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR
-                           (param GLOB '*\nc=1*' OR param GLOB 'c=1*'))
-                )",
+                MARK_ENCRYPTED_FOR_DELETION,
                 (transport_id, now, DownloadState::Done),
             )
             .await?;
