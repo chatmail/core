@@ -124,6 +124,9 @@ pub trait DcKey: Serialize + Deserializable + Clone {
 }
 
 /// Converts secret key to public key.
+///
+/// `addr` is the address used in the User ID which is generated for compatibility.
+/// `relay_addrs` is the comma-separated list of relay addresses.
 pub(crate) fn secret_key_to_public_key(
     mut signed_secret_key: SignedSecretKey,
     timestamp: u32,
