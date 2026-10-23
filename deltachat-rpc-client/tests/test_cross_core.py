@@ -3,7 +3,7 @@ import time
 
 import pytest
 
-from deltachat_rpc_client import DeltaChat, Rpc
+from deltachat_rpc_client import DeltaChat, EventType, Rpc
 
 
 def test_install_venv_and_use_other_core(tmp_path, get_core_python_env):
@@ -72,6 +72,19 @@ def test_send_and_receive_message(alice_and_remote_bob) -> None:
 
     msg = alice.wait_for_incoming_msg()
     assert msg.get_snapshot().text == "hello"
+
+
+def test_old_core_mdn(alice_and_remote_bob) -> None:
+    """Test that old core can send a read receipt that we can receive."""
+    alice, alice_contact_bob, remote_eval = alice_and_remote_bob("2.23.0")
+
+    # Create chat with Alice so the message does not arrive as contact request.
+    remote_eval("bob_contact_alice.create_chat()")
+
+    alice_chat = alice_contact_bob.create_chat()
+    alice_chat.send_text("Hello!")
+    remote_eval("bob.wait_for_incoming_msg().mark_seen()")
+    alice.wait_for_event(EventType.MSG_READ)
 
 
 def test_second_device(acf, alice_and_remote_bob) -> None:
