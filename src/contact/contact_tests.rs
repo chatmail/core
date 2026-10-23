@@ -3,6 +3,7 @@ use deltachat_contact_tools::{addr_cmp, may_be_valid_addr};
 use super::*;
 use crate::chat::{Chat, get_chat_contacts, send_text_msg};
 use crate::chatlist::Chatlist;
+use crate::key::secret_key_to_public_key;
 use crate::receive_imf::receive_imf;
 use crate::securejoin::get_securejoin_qr;
 use crate::test_utils::{self, TestContext, TestContextManager, TimeShiftFalsePositiveNote, sync};
@@ -1557,6 +1558,47 @@ async fn test_same_avatar_no_changed_event() -> Result<()> {
         })
         .await;
     assert_eq!(event_opt, None);
+
+    Ok(())
+}
+
+/// Tests that relay list from imported key is preferred if the signature
+/// has the same timestamp as already imported key.
+/// If they key is signed twice with different relay list at the same second,
+/// we want to use the relay list from the message that arrives last
+/// so the newest relay list is used unless the messages are reordered.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_import_public_key_tiebreak() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let contact = bob.add_or_lookup_contact(alice).await;
+
+    let secret_key = test_utils::alice_keypair();
+    let timestamp = pgp::types::Timestamp::now();
+
+    let addr = "alice@example.net";
+    let relays1 = "alice@example.net,alice@example.org";
+    let relays2 = "alice@example.net,alice@example.com";
+    let relays1_vec: Vec<String> = relays1.split(',').map(String::from).collect();
+    let relays2_vec: Vec<String> = relays2.split(',').map(String::from).collect();
+
+    let public_key1 =
+        secret_key_to_public_key(secret_key.clone(), timestamp.as_secs(), addr, relays1)?;
+    let public_key2 = secret_key_to_public_key(secret_key, timestamp.as_secs(), addr, relays2)?;
+
+    import_public_key(bob, &public_key1).await?;
+    assert_eq!(contact.relay_addresses(bob).await?.unwrap(), relays1_vec);
+
+    import_public_key(bob, &public_key2).await?;
+    assert_eq!(contact.relay_addresses(bob).await?.unwrap(), relays2_vec);
+
+    import_public_key(bob, &public_key1).await?;
+    assert_eq!(contact.relay_addresses(bob).await?.unwrap(), relays1_vec);
+
+    import_public_key(bob, &public_key2).await?;
+    assert_eq!(contact.relay_addresses(bob).await?.unwrap(), relays2_vec);
 
     Ok(())
 }
