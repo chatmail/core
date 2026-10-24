@@ -950,12 +950,6 @@ impl Context {
             self.get_config_int(Config::GossipPeriod).await?.to_string(),
         );
         res.insert(
-            "webxdc_realtime_enabled",
-            self.get_config_bool(Config::WebxdcRealtimeEnabled)
-                .await?
-                .to_string(),
-        );
-        res.insert(
             "donation_request_next_check",
             self.get_config_i64(Config::DonationRequestNextCheck)
                 .await?

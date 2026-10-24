@@ -468,9 +468,6 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  *                    e.g. `ui.desktop.foo`, `ui.desktop.linux.bar`, `ui.android.foo`, `ui.dc40.bar`, `ui.bot.simplebot.baz`.
  *                    These keys go to backups and allow easy per-account settings when using @ref dc_accounts_t,
  *                    however, are not handled by the core otherwise.
- * - `webxdc_realtime_enabled` = Whether the realtime APIs should be enabled.
- *                               0 = WebXDC realtime API is disabled and behaves as noop.
- *                               1 = WebXDC realtime API is enabled (default).
  * - `who_can_call_me` = Who can cause call notifications.
  *                       0 = Everybody (except explicitly blocked contacts),
  *                       1 = Contacts (default, does not include contact requests),

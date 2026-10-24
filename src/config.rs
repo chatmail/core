@@ -442,10 +442,6 @@ pub enum Config {
     /// MsgId of webxdc map integration.
     WebxdcIntegration,
 
-    /// Enable webxdc realtime features.
-    #[strum(props(default = "1"))]
-    WebxdcRealtimeEnabled,
-
     /// Last device token stored on the chatmail server.
     ///
     /// If it has not changed, we do not store
