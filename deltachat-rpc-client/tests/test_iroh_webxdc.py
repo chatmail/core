@@ -50,8 +50,6 @@ SETUP_DATA = b"realtime-setup"
 
 
 def setup_realtime_webxdc(ac1, ac2, path_to_webxdc, wait=True):
-    assert ac1.get_config("webxdc_realtime_enabled") == "1"
-    assert ac2.get_config("webxdc_realtime_enabled") == "1"
     ac1_ac2_chat = ac1.create_chat(ac2)
     ac2.create_chat(ac1)
 

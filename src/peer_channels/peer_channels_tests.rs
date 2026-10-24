@@ -242,12 +242,6 @@ async fn test_can_reconnect() {
     let alice = &mut tcm.alice().await;
     let bob = &mut tcm.bob().await;
 
-    assert!(
-        alice
-            .get_config_bool(Config::WebxdcRealtimeEnabled)
-            .await
-            .unwrap()
-    );
     // Alice sends webxdc to bob
     let alice_chat = alice.create_chat(bob).await;
     let mut instance = Message::new(Viewtype::File);
@@ -589,47 +583,9 @@ async fn connect_alice_bob(
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_peer_channels_disabled() {
-    let mut tcm = TestContextManager::new();
-    let alice = &mut tcm.alice().await;
-
-    alice
-        .set_config_bool(Config::WebxdcRealtimeEnabled, false)
-        .await
-        .unwrap();
-
-    // creates iroh endpoint as side effect
-    send_webxdc_realtime_advertisement(alice, MsgId::new(1))
-        .await
-        .unwrap();
-
-    assert!(alice.ctx.iroh.read().await.is_none());
-
-    // creates iroh endpoint as side effect
-    send_webxdc_realtime_data(alice, MsgId::new(1), vec![])
-        .await
-        .unwrap();
-
-    assert!(alice.ctx.iroh.read().await.is_none());
-
-    leave_webxdc_realtime(alice, MsgId::new(1)).await.unwrap();
-
-    assert!(alice.ctx.iroh.read().await.is_none());
-
-    // This internal function should return error
-    // if accidentally called with the setting disabled.
-    assert!(alice.ctx.get_or_try_init_peer_channel().await.is_err());
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_leave_webxdc_realtime_uninitialized() {
     let mut tcm = TestContextManager::new();
     let alice = &mut tcm.alice().await;
-
-    alice
-        .set_config_bool(Config::WebxdcRealtimeEnabled, true)
-        .await
-        .unwrap();
 
     assert!(alice.ctx.iroh.read().await.is_none());
     leave_webxdc_realtime(alice, MsgId::new(1)).await.unwrap();

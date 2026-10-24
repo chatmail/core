@@ -23,7 +23,7 @@
 //!    (scoped per WebXDC app instance/message-id). The other peers can then join the gossip with `joinRealtimeChannel().setListener()`
 //!    and `joinRealtimeChannel().send()` just like the other peers.
 
-use anyhow::{Context as _, Result, anyhow, bail};
+use anyhow::{Context as _, Result, anyhow};
 use data_encoding::BASE32_NOPAD;
 use futures_lite::StreamExt;
 use iroh::{Endpoint, NodeAddr, NodeId, PublicKey, RelayMode, RelayUrl, SecretKey};
@@ -38,7 +38,6 @@ use url::Url;
 
 use crate::EventType;
 use crate::chat::send_msg;
-use crate::config::Config;
 use crate::context::Context;
 use crate::log::warn;
 use crate::message::{Message, MsgId, Viewtype};
@@ -299,10 +298,6 @@ impl Context {
     pub async fn get_or_try_init_peer_channel(
         &self,
     ) -> Result<tokio::sync::RwLockReadGuard<'_, Iroh>> {
-        if !self.get_config_bool(Config::WebxdcRealtimeEnabled).await? {
-            bail!("Attempt to initialize Iroh when realtime is disabled");
-        }
-
         if let Some(lock) = self.get_peer_channels().await {
             return Ok(lock);
         }
@@ -360,13 +355,6 @@ pub async fn add_gossip_peer_from_header(
     instance_id: MsgId,
     node_addr: &str,
 ) -> Result<()> {
-    if !context
-        .get_config_bool(Config::WebxdcRealtimeEnabled)
-        .await?
-    {
-        return Ok(());
-    }
-
     let node_addr =
         serde_json::from_str::<NodeAddr>(node_addr).context("Failed to parse node address")?;
 
@@ -464,10 +452,6 @@ pub async fn send_webxdc_realtime_advertisement(
     ctx: &Context,
     msg_id: MsgId,
 ) -> Result<Option<oneshot::Receiver<()>>> {
-    if !ctx.get_config_bool(Config::WebxdcRealtimeEnabled).await? {
-        return Ok(None);
-    }
-
     let iroh = ctx.get_or_try_init_peer_channel().await?;
     let conn = iroh.join_and_subscribe_gossip(ctx, msg_id).await?;
 
@@ -483,10 +467,6 @@ pub async fn send_webxdc_realtime_advertisement(
 
 /// Send realtime data to other peers using iroh.
 pub async fn send_webxdc_realtime_data(ctx: &Context, msg_id: MsgId, data: Vec<u8>) -> Result<()> {
-    if !ctx.get_config_bool(Config::WebxdcRealtimeEnabled).await? {
-        return Ok(());
-    }
-
     let iroh = ctx.get_or_try_init_peer_channel().await?;
     iroh.send_webxdc_realtime_data(ctx, msg_id, data).await?;
     Ok(())
