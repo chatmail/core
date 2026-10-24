@@ -116,3 +116,28 @@ fn test_uid_grouper() {
         vec![("INBOX".to_string(), vec![1, 2, 3], "2:3".to_string())]
     );
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_loop_queries_do_not_scan_imap() -> Result<()> {
+    let t = TestContext::new_alice().await;
+    let mut scans = Vec::new();
+    for (name, query) in [
+        ("PENDING_DELETIONS", PENDING_DELETIONS),
+        ("PENDING_SEEN_FLAGS", PENDING_SEEN_FLAGS),
+    ] {
+        for step in t.query_plan(query).await? {
+            // A step on the `imap` table (not `imap_markseen`) may only look up single rows
+            // by rowid or read the partial index of rows pending deletion. With any other index
+            // SQLite walks at least every `imap` row of the transport.
+            let reads_imap = step.contains(" imap ") || step.ends_with(" imap");
+            if reads_imap
+                && !step.contains("USING INTEGER PRIMARY KEY (rowid=?)")
+                && !step.contains("USING INDEX imap_pending_deletions ")
+            {
+                scans.push(format!("{name}: {step}"));
+            }
+        }
+    }
+    assert!(scans.is_empty(), "{scans:#?}");
+    Ok(())
+}

@@ -895,6 +895,20 @@ ORDER BY id"
             .expect("failed to load msg")
     }
 
+    /// Returns the `EXPLAIN QUERY PLAN` steps of `query`.
+    pub async fn query_plan(&self, query: &str) -> Result<Vec<String>> {
+        self.sql
+            .call(true, |conn| {
+                let mut stmt = conn.prepare(&format!("EXPLAIN QUERY PLAN {query}"))?;
+                let plan = stmt
+                    .raw_query()
+                    .mapped(|row| row.get::<_, String>(3))
+                    .collect::<rusqlite::Result<Vec<_>>>()?;
+                Ok(plan)
+            })
+            .await
+    }
+
     /// Returns the [`ContactId`] for the other [`TestContext`], creating a contact if necessary.
     pub async fn add_or_lookup_address_contact_id(&self, other: &TestContext) -> ContactId {
         let primary_self_addr = other.ctx.get_primary_self_addr().await.unwrap();

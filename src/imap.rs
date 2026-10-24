@@ -69,8 +69,9 @@ const PENDING_DELETIONS: &str = "
     AND target != folder
     ORDER BY target, uid";
 
+/// `CROSS JOIN` loops over the few `imap_markseen` rows, not over the transport's `imap` rows.
 const PENDING_SEEN_FLAGS: &str = "
-    SELECT imap.id, uid, folder FROM imap, imap_markseen
+    SELECT imap.id, uid, folder FROM imap_markseen CROSS JOIN imap
     WHERE imap.id = imap_markseen.id
     AND imap.transport_id=?
     AND target = folder";
@@ -480,8 +481,7 @@ impl Imap {
             context.scheduler.interrupt_ephemeral_task().await;
         }
 
-        // Mark expired messages for deletion. Note that `delete_expired_imap_messages` is
-        // not well optimized and should not be called before fetching.
+        // Mark messages for deletion on the server.
         delete_expired_imap_messages(context, session.transport_id())
             .await
             .context("delete_expired_imap_messages")?;
