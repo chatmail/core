@@ -37,7 +37,14 @@ jobs:
         run: npm run build
       - name: Run integration tests
         working-directory: deltachat-jsonrpc-bindings/typescript
-        run: npm run test
+        run: |
+          if [ -n "$CHATMAIL_DOMAIN" ]; then
+            npm run test
+          else
+            echo "CHATMAIL_DOMAIN is not set; running offline tests without coverage"
+            npm run test:prepare
+            npm run test:run
+          fi
         env:
           CHATMAIL_DOMAIN: ${{ vars.CHATMAIL_DOMAIN }}
       - name: Run linter
