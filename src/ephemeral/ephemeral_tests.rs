@@ -576,6 +576,31 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_expiration_queries_do_not_scan_msgs() -> Result<()> {
+    let t = TestContext::new_alice().await;
+    let mut scans = Vec::new();
+    for (name, query) in [
+        ("NEXT_EPHEMERAL_TIMESTAMP", NEXT_EPHEMERAL_TIMESTAMP),
+        ("MARK_DOWNLOADED_FOR_DELETION", MARK_DOWNLOADED_FOR_DELETION),
+        ("MARK_EXPIRED_FOR_DELETION", MARK_EXPIRED_FOR_DELETION),
+        ("MARK_ENCRYPTED_FOR_DELETION", MARK_ENCRYPTED_FOR_DELETION),
+    ] {
+        for step in t.query_plan(query).await? {
+            // These statements run after every IMAP fetch or sent message. `SCAN msgs` reads
+            // the whole table, and so does a rowid range from `id>9`, which SQLite plans as
+            // `SEARCH msgs USING INTEGER PRIMARY KEY (rowid>?)`. Index lookups and ranges pass.
+            if step.starts_with("SCAN msgs")
+                || step.ends_with("msgs USING INTEGER PRIMARY KEY (rowid>?)")
+            {
+                scans.push(format!("{name}: {step}"));
+            }
+        }
+    }
+    assert!(scans.is_empty(), "{scans:#?}");
+    Ok(())
+}
+
 // Regression test for a bug in the timer rollback protection.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_ephemeral_timer_references() -> Result<()> {

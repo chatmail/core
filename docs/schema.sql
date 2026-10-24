@@ -723,6 +723,7 @@ CREATE TABLE imap (
 CREATE INDEX imap_folder ON imap(transport_id, folder);
 CREATE INDEX imap_rfc724_mid ON imap(transport_id, rfc724_mid);
 CREATE INDEX imap_only_rfc724_mid ON imap(rfc724_mid);
+CREATE INDEX imap_pending_deletions ON imap(transport_id, folder) WHERE target != folder;
 
 CREATE TABLE imap_markseen (
     id INTEGER PRIMARY KEY NOT NULL,

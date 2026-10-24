@@ -379,7 +379,7 @@ async fn select_expired_messages(
 SELECT id, chat_id, type, pinned, location_id
 FROM msgs
 WHERE
-  ephemeral_timestamp != 0
+  ephemeral_timestamp > 0
   AND ephemeral_timestamp <= ?
   AND chat_id != ?
 "#,
@@ -560,10 +560,11 @@ async fn next_delete_device_after_timestamp(context: &Context) -> Result<Option<
     }
 }
 
+/// `> 0` rather than `!= 0`, so that SQLite uses `msgs_index8`.
 const NEXT_EPHEMERAL_TIMESTAMP: &str = "
     SELECT min(ephemeral_timestamp)
     FROM msgs
-    WHERE ephemeral_timestamp != 0
+    WHERE ephemeral_timestamp > 0
       AND chat_id != ?
     HAVING count(*) > 0";
 
@@ -662,48 +663,58 @@ pub(crate) async fn ephemeral_loop(context: &Context, interrupt_receiver: Receiv
     }
 }
 
+/// Driven by `imap`: with `bcc_self` off and `force_encryption` on core deletes downloaded
+/// messages from the server and their `imap` rows with them, leaving rows only for messages
+/// it does not download.
 const MARK_DOWNLOADED_FOR_DELETION: &str = "
     UPDATE imap
     SET target=''
-    WHERE transport_id=?1
-    AND rfc724_mid IN (
-        SELECT rfc724_mid FROM msgs
-        WHERE ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR download_state=?3)
-            AND id>9
-        UNION
-        SELECT pre_rfc724_mid FROM msgs
-        WHERE pre_rfc724_mid!=''
-            AND id>9
-    )";
+    WHERE transport_id=?1 AND target!=''
+    AND (EXISTS (
+            SELECT 1 FROM msgs
+            WHERE rfc724_mid=imap.rfc724_mid
+              AND id>9
+              AND ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR download_state=?3))
+        OR EXISTS (
+            SELECT 1 FROM msgs
+            WHERE pre_rfc724_mid=imap.rfc724_mid
+              AND pre_rfc724_mid!=''
+              AND id>9))";
 
+/// Driven by `imap` like [`MARK_DOWNLOADED_FOR_DELETION`]: with `bcc_self` and
+/// `force_encryption` off core deletes only encrypted and expired messages from the server,
+/// so the rows of other messages remain.
 const MARK_ENCRYPTED_FOR_DELETION: &str = "
     UPDATE imap
     SET target=''
-    WHERE transport_id=?1
-    AND rfc724_mid IN (
-        SELECT rfc724_mid FROM msgs
-        WHERE id>9
-          AND ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR
-               ((param GLOB '*\nc=1*' OR param GLOB 'c=1*') AND download_state=?3))
-        UNION
-        SELECT pre_rfc724_mid FROM msgs
-        WHERE pre_rfc724_mid!=''
-          AND id>9
-          AND ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR
-               (param GLOB '*\nc=1*' OR param GLOB 'c=1*'))
-    )";
+    WHERE transport_id=?1 AND target!=''
+    AND (EXISTS (
+            SELECT 1 FROM msgs
+            WHERE rfc724_mid=imap.rfc724_mid
+              AND id>9
+              AND ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR
+                   ((param GLOB '*\nc=1*' OR param GLOB 'c=1*') AND download_state=?3)))
+        OR EXISTS (
+            SELECT 1 FROM msgs
+            WHERE pre_rfc724_mid=imap.rfc724_mid
+              AND pre_rfc724_mid!=''
+              AND id>9
+              AND ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR
+                   (param GLOB '*\nc=1*' OR param GLOB 'c=1*'))))";
 
+/// Driven by `msgs_index8`: in multi-device mode core leaves downloaded messages on the server,
+/// so the `imap` table keeps a row for every message core has not deleted there.
 const MARK_EXPIRED_FOR_DELETION: &str = "
     UPDATE imap
     SET target=''
-    WHERE transport_id=?1
+    WHERE transport_id=?1 AND target!=''
     AND rfc724_mid IN (
         SELECT rfc724_mid FROM msgs
-        WHERE ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9
+        WHERE ephemeral_timestamp>0 AND ephemeral_timestamp<=?2 AND id>9
         UNION
         SELECT pre_rfc724_mid FROM msgs
         WHERE pre_rfc724_mid!=''
-            AND ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2 AND id>9
+            AND ephemeral_timestamp>0 AND ephemeral_timestamp<=?2 AND id>9
     )";
 
 /// Schedules expired IMAP messages for deletion on the server.
