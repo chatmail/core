@@ -78,13 +78,17 @@ class RPCAccountFactory:
 
     def get_credentials(self) -> tuple[str, str]:
         """Generate new credentials for chatmail account."""
-        domain = os.environ["CHATMAIL_DOMAIN"]
+        domain = os.environ.get("CHATMAIL_DOMAIN")
+        if not domain:
+            pytest.skip("Set CHATMAIL_DOMAIN to run online tests")
         username = "ci-" + "".join(random.choice("2345789acdefghjkmnpqrstuvwxyz") for i in range(6))
         return f"{username}@{domain}", f"{username}${username}"
 
     def get_account_qr(self):
         """Return "dcaccount:" QR code for testing chatmail relay."""
-        domain = os.environ["CHATMAIL_DOMAIN"]
+        domain = os.environ.get("CHATMAIL_DOMAIN")
+        if not domain:
+            pytest.skip("Set CHATMAIL_DOMAIN to run online tests")
         return f"dcaccount:{domain}"
 
     @futuremethod
@@ -301,6 +305,7 @@ def alice_and_remote_bob(tmp_path, acf, get_core_python_env):
     from execnet import makegateway
 
     def factory(core_version):
+        addr, password = acf.get_credentials()
         python, rpc_server_path = get_core_python_env(core_version)
         gw = makegateway(f"popen//python={python}")
 
@@ -309,7 +314,6 @@ def alice_and_remote_bob(tmp_path, acf, get_core_python_env):
 
         # old cores need "ic=3" to accept
         # the self-signed cert of an underscore domain
-        addr, password = acf.get_credentials()
         dclogin_qr = f"dclogin://{urllib.parse.quote(addr, safe='@')}?p={urllib.parse.quote(password)}&v=1"
         if os.environ["CHATMAIL_DOMAIN"].startswith("_"):
             dclogin_qr += "&ic=3"
