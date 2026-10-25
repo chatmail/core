@@ -54,7 +54,7 @@ async fn test_can_communicate() {
         .await
         .unwrap()
         .into_iter()
-        .map(|addr| addr.node_id)
+        .map(|addr| addr.id)
         .collect::<Vec<_>>();
 
     assert_eq!(
@@ -67,7 +67,7 @@ async fn test_can_communicate() {
                 .get_node_addr()
                 .await
                 .unwrap()
-                .node_id
+                .id
         ]
     );
 
@@ -130,7 +130,7 @@ async fn test_can_communicate() {
         .await
         .unwrap()
         .into_iter()
-        .map(|addr| addr.node_id)
+        .map(|addr| addr.id)
         .collect::<Vec<_>>();
 
     assert_eq!(
@@ -142,7 +142,7 @@ async fn test_can_communicate() {
                 .get_node_addr()
                 .await
                 .unwrap()
-                .node_id
+                .id
         ]
     );
 
@@ -217,7 +217,7 @@ async fn test_duplicated_out_of_order_advertisement() -> Result<()> {
     let members = get_iroh_gossip_peers(bob, bob_webxdc.id)
         .await?
         .into_iter()
-        .map(|addr| addr.node_id)
+        .map(|addr| addr.id)
         .collect::<Vec<_>>();
     assert_eq!(
         members,
@@ -229,7 +229,7 @@ async fn test_duplicated_out_of_order_advertisement() -> Result<()> {
                 .get_node_addr()
                 .await
                 .unwrap()
-                .node_id
+                .id
         ]
     );
     bob.assert_warn("Cannot add iroh peer").await;
@@ -282,7 +282,7 @@ async fn test_can_reconnect() {
         .await
         .unwrap()
         .into_iter()
-        .map(|addr| addr.node_id)
+        .map(|addr| addr.id)
         .collect::<Vec<_>>();
 
     assert_eq!(
@@ -295,7 +295,7 @@ async fn test_can_reconnect() {
                 .get_node_addr()
                 .await
                 .unwrap()
-                .node_id
+                .id
         ]
     );
 

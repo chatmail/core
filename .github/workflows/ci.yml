@@ -23,7 +23,7 @@ env:
   RUST_VERSION: 1.99.0
 
   # Minimum Supported Rust Version
-  MSRV: 1.89.0
+  MSRV: 1.91.0
 
   PYTHON_VERSION: "3.15"
 
