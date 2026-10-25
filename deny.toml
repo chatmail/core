@@ -56,6 +56,14 @@ ignore = [
     # We enable PQC for encryption rather than signatures.
     # <https://rustsec.org/advisories/RUSTSEC-2025-0144>
     "RUSTSEC-2025-0144",
+
+    # Timing side channels in crypto-bigint 0.5.5, fixed only in 0.7.6.
+    # rPGP 0.21 depends on elliptic-curve 0.13 and cx448 0.1,
+    # which require crypto-bigint^0.5.
+    # Delta by default uses only Ed25519 and X25519 (and RSA keys from old profiles)
+    # that do not use crypto-bigint.
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0387>
+    "RUSTSEC-2026-0387",
 ]
 
 [bans]
