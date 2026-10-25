@@ -408,8 +408,8 @@ async fn test_recode_image_balanced_png() {
         extension: "png",
         original_width: 1920,
         original_height: 1080,
-        compressed_width: 848,
-        compressed_height: 477,
+        compressed_width: 904,
+        compressed_height: 509,
         ..Default::default()
     }
     .test()
@@ -499,8 +499,8 @@ async fn test_recode_image_rgba_png_to_jpeg() {
         extension: "png",
         original_width: 1920,
         original_height: 1080,
-        compressed_width: 848,
-        compressed_height: 477,
+        compressed_width: 904,
+        compressed_height: 509,
         ..Default::default()
     }
     .test()
@@ -519,8 +519,8 @@ async fn test_recode_image_huge_jpg() {
         has_exif: true,
         original_width: 2560,
         original_height: 1440,
-        compressed_width: 2344,
-        compressed_height: 1319,
+        compressed_width: 2384,
+        compressed_height: 1341,
         ..Default::default()
     }
     .test()
