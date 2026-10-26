@@ -717,7 +717,7 @@ async fn smtp_loop(ctx: Context, smtp_handlers: SmtpConnectionHandlers) {
 impl Scheduler {
     /// Start the scheduler.
     pub async fn start(ctx: &Context) -> Result<Self> {
-        let (smtp, smtp_handlers) = SmtpConnectionState::new();
+        let (smtp, smtp_handlers) = SmtpConnectionState::new(ctx).await?;
 
         let (ephemeral_interrupt_send, ephemeral_interrupt_recv) = channel::bounded(1);
         let (location_interrupt_send, location_interrupt_recv) = channel::bounded(1);
@@ -900,12 +900,12 @@ pub(crate) struct SmtpConnectionState {
 }
 
 impl SmtpConnectionState {
-    fn new() -> (Self, SmtpConnectionHandlers) {
+    async fn new(context: &Context) -> Result<(Self, SmtpConnectionHandlers)> {
         let stop_token = CancellationToken::new();
         let (idle_interrupt_sender, idle_interrupt_receiver) = channel::bounded(1);
 
         let handlers = SmtpConnectionHandlers {
-            connection: Smtp::new(),
+            connection: Smtp::new(context).await?,
             stop_token: stop_token.clone(),
             idle_interrupt_receiver,
         };
@@ -918,7 +918,7 @@ impl SmtpConnectionState {
 
         let conn = SmtpConnectionState { state };
 
-        (conn, handlers)
+        Ok((conn, handlers))
     }
 
     /// Interrupt any form of idle.

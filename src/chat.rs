@@ -2659,7 +2659,7 @@ pub async fn send_msg_sync(context: &Context, chat_id: ChatId, msg: &mut Message
     if rowids.is_empty() {
         return Ok(msg.id);
     }
-    let mut smtp = crate::smtp::Smtp::new();
+    let mut smtp = crate::smtp::Smtp::new(context).await?;
     for rowid in rowids {
         send_msg_to_smtp(context, &mut smtp, rowid)
             .await
