@@ -33,7 +33,7 @@ use crate::transport::{
 
 /// SMTP connection with information about it.
 #[derive(Debug)]
-struct Connection {
+pub(crate) struct Connection {
     transport: SmtpTransport<Box<dyn SessionBufStream>>,
 
     /// Email address that should be put into the From field when sending over this connection.
@@ -45,6 +45,59 @@ struct Connection {
     /// Timestamp of last successful send/receive network interaction
     /// (eg connect or send succeeded).
     last_success: tools::Time,
+}
+
+impl Connection {
+    pub(crate) async fn new(
+        context: &Context,
+        login_params: &[ConfiguredServerLoginParam],
+        password: &str,
+        proxy_config: &Option<ProxyConfig>,
+        addr: &str,
+        transport_id: u32,
+        strict_tls: bool,
+    ) -> Result<Self> {
+        let from = EmailAddress::new(addr.to_string())
+            .with_context(|| format!("Invalid address {addr:?}"))?;
+
+        let login_params =
+            prioritize_server_login_params(&context.sql, login_params, "smtp").await?;
+        let mut first_error = None;
+        for lp in login_params {
+            info!(context, "SMTP trying to connect to {}.", &lp.connection);
+            let transport = match connect::connect_and_auth(
+                context,
+                proxy_config,
+                strict_tls,
+                lp.connection.clone(),
+                &lp.user,
+                password,
+            )
+            .await
+            {
+                Ok(transport) => transport,
+                Err(err) => {
+                    warn!(context, "SMTP failed to connect and authenticate: {err:#}.");
+                    first_error.get_or_insert(err);
+                    continue;
+                }
+            };
+
+            let connection = Self {
+                transport,
+                from,
+                transport_id,
+                last_success: tools::Time::now(),
+            };
+            context.emit_event(EventType::SmtpConnected(format!(
+                "SMTP-LOGIN as {} ok",
+                lp.user,
+            )));
+            return Ok(connection);
+        }
+
+        Err(first_error.unwrap_or_else(|| format_err!("No SMTP connection candidates provided")))
+    }
 }
 
 #[derive(Default)]
@@ -151,7 +204,7 @@ impl Smtp {
     }
 
     /// Connect using configured parameters.
-    pub async fn connect_configured(&mut self, context: &Context) -> Result<()> {
+    pub async fn connect(&mut self, context: &Context) -> Result<()> {
         if self.has_maybe_stale_connection() {
             info!(context, "Closing stale connection.");
             self.disconnect();
@@ -165,19 +218,21 @@ impl Smtp {
         let proxy_config = ProxyConfig::load(context).await?;
         for (transport_id, lp) in sorted_transports(context).await? {
             info!(context, "Trying to connect to transport {transport_id}.");
-            match self
-                .connect(
-                    context,
-                    &lp.smtp,
-                    &lp.smtp_password,
-                    &proxy_config,
-                    &lp.addr,
-                    transport_id,
-                    lp.strict_tls(proxy_config.is_some())?,
-                )
-                .await
+            match Connection::new(
+                context,
+                &lp.smtp,
+                &lp.smtp_password,
+                &proxy_config,
+                &lp.addr,
+                transport_id,
+                lp.strict_tls(proxy_config.is_some())?,
+            )
+            .await
             {
-                Ok(()) => return Ok(()),
+                Ok(connection) => {
+                    self.connection = Some(connection);
+                    return Ok(());
+                }
                 Err(err) => {
                     warn!(
                         context,
@@ -187,66 +242,6 @@ impl Smtp {
             }
         }
         bail!("Failed to connect to any SMTP server");
-    }
-
-    /// Connect using the provided login params.
-    #[expect(clippy::too_many_arguments)]
-    pub async fn connect(
-        &mut self,
-        context: &Context,
-        login_params: &[ConfiguredServerLoginParam],
-        password: &str,
-        proxy_config: &Option<ProxyConfig>,
-        addr: &str,
-        transport_id: u32,
-        strict_tls: bool,
-    ) -> Result<()> {
-        if self.is_connected() {
-            warn!(context, "SMTP already connected.");
-            return Ok(());
-        }
-
-        let from = EmailAddress::new(addr.to_string())
-            .with_context(|| format!("Invalid address {addr:?}"))?;
-
-        let login_params =
-            prioritize_server_login_params(&context.sql, login_params, "smtp").await?;
-        let mut first_error = None;
-        for lp in login_params {
-            info!(context, "SMTP trying to connect to {}.", &lp.connection);
-            let transport = match connect::connect_and_auth(
-                context,
-                proxy_config,
-                strict_tls,
-                lp.connection.clone(),
-                &lp.user,
-                password,
-            )
-            .await
-            {
-                Ok(transport) => transport,
-                Err(err) => {
-                    warn!(context, "SMTP failed to connect and authenticate: {err:#}.");
-                    first_error.get_or_insert(err);
-                    continue;
-                }
-            };
-
-            self.connection = Some(Connection {
-                transport,
-                from,
-                transport_id,
-                last_success: tools::Time::now(),
-            });
-
-            context.emit_event(EventType::SmtpConnected(format!(
-                "SMTP-LOGIN as {} ok",
-                lp.user,
-            )));
-            return Ok(());
-        }
-
-        Err(first_error.unwrap_or_else(|| format_err!("No SMTP connection candidates provided")))
     }
 }
 
@@ -445,7 +440,7 @@ pub(crate) fn insert_into_smtp(
 /// Removes row if the message should not be retried, otherwise increments retry count.
 pub(crate) async fn send_msg_to_smtp(context: &Context, smtp: &mut Smtp, rowid: i64) -> Result<()> {
     if let Err(err) = smtp
-        .connect_configured(context)
+        .connect(context)
         .await
         .context("SMTP connection failure")
     {
@@ -864,7 +859,7 @@ async fn send_mdn(context: &Context, smtp: &mut Smtp) -> Result<bool> {
     // If we don't have an MDN, no need to connect.
     // If we are offline and cannot connect, it is not a failure of an MDN.
     if let Err(err) = smtp
-        .connect_configured(context)
+        .connect(context)
         .await
         .context("SMTP connection failure while preparing to send MDNs")
     {
