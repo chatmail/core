@@ -100,7 +100,6 @@ impl Connection {
     }
 }
 
-#[derive(Default)]
 pub(crate) struct Smtp {
     /// SMTP connection.
     connection: Option<Connection>,
@@ -109,6 +108,8 @@ pub(crate) struct Smtp {
 
     /// If sending the last message failed, contains the error message.
     pub(crate) last_send_error: Option<String>,
+
+    proxy_config: Option<ProxyConfig>,
 }
 
 /// Returns transports with their IDs in the order in which they should be tried.
@@ -175,9 +176,15 @@ async fn record_failure(context: &Context, transport_id: u32) -> Result<()> {
 }
 
 impl Smtp {
-    /// Create a new Smtp instances.
-    pub fn new() -> Self {
-        Default::default()
+    /// Creates a new Smtp instance.
+    pub async fn new(context: &Context) -> Result<Self> {
+        let proxy_config = ProxyConfig::load(context).await?;
+        Ok(Self {
+            connection: None,
+            connectivity: Default::default(),
+            last_send_error: None,
+            proxy_config,
+        })
     }
 
     /// Disconnect the SMTP transport and drop it entirely.
@@ -215,17 +222,16 @@ impl Smtp {
         }
 
         self.connectivity.set_connecting(context);
-        let proxy_config = ProxyConfig::load(context).await?;
         for (transport_id, lp) in sorted_transports(context).await? {
             info!(context, "Trying to connect to transport {transport_id}.");
             match Connection::new(
                 context,
                 &lp.smtp,
                 &lp.smtp_password,
-                &proxy_config,
+                &self.proxy_config,
                 &lp.addr,
                 transport_id,
-                lp.strict_tls(proxy_config.is_some())?,
+                lp.strict_tls(self.proxy_config.is_some())?,
             )
             .await
             {
