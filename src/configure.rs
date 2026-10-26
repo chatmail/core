@@ -32,7 +32,7 @@ pub use crate::login_param::EnteredLoginParam;
 use crate::net::proxy::ProxyConfig;
 use crate::provider::{self, Protocol, Socket};
 use crate::qr::{Qr, check_qr, login_param_from_account_qr, login_param_from_login_qr};
-use crate::smtp::Smtp;
+use crate::smtp;
 use crate::sync::Sync::Nosync;
 use crate::tools::time;
 use crate::transport::{
@@ -513,8 +513,7 @@ pub(crate) async fn configure(
 
         let proxy_config2 = proxy_config.clone();
         let smtp_config_task = task::spawn(async move {
-            let mut smtp = Smtp::new();
-            smtp.connect(
+            smtp::Connection::new(
                 &context_smtp,
                 &smtp_param,
                 &smtp_password,
