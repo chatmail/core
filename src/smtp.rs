@@ -4,7 +4,7 @@ mod connect;
 pub(crate) mod queue;
 pub mod send;
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{Context as _, Error, Result, bail, format_err};
 use async_smtp::response::{Category, Code, Detail};
@@ -110,14 +110,17 @@ pub(crate) struct Smtp {
     pub(crate) last_send_error: Option<String>,
 
     proxy_config: Option<ProxyConfig>,
+
+    /// Map from transport IDs to login parameters.
+    login_params: BTreeMap<u32, ConfiguredLoginParam>,
 }
 
-/// Returns transports with their IDs in the order in which they should be tried.
-async fn sorted_transports(context: &Context) -> Result<Vec<(u32, ConfiguredLoginParam)>> {
+/// Returns transport IDs in the order in which they should be tried.
+async fn sorted_transport_ids(context: &Context) -> Result<Vec<u32>> {
     context
         .sql
         .query_map_vec(
-            "SELECT transports.id, configured_param FROM transports
+            "SELECT transports.id FROM transports
              LEFT JOIN smtp_success ON smtp_success.transport_id=transports.id
              LEFT JOIN smtp_failure ON smtp_failure.transport_id=transports.id
              ORDER BY IFNULL(smtp_success.id, 0) DESC,
@@ -126,9 +129,7 @@ async fn sorted_transports(context: &Context) -> Result<Vec<(u32, ConfiguredLogi
             (),
             |row| {
                 let id: u32 = row.get(0)?;
-                let json: String = row.get(1)?;
-                let param = ConfiguredLoginParam::from_json(&json)?;
-                Ok((id, param))
+                Ok(id)
             },
         )
         .await
@@ -179,11 +180,21 @@ impl Smtp {
     /// Creates a new Smtp instance.
     pub async fn new(context: &Context) -> Result<Self> {
         let proxy_config = ProxyConfig::load(context).await?;
+        let login_params = context
+            .sql
+            .query_map_collect("SELECT id, configured_param FROM transports", (), |row| {
+                let id: u32 = row.get(0)?;
+                let json: String = row.get(1)?;
+                let param = ConfiguredLoginParam::from_json(&json)?;
+                Ok((id, param))
+            })
+            .await?;
         Ok(Self {
             connection: None,
             connectivity: Default::default(),
             last_send_error: None,
             proxy_config,
+            login_params,
         })
     }
 
@@ -222,8 +233,11 @@ impl Smtp {
         }
 
         self.connectivity.set_connecting(context);
-        for (transport_id, lp) in sorted_transports(context).await? {
+        for transport_id in sorted_transport_ids(context).await? {
             info!(context, "Trying to connect to transport {transport_id}.");
+            let Some(lp) = self.login_params.get(&transport_id) else {
+                continue;
+            };
             match Connection::new(
                 context,
                 &lp.smtp,
