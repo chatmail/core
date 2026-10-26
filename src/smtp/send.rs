@@ -24,6 +24,7 @@ impl Connection {
     pub(super) async fn send(
         &mut self,
         context: &Context,
+        from: EmailAddress,
         recipients: &[EmailAddress],
         message: &[u8],
     ) -> Result<()> {
@@ -34,8 +35,7 @@ impl Connection {
             context.ratelimit.write().await.send();
         }
 
-        let envelope = Envelope::new(Some(self.from.clone()), recipients.to_vec())
-            .context("Envelope error")?;
+        let envelope = Envelope::new(Some(from), recipients.to_vec()).context("Envelope error")?;
         let mail = SendableEmail::new(envelope, message);
 
         self.transport.send(mail).await.map_err(Error::SmtpSend)?;

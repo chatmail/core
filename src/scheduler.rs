@@ -603,7 +603,11 @@ async fn fetch_idle(ctx: &Context, connection: &mut Imap, mut session: Session) 
     Ok(session)
 }
 
-async fn smtp_loop(ctx: Context, mut connection: Smtp, idle_interrupt_receiver: Receiver<()>) {
+pub(crate) async fn smtp_loop(
+    ctx: Context,
+    mut connection: Smtp,
+    idle_interrupt_receiver: Receiver<()>,
+) {
     info!(ctx, "Starting SMTP loop.");
 
     // Reschedule the check to catch changes lost to a restart.
@@ -723,15 +727,17 @@ impl Scheduler {
             inboxes.push(inbox);
         }
 
-        let smtp_connection = Smtp::new(ctx).await?;
-        let (smtp, idle_interrupt_receiver) =
-            SmtpConnectionState::new(smtp_connection.connectivity.clone());
+        let smtp_stop_token = CancellationToken::new();
+        let smtp_connection = Smtp::new(ctx, smtp_stop_token.clone()).await?;
+        let (smtp, idle_interrupt_receiver) = SmtpConnectionState::new(
+            smtp_connection.connectivity.clone(),
+            smtp_stop_token.clone(),
+        );
         let smtp_handle = {
             let ctx = ctx.clone();
             let ctx2 = ctx.clone();
-            let stop_token = smtp.state.stop_token.clone();
             task::spawn(async move {
-                stop_token
+                smtp_stop_token
                     .cancelled()
                     .map(|_| {
                         info!(ctx, "Shutting down SMTP loop.");
@@ -892,11 +898,11 @@ pub(crate) struct SmtpConnectionState {
 }
 
 impl SmtpConnectionState {
-    fn new(connectivity: ConnectivityStore) -> (Self, Receiver<()>) {
+    fn new(connectivity: ConnectivityStore, stop_token: CancellationToken) -> (Self, Receiver<()>) {
         let (idle_interrupt_sender, idle_interrupt_receiver) = channel::bounded(1);
 
         let state = ConnectionState {
-            stop_token: CancellationToken::new(),
+            stop_token,
             idle_interrupt_sender,
             connectivity,
         };

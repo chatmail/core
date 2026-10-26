@@ -1,16 +1,20 @@
 //! # SMTP transport module.
 
 mod connect;
+mod connection_actor;
 pub(crate) mod queue;
 pub mod send;
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{Context as _, Error, Result, bail, format_err};
-use async_smtp::response::{Category, Code, Detail};
+
 use async_smtp::{EmailAddress, SmtpTransport};
+use bytes::Bytes;
+use futures_lite::FutureExt as _;
 use rusqlite::OptionalExtension as _;
-use tokio::task;
+use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 
 use crate::chat::{ChatId, add_info_msg_with_cmd};
 use crate::contact::{Contact, ContactId};
@@ -26,21 +30,17 @@ use crate::net::session::SessionBufStream;
 use crate::scheduler::connectivity::ConnectivityStore;
 use crate::smtp::queue::QueuedMail;
 use crate::stock_str::unencrypted_email;
-use crate::tools::{self, time_elapsed};
+use crate::tools;
 use crate::transport::{
     ConfiguredLoginParam, ConfiguredServerLoginParam, prioritize_server_login_params,
 };
+
+use self::connection_actor::{ConnectionActor, ConnectionActorHandle, SendResult};
 
 /// SMTP connection with information about it.
 #[derive(Debug)]
 pub(crate) struct Connection {
     transport: SmtpTransport<Box<dyn SessionBufStream>>,
-
-    /// Email address that should be put into the From field when sending over this connection.
-    from: EmailAddress,
-
-    /// ID of the transport from which SMTP connection configuration comes from.
-    transport_id: u32,
 
     /// Timestamp of last successful send/receive network interaction
     /// (eg connect or send succeeded).
@@ -53,13 +53,8 @@ impl Connection {
         login_params: &[ConfiguredServerLoginParam],
         password: &str,
         proxy_config: &Option<ProxyConfig>,
-        addr: &str,
-        transport_id: u32,
         strict_tls: bool,
     ) -> Result<Self> {
-        let from = EmailAddress::new(addr.to_string())
-            .with_context(|| format!("Invalid address {addr:?}"))?;
-
         let login_params =
             prioritize_server_login_params(&context.sql, login_params, "smtp").await?;
         let mut first_error = None;
@@ -85,8 +80,6 @@ impl Connection {
 
             let connection = Self {
                 transport,
-                from,
-                transport_id,
                 last_success: tools::Time::now(),
             };
             context.emit_event(EventType::SmtpConnected(format!(
@@ -101,18 +94,16 @@ impl Connection {
 }
 
 pub(crate) struct Smtp {
-    /// SMTP connection.
-    connection: Option<Connection>,
-
     pub(crate) connectivity: ConnectivityStore,
 
     /// If sending the last message failed, contains the error message.
     pub(crate) last_send_error: Option<String>,
 
-    proxy_config: Option<ProxyConfig>,
+    /// Map from transport IDs to actors maintainng connection to this transport.
+    connection_actors: BTreeMap<u32, ConnectionActorHandle>,
 
-    /// Map from transport IDs to login parameters.
-    login_params: BTreeMap<u32, ConfiguredLoginParam>,
+    /// Currently selected transport over which we send messages until it errors out.
+    sending_transport_id: Option<u32>,
 }
 
 /// Returns transport IDs in the order in which they should be tried.
@@ -178,9 +169,11 @@ async fn record_failure(context: &Context, transport_id: u32) -> Result<()> {
 
 impl Smtp {
     /// Creates a new Smtp instance.
-    pub async fn new(context: &Context) -> Result<Self> {
+    ///
+    /// This constructor starts one [`ConnectionActor`] per configured transport.
+    pub async fn new(context: &Context, stop_token: CancellationToken) -> Result<Self> {
         let proxy_config = ProxyConfig::load(context).await?;
-        let login_params = context
+        let transports: Vec<(u32, ConfiguredLoginParam)> = context
             .sql
             .query_map_collect("SELECT id, configured_param FROM transports", (), |row| {
                 let id: u32 = row.get(0)?;
@@ -189,72 +182,56 @@ impl Smtp {
                 Ok((id, param))
             })
             .await?;
-        Ok(Self {
-            connection: None,
+        let mut connection_actors = BTreeMap::new();
+        for (transport_id, lp) in transports {
+            let from = EmailAddress::new(lp.addr.to_string())
+                .with_context(|| format!("Invalid address {:?}", lp.addr))?;
+
+            let (sender, receiver) = mpsc::channel(2);
+            let actor = ConnectionActor::new(context.clone(), proxy_config.clone(), lp)?;
+            let cloned_stop_token = stop_token.clone();
+            tokio::spawn(async move {
+                cloned_stop_token
+                    .cancelled()
+                    .race(actor.run(receiver))
+                    .await
+            });
+            let handle = ConnectionActorHandle::new(sender, from);
+
+            connection_actors.insert(transport_id, handle);
+        }
+
+        Ok(Self::with_connection_actors(connection_actors))
+    }
+
+    /// Creates a new [`Smtp`] instance with provided [`ConnectionActor`] handles.
+    ///
+    /// Used for testing by providing custom handles that are connected to the test
+    /// instead of real `ConnectionActor`s.
+    fn with_connection_actors(connection_actors: BTreeMap<u32, ConnectionActorHandle>) -> Self {
+        Self {
             connectivity: Default::default(),
             last_send_error: None,
-            proxy_config,
-            login_params,
-        })
-    }
-
-    /// Disconnect the SMTP transport and drop it entirely.
-    pub fn disconnect(&mut self) {
-        if let Some(mut connection) = self.connection.take() {
-            // Closing connection with a QUIT command may take some time, especially if it's a
-            // stale connection and an attempt to send the command times out. Send a command in a
-            // separate task to avoid waiting for reply or timeout.
-            task::spawn(async move { connection.transport.quit().await });
+            connection_actors,
+            sending_transport_id: None,
         }
-    }
-
-    /// Return true if smtp was connected but is not known to
-    /// have been successfully used the last 60 seconds
-    pub fn has_maybe_stale_connection(&self) -> bool {
-        self.connection
-            .as_ref()
-            .is_some_and(|connection| time_elapsed(&connection.last_success).as_secs() > 60)
-    }
-
-    /// Check whether we are connected.
-    pub fn is_connected(&self) -> bool {
-        self.connection.is_some()
     }
 
     /// Connect using configured parameters.
     pub async fn connect(&mut self, context: &Context) -> Result<()> {
-        if self.has_maybe_stale_connection() {
-            info!(context, "Closing stale connection.");
-            self.disconnect();
-        }
-
-        if self.is_connected() {
-            return Ok(());
-        }
-
         self.connectivity.set_connecting(context);
         for transport_id in sorted_transport_ids(context).await? {
             info!(context, "Trying to connect to transport {transport_id}.");
-            let Some(lp) = self.login_params.get(&transport_id) else {
+            let Some(actor) = self.connection_actors.get(&transport_id) else {
                 continue;
             };
-            match Connection::new(
-                context,
-                &lp.smtp,
-                &lp.smtp_password,
-                &self.proxy_config,
-                &lp.addr,
-                transport_id,
-                lp.strict_tls(self.proxy_config.is_some())?,
-            )
-            .await
-            {
-                Ok(connection) => {
-                    self.connection = Some(connection);
+            match actor.connect().await {
+                Ok(()) => {
+                    self.sending_transport_id = Some(transport_id);
                     return Ok(());
                 }
                 Err(err) => {
-                    warn!(
+                    info!(
                         context,
                         "Failed to connect to SMTP transport {transport_id}: {err:#}."
                     );
@@ -263,152 +240,59 @@ impl Smtp {
         }
         bail!("Failed to connect to any SMTP server");
     }
+
+    pub fn disconnect(&mut self) {
+        self.sending_transport_id = None;
+    }
 }
 
-pub(crate) enum SendResult {
-    /// Message was sent successfully.
-    Success,
-
-    /// Permanent error, message sending has failed.
-    Failure(Error),
-
-    /// Temporary error, the message should be retried later.
-    Retry,
-}
-
-/// Tries to send a message.
+/// Tries to send a message over the currently selected SMTP connector.
 async fn smtp_send(
     context: &Context,
-    recipients: &[async_smtp::EmailAddress],
-    message: &str,
+    recipients: Vec<async_smtp::EmailAddress>,
+    message: Bytes,
     smtp: &mut Smtp,
     msg_id: Option<MsgId>,
-) -> SendResult {
-    if recipients.is_empty() {
-        return SendResult::Success;
-    }
-    if std::env::var(crate::DCC_MIME_DEBUG).is_ok() {
-        info!(context, "SMTP-sending out mime message:\n{message}");
-    }
-
+) -> Result<SendResult> {
     smtp.connectivity.set_working(context);
 
-    let Some(ref mut connection) = smtp.connection else {
+    let Some(transport_id) = smtp.sending_transport_id else {
         warn!(
             context,
-            "Failed to send a message because SMTP client is not connected."
+            "Failed to send a message because SMTP transport is not selected."
         );
-        return SendResult::Retry;
+        return Ok(SendResult::Retry);
     };
-    let transport_id = connection.transport_id;
 
-    let send_result = connection
-        .send(context, recipients, message.as_bytes())
-        .await;
-    smtp.last_send_error = send_result.as_ref().err().map(|e| format!("{e:#}"));
+    let connector_handle = smtp
+        .connection_actors
+        .get(&transport_id)
+        .with_context(|| format!("Did not find connector handle for {transport_id}."))?;
 
-    let status = match send_result {
-        Err(send::Error::SmtpSend(err)) => {
-            // Remote error, retry later.
-            info!(context, "SMTP failed to send: {:?}.", &err);
+    let send_result = connector_handle.sendmail(recipients, message).await?;
 
+    match send_result {
+        SendResult::PermanentFailure(ref err) | SendResult::TemporaryFailure(ref err) => {
+            smtp.last_send_error = Some(format!("{err:#}"));
+        }
+        _ => {}
+    }
+
+    match send_result {
+        SendResult::Retry => {
+            smtp.disconnect();
+        }
+        SendResult::PermanentFailure(_) | SendResult::TemporaryFailure(_) => {
             // Record failure on any error returned by the server, but not network errors.
-            if matches!(
-                err,
-                async_smtp::error::Error::Permanent(_) | async_smtp::error::Error::Transient(_)
-            ) && let Err(err) = record_failure(context, transport_id).await
-            {
+            if let Err(err) = record_failure(context, transport_id).await {
                 warn!(
                     context,
-                    "Failed to remove success for {transport_id}: {err:#}."
+                    "Failed to record failure for {transport_id}: {err:#}."
                 )
             }
-
-            let res = match err {
-                async_smtp::error::Error::Permanent(ref response) => {
-                    // Workaround for incorrectly configured servers returning permanent errors
-                    // instead of temporary ones.
-                    let maybe_transient = match response.code {
-                        // Sometimes servers send a permanent error when actually it is a temporary error
-                        // For documentation see <https://tools.ietf.org/html/rfc3463>
-                        Code {
-                            category: Category::MailSystem,
-                            detail: Detail::Zero,
-                            ..
-                        } => {
-                            // Ignore status code 5.5.0, see <https://support.delta.chat/t/every-other-message-gets-stuck/877/2>
-                            // Maybe incorrectly configured Postfix milter with "reject" instead of "tempfail", which returns
-                            // "550 5.5.0 Service unavailable" instead of "451 4.7.1 Service unavailable - try again later".
-                            //
-                            // Other enhanced status codes, such as Postfix
-                            // "550 5.1.1 <foobar@example.org>: Recipient address rejected: User unknown in local recipient table"
-                            // are not ignored.
-                            response.first_word() == Some("5.5.0")
-                        }
-                        _ => false,
-                    };
-
-                    if maybe_transient {
-                        info!(
-                            context,
-                            "Permanent error that is likely to actually be transient, postponing retry for later."
-                        );
-                        SendResult::Retry
-                    } else {
-                        info!(context, "Permanent error, message sending failed.");
-                        // If we do not retry, add an info message to the chat.
-                        // Yandex error "554 5.7.1 [2] Message rejected under suspicion of SPAM; https://ya.cc/..."
-                        // should definitely go here, because user has to open the link to
-                        // resume message sending.
-                        SendResult::Failure(format_err!("Permanent SMTP error: {err}"))
-                    }
-                }
-                async_smtp::error::Error::Transient(ref response) => {
-                    // We got a transient 4xx response from SMTP server.
-                    // Give some time until the server-side error maybe goes away.
-                    //
-                    // One particular case is
-                    // `450 4.1.2 <alice@example.org>: Recipient address rejected: Domain not found`.
-                    // known to be returned by Postfix.
-                    //
-                    // [RFC 3463](https://tools.ietf.org/html/rfc3463#section-3.2)
-                    // says "This code is only useful for permanent failures."
-                    // in X.1.1, X.1.2 and X.1.3 descriptions.
-                    //
-                    // Previous Delta Chat core versions
-                    // from 1.51.0 to 1.151.1
-                    // were treating such errors as permanent.
-                    //
-                    // This was later reverted because such errors were observed
-                    // for existing domains and turned out to be actually transient,
-                    // likely caused by nameserver downtime.
-                    info!(
-                        context,
-                        "Transient error {response:?}, postponing retry for later."
-                    );
-                    SendResult::Retry
-                }
-                _ => {
-                    info!(
-                        context,
-                        "Message sending failed without error returned by the server, retry later."
-                    );
-                    SendResult::Retry
-                }
-            };
-
-            info!(context, "Failed to send message over SMTP, disconnecting.");
             smtp.disconnect();
-
-            res
         }
-        Err(send::Error::Other(err)) => {
-            // Local error, job is invalid, do not retry.
-            smtp.disconnect();
-            warn!(context, "Unable to load SMTP job: {err:#}.");
-            SendResult::Failure(err)
-        }
-        Ok(()) => {
+        SendResult::Success => {
             record_success(context, transport_id)
                 .await
                 .with_context(|| {
@@ -416,11 +300,10 @@ async fn smtp_send(
                 })
                 .log_err(context)
                 .ok();
-            SendResult::Success
         }
-    };
+    }
 
-    if let SendResult::Failure(err) = &status
+    if let SendResult::PermanentFailure(err) = &send_result
         && let Some(msg_id) = msg_id
     {
         // We couldn't send the message, so mark it as failed
@@ -439,7 +322,7 @@ async fn smtp_send(
             }
         }
     }
-    status
+    Ok(send_result)
 }
 
 /// Inserts a tombstone for `rfc724_mid`
@@ -516,19 +399,23 @@ pub(crate) async fn send_msg_to_smtp(context: &Context, smtp: &mut Smtp, rowid: 
         return Ok(());
     }
 
+    let public_key = key::load_self_public_key(context).await?;
+    let secret_key = key::load_self_secret_key(context).await?;
+    let transport_id = smtp.sending_transport_id.context("Not connected")?;
+    let from_addr = smtp
+        .connection_actors
+        .get(&transport_id)
+        .context("ConnectionActor not found")?
+        .from()
+        .to_string();
+
     let mut recipients = queued_mail.recipients.clone();
     if queued_mail.bcc_self {
-        let from_addr = smtp
-            .connection
-            .as_ref()
-            .context("Not connected")?
-            .from
-            .to_string();
         add_self_recipients(
             context,
             &mut recipients,
             queued_mail.encryption.is_encrypted(),
-            from_addr,
+            from_addr.clone(),
         )
         .await
         .context("Failed to add self recipients")?;
@@ -549,20 +436,6 @@ pub(crate) async fn send_msg_to_smtp(context: &Context, smtp: &mut Smtp, rowid: 
         )
         .collect::<Vec<_>>();
 
-    let public_key = key::load_self_public_key(context).await?;
-    let secret_key = key::load_self_secret_key(context).await?;
-    let from_addr = smtp
-        .connection
-        .as_ref()
-        .context("Not connected")?
-        .from
-        .to_string();
-
-    let transport_id = smtp
-        .connection
-        .as_ref()
-        .context("Not connected")?
-        .transport_id;
     let chunk_size = context
         .get_max_smtp_rcpt_to(transport_id, &from_addr)
         .await?
@@ -570,7 +443,7 @@ pub(crate) async fn send_msg_to_smtp(context: &Context, smtp: &mut Smtp, rowid: 
 
     let rendered_mail =
         mimefactory::render_queued_mail(queued_mail, &public_key, &secret_key, from_addr.clone())?;
-    let body = rendered_mail.message;
+    let body = Bytes::from_owner(rendered_mail.message);
 
     info!(
         context,
@@ -588,7 +461,7 @@ pub(crate) async fn send_msg_to_smtp(context: &Context, smtp: &mut Smtp, rowid: 
                 error!(context, "Attempted to send to {sent_to_addr} twice.");
             }
         }
-        let status = smtp_send(context, chunk, body.as_str(), smtp, Some(msg_id)).await;
+        let status = smtp_send(context, chunk.to_vec(), body.clone(), smtp, Some(msg_id)).await?;
         if !matches!(status, SendResult::Success) || rest.is_empty() {
             break status;
         }
@@ -609,6 +482,7 @@ pub(crate) async fn send_msg_to_smtp(context: &Context, smtp: &mut Smtp, rowid: 
 
     match status {
         SendResult::Retry => {}
+        SendResult::TemporaryFailure(ref _err) => {}
         SendResult::Success => {
             context
                 .sql
@@ -624,7 +498,7 @@ pub(crate) async fn send_msg_to_smtp(context: &Context, smtp: &mut Smtp, rowid: 
             info!(context, "{info_msg}.");
             context.emit_event(EventType::SmtpMessageSent(info_msg));
         }
-        SendResult::Failure(ref err) => {
+        SendResult::PermanentFailure(ref err) => {
             if err
                 .to_string()
                 .to_lowercase()
@@ -666,13 +540,14 @@ pub(crate) async fn send_msg_to_smtp(context: &Context, smtp: &mut Smtp, rowid: 
 
     match status {
         SendResult::Retry => Err(format_err!("Retry")),
+        SendResult::TemporaryFailure(err) => Err(format_err!("Temporary SMTP failure {err:#}")),
         SendResult::Success => {
             if !msg_has_pending_smtp_job(context, msg_id).await? {
                 msg_id.set_delivered(context).await?;
             }
             Ok(())
         }
-        SendResult::Failure(err) => Err(format_err!("{err}")),
+        SendResult::PermanentFailure(err) => Err(format_err!("{err:#}")),
     }
 }
 
@@ -806,15 +681,16 @@ async fn send_mdn_rfc724_mid(
 
     let public_key = key::load_self_public_key(context).await?;
     let secret_key = key::load_self_secret_key(context).await?;
+    let transport_id = smtp.sending_transport_id.context("Not connected")?;
     let from = smtp
-        .connection
-        .as_ref()
-        .context("Not connected")?
-        .from
+        .connection_actors
+        .get(&transport_id)
+        .context("Cannot find From address")?
+        .from()
         .to_string();
     let rendered_msg =
         mimefactory::render_queued_mail(queued_mdn, &public_key, &secret_key, from.clone())?;
-    let body = rendered_msg.message;
+    let body = Bytes::from_owner(rendered_msg.message);
 
     if bcc_self {
         add_self_recipients(context, &mut recipients, encrypted, from).await?;
@@ -832,22 +708,26 @@ async fn send_mdn_rfc724_mid(
         .sql
         .transaction(|tx| message::insert_tombstone(tx, &rendered_msg.rfc724_mid, false))
         .await?;
-    match smtp_send(context, &recipients, &body, smtp, None).await {
+    match smtp_send(context, recipients, body, smtp, None).await? {
         SendResult::Success => {
-            if !recipients.is_empty() {
-                info!(context, "Successfully sent MDN for {rfc724_mid}.");
-            }
             delete_mdns_by_rfc724_mid(context, rfc724_mid, additional_rfc724_mids).await?;
             Ok(true)
         }
-        SendResult::Retry => {
+        SendResult::TemporaryFailure(_err) => {
             info!(
                 context,
                 "Temporary SMTP failure while sending an MDN for {rfc724_mid}."
             );
             Ok(false)
         }
-        SendResult::Failure(err) => Err(err),
+        SendResult::Retry => {
+            info!(
+                context,
+                "Temporary error while sending an MDN for {rfc724_mid}."
+            );
+            Ok(false)
+        }
+        SendResult::PermanentFailure(err) => Err(err),
     }
 }
 
