@@ -1023,7 +1023,6 @@ UPDATE msgs SET state=? WHERE
             chat_id.emit_msg_event(context, *msg_id, important);
         }
     }
-    context.new_msgs_notify.notify_one();
 
     mime_parser
         .handle_reports(context, from_id, &mime_parser.parts)
@@ -2551,7 +2550,6 @@ WHERE id=?
             original_msg
                 .chat_id
                 .emit_msg_event(context, original_msg.id, important);
-            context.new_msgs_notify.notify_one();
         }
     } else {
         context.emit_msgs_changed(original_msg.chat_id, original_msg.id);

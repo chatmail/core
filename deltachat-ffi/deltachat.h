@@ -182,7 +182,6 @@ typedef struct _dc_event_emitter dc_accounts_event_emitter_t;
  * To terminate the event loop, main thread should:
  * 1. Notify background threads,
  *    such as event loop (blocking in dc_get_next_event())
- *    and message processing loop (blocking in dc_wait_next_msgs()),
  *    that they should terminate by atomically setting the
  *    boolean flag in the memory
  *    shared between the main thread and background loop threads.
@@ -190,7 +189,6 @@ typedef struct _dc_event_emitter dc_accounts_event_emitter_t;
  *    on whether a single account or account manager is used.
  *    Stopping I/O is guaranteed to emit at least one event
  *    and interrupt the event loop even if it was blocked on dc_get_next_event().
- *    Stopping I/O is guaranteed to interrupt a single dc_wait_next_msgs().
  * 3. Wait until the event loop thread notices the flag,
  *    exits the event loop and terminates.
  * 4. Call dc_context_unref() or dc_accounts_unref().
@@ -428,7 +426,7 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  *                    handles existing messages the same way as new ones if `fetch_existing_msgs=1`.
  * - `last_msg_id` = database ID of the last message processed by the bot.
  *                   This ID and IDs below it are guaranteed not to be returned
- *                   by dc_get_next_msgs() and dc_wait_next_msgs().
+ *                   by dc_get_next_msgs().
  *                   The value is updated automatically
  *                   when dc_markseen_msgs() is called,
  *                   but the bot can also set it manually if it processed
@@ -1461,8 +1459,6 @@ dc_array_t*     dc_get_fresh_msgs            (dc_context_t* context);
  * This function may be called as a part of event loop
  * triggered by DC_EVENT_INCOMING_MSG if you are only interested
  * in the incoming messages.
- * Otherwise use a separate message processing loop
- * calling dc_wait_next_msgs() in a separate thread.
  *
  * @memberof dc_context_t
  * @param context The context object as returned from dc_context_new().
@@ -1470,31 +1466,6 @@ dc_array_t*     dc_get_fresh_msgs            (dc_context_t* context);
  *     On errors, the list is empty. NULL is never returned.
  */
 dc_array_t*     dc_get_next_msgs             (dc_context_t* context);
-
-
-/**
- * Waits for notification of new messages
- * and returns an array of new message IDs.
- * See the documentation for dc_get_next_msgs()
- * for the details of return value.
- *
- * This function waits for internal notification of
- * a new message in the database and returns afterwards.
- * Notification is also sent when I/O is started
- * to allow processing new messages
- * and when I/O is stopped using dc_stop_io() or dc_accounts_stop_io()
- * to allow for manual interruption of the message processing loop.
- * The function may return an empty array if there are
- * no messages after notification,
- * which may happen on start or if the message is quickly deleted
- * after adding it to the database.
- *
- * @memberof dc_context_t
- * @param context The context object as returned from dc_context_new().
- * @return An array of message IDs, must be dc_array_unref()'d when no longer used.
- *     On errors, the list is empty. NULL is never returned.
- */
-dc_array_t*     dc_wait_next_msgs            (dc_context_t* context);
 
 
 /**

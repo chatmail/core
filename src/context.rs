@@ -12,7 +12,7 @@ use anyhow::{Result, bail, ensure};
 use async_channel::{self as channel, Receiver, Sender};
 use pgp::composed::SignedPublicKey;
 use ratelimit::Ratelimit;
-use tokio::sync::{Mutex, Notify, RwLock};
+use tokio::sync::{Mutex, RwLock};
 
 use crate::chat::{ChatId, get_chat_cnt};
 use crate::config::Config;
@@ -252,11 +252,6 @@ pub struct InnerContext {
     /// If quota was never tried to load, then the transport doesn't have an entry in the BTreeMap.
     pub(crate) quota: RwLock<BTreeMap<u32, QuotaInfo>>,
 
-    /// Notify about new messages.
-    ///
-    /// This causes [`Context::wait_next_msgs`] to wake up.
-    pub(crate) new_msgs_notify: Notify,
-
     /// Whether IO should be restarted after the current fetch cycle completed.
     ///
     /// Set when a fetched transport sync message modified the transports.
@@ -477,11 +472,6 @@ impl Context {
             blobdir.display()
         );
 
-        let new_msgs_notify = Notify::new();
-        // Notify once immediately to allow processing old messages
-        // without starting I/O.
-        new_msgs_notify.notify_one();
-
         let inner = InnerContext {
             id,
             blobdir,
@@ -494,7 +484,6 @@ impl Context {
             scheduler: SchedulerState::new(),
             ratelimit: RwLock::new(Ratelimit::new(Duration::new(3, 0), 3.0)), // Allow at least 1 message every second + a burst of 3.
             quota: RwLock::new(BTreeMap::new()),
-            new_msgs_notify,
             restart_io_after_fetch: AtomicBool::new(false),
             server_id: RwLock::new(None),
             metadata: RwLock::new(BTreeMap::new()),
@@ -1120,29 +1109,6 @@ ORDER BY m.timestamp DESC,m.id DESC",
                 },
             )
             .await?;
-        Ok(list)
-    }
-
-    /// (deprecated) Returns a list of messages with database ID higher than last marked as seen.
-    ///
-    /// This function is supposed to be used by bot to request messages
-    /// that are not processed yet.
-    ///
-    /// Waits for notification and returns a result.
-    /// Note that the result may be empty if the message is deleted
-    /// shortly after notification or notification is manually triggered
-    /// to interrupt waiting.
-    /// Notification may be manually triggered by calling [`Self::stop_io`].
-    ///
-    /// Deprecated 2026-04: This returns the message's id as soon as the first part arrives,
-    /// even if it is not fully downloaded yet.
-    /// The bot needs to wait for the message to be fully downloaded.
-    /// Since this is usually not the desired behavior,
-    /// bots should instead use the #DC_EVENT_INCOMING_MSG / [`EventType::IncomingMsg`]
-    /// event for getting notified about new messages.
-    pub async fn wait_next_msgs(&self) -> Result<Vec<MsgId>> {
-        self.new_msgs_notify.notified().await;
-        let list = self.get_next_msgs().await?;
         Ok(list)
     }
 

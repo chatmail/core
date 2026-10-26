@@ -690,36 +690,6 @@ impl CommandApi {
         Ok(msg_ids)
     }
 
-    /// (deprecated) Waits for messages to be processed by the bot and returns their IDs.
-    ///
-    /// This function is similar to [`get_next_msgs`],
-    /// but waits for internal new message notification before returning.
-    /// New message notification is sent when new message is added to the database,
-    /// on initialization, when I/O is started and when I/O is stopped.
-    /// This allows bots to use `wait_next_msgs` in a loop to process
-    /// old messages after initialization and during the bot runtime.
-    /// To shutdown the bot, stopping I/O can be used to interrupt
-    /// pending or next `wait_next_msgs` call.
-    ///
-    /// Deprecated 2026-04: This returns the message's id as soon as the first part arrives,
-    /// even if it is not fully downloaded yet.
-    /// The bot needs to wait for the message to be fully downloaded.
-    /// Since this is usually not the desired behavior,
-    /// bots should instead use the #DC_EVENT_INCOMING_MSG / [`types::events::EventType::IncomingMsg`]
-    /// event for getting notified about new messages.
-    ///
-    /// [`get_next_msgs`]: Self::get_next_msgs
-    async fn wait_next_msgs(&self, account_id: u32) -> Result<Vec<u32>> {
-        let ctx = self.get_context(account_id).await?;
-        let msg_ids = ctx
-            .wait_next_msgs()
-            .await?
-            .iter()
-            .map(|msg_id| msg_id.to_u32())
-            .collect();
-        Ok(msg_ids)
-    }
-
     /// Estimates the number of messages that will be deleted
     /// by the `set_config()`-option `delete_device_after`.
     ///
