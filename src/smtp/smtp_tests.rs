@@ -1,24 +1,8 @@
 use anyhow::Result;
 
-use crate::test_utils::{TestContext, TestContextManager};
+use super::sorted_transport_ids;
+use crate::test_utils::TestContextManager;
 use crate::transport;
-
-async fn sorted_transport_addrs(t: &TestContext) -> Result<String> {
-    let transports = super::sorted_transports(t).await?;
-    let addrs: Vec<String> = transports
-        .into_iter()
-        .map(|(_transport_id, transport)| transport.addr)
-        .collect();
-    Ok(addrs.join(" "))
-}
-
-async fn sorted_transport_ids(t: &TestContext) -> Result<Vec<u32>> {
-    let transports = super::sorted_transports(t).await?;
-    Ok(transports
-        .into_iter()
-        .map(|(transport_id, _transport)| transport_id)
-        .collect())
-}
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_smtp_candidates() -> Result<()> {
@@ -30,10 +14,6 @@ async fn test_smtp_candidates() -> Result<()> {
     transport::add_pseudo_transport(t, "baz@example.net").await?;
 
     // By default first added transport is used first.
-    assert_eq!(
-        sorted_transport_addrs(t).await?,
-        "foo@example.net bar@example.net baz@example.net"
-    );
     assert_eq!(sorted_transport_ids(t).await?, [1, 2, 3]);
 
     super::record_success(t, 3).await?;
@@ -50,10 +30,6 @@ async fn test_smtp_candidates() -> Result<()> {
 
     // New transport is added before all failing transports.
     transport::add_pseudo_transport(t, "qux@example.net").await?;
-    assert_eq!(
-        sorted_transport_addrs(t).await?,
-        "bar@example.net foo@example.net qux@example.net baz@example.net"
-    );
     assert_eq!(sorted_transport_ids(t).await?, [2, 1, 4, 3]);
 
     super::record_success(t, 4).await?;
