@@ -1905,7 +1905,11 @@ impl Chat {
         };
         let ephemeral_timestamp = match ephemeral_timer {
             EphemeralTimer::Disabled => 0,
-            EphemeralTimer::Enabled { duration } => time().saturating_add(duration.get().into()),
+            EphemeralTimer::Enabled { duration } => {
+                let now = msg.timestamp_sort;
+                debug_assert_ne!(now, 0);
+                now.saturating_add(i64::from(duration.get()))
+            }
         };
 
         let (msg_text, was_truncated) = truncate_msg_text(context, msg.text.clone()).await?;
