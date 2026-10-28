@@ -33,7 +33,7 @@ use tls::wrap_tls;
 pub(crate) const TIMEOUT: Duration = Duration::from_secs(60);
 
 /// TTL for caches in seconds.
-pub(crate) const CACHE_TTL: u64 = 30 * 24 * 60 * 60;
+pub(crate) const CACHE_TTL: u32 = 30 * 24 * 60 * 60;
 
 /// Removes connection history entries after `CACHE_TTL`.
 pub(crate) async fn prune_connection_history(context: &Context) -> Result<()> {

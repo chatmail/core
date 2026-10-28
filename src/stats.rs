@@ -69,7 +69,7 @@ struct ContactStat {
     #[serde(skip_serializing_if = "is_false", rename = "direct_chat")]
     single_chat: bool,
 
-    last_seen: u64,
+    last_seen: i64,
 
     /// Whether the contact was established after stats-sending was enabled
     #[serde(skip_serializing_if = "is_false")]
@@ -312,7 +312,7 @@ async fn ensure_last_old_contact_id(context: &Context) -> Result<()> {
         return Ok(());
     }
 
-    let last_contact_id: u64 = context
+    let last_contact_id: u32 = context
         .sql
         .query_get_value("SELECT MAX(id) FROM contacts", ())
         .await?
@@ -436,7 +436,7 @@ async fn get_contact_stats(context: &Context, last_old_contact: u32) -> Result<V
             |row| {
                 let id = row.get(0)?;
                 let encrypted: bool = row.get(1)?;
-                let last_seen: u64 = row.get(2)?;
+                let last_seen: i64 = row.get(2)?;
                 let bot: bool = row.get(3)?;
 
                 Ok(ContactStat {
