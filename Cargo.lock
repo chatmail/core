@@ -7550,9 +7550,9 @@ dependencies = [
 
 [[package]]
 name = "yerpc_derive"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42c374248c189b15a7f0660db3984e9dcc790ec15f4b44e932e92be49de829f9"
+checksum = "feab3bc81a5743c3661099ef6727b182a27c32686b78831e143786b636b32fee"
 dependencies = [
  "convert_case",
  "darling",
