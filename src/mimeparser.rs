@@ -1505,74 +1505,74 @@ impl MimeMessage {
             return Ok(());
         }
         let mut part = Part::default();
-        let msg_type = if filename.ends_with(".xdc") && mime_type.essence_str() == "application/webxdc+zip"
-        {
-            Viewtype::Webxdc
-        } else if filename.ends_with(".kml") {
-            // XXX what if somebody sends eg an "location-highlights.kml"
-            // attachment unrelated to location streaming?
-            if filename.starts_with("location") || filename.starts_with("message") {
-                let parsed = location::Kml::parse(decoded_data)
+        let msg_type =
+            if filename.ends_with(".xdc") && mime_type.essence_str() == "application/webxdc+zip" {
+                Viewtype::Webxdc
+            } else if filename.ends_with(".kml") {
+                // XXX what if somebody sends eg an "location-highlights.kml"
+                // attachment unrelated to location streaming?
+                if filename.starts_with("location") || filename.starts_with("message") {
+                    let parsed = location::Kml::parse(decoded_data)
+                        .map_err(|err| {
+                            warn!(context, "failed to parse kml part: {:#}", err);
+                        })
+                        .ok();
+                    if filename.starts_with("location") {
+                        self.location_kml = parsed;
+                    } else {
+                        self.message_kml = parsed;
+                    }
+                    return Ok(());
+                }
+                msg_type
+            } else if filename == "multi-device-sync.json" {
+                if !context.get_config_bool(Config::SyncMsgs).await? {
+                    return Ok(());
+                }
+                let serialized = String::from_utf8_lossy(decoded_data)
+                    .parse()
+                    .unwrap_or_default();
+                self.sync_items = context
+                    .parse_sync_items(serialized)
                     .map_err(|err| {
-                        warn!(context, "failed to parse kml part: {:#}", err);
+                        warn!(context, "failed to parse sync data: {:#}", err);
                     })
                     .ok();
-                if filename.starts_with("location") {
-                    self.location_kml = parsed;
-                } else {
-                    self.message_kml = parsed;
-                }
                 return Ok(());
-            }
-            msg_type
-        } else if filename == "multi-device-sync.json" {
-            if !context.get_config_bool(Config::SyncMsgs).await? {
+            } else if filename == "status-update.json" {
+                let serialized = String::from_utf8_lossy(decoded_data)
+                    .parse()
+                    .unwrap_or_default();
+                self.webxdc_status_update = Some(serialized);
                 return Ok(());
-            }
-            let serialized = String::from_utf8_lossy(decoded_data)
-                .parse()
-                .unwrap_or_default();
-            self.sync_items = context
-                .parse_sync_items(serialized)
-                .map_err(|err| {
-                    warn!(context, "failed to parse sync data: {:#}", err);
-                })
-                .ok();
-            return Ok(());
-        } else if filename == "status-update.json" {
-            let serialized = String::from_utf8_lossy(decoded_data)
-                .parse()
-                .unwrap_or_default();
-            self.webxdc_status_update = Some(serialized);
-            return Ok(());
-        } else if msg_type == Viewtype::Vcard {
-            if let Some(summary) = get_vcard_summary(decoded_data) {
-                part.param.set(Param::Summary1, summary);
-                msg_type
-            } else {
-                Viewtype::File
-            }
-        } else if msg_type == Viewtype::Image
-            || msg_type == Viewtype::Gif
-            || msg_type == Viewtype::Sticker
-        {
-            match get_filemeta(decoded_data) {
-                // image size is known, not too big, keep msg_type:
-                Ok((width, height))
-                    if width
-                        .checked_mul(height)
-                        .is_some_and(|pixels| pixels <= constants::MAX_RCVD_IMAGE_PIXELS) =>
-                {
-                    part.param.set_i64(Param::Width, width.into());
-                    part.param.set_i64(Param::Height, height.into());
+            } else if msg_type == Viewtype::Vcard {
+                if let Some(summary) = get_vcard_summary(decoded_data) {
+                    part.param.set(Param::Summary1, summary);
                     msg_type
+                } else {
+                    Viewtype::File
                 }
-                // image is too big or size is unknown, display as file:
-                _ => Viewtype::File,
-            }
-        } else {
-            msg_type
-        };
+            } else if msg_type == Viewtype::Image
+                || msg_type == Viewtype::Gif
+                || msg_type == Viewtype::Sticker
+            {
+                match get_filemeta(decoded_data) {
+                    // image size is known, not too big, keep msg_type:
+                    Ok((width, height))
+                        if width
+                            .checked_mul(height)
+                            .is_some_and(|pixels| pixels <= constants::MAX_RCVD_IMAGE_PIXELS) =>
+                    {
+                        part.param.set_i64(Param::Width, width.into());
+                        part.param.set_i64(Param::Height, height.into());
+                        msg_type
+                    }
+                    // image is too big or size is unknown, display as file:
+                    _ => Viewtype::File,
+                }
+            } else {
+                msg_type
+            };
 
         /* we have a regular file attachment,
         write decoded data to new blob object */
