@@ -1,5 +1,51 @@
 # Changelog
 
+## [2.66.0] - 2026-10-28
+
+### API-Changes
+
+- [**breaking**] remove `webxdc_realtime_enabled` config.
+
+### Fixes
+
+- mark messages seen and queue read receipts in one transaction.
+- fix the order of arguments to `merge_openpgp_certificates()` call.
+- ignore `html/*` MIME parts.
+
+### Performance
+
+- avoid some full table scans on every IMAP loop iteration and sent message.
+
+### Documentation
+
+- document arguments to `secret_key_to_public_key()`.
+
+### Refactor
+
+- pass current timestamp as an argument to `signature_subpackets()`.
+- factor out `Contact.relay_addresses()`.
+- scheduler: do not wait for IMAP and SMTP loop to be started.
+- move expiration and IMAP loop queries into constants.
+- make `update_msg_state()` synchronous and take a transaction.
+- make `MsgId::start_ephemeral_timer()` synchronous.
+- split a sync `insert_imap_markseen()` out of `markseen_on_imap_table()`.
+- read messages inside the `markseen_msgs()` transaction.
+- smtp: handle closed interrupt channel explicitly.
+- [**breaking**] remove `configured_addr` config.
+
+### Tests
+
+- add `test_merge_openpgp_certificates_tiebreak()`.
+- add `test_import_public_key_tiebreak()`.
+
+### Miscellaneous Tasks
+
+- update yerpc 0.7.0 to 0.7.1 ([#8868](https://github.com/chatmail/core/pull/8868)).
+- update clipboard-win from 5.4.0 to 5.4.3.
+- upgrade tokio from 1.53.1 to 1.53.3.
+- add deny.toml exception for RUSTSEC-2026-0387.
+- update preloaded DNS cache.
+
 ## [2.65.0] - 2026-10-22
 
 ### Features / Changes
@@ -9051,3 +9097,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.63.0]: https://github.com/chatmail/core/compare/v2.62.0..v2.63.0
 [2.64.0]: https://github.com/chatmail/core/compare/v2.63.0..v2.64.0
 [2.65.0]: https://github.com/chatmail/core/compare/v2.64.0..v2.65.0
+[2.66.0]: https://github.com/chatmail/core/compare/v2.65.0..v2.66.0
