@@ -1,6 +1,6 @@
 [package]
 name = "deltachat_ffi"
-version = "2.66.0"
+version = "2.67.0-dev"
 description = "Deltachat FFI"
 edition = "2024"
 license = "MPL-2.0"
