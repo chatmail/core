@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions: {}
 
 env:
@@ -35,11 +39,19 @@ jobs:
       - name: Build TypeScript, run Rust tests, generate bindings
         working-directory: deltachat-jsonrpc-bindings/typescript
         run: npm run build
-      - name: Run integration tests
+      - name: Run integration tests with online coverage
+        if: vars.CHATMAIL_DOMAIN != ''
         working-directory: deltachat-jsonrpc-bindings/typescript
         run: npm run test
         env:
           CHATMAIL_DOMAIN: ${{ vars.CHATMAIL_DOMAIN }}
+      - name: Run offline integration tests
+        if: vars.CHATMAIL_DOMAIN == ''
+        working-directory: deltachat-jsonrpc-bindings/typescript
+        run: |
+          echo 'CHATMAIL_DOMAIN is not configured; running offline integration tests without coverage.' >> "$GITHUB_STEP_SUMMARY"
+          npm run test:prepare
+          npm run test:run
       - name: Run linter
         working-directory: deltachat-jsonrpc-bindings/typescript
         run: npm run prettier:check
