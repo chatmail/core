@@ -160,7 +160,7 @@ const DB_COMMANDS: [&str; 10] = [
     "info",
     "set",
     "get",
-    "configure",
+    "init",
     "connect",
     "disconnect",
     "fetch",
