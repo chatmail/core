@@ -263,7 +263,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                  info\n\
                  set <configuration-key> [<value>]\n\
                  get <configuration-key>\n\
-                 configure\n\
+                 init [<qr>]\n\
                  connect\n\
                  disconnect\n\
                  fetch\n\
@@ -346,6 +346,13 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                  ============================================="
             ),
         },
+        "init" => {
+            if arg1.is_empty() {
+                context.init_transports(None).await?
+            } else {
+                context.init_transports(Some(arg1)).await?
+            }
+        }
         "connect" => {
             context.start_io().await;
         }
@@ -354,9 +361,6 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
         }
         "fetch" => {
             context.background_fetch().await?;
-        }
-        "configure" => {
-            context.configure().await?;
         }
         "has-backup" => {
             has_backup(&context, blobdir).await?;
