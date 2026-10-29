@@ -26,6 +26,7 @@ let
   };
 
   rustTarget = androidAttrs.${arch}.rustTarget;
+  supports16kPages = builtins.elem arch [ "arm64-v8a" "x86_64" ];
   toolchain = fenixPkgs.combine [
     fenixPkgs.stable.rustc
     fenixPkgs.stable.cargo
@@ -56,7 +57,25 @@ naersk-lib.buildPackage {
   CARGO_BUILD_RUSTFLAGS = [
     "-C"
     "linker=${targetCc}"
+  ] ++ pkgs.lib.optionals supports16kPages [
+    # NDK r27 defaults to 4 KiB. These binaries must also load on Android
+    # devices with 16 KiB pages (and remain compatible with 4 KiB devices).
+    "-C"
+    "link-arg=-Wl,-z,max-page-size=16384"
+    "-C"
+    "link-arg=-Wl,-z,common-page-size=16384"
   ];
+
+  # Check the installed binary, also used by the wheel/npm release packages.
+  # Keep this in the derivation so local builds and both CI workflows enforce it.
+  postInstall = pkgs.lib.optionalString supports16kPages ''
+    ${targetToolchain}/bin/llvm-readelf --program-headers --wide "$out/bin/${packageName}" \
+      | ${pkgs.gawk}/bin/awk '
+          $1 == "LOAD" { found = 1; if (strtonum($NF) < 16384) bad = 1 }
+          $1 == "GNU_RELRO" { if ((strtonum($3) + strtonum($6)) % 16384) bad = 1 }
+          END { if (!found || bad) { print "ELF LOAD/RELRO segments must support 16 KiB pages"; exit 1 } }
+        '
+  '';
 
   CC = "${targetCc}";
   LD = "${targetCc}";
