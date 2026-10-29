@@ -291,6 +291,18 @@ async fn test_setup_contact_ext(case: SetupContactCase) -> (TestContext, TestCon
     assert!(msg.is_info());
     assert_eq!(msg.get_text(), messages_e2ee_info_msg(&bob));
 
+    // At the end of securejoin each side must have the other side key stored.
+    // Make sure we don't accidentally store our own public key too.
+    for ctx in [&alice, &bob] {
+        let count: u32 = ctx
+            .sql
+            .query_get_value("SELECT COUNT(*) FROM public_keys", ())
+            .await
+            .expect("Failed to count public keys")
+            .unwrap();
+        assert_eq!(count, 1);
+    }
+
     (alice, bob)
 }
 

@@ -356,6 +356,11 @@ pub(crate) async fn import_public_key(
 
     let fingerprint = public_key.dc_fingerprint().hex();
 
+    if fingerprint == self_fingerprint(context).await? {
+        // Do not store own key in the keystore.
+        return Ok(());
+    }
+
     let merged_public_key;
     let merged_public_key_ref = if let Some(public_key_bytes) = context
         .sql
