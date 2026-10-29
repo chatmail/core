@@ -12,12 +12,10 @@ use crate::blob::BlobObject;
 use crate::chat::ChatId;
 use crate::config::Config;
 use crate::context::Context;
-use crate::debug_logging::set_debug_logging_xdc;
 use crate::ephemeral::start_ephemeral_timers;
 use crate::imex::{self, BLOBS_BACKUP_NAME};
 use crate::location;
 use crate::log::{LogExt, warn};
-use crate::message::MsgId;
 use crate::net::dns::prune_dns_cache;
 use crate::net::http::http_cache_cleanup;
 use crate::net::prune_connection_history;
@@ -260,14 +258,6 @@ impl Sql {
         self.try_open(context, &self.dbfile, passphrase).await?;
         info!(context, "Opened database {:?}.", self.dbfile);
         *self.is_encrypted.write().await = Some(passphrase_nonempty);
-
-        // setup debug logging if there is an entry containing its id
-        if let Some(xdc_id) = self
-            .get_raw_config_u32(Config::DebugLogging.as_ref())
-            .await?
-        {
-            set_debug_logging_xdc(context, Some(MsgId::new(xdc_id))).await?;
-        }
         Ok(())
     }
 
@@ -616,13 +606,6 @@ impl Sql {
 
     /// Returns 32-bit signed integer configuration value for the given key.
     pub async fn get_raw_config_int(&self, key: &str) -> Result<Option<i32>> {
-        self.get_raw_config(key)
-            .await
-            .map(|s| s.and_then(|s| s.parse().ok()))
-    }
-
-    /// Returns 32-bit unsigned integer configuration value for the given key.
-    pub async fn get_raw_config_u32(&self, key: &str) -> Result<Option<u32>> {
         self.get_raw_config(key)
             .await
             .map(|s| s.and_then(|s| s.parse().ok()))

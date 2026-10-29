@@ -21,7 +21,6 @@ use crate::config::Config;
 use crate::constants::{Blocked, Chattype};
 use crate::contact::{self, Contact, ContactId};
 use crate::context::Context;
-use crate::debug_logging::set_debug_logging_xdc;
 use crate::download::DownloadState;
 use crate::ephemeral::Timer as EphemeralTimer;
 use crate::events::EventType;
@@ -1619,18 +1618,6 @@ pub(crate) async fn delete_msg_locally(context: &Context, msg: &Message) -> Resu
 
     if msg.viewtype == Viewtype::Webxdc {
         context.emit_event(EventType::WebxdcInstanceDeleted { msg_id: msg.id });
-    }
-
-    let logging_xdc_id = context
-        .debug_logging
-        .read()
-        .expect("RwLock is poisoned")
-        .as_ref()
-        .map(|dl| dl.msg_id);
-    if let Some(id) = logging_xdc_id
-        && id == msg.id
-    {
-        set_debug_logging_xdc(context, None).await?;
     }
 
     Ok(())
