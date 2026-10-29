@@ -398,11 +398,6 @@ pub enum Config {
     #[strum(props(default = "1"))]
     SyncMsgs,
 
-    /// Let the core save all events to the database.
-    /// This value is used internally to remember the MsgId of the logging xdc
-    #[strum(props(default = "0"))]
-    DebugLogging,
-
     /// Last message processed by the bot.
     LastMsgId,
 

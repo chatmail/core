@@ -116,15 +116,6 @@ impl SchedulerState {
         // to allow for clean shutdown.
         context.new_msgs_notify.notify_one();
 
-        let debug_logging = context
-            .debug_logging
-            .write()
-            .expect("RwLock is poisoned")
-            .take();
-        if let Some(debug_logging) = debug_logging {
-            debug_logging.loop_handle.abort();
-            debug_logging.loop_handle.await.ok();
-        }
         let prev_state = std::mem::replace(inner, new_state);
         context.emit_event(EventType::ConnectivityChanged);
         match prev_state {
