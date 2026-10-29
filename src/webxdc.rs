@@ -63,6 +63,10 @@ const WEBXDC_DEFAULT_ICON: &str = "__webxdc__/default-icon.png";
 /// Text shown to classic e-mail users in the visible e-mail body.
 const BODY_DESCR: &str = "Webxdc Status Update";
 
+fn webxdc_default_icon_vec() -> Vec<u8> {
+    include_bytes!("../assets/icon-webxdc.png").to_vec()
+}
+
 /// Raw information read from manifest.toml
 #[derive(Debug, Deserialize, Default)]
 #[non_exhaustive]
@@ -879,12 +883,12 @@ impl Message {
     /// `name` is the filename within the archive, e.g. `index.html`.
     ///
     /// If the file is `icon.png` or `icon.jpg`,
-    /// loading it may fail if dimensions are unexpectedly large.
+    /// it may return default icon if dimensions are unexpectedly large.
     pub async fn get_webxdc_blob(&self, context: &Context, name: &str) -> Result<Vec<u8>> {
         ensure!(self.viewtype == Viewtype::Webxdc, "No webxdc instance.");
 
         if name == WEBXDC_DEFAULT_ICON {
-            return Ok(include_bytes!("../assets/icon-webxdc.png").to_vec());
+            return Ok(webxdc_default_icon_vec());
         }
 
         // ignore first slash.
@@ -914,17 +918,31 @@ impl Message {
                 .with_guessed_format()
                 .context("Reading from Cursor must never fail")?;
             match image_reader.format() {
-                None => bail!("Unable to determine image format"),
+                None => {
+                    warn!(context, "Unable to determine image format.");
+                    return Ok(webxdc_default_icon_vec());
+                }
                 Some(ImageFormat::Png) | Some(ImageFormat::Jpeg) => {
                     // We accept PNG named icon.jpg and JPEG named icon.png
                     // to avoid incompatibilities, but no unexpected formats like GIF.
                 }
-                Some(format) => bail!("Unexpected icon format {format:?}"),
+                Some(format) => {
+                    warn!(context, "Unexpected icon format {format:?}.");
+                    return Ok(webxdc_default_icon_vec());
+                }
             }
-            let (width, height) = image_reader
-                .into_dimensions()
-                .context("Failed to determine icon dimensions")?;
-            ensure!(width <= 4096 && height <= 4096, "Icon is too large");
+            match image_reader.into_dimensions() {
+                Ok((width, height)) => {
+                    if width > 4096 || height > 4096 {
+                        warn!(context, "Icon is too large.");
+                        return Ok(webxdc_default_icon_vec());
+                    }
+                }
+                Err(err) => {
+                    warn!(context, "Failed to determine icon dimensions: {err:#}.");
+                    return Ok(webxdc_default_icon_vec());
+                }
+            }
         }
         Ok(blob)
     }
