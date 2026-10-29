@@ -206,6 +206,7 @@ yerpc = "0.7"
 [features]
 default = ["vendored"]
 internals = []
+haiku = ["rusqlite/bundled-sqlcipher"]
 vendored = [
   "rusqlite/bundled-sqlcipher-vendored-openssl",
   "async-native-tls/vendored"
