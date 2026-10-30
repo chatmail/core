@@ -6,7 +6,8 @@ use std::sync::atomic::Ordering;
 
 use anyhow::{Context as _, Error, Result};
 use async_channel::{self as channel, Receiver, Sender};
-use futures_lite::FutureExt;
+use futures::future::FutureExt as _;
+use futures_lite::FutureExt as _;
 use tokio::sync::{RwLock, oneshot};
 use tokio::task::{self, JoinSet};
 use tokio_util::sync::CancellationToken;
@@ -603,115 +604,99 @@ async fn fetch_idle(ctx: &Context, connection: &mut Imap, mut session: Session) 
 }
 
 async fn smtp_loop(ctx: Context, smtp_handlers: SmtpConnectionHandlers) {
-    use futures::future::FutureExt;
-
     info!(ctx, "Starting SMTP loop.");
     let SmtpConnectionHandlers {
         mut connection,
-        stop_token,
         idle_interrupt_receiver,
     } = smtp_handlers;
 
-    let ctx1 = ctx.clone();
-    let fut = async move {
-        let ctx = ctx1;
+    // Reschedule the check to catch changes lost to a restart.
+    schedule_keyupdate_check(&ctx).await.log_err(&ctx).ok();
 
-        // Reschedule the check to catch changes lost to a restart.
-        schedule_keyupdate_check(&ctx).await.log_err(&ctx).ok();
-
-        let mut timeout = None;
-        loop {
-            if let Err(err) = send_smtp_messages(&ctx, &mut connection).await {
-                warn!(ctx, "send_smtp_messages failed: {:#}.", err);
-                timeout = Some(timeout.unwrap_or(30));
-            } else {
-                timeout = None;
-                let duration_until_can_send = ctx.ratelimit.read().await.until_can_send();
-                if !duration_until_can_send.is_zero() {
-                    info!(
-                        ctx,
-                        "smtp got rate limited, waiting for {} until can send again",
-                        duration_to_str(duration_until_can_send)
-                    );
-                    tokio::time::sleep(duration_until_can_send).await;
-                    continue;
-                }
-            }
-
-            stats::maybe_update_message_stats(&ctx)
-                .await
-                .log_err(&ctx)
-                .ok();
-
-            // Fake Idle
-            info!(ctx, "SMTP fake idle started.");
-            match &connection.last_send_error {
-                None => connection.connectivity.set_idle(&ctx),
-                Some(err) => connection.connectivity.set_err(&ctx, err.clone()),
-            }
-
-            // If send_smtp_messages() failed, we set a timeout for the fake-idle so that
-            // sending is retried (at the latest) after the timeout. If sending fails
-            // again, we increase the timeout exponentially, in order not to do lots of
-            // unnecessary retries.
-            if let Some(t) = timeout {
-                let now = tools::Time::now();
+    let mut timeout = None;
+    loop {
+        if let Err(err) = send_smtp_messages(&ctx, &mut connection).await {
+            warn!(ctx, "send_smtp_messages failed: {:#}.", err);
+            timeout = Some(timeout.unwrap_or(30));
+        } else {
+            timeout = None;
+            let duration_until_can_send = ctx.ratelimit.read().await.until_can_send();
+            if !duration_until_can_send.is_zero() {
                 info!(
                     ctx,
-                    "SMTP has messages to retry, planning to retry {t} seconds later."
+                    "smtp got rate limited, waiting for {} until can send again",
+                    duration_to_str(duration_until_can_send)
                 );
-                let duration = std::time::Duration::from_secs(t);
+                tokio::time::sleep(duration_until_can_send).await;
+                continue;
+            }
+        }
+
+        stats::maybe_update_message_stats(&ctx)
+            .await
+            .log_err(&ctx)
+            .ok();
+
+        // Fake Idle
+        info!(ctx, "SMTP fake idle started.");
+        match &connection.last_send_error {
+            None => connection.connectivity.set_idle(&ctx),
+            Some(err) => connection.connectivity.set_err(&ctx, err.clone()),
+        }
+
+        // If send_smtp_messages() failed, we set a timeout for the fake-idle so that
+        // sending is retried (at the latest) after the timeout. If sending fails
+        // again, we increase the timeout exponentially, in order not to do lots of
+        // unnecessary retries.
+        if let Some(t) = timeout {
+            let now = tools::Time::now();
+            info!(
+                ctx,
+                "SMTP has messages to retry, planning to retry {t} seconds later."
+            );
+            let duration = std::time::Duration::from_secs(t);
+            if let Ok(Err(async_channel::RecvError)) =
+                tokio::time::timeout(duration, idle_interrupt_receiver.recv()).await
+            {
+                break;
+            }
+            let slept = time_elapsed(&now).as_secs();
+            timeout = Some(cmp::max(
+                t,
+                slept.saturating_add(rand::random_range((slept / 2)..=slept)),
+            ));
+        } else {
+            // Queue is drained: send a due keyupdate without delaying real messages.
+            let next_check = ctx.next_keyupdate_check.load(Ordering::Relaxed);
+            let wait = u64::try_from(next_check.saturating_sub(time())).unwrap_or_default();
+            if next_check != 0 && wait == 0 {
+                // Clear first so that an intervening transport change schedules a new check.
+                ctx.next_keyupdate_check.store(0, Ordering::Relaxed);
+                maybe_send_keyupdate_message(&ctx)
+                    .await
+                    .context("Failed to send keyupdate message")
+                    .log_err(&ctx)
+                    .ok();
+                continue;
+            }
+
+            info!(ctx, "SMTP has no messages to retry, waiting for interrupt.");
+            let interrupt = idle_interrupt_receiver.recv();
+            if next_check != 0 {
                 if let Ok(Err(async_channel::RecvError)) =
-                    tokio::time::timeout(duration, idle_interrupt_receiver.recv()).await
+                    tokio::time::timeout(std::time::Duration::from_secs(wait), interrupt).await
                 {
                     break;
                 }
-                let slept = time_elapsed(&now).as_secs();
-                timeout = Some(cmp::max(
-                    t,
-                    slept.saturating_add(rand::random_range((slept / 2)..=slept)),
-                ));
             } else {
-                // Queue is drained: send a due keyupdate without delaying real messages.
-                let next_check = ctx.next_keyupdate_check.load(Ordering::Relaxed);
-                let wait = u64::try_from(next_check.saturating_sub(time())).unwrap_or_default();
-                if next_check != 0 && wait == 0 {
-                    // Clear first so that an intervening transport change schedules a new check.
-                    ctx.next_keyupdate_check.store(0, Ordering::Relaxed);
-                    maybe_send_keyupdate_message(&ctx)
-                        .await
-                        .context("Failed to send keyupdate message")
-                        .log_err(&ctx)
-                        .ok();
-                    continue;
+                if let Err(async_channel::RecvError) = interrupt.await {
+                    break;
                 }
+            }
+        };
 
-                info!(ctx, "SMTP has no messages to retry, waiting for interrupt.");
-                let interrupt = idle_interrupt_receiver.recv();
-                if next_check != 0 {
-                    if let Ok(Err(async_channel::RecvError)) =
-                        tokio::time::timeout(std::time::Duration::from_secs(wait), interrupt).await
-                    {
-                        break;
-                    }
-                } else {
-                    if let Err(async_channel::RecvError) = interrupt.await {
-                        break;
-                    }
-                }
-            };
-
-            info!(ctx, "SMTP fake idle interrupted.")
-        }
-    };
-
-    stop_token
-        .cancelled()
-        .map(|_| {
-            info!(ctx, "Shutting down SMTP loop.");
-        })
-        .race(fut)
-        .await;
+        info!(ctx, "SMTP fake idle interrupted.")
+    }
 }
 
 impl Scheduler {
@@ -746,7 +731,17 @@ impl Scheduler {
 
         let smtp_handle = {
             let ctx = ctx.clone();
-            task::spawn(smtp_loop(ctx, smtp_handlers))
+            let ctx2 = ctx.clone();
+            let stop_token = smtp.state.stop_token.clone();
+            task::spawn(async move {
+                stop_token
+                    .cancelled()
+                    .map(|_| {
+                        info!(ctx, "Shutting down SMTP loop.");
+                    })
+                    .race(smtp_loop(ctx2, smtp_handlers))
+                    .await
+            })
         };
 
         let ephemeral_handle = {
@@ -901,17 +896,15 @@ pub(crate) struct SmtpConnectionState {
 
 impl SmtpConnectionState {
     async fn new(context: &Context) -> Result<(Self, SmtpConnectionHandlers)> {
-        let stop_token = CancellationToken::new();
         let (idle_interrupt_sender, idle_interrupt_receiver) = channel::bounded(1);
 
         let handlers = SmtpConnectionHandlers {
             connection: Smtp::new(context).await?,
-            stop_token: stop_token.clone(),
             idle_interrupt_receiver,
         };
 
         let state = ConnectionState {
-            stop_token,
+            stop_token: CancellationToken::new(),
             idle_interrupt_sender,
             connectivity: handlers.connection.connectivity.clone(),
         };
@@ -934,7 +927,6 @@ impl SmtpConnectionState {
 
 struct SmtpConnectionHandlers {
     connection: Smtp,
-    stop_token: CancellationToken,
     idle_interrupt_receiver: Receiver<()>,
 }
 
