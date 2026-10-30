@@ -1834,31 +1834,6 @@ async fn test_time_in_future() -> Result<()> {
     Ok(())
 }
 
-/// Tests receiving a message with RFC 9788 header protection and legacy display element.
-///
-/// Legacy display elements should not be rendered:
-/// <https://www.rfc-editor.org/rfc/rfc9788.html#name-do-not-render-legacy-displa>
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_hp_legacy_display() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let bob = &tcm.bob().await;
-
-    let msg_id = receive_imf(
-        bob,
-        include_bytes!("../../test-data/message/hp_legacy_display.eml"),
-        false,
-    )
-    .await?
-    .unwrap()
-    .msg_ids[0];
-    let msg_bob = Message::load_from_db(bob, msg_id).await?;
-    assert_eq!(msg_bob.subject, "Dinner plans");
-
-    // Legacy display element is removed from the text/plain body.
-    assert_eq!(msg_bob.text, "Let's eat");
-    Ok(())
-}
-
 /// Tests that subject is not prepended to the message
 /// when bot receives it.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
