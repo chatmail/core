@@ -248,28 +248,6 @@ fn find_zip_entry<'a>(
 const STATUS_UPDATE_SIZE_MAX: usize = 100 << 10;
 
 impl Context {
-    /// check if a file is an acceptable webxdc for sending or receiving.
-    pub(crate) async fn is_webxdc_file(&self, filename: &str, file: &[u8]) -> Result<bool> {
-        if !filename.ends_with(WEBXDC_SUFFIX) {
-            return Ok(false);
-        }
-
-        let archive = match async_zip::base::read::mem::ZipFileReader::new(file.to_vec()).await {
-            Ok(archive) => archive,
-            Err(_) => {
-                info!(self, "{} cannot be opened as zip-file", &filename);
-                return Ok(false);
-            }
-        };
-
-        if find_zip_entry(archive.file(), "index.html").is_none() {
-            info!(self, "{} misses index.html", &filename);
-            return Ok(false);
-        }
-
-        Ok(true)
-    }
-
     /// Ensure that a file is an acceptable webxdc for sending.
     pub(crate) async fn ensure_sendable_webxdc_file(&self, path: &Path) -> Result<()> {
         let filename = path.to_str().unwrap_or_default();
