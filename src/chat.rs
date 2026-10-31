@@ -24,7 +24,6 @@ use crate::constants::{
 };
 use crate::contact::{self, Contact, ContactId, Origin};
 use crate::context::Context;
-use crate::debug_logging::maybe_set_logging_xdc;
 use crate::download::{DownloadState, PRE_MSG_ATTACHMENT_SIZE_THRESHOLD};
 use crate::ensure_and_debug_assert_eq;
 use crate::ephemeral::{Timer as EphemeralTimer, start_chat_ephemeral_timers};
@@ -2026,7 +2025,6 @@ impl Chat {
             context.new_msgs_notify.notify_one();
             msg.id = MsgId::new(u32::try_from(raw_id)?);
 
-            maybe_set_logging_xdc(context, msg, self.id).await?;
             context
                 .update_webxdc_integration_database(msg, context)
                 .await?;
