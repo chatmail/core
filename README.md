@@ -65,16 +65,15 @@ and run as
 $ deltachat-repl ~/profile-db
 ```
 
-Configure your account (if not already configured):
+Set display name for the profile and add transports:
 
 ```
 Chatmail is awaiting your commands.
-> set addr your@email.org
-> set mail_pw yourpassword
-> configure
+> set displayname Alice
+> init
 ```
 
-Connect to your mail server (if already configured):
+Connect:
 
 ```
 > connect
