@@ -227,3 +227,36 @@ async fn test_key_contacts_migration_verified() -> Result<()> {
 
     Ok(())
 }
+
+/// If there is a single transport AND it is on nine.testrun.org,
+/// `autorelay` should get enabled.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_autorelay_migration_171() -> Result<()> {
+    let t = STOP_MIGRATIONS_AT
+        .scope(170, async move { TestContext::new_alice().await })
+        .await;
+    t.sql
+        .execute("UPDATE transports SET addr='alice@nine.testrun.org'", ())
+        .await?;
+    assert_eq!(t.get_config(Config::Autorelay).await?, None);
+    t.sql.run_migrations(&t).await?;
+    assert_eq!(t.get_config(Config::Autorelay).await?.as_deref(), Some("1"));
+
+    let t = STOP_MIGRATIONS_AT
+        .scope(170, async move { TestContext::new_alice().await })
+        .await;
+    t.sql.run_migrations(&t).await?;
+    assert_eq!(t.get_config(Config::Autorelay).await?, None);
+
+    let t = STOP_MIGRATIONS_AT
+        .scope(170, async move { TestContext::new_alice().await })
+        .await;
+    t.sql
+        .execute("UPDATE transports SET addr='alice@nine.testrun.org'", ())
+        .await?;
+    add_pseudo_transport(&t, "alice2@nine.testrun.org").await?;
+    t.sql.run_migrations(&t).await?;
+    assert_eq!(t.get_config(Config::Autorelay).await?, None);
+
+    Ok(())
+}
