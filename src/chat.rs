@@ -13,6 +13,7 @@ use deltachat_contact_tools::{ContactAddress, sanitize_bidi_characters, sanitize
 use mail_builder::mime::MimePart;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
+use tokio_util::sync::CancellationToken;
 
 use crate::blob::BlobObject;
 use crate::chatlist::Chatlist;
@@ -2659,7 +2660,9 @@ pub async fn send_msg_sync(context: &Context, chat_id: ChatId, msg: &mut Message
     if rowids.is_empty() {
         return Ok(msg.id);
     }
-    let mut smtp = crate::smtp::Smtp::new();
+    let stop_token = CancellationToken::new();
+    let mut smtp = crate::smtp::Smtp::new(context, stop_token.clone()).await?;
+    let _drop_guard = stop_token.drop_guard();
     for rowid in rowids {
         send_msg_to_smtp(context, &mut smtp, rowid)
             .await
