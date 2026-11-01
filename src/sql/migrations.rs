@@ -2713,6 +2713,20 @@ CREATE TABLE smtp_failure (
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 171)?;
+    if dbversion < migration_version {
+        // If the only transport is on nine.testrun.org,
+        // fill it up with 2 more relays.
+        sql.execute_migration(
+            "INSERT OR REPLACE INTO config (keyname, value)
+             SELECT 'autorelay', '1'
+             WHERE (SELECT COUNT(*) FROM transports) = 1
+               AND (SELECT addr FROM transports) LIKE '%@nine.testrun.org'",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
