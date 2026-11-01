@@ -21,7 +21,6 @@ use crate::config::Config;
 use crate::constants::{Blocked, Chattype, EDITED_PREFIX};
 use crate::contact::{self, Contact, ContactId, Origin};
 use crate::context::Context;
-use crate::debug_logging::maybe_set_logging_xdc_inner;
 use crate::download::{DownloadState, msg_is_downloaded_for};
 use crate::ephemeral::{Timer as EphemeralTimer, stock_ephemeral_timer_changed};
 use crate::events::EventType;
@@ -2285,7 +2284,6 @@ INSERT INTO msgs
         created_db_entries.push(row_id);
     }
 
-    // Maybe set logging xdc and add gossip topics for webxdcs.
     for (part, msg_id) in mime_parser.parts.iter().zip(&created_db_entries) {
         if mime_parser.pre_message != PreMessageMode::Post
             && part.typ == Viewtype::Webxdc
@@ -2294,15 +2292,6 @@ INSERT INTO msgs
             let topic = iroh_topic_from_str(topic)?;
             insert_topic_stub(context, *msg_id, topic).await?;
         }
-
-        maybe_set_logging_xdc_inner(
-            context,
-            part.typ,
-            chat_id,
-            part.param.get(Param::Filename),
-            *msg_id,
-        )
-        .await?;
     }
 
     let unarchive = match mime_parser.get_header(HeaderDef::ChatGroupMemberRemoved) {
