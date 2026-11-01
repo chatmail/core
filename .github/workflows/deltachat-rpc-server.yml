@@ -34,7 +34,7 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
 
       - name: Build deltachat-rpc-server binaries
         run: nix build .#deltachat-rpc-server-${{ matrix.arch }}-linux
@@ -58,7 +58,7 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
 
       - name: Build deltachat-rpc-server wheels
         run: nix build .#deltachat-rpc-server-${{ matrix.arch }}-linux-wheel
@@ -82,7 +82,7 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
 
       - name: Build deltachat-rpc-server binaries
         run: nix build .#deltachat-rpc-server-${{ matrix.arch }}
@@ -106,7 +106,7 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
 
       - name: Build deltachat-rpc-server wheels
         run: nix build .#deltachat-rpc-server-${{ matrix.arch }}-wheel
@@ -157,7 +157,7 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
 
       - name: Build deltachat-rpc-server binaries
         run: nix build .#deltachat-rpc-server-${{ matrix.arch }}-android
@@ -181,7 +181,7 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
 
       - name: Build deltachat-rpc-server wheels
         run: nix build .#deltachat-rpc-server-${{ matrix.arch }}-android-wheel
@@ -208,7 +208,7 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
 
       - name: Download Linux aarch64 binary
         uses: actions/download-artifact@v7
