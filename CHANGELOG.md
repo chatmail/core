@@ -1,5 +1,36 @@
 # Changelog
 
+## [2.67.0] - 2026-11-02
+
+### Fixes
+
+- return default webxdc icon instead of an error if the icon in .xdc is broken.
+- remove buggy support for RFC 9788 "legacy display elements".
+
+### Features / Changes
+
+- replace deltachat-repl `configure` command with `init`.
+- detect webxdc by application/webxdc+zip MIME type.
+
+### Miscellaneous Tasks
+
+- fix future incompatibility warning ([#8869](https://github.com/chatmail/core/pull/8869)).
+- cargo: bump tokio-rustls from 0.26.5 to 0.26.6. It contains a fix for regression in error handling introduced in core 2.65.0 with an upgrade of tokio-rustls from 0.26.4 to 0.26.5.
+- cargo: bump smallvec from 1.16.1 to 1.16.4.
+- deps: bump taiki-e/install-action from 2.87.20 to 2.87.31.
+- cargo: bump serde_json from 1.0.151 to 1.0.154.
+- cargo: bump libc from 0.2.189 to 0.2.191.
+- cargo: bump syn from 3.0.6 to 3.0.9.
+- cargo: bump tokio from 1.53.3 to 1.54.1.
+- deps: bump cachix/install-nix-action from 31.11.1 to 31.11.3.
+- cargo: bump uuid from 1.26.1 to 1.29.0.
+- deps: bump swatinem/rust-cache from 2.9.2 to 2.9.3.
+- cargo: bump webpki-roots from 1.0.10 to 1.0.11.
+- cargo: bump tokio-util from 0.7.19 to 0.7.20.
+- cargo: bump hyper from 1.11.1 to 1.12.0.
+- deps: bump actions/setup-python from 7.0.0 to 7.1.0.
+- cargo: bump mailparse from 0.17.0 to 0.18.0.
+
 ## [2.66.0] - 2026-10-28
 
 ### API-Changes
@@ -9098,3 +9129,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.64.0]: https://github.com/chatmail/core/compare/v2.63.0..v2.64.0
 [2.65.0]: https://github.com/chatmail/core/compare/v2.64.0..v2.65.0
 [2.66.0]: https://github.com/chatmail/core/compare/v2.65.0..v2.66.0
+[2.67.0]: https://github.com/chatmail/core/compare/v2.66.0..v2.67.0
