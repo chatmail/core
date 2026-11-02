@@ -1299,12 +1299,12 @@ async fn test_mime_modified_large_plain() -> Result<()> {
 
     {
         let mimemsg = MimeMessage::from_bytes(&t, long_txt.as_ref()).await?;
-        assert!(mimemsg.is_mime_modified);
-        assert!(
-            mimemsg.parts[0].msg.matches("just repeated").count()
-                <= DC_DESIRED_TEXT_LEN / REPEAT_TXT.len()
+        assert!(!mimemsg.is_mime_modified);
+        assert!(mimemsg.parts[0].msg.matches("just repeated").count() == REPEAT_CNT);
+        assert_eq!(
+            mimemsg.parts[0].msg.len() + 1,
+            REPEAT_TXT.len() * REPEAT_CNT
         );
-        assert!(mimemsg.parts[0].msg.len() <= DC_DESIRED_TEXT_LEN + DC_ELLIPSIS.len());
     }
 
     for draft in [false, true] {
@@ -1320,9 +1320,16 @@ async fn test_mime_modified_large_plain() -> Result<()> {
         assert_eq!(html.matches("<!DOCTYPE html>").count(), 1);
         assert_eq!(html.matches("just repeated.<br/>").count(), REPEAT_CNT);
         assert!(
-            msg.text.matches("just repeated.").count() <= DC_DESIRED_TEXT_LEN / REPEAT_TXT.len()
+            msg.truncated_text
+                .as_ref()
+                .unwrap()
+                .matches("just repeated.")
+                .count()
+                <= DC_DESIRED_TEXT_LEN / REPEAT_TXT.len()
         );
-        assert!(msg.text.len() <= DC_DESIRED_TEXT_LEN + DC_ELLIPSIS.len());
+        assert!(
+            msg.truncated_text.as_ref().unwrap().len() <= DC_DESIRED_TEXT_LEN + DC_ELLIPSIS.len()
+        );
 
         let msg = t1.recv_msg(&sent_msg).await;
         assert!(msg.has_html());

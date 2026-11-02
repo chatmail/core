@@ -32,10 +32,9 @@ use crate::param::{Param, Params};
 use crate::reaction::get_msg_reactions;
 use crate::summary::Summary;
 use crate::sync::SyncData;
-use crate::tools::create_outgoing_rfc724_mid;
 use crate::tools::{
-    get_filebytes, get_filemeta, gm2local_offset, read_file, sanitize_filename, time,
-    timestamp_to_str,
+    create_outgoing_rfc724_mid, get_filebytes, get_filemeta, gm2local_offset, read_file,
+    sanitize_filename, time, timestamp_to_str, truncate_msg_text,
 };
 
 /// Message ID, including reserved IDs.
@@ -413,7 +412,19 @@ pub struct Message {
     pub(crate) timestamp_rcvd: i64,
     pub(crate) ephemeral_timer: EphemeralTimer,
     pub(crate) ephemeral_timestamp: i64,
+
+    /// Message text.
+    ///
+    /// Never truncated for new messages.
+    /// Older messages stored by core <=2.67.0 may have this text truncated
+    /// because it is stored truncated in the database.
     pub(crate) text: String,
+
+    /// Truncated text if the message text is long, `None` otherwise.
+    ///
+    /// Always `None` for drafts so user can edit the full text.
+    pub(crate) truncated_text: Option<String>,
+
     /// Text that is added to the end of Message.text
     ///
     /// Currently used for adding the download information on pre-messages
@@ -562,6 +573,7 @@ impl Message {
                         pinned: row.get("pinned")?,
                         mime_modified: row.get("mime_modified")?,
                         text,
+                        truncated_text: None,
                         additional_text: String::new(),
                         subject: row.get("subject")?,
                         param: row.get::<_, String>("param")?.parse().unwrap_or_default(),
@@ -579,6 +591,19 @@ impl Message {
             .with_context(|| format!("failed to load message {id} from the database"))?;
 
         if let Some(msg) = &mut msg {
+            // Don't truncate drafts, so that the user can edit the full text.
+            // Don't truncate outgoing edited messages, since truncating them
+            // would mean that they are not editable anymore.
+            if msg.state != MessageState::OutDraft
+                && !(msg.is_edited() && msg.from_id == ContactId::SELF)
+            {
+                let (truncated_text, was_truncated) =
+                    truncate_msg_text(context, msg.text.clone()).await?;
+                if was_truncated {
+                    msg.truncated_text = Some(truncated_text);
+                }
+            }
+
             msg.additional_text =
                 Self::get_additional_text(context, msg.download_state, &msg.param);
         }
@@ -825,10 +850,17 @@ impl Message {
 
     /// Returns the text of the message.
     ///
+    /// Returned text may be truncated if the message is long,
+    /// in this case full text is available as HTML.
+    ///
     /// Currently this includes `additional_text`, but this may change in future, when the UIs show
     /// the necessary info themselves.
     pub fn get_text(&self) -> String {
-        self.text.clone() + &self.additional_text
+        self.truncated_text
+            .as_deref()
+            .unwrap_or(&self.text)
+            .to_string()
+            + &self.additional_text
     }
 
     /// Returns message subject.
@@ -1067,6 +1099,7 @@ impl Message {
     /// Sets or unsets message text.
     pub fn set_text(&mut self, text: String) {
         self.text = text;
+        self.truncated_text = None;
     }
 
     /// Sets the email's subject. If it's empty, a default subject

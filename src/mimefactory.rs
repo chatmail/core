@@ -1877,7 +1877,7 @@ impl MimeFactory {
 
         let mut parts = Vec::new();
 
-        if msg.has_html() {
+        if msg.mime_modified {
             let html = if let Some(html) = msg.param.get(Param::SendHtml) {
                 Some(html.to_string())
             } else if let Some(orig_msg_id) = msg.param.get_int(Param::Forwarded)

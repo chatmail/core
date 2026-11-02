@@ -44,7 +44,6 @@ use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::{
     IsNoneOrEmpty, SystemTime, buf_compress, create_broadcast_secret, create_id,
     create_outgoing_rfc724_mid, get_abs_path, gm2local_offset, normalize_text, time,
-    truncate_msg_text,
 };
 use crate::webxdc::StatusUpdateSerial;
 use crate::{ensure_and_debug_assert_eq, ensure_and_debug_assert_ne};
@@ -1911,8 +1910,7 @@ impl Chat {
             }
         };
 
-        let (msg_text, was_truncated) = truncate_msg_text(context, msg.text.clone()).await?;
-        let new_mime_headers = if msg.has_html() {
+        let new_mime_headers = if msg.mime_modified {
             msg.param.get(Param::SendHtml).map(|s| s.to_string())
         } else {
             None
@@ -1922,13 +1920,6 @@ impl Chat {
             let mut buffer = Vec::new();
             html_part.write_part(&mut buffer);
             String::from_utf8_lossy(&buffer).to_string()
-        });
-        let new_mime_headers = new_mime_headers.or_else(|| match was_truncated {
-            // We need to add some headers so that they are stripped before formatting HTML by
-            // `MsgId::get_html()`, not a part of the actual text. Let's add "Content-Type", it's
-            // anyway a useful metadata about the stored text.
-            true => Some("Content-Type: text/plain; charset=utf-8\r\n\r\n".to_string() + &msg.text),
-            false => None,
         });
         let new_mime_headers = match new_mime_headers {
             Some(h) => Some(tokio::task::block_in_place(move || {
@@ -1960,8 +1951,8 @@ impl Chat {
                         msg.timestamp_sort,
                         msg.viewtype,
                         msg.state,
-                        msg_text,
-                        normalize_text(&msg_text),
+                        msg.text,
+                        normalize_text(&msg.text),
                         &msg.subject,
                         msg.param.to_string(),
                         msg.hidden,
@@ -2011,8 +2002,8 @@ impl Chat {
                         msg.timestamp_sort,
                         msg.viewtype,
                         msg.state,
-                        msg_text,
-                        normalize_text(&msg_text),
+                        msg.text,
+                        normalize_text(&msg.text),
                         &msg.subject,
                         msg.param.to_string(),
                         msg.hidden,
@@ -4526,7 +4517,7 @@ pub async fn forward_msgs_2ctx(
         msg.param.steal(param, Param::ProtectQuote);
         msg.param.steal(param, Param::Quote);
         msg.param.steal(param, Param::Summary1);
-        if msg.has_html() {
+        if msg.mime_modified {
             msg.set_html(src_msg_id.get_html(ctx_src).await?);
         }
         msg.in_reply_to = None;
