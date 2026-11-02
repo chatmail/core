@@ -27,6 +27,13 @@ use pretty_assertions::assert_eq;
 use strum::IntoEnumIterator;
 use tokio::fs;
 
+const REPEAT_TXT: &str = "this text with 42 chars is just repeated.\n";
+const REPEAT_CNT: usize = constants::DC_DESIRED_TEXT_LEN / REPEAT_TXT.len() + 2;
+
+fn long_text() -> String {
+    REPEAT_TXT.repeat(REPEAT_CNT)
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_chat_info() {
     let t = TestContext::new().await;
@@ -101,6 +108,24 @@ async fn test_get_draft() {
     let msg_text = msg.get_text();
     let draft_text = draft.get_text();
     assert_eq!(msg_text, draft_text);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_set_get_long_draft() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+
+    let long_txt = long_text();
+    let chat_id = alice.get_self_chat().await.id;
+    let mut msg = Message::new_text(long_txt.clone());
+
+    chat_id.set_draft(alice, Some(&mut msg)).await?;
+    let draft = chat_id.get_draft(alice).await?.unwrap();
+    assert_eq!(draft.text, long_txt);
+    assert_eq!(draft.truncated_text, None);
+    assert!(!draft.has_html());
+
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -2335,6 +2360,82 @@ async fn test_forward_quote() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_forward_long_text() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let alice_chat_id = alice.create_chat_id(bob).await;
+
+    let long_txt = long_text();
+
+    // Alice sends a message to Bob.
+    let sent_msg = alice.send_text(alice_chat_id, &long_txt).await;
+    let received_msg = bob.recv_msg(&sent_msg).await;
+    assert!(!received_msg.is_forwarded());
+    assert_eq!(received_msg.mime_modified, false);
+    assert_eq!(received_msg.has_html(), true);
+    assert_eq!(received_msg.text, long_txt.trim_end());
+    assert!(received_msg.truncated_text.is_some());
+    let bob_text = received_msg.get_text();
+    assert!(bob_text.matches("just repeated.").count() > 0);
+    assert!(bob_text.matches("just repeated.").count() < REPEAT_CNT);
+
+    // Alice forwards a message to Bob.
+    forward_msgs(alice, &[sent_msg.sender_msg_id], alice_chat_id).await?;
+    let sent_msg2 = alice.pop_sent_msg().await;
+    let alice_msg2 = sent_msg2.load_from_db().await;
+    assert_eq!(alice_msg2.text, long_txt);
+    assert!(alice_msg2.truncated_text.is_some());
+    assert!(alice_msg2.has_html());
+
+    let received_msg2 = bob.recv_msg(&sent_msg2).await;
+    assert!(received_msg2.is_forwarded());
+    assert_eq!(received_msg2.mime_modified, false);
+    assert_eq!(received_msg2.has_html(), true);
+    assert_eq!(received_msg2.text, long_txt.trim_end());
+    assert!(received_msg2.truncated_text.is_some());
+    let bob_text2 = received_msg2.get_text();
+    assert!(bob_text2.matches("just repeated.").count() > 0);
+    assert!(bob_text2.matches("just repeated.").count() < REPEAT_CNT);
+
+    // Alice forwards the same message to Bob again.
+    // This is to test that forwarding the message once
+    // did not result in storing truncated text on the sender side.
+    forward_msgs(alice, &[sent_msg.sender_msg_id], alice_chat_id).await?;
+    let sent_msg3 = alice.pop_sent_msg().await;
+    let alice_msg3 = sent_msg3.load_from_db().await;
+    assert_eq!(alice_msg3.text, long_txt);
+    assert!(alice_msg3.truncated_text.is_some());
+    assert!(alice_msg3.has_html());
+
+    let received_msg3 = bob.recv_msg(&sent_msg3).await;
+    assert!(received_msg3.is_forwarded());
+    assert_eq!(received_msg3.mime_modified, false);
+    assert_eq!(received_msg3.has_html(), true);
+    assert_eq!(received_msg3.text, long_txt.trim_end());
+    assert!(received_msg3.truncated_text.is_some());
+    let bob_text3 = received_msg3.get_text();
+    assert!(bob_text3.matches("just repeated.").count() > 0);
+    assert!(bob_text3.matches("just repeated.").count() < REPEAT_CNT);
+
+    // Check original message on the sender side.
+    let alice_msg = sent_msg.load_from_db().await;
+    assert_eq!(alice_msg.mime_modified, false);
+    assert_eq!(alice_msg.has_html(), true);
+    assert_eq!(alice_msg.text, long_txt);
+    assert!(
+        alice_msg
+            .truncated_text
+            .unwrap()
+            .matches("just repeated.")
+            .count()
+            < REPEAT_CNT
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_forward_group() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
@@ -2497,6 +2598,42 @@ async fn test_save_msgs() -> Result<()> {
     rcvd_msg.chat_id.delete(&bob).await?;
     let msg = Message::load_from_db(&bob, saved_msg.id).await?;
     assert!(msg.get_original_msg_id(&bob).await?.is_none());
+
+    Ok(())
+}
+
+/// Tests saving long messages to "Saved messages" on both the sender and receiver side.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_save_long_msg() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = tcm.alice().await;
+    let bob = tcm.bob().await;
+    let alice_chat = alice.create_chat(&bob).await;
+
+    let long_txt = long_text();
+    let sent = alice.send_text(alice_chat.get_id(), &long_txt).await;
+
+    let alice_self_chat = alice.get_self_chat().await;
+    save_msgs(&alice, &[sent.sender_msg_id]).await?;
+
+    let alice_saved_msg = alice.get_last_msg_in(alice_self_chat.id).await;
+    assert_eq!(alice_saved_msg.text, long_txt);
+    let alice_saved_text = alice_saved_msg.get_text();
+    assert!(alice_saved_text.matches("just repeated.").count() > 0);
+    assert!(alice_saved_text.matches("just repeated.").count() < REPEAT_CNT);
+    assert!(alice_saved_msg.has_html());
+    assert!(alice_saved_msg.truncated_text.is_some());
+
+    let rcvd_msg = bob.recv_msg(&sent).await;
+    let bob_self_chat = bob.get_self_chat().await;
+    save_msgs(&bob, &[rcvd_msg.id]).await?;
+    let bob_saved_msg = bob.get_last_msg_in(bob_self_chat.id).await;
+    assert_eq!(bob_saved_msg.text, long_txt.trim_end());
+    let bob_saved_text = bob_saved_msg.get_text();
+    assert!(bob_saved_text.matches("just repeated.").count() > 0);
+    assert!(bob_saved_text.matches("just repeated.").count() < REPEAT_CNT);
+    assert!(bob_saved_msg.has_html());
+    assert!(bob_saved_msg.truncated_text.is_some());
 
     Ok(())
 }
@@ -2790,6 +2927,37 @@ async fn test_resend_info_message_fails() -> Result<()> {
     .await?;
     let sent2 = alice.pop_sent_msg().await;
     assert!(resend_msgs(alice, &[sent2.sender_msg_id]).await.is_err());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_resend_long_message() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+
+    let alice_grp = create_group(alice, "grp").await?;
+    add_contact_to_chat(alice, alice_grp, alice.add_or_lookup_contact_id(bob).await).await?;
+
+    let long_txt = long_text();
+    let sent = alice.send_text(alice_grp, &long_txt).await;
+
+    add_contact_to_chat(
+        alice,
+        alice_grp,
+        alice.add_or_lookup_contact_id(charlie).await,
+    )
+    .await?;
+    let sent2 = alice.pop_sent_msg().await;
+    charlie.recv_msg(&sent2).await;
+
+    resend_msgs(alice, &[sent.sender_msg_id]).await?;
+    let sent3 = alice.pop_sent_msg().await;
+    let charlie_rcvd = charlie.recv_msg(&sent3).await;
+    assert!(charlie_rcvd.has_html());
+    assert_eq!(charlie_rcvd.text, long_txt.trim_end());
 
     Ok(())
 }
@@ -5998,32 +6166,44 @@ async fn test_send_edit_request() -> Result<()> {
 
     // If a message is too long after editing, it becomes an HTML message on the receiver side. On
     // the sender side it's still text so that it can be edited again.
-    static REPEAT_TXT: &str = "this text with 42 chars is just repeated.\n";
-    static REPEAT_CNT: usize = constants::DC_DESIRED_TEXT_LEN / REPEAT_TXT.len() + 2;
-    let long_txt = REPEAT_TXT.repeat(REPEAT_CNT);
+    let long_txt = long_text();
     send_edit_request(alice, alice_msg.id, long_txt.clone()).await?;
     let sent = alice.pop_sent_msg().await;
     let test = Message::load_from_db(alice, alice_msg.id).await?;
     assert!(!test.has_html());
     assert_eq!(test.text, long_txt);
+    assert_eq!(test.truncated_text, None);
     bob.recv_msg_opt(&sent).await;
     let test = Message::load_from_db(bob, bob_msg.id).await?;
     assert!(test.is_edited());
+    assert!(
+        test.truncated_text
+            .as_ref()
+            .unwrap()
+            .matches("just repeated.")
+            .count()
+            < REPEAT_CNT
+    );
     assert!(test.has_html());
     let html = test.id.get_html(bob).await?.unwrap();
     assert_eq!(html.matches("just repeated.<br/>").count(), REPEAT_CNT);
-    assert!(test.text.matches("just repeated.").count() > 0);
+    assert_eq!(test.text.matches("just repeated.").count(), REPEAT_CNT);
+    assert!(test.get_text().matches("just repeated.").count() < REPEAT_CNT);
 
     // Alice shortens the message back so it's not HTML for Bob anymore.
     send_edit_request(alice, alice_msg.id, "Text me on Delta.Chat".to_string()).await?;
     let sent = alice.pop_sent_msg().await;
     let test = Message::load_from_db(alice, alice_msg.id).await?;
     assert_eq!(test.text, "Text me on Delta.Chat");
+    assert_eq!(test.truncated_text, None);
+    assert_eq!(test.get_text(), "Text me on Delta.Chat");
     bob.recv_msg_opt(&sent).await;
     let test = Message::load_from_db(bob, bob_msg.id).await?;
     assert!(test.is_edited());
     assert!(!test.has_html());
     assert_eq!(test.text, "Text me on Delta.Chat");
+    assert_eq!(test.truncated_text, None);
+    assert_eq!(test.get_text(), "Text me on Delta.Chat");
 
     Ok(())
 }
@@ -6724,6 +6904,38 @@ async fn test_broadcast_message_replaced_to() -> Result<()> {
     // The message should be assigned to the broadcast chat
     // and not to some ad hoc group with mallory@example.org
     assert_eq!(bob_msg.chat_id, bob_chat_id);
+
+    Ok(())
+}
+
+/// Tests that long plain text is truncated even if HTML is attached.
+///
+/// There is then no way to see full plain text,
+/// but it is the sender's problem if the sender puts different text in HTML.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_long_html_message() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let long_txt = long_text();
+    let alice_chat_id = alice.create_chat_id(bob).await;
+    let mut msg = Message::new_text(long_txt.clone());
+    msg.set_html(Some("Some <b>HTML</b> text".to_string()));
+    assert!(msg.mime_modified);
+    send_msg(alice, alice_chat_id, &mut msg).await?;
+
+    let bob_msg = bob.recv_msg(&alice.pop_sent_msg().await).await;
+    assert!(bob_msg.mime_modified);
+    assert!(bob_msg.has_html());
+    assert!(bob_msg.get_text().matches("just repeated.").count() < REPEAT_CNT);
+    assert_eq!(
+        bob_msg.get_text(),
+        bob_msg.truncated_text.as_deref().unwrap()
+    );
+    assert_eq!(bob_msg.text, long_txt.trim_end());
+    let html = bob_msg.id.get_html(bob).await?.unwrap();
+    assert_eq!(html, "Some <b>HTML</b> text");
 
     Ok(())
 }

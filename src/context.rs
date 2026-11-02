@@ -1132,12 +1132,6 @@ ORDER BY m.timestamp DESC,m.id DESC",
     ///
     /// If `chat_id` is provided this searches only for messages in this chat, if `chat_id`
     /// is `None` this searches messages from all chats.
-    ///
-    /// NB: Wrt the search in long messages which are shown truncated with the "Show Full Message…"
-    /// button, we only look at the first several kilobytes. Let's not fix this -- one can send a
-    /// dictionary in the message that matches any reasonable search request, but the user won't see
-    /// the match because they should tap on "Show Full Message…" for that. Probably such messages
-    /// would only clutter search results.
     pub async fn search_msgs(&self, chat_id: Option<ChatId>, query: &str) -> Result<Vec<MsgId>> {
         let real_query = query.trim().to_lowercase();
         if real_query.is_empty() {
