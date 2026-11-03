@@ -5,7 +5,7 @@ use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use anyhow::{Context as _, Result, bail, ensure};
+use anyhow::{Context as _, Result, ensure};
 use async_channel::{self, Receiver, Sender};
 use futures::FutureExt as _;
 use futures::future;
@@ -665,7 +665,7 @@ impl Config {
             Ok(())
         });
         if locked_rx.await.is_err() {
-            bail!(
+            anyhow::bail!(
                 "Delta Chat is already running. To use Delta Chat, you must first close the existing Delta Chat process, or restart your device. (accounts.lock file is already locked)"
             );
         };
