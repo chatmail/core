@@ -33,6 +33,10 @@ $ pip install .
 
 Additional arguments to `tox` are passed to pytest, e.g. `tox -- -s` does not capture test output.
 
+When `CHATMAIL_DOMAIN` is unset or empty, tests that require online accounts
+are skipped with an explicit reason. Offline tests still run. Set the variable
+to a test relay domain to run the online suite as well.
+
 
 ## Activating current checkout of deltachat-rpc-client and -server for development 
 
