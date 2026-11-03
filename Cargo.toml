@@ -185,7 +185,12 @@ deltachat-jsonrpc = { path = "deltachat-jsonrpc", default-features = false }
 deltachat = { path = ".", default-features = false }
 futures = "0.3.32"
 futures-lite = "2.6.1"
-libc = "0.2"
+
+# Version 0.2.190 removed `libc::RTAX_MAX` on iOS that iroh-0.35.0 depends on via netdev-0.31.0
+# Commit that removed RTAX_MAX: <https://github.com/rust-lang/libc/commit/da60a42749e88b09d65cb87c0103c43f6296f13e>
+# PR: <https://github.com/rust-lang/libc/pull/5158>
+libc = ">=0.2.0, <0.2.190"
+
 log = "0.4"
 mailparse = "0.18.0"
 nu-ansi-term = "0.50"
