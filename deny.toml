@@ -13,6 +13,14 @@ ignore = [
     # Unmaintained paste
     "RUSTSEC-2024-0436",
 
+    # Unmaintained pin-utils
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0441>
+    "RUSTSEC-2026-0441",
+
+    # Unmaintained astral-tokio-tar
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0440>
+    "RUSTSEC-2026-0440",
+
     # Unmaintained rustls-pemfile
     # It is a transitive dependency of iroh 0.35.0,
     # this should be fixed by upgrading to iroh 1.0 once it is released.
