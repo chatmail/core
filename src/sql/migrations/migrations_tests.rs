@@ -232,31 +232,39 @@ async fn test_key_contacts_migration_verified() -> Result<()> {
 /// `autorelay` should get enabled.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_autorelay_migration_171() -> Result<()> {
-    let t = STOP_MIGRATIONS_AT
-        .scope(170, async move { TestContext::new_alice().await })
-        .await;
-    t.sql
-        .execute("UPDATE transports SET addr='alice@nine.testrun.org'", ())
-        .await?;
+    async fn prepare_context(addr: &str) -> TestContext {
+        let t = STOP_MIGRATIONS_AT
+            .scope(170, async move { TestContext::new_alice().await })
+            .await;
+        t.sql
+            .execute("UPDATE transports SET addr=?", (addr,))
+            .await
+            .unwrap();
+        t
+    }
+
+    // Autorelay is enabled if the relay is nine.testrun.org:
+    let t = prepare_context("alice@nine.testrun.org").await;
     assert_eq!(t.get_config(Config::Autorelay).await?, None);
     t.sql.run_migrations(&t).await?;
-    assert_eq!(t.get_config(Config::Autorelay).await?.as_deref(), Some("1"));
+    assert_eq!(t.get_config_bool(Config::Autorelay).await?, true);
 
-    let t = STOP_MIGRATIONS_AT
-        .scope(170, async move { TestContext::new_alice().await })
-        .await;
-    t.sql.run_migrations(&t).await?;
+    // Autorelay is enabled if the relay is mehl.cloud:
+    let t = prepare_context("alice@mehl.cloud").await;
     assert_eq!(t.get_config(Config::Autorelay).await?, None);
+    t.sql.run_migrations(&t).await?;
+    assert_eq!(t.get_config_bool(Config::Autorelay).await?, true);
 
-    let t = STOP_MIGRATIONS_AT
-        .scope(170, async move { TestContext::new_alice().await })
-        .await;
-    t.sql
-        .execute("UPDATE transports SET addr='alice@nine.testrun.org'", ())
-        .await?;
+    // Autorelay is NOT enabled if the relay is example.org:
+    let t = prepare_context("alice@example.org").await;
+    t.sql.run_migrations(&t).await?;
+    assert_eq!(t.get_config_bool(Config::Autorelay).await?, false);
+
+    // Autorelay is NOT enabled if there are two relays:
+    let t = prepare_context("alice@nine.testrun.org").await;
     add_pseudo_transport(&t, "alice2@nine.testrun.org").await?;
     t.sql.run_migrations(&t).await?;
-    assert_eq!(t.get_config(Config::Autorelay).await?, None);
+    assert_eq!(t.get_config_bool(Config::Autorelay).await?, false);
 
     Ok(())
 }

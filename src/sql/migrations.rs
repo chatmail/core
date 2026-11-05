@@ -16,6 +16,7 @@ use crate::key::DcKey;
 use crate::log::warn;
 
 use crate::sql::Sql;
+use crate::sql::TransactionExt as _;
 use crate::tools::{self, Time, inc_and_check, time_elapsed};
 use crate::transport::ConfiguredLoginParam;
 
@@ -2715,13 +2716,61 @@ CREATE TABLE smtp_failure (
 
     inc_and_check(&mut migration_version, 171)?;
     if dbversion < migration_version {
-        // If the only transport is on nine.testrun.org,
-        // fill it up with 2 more relays.
-        sql.execute_migration(
-            "INSERT OR REPLACE INTO config (keyname, value)
-             SELECT 'autorelay', '1'
-             WHERE (SELECT COUNT(*) FROM transports) = 1
-               AND (SELECT addr FROM transports) LIKE '%@nine.testrun.org'",
+        // If the only transport is on one of the domains listed at chatmail.at,
+        // we assume that the user just wanted a profile on some chatmail relay,
+        // and we fill up with 2 more relays.
+        // We do this because many of these relays are run by volunteers,
+        // and we want to prepare for the event that some of them stop working.
+
+        // These are the domains on chatmail.at
+        // (incl. mehl.cloud, which was there in the past):
+        const CHATMAIL_DOT_AT_DOMAINS: &[&str] = &[
+            "mehl.cloud",
+            "chatmail.culturanerd.it",
+            "chika.aangat.lahat.computer",
+            "chatmail.woodpeckersnest.space",
+            "mailchat.pl",
+            "e2ee.im",
+            "chtml.ca",
+            "chatmail.email",
+            "chatmail.au",
+            "nine.testrun.org",
+            "d.gaufr.es",
+            "chat.in-the.eu",
+            "toque.im",
+            "sweetfern.net",
+            "chat.privittytech.com",
+            "uninterest.ing",
+            "chat.nuvon.app",
+            "chat.me.ke",
+            "nibblehole.com",
+            "jp.deltachat.me",
+            "e2ee.wang",
+            "chat.adminforge.de",
+            "delta.thelab.uno",
+            "tarpit.fun",
+            "delta.disobey.net",
+            "chat.vim.wtf",
+            "deltachat.me",
+            "e2e.sus.fr",
+        ];
+
+        sql.execute_migration_transaction(
+            |transaction| {
+                let addrs: Vec<String> =
+                    transaction.query_collect("SELECT addr FROM transports", ())?;
+                if let [addr] = addrs.as_slice()
+                    && let Some((_, domain)) = addr.split_once('@')
+                    && CHATMAIL_DOT_AT_DOMAINS.contains(&domain)
+                {
+                    // Enabling the `autorelay` config will lead to additional relays being added:
+                    transaction.execute(
+                        "INSERT OR IGNORE INTO config (keyname, value) VALUES ('autorelay', '1')",
+                        (),
+                    )?;
+                }
+                Ok(())
+            },
             migration_version,
         )
         .await?;
