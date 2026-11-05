@@ -96,7 +96,7 @@ static CTEXT_SIGNED: OnceCell<String> = OnceCell::const_new();
 /// A ciphertext encrypted to Alice & Bob, signed by Alice.
 async fn ctext_signed() -> &'static String {
     CTEXT_SIGNED
-        .get_or_init(|| async {
+        .get_or_init(async || {
             let keyring = vec![KEYS.alice_public.clone(), KEYS.bob_public.clone()];
             let compress = true;
 

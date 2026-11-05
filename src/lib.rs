@@ -7,6 +7,7 @@
     clippy::correctness,
     missing_debug_implementations,
     missing_docs,
+    closure_returning_async_block,
     clippy::all,
     clippy::wildcard_imports,
     clippy::needless_borrow,
