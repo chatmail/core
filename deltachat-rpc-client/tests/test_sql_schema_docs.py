@@ -85,6 +85,7 @@ def read_database_schema(dbfile):
 FULLY_DOCUMENTED_TABLES = {
     "contacts",
     "imap_markseen",
+    "imap_sync",
     "multi_device_sync",
     "transports",
 }
