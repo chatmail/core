@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.68.0] - 2026-11-05
+
+### Build system
+
+- pin libc crate to 0.2.189 to make core compile for iOS targets.
+
+### Fixes
+
+- truncate long messages when loading instead of saving.
+
+### Features / Changes
+
+- remove debug logging webxdc integration.
+- send vc- prefix instead of vg- in Secure-Join where accepted.
+
+### Tests
+
+- fix flaky test `test_ephemeral_delete_msgs`.
+- test that MDN sent by core 2.23.0 can be received by the current core.
+
+### Miscellaneous Tasks
+
+- update mail-builder from 1.0.0 to 2.0.0.
+- avoid unused import when building for iOS.
+- add cargo-deny exceptions for unmaintained crates.
+
 ## [2.67.0] - 2026-11-02
 
 ### Fixes
@@ -9130,3 +9156,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.65.0]: https://github.com/chatmail/core/compare/v2.64.0..v2.65.0
 [2.66.0]: https://github.com/chatmail/core/compare/v2.65.0..v2.66.0
 [2.67.0]: https://github.com/chatmail/core/compare/v2.66.0..v2.67.0
+[2.68.0]: https://github.com/chatmail/core/compare/v2.67.0..v2.68.0
