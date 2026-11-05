@@ -217,7 +217,12 @@ async fn triable_relay_candidates(context: &Context, now: i64) -> Result<Vec<Str
             Ok((row.get(0)?, row.get(1)?))
         })
         .await?;
-    for host in DEFAULT_RELAY_CANDIDATES {
+    let test_relay_set = context.get_config(Config::TestRelaySet).await?;
+    let hosts: Vec<&str> = match &test_relay_set {
+        Some(set) => set.split_ascii_whitespace().collect(),
+        None => DEFAULT_RELAY_CANDIDATES.to_vec(),
+    };
+    for host in hosts {
         last_tried.entry(host.to_string()).or_insert(0);
     }
     let self_addrs = context.get_self_addrs().await?;
