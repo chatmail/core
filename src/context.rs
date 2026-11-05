@@ -1001,6 +1001,12 @@ impl Context {
                 .to_string(),
         );
         res.insert(
+            "test_relay_set",
+            self.get_config(Config::TestRelaySet)
+                .await?
+                .unwrap_or_else(|| "<unset>".to_string()),
+        );
+        res.insert(
             "keyupdate_debounce",
             self.get_config_int(Config::KeyupdateDebounce)
                 .await?

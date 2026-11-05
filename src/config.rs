@@ -357,6 +357,10 @@ pub enum Config {
     /// Whether automatic relay management successfully added the desired number of relays
     AutorelayFinished,
 
+    /// For tests only: space-separated relay hosts used for initial onboarding.
+    /// If set, it will replace the internal default relay list.
+    TestRelaySet,
+
     /// Sorted, space-separated relay list for which no keyupdate is due.
     KeyupdateBaseline,
 
