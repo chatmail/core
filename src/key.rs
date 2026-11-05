@@ -860,7 +860,7 @@ i8pcjGO+IZffvyZJVRWfVooBJmWWbPB1pueo3tx8w3+fcuzpxz+RLFKaPyqXO+dD
         let t = TestContext::new().await;
         let ctx = Arc::new(t);
 
-        let nrows = || async {
+        let nrows = async || {
             ctx.sql
                 .count("SELECT COUNT(*) FROM keypairs;", ())
                 .await

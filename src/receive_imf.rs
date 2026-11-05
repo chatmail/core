@@ -481,7 +481,7 @@ pub(crate) async fn receive_imf_inner(
         );
     }
 
-    let trash = || async {
+    let trash = async || {
         let msg_ids = vec![
             context
                 .sql
