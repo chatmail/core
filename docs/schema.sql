@@ -732,10 +732,10 @@ CREATE TABLE imap_markseen (
 
 CREATE TABLE imap_sync (
     transport_id INTEGER NOT NULL, -- ID of the transport in the `transports` table.
-    folder TEXT NOT NULL,
-    uidvalidity INTEGER NOT NULL DEFAULT 0,
-    uid_next INTEGER NOT NULL DEFAULT 0,
-    modseq INTEGER NOT NULL DEFAULT 0,
+    folder TEXT NOT NULL, -- IMAP folder name, normally "INBOX"
+    uidvalidity INTEGER NOT NULL DEFAULT 0, -- Last seen UID validity
+    uid_next INTEGER NOT NULL DEFAULT 0, -- Next expected UID
+    modseq INTEGER NOT NULL DEFAULT 0, -- Deprecated since 2.54.0
     UNIQUE (transport_id, folder)
 ) STRICT;
 CREATE INDEX imap_sync_index ON imap_sync(transport_id, folder);
