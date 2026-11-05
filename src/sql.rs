@@ -667,6 +667,28 @@ impl Sql {
     }
 }
 
+pub(crate) trait TransactionExt {
+    /// Prepares and executes the statement and maps a function over the resulting rows.
+    ///
+    /// Collects the resulting rows into a collection.
+    fn query_collect<T, C>(&self, sql: &str, params: impl rusqlite::Params + Send) -> Result<C>
+    where
+        T: Send + 'static + rusqlite::types::FromSql,
+        C: Send + 'static + std::iter::FromIterator<T>;
+}
+
+impl TransactionExt for rusqlite::Transaction<'_> {
+    fn query_collect<T, C>(&self, sql: &str, params: impl rusqlite::Params + Send) -> Result<C>
+    where
+        T: Send + 'static + rusqlite::types::FromSql,
+        C: Send + 'static + std::iter::FromIterator<T>,
+    {
+        let mut stmt = self.prepare(sql)?;
+        let res = stmt.query_and_then(params, |row| anyhow::Ok(row.get::<_, T>(0)?))?;
+        res.collect()
+    }
+}
+
 /// Creates a new SQLite connection.
 ///
 /// `path` is the database path.
