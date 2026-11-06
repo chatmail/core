@@ -45,7 +45,7 @@ pub enum Connectivity {
 // because there is no internet connection - the connectivity for the whole
 // account will be `Notconnected`.
 #[derive(Debug, Default, Clone, PartialEq, Eq, EnumProperty, PartialOrd)]
-enum DetailedConnectivity {
+pub(crate) enum DetailedConnectivity {
     Error(String),
     #[default]
     Uninitialized,
@@ -173,13 +173,13 @@ impl ConnectivityStore {
         self.set(context, DetailedConnectivity::Idle);
     }
 
-    fn get_detailed(&self) -> DetailedConnectivity {
+    pub(crate) fn get_detailed(&self) -> DetailedConnectivity {
         self.0.lock().deref().clone()
     }
-    fn get_basic(&self) -> Connectivity {
+    pub(crate) fn get_basic(&self) -> Connectivity {
         self.0.lock().to_basic()
     }
-    fn get_all_work_done(&self) -> bool {
+    pub(crate) fn get_all_work_done(&self) -> bool {
         self.0.lock().all_work_done()
     }
 }
