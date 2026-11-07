@@ -1,3 +1,4 @@
+import os
 import time
 import urllib.parse
 
@@ -27,6 +28,21 @@ def wait_for_imap_message(imap):
 def test_init_transports(acf):
     account = acf.get_unconfigured_account()
     account.init_transports(acf.get_account_qr())
+    assert len(account.list_transports()) == 1
+
+
+def test_init_transports_test_relay_set(acf):
+    """The test relay set replaces the default relays."""
+    domain = os.environ["CHATMAIL_DOMAIN"]
+    account = acf.get_unconfigured_account()
+    account.set_config("test_relay_set", domain)
+    account.init_transports()
+    [transport] = account.list_transports()
+    assert transport["addr"].endswith("@" + domain)
+    # A bit hacky check that the default relays are not candidates
+    while "candidates" not in (msg := account.wait_for_event(EventType.INFO).msg):
+        pass
+    assert msg.endswith("No suitable candidates"), msg
     assert len(account.list_transports()) == 1
 
 
