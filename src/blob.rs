@@ -590,17 +590,15 @@ impl<'a> BlobDirContents<'a> {
     pub(crate) async fn new(context: &'a Context) -> Result<BlobDirContents<'a>> {
         let readdir = fs::read_dir(context.get_blobdir()).await?;
         let inner = ReadDirStream::new(readdir)
-            .filter_map(|entry| async move {
-                match entry {
-                    Ok(entry) => Some(entry),
-                    Err(err) => {
-                        error!(context, "Failed to read blob file: {err}.");
-                        None
-                    }
+            .filter_map(async |entry| match entry {
+                Ok(entry) => Some(entry),
+                Err(err) => {
+                    error!(context, "Failed to read blob file: {err}.");
+                    None
                 }
             })
-            .filter_map(|entry| async move {
-                match entry.file_type().await.ok()?.is_file() {
+            .filter_map(
+                async |entry| match entry.file_type().await.ok()?.is_file() {
                     true => Some(entry.path()),
                     false => {
                         warn!(
@@ -610,8 +608,8 @@ impl<'a> BlobDirContents<'a> {
                         );
                         None
                     }
-                }
-            })
+                },
+            )
             .collect()
             .await;
         Ok(Self { inner, context })
