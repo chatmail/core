@@ -56,7 +56,7 @@ pub struct MessageObject {
     timestamp: i64,
     sort_timestamp: i64,
 
-    /// The message receive time.
+    /// The message receive time as a unix timestamp in seconds.
     /// For webxdc apps, this is the time of the last status update, if any,
     /// also for outgoing messages.
     /// 0 if there is none, e.g. for most outgoing messages that are not webxdc.

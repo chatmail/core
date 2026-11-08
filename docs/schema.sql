@@ -251,6 +251,10 @@ CREATE TABLE msgs (
 
     timestamp INTEGER DEFAULT 0, -- Timestamp of the message used for sorting.
     timestamp_sent INTEGER DEFAULT 0, -- Timestamp of the message as sent in the Date header.
+
+    -- Receive time of a message as a unix timestamp in seconds.
+    -- For webxdc apps, incoming or outgoing, this is the time of the last status update, if any.
+    -- 0 if there is none, e.g. for most outgoing messages that are not webxdc.
     timestamp_rcvd INTEGER DEFAULT 0,
 
     -- True if the message should not be displayed.
