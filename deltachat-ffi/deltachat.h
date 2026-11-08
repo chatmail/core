@@ -3957,14 +3957,16 @@ int64_t          dc_msg_get_timestamp          (const dc_msg_t* msg);
 
 /**
  * Get the message receive time.
- * The receive time is returned as a unix timestamp in seconds.
+ * For webxdc apps, this is the time of the last status update, if any,
+ * also for outgoing messages.
+ * The time is returned as a unix timestamp in seconds.
  *
  * To get the sending time, use dc_msg_get_timestamp().
  *
  * @memberof dc_msg_t
  * @param msg The message object.
- * @return The receiving time of the message.
- *     For outgoing messages, 0 is returned.
+ * @return The receiving time of the message or the time of the last webxdc update.
+ *     0 if there is none, e.g. for most outgoing messages that are not webxdc.
  */
 int64_t          dc_msg_get_received_timestamp (const dc_msg_t* msg);
 
