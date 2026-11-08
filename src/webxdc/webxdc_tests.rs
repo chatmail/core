@@ -19,7 +19,7 @@ use crate::{message, sql};
 
 fn create_webxdc_instance(t: &TestContext, name: &str, bytes: &[u8]) -> Result<Message> {
     let mut instance = Message::new(Viewtype::File);
-    instance.set_file_from_bytes(t, name, bytes, None)?;
+    instance.set_file_from_bytes(t, name, bytes, Some("application/octet-stream"))?;
     Ok(instance)
 }
 
@@ -227,7 +227,7 @@ async fn test_receive_webxdc_instance() -> Result<()> {
     )
     .await?;
     let instance = alice.get_last_msg().await;
-    assert_eq!(instance.viewtype, Viewtype::File);
+    assert_eq!(instance.viewtype, Viewtype::Webxdc);
     assert_eq!(instance.get_filename().unwrap(), "minimal.xdc");
 
     test_utils::receive_encrypted_imf(
@@ -256,6 +256,10 @@ async fn test_webxdc_contact_request() -> Result<()> {
     // Bob can start the webxdc from a contact request (get index.html)
     // but cannot send updates to contact requests
     let bob_instance = bob.get_last_msg().await;
+    assert_eq!(
+        bob_instance.get_filemime().unwrap(),
+        "application/webxdc+zip"
+    );
     let bob_chat = Chat::load_from_db(&bob, bob_instance.chat_id).await?;
     assert!(bob_chat.is_contact_request());
     assert!(
