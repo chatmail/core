@@ -11,7 +11,7 @@ Content-Type: multipart/mixed; boundary="==BREAK=="
 Content-Type: text/plain; charset=utf-8
 
 webxdc with bad mime type,
-not detected as a webxdc
+detected as a webxdc by its extension
 
 --==BREAK==
 Content-Type: text/html

@@ -1488,9 +1488,7 @@ impl MimeMessage {
             return Ok(());
         }
         let mut part = Part::default();
-        let is_webxdc =
-            filename.ends_with(".xdc") && mime_type.essence_str() == "application/webxdc+zip";
-        let msg_type = if is_webxdc {
+        let msg_type = if filename.ends_with(".xdc") {
             Viewtype::Webxdc
         } else if filename.ends_with(".kml") {
             // XXX what if somebody sends eg an "location-highlights.kml"
