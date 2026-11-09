@@ -1,5 +1,34 @@
 # Changelog
 
+## [2.69.0] - 2026-11-09
+
+### CI
+
+- zizmor: update GitHub Actions linting workflow.
+
+### Documentation
+
+- document imap_sync table columns.
+- clarify received timestamp ([#8908](https://github.com/chatmail/core/pull/8908)).
+
+### Fixes
+
+- Simplify determination of webxdc apps.
+  This fixes a critical bug where webxdc apps were sometimes received as files.
+
+### Miscellaneous Tasks
+
+- bump version to 2.69.0-dev.
+
+### Refactor
+
+- enable closure_returning_async_block lint.
+
+### Tests
+
+- status updates do not extend ephemeral message deletion of apps.
+- new `TestRelaySet` config determines which relays are used for automatic onboarding..
+
 ## [2.68.0] - 2026-11-05
 
 ### Build system
@@ -9157,3 +9186,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.66.0]: https://github.com/chatmail/core/compare/v2.65.0..v2.66.0
 [2.67.0]: https://github.com/chatmail/core/compare/v2.66.0..v2.67.0
 [2.68.0]: https://github.com/chatmail/core/compare/v2.67.0..v2.68.0
+[2.69.0]: https://github.com/chatmail/core/compare/v2.68.0..v2.69.0
