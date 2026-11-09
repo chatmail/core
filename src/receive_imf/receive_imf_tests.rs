@@ -2964,7 +2964,7 @@ async fn test_weird_and_duplicated_filenames() -> Result<()> {
         tokio::fs::write(&attachment, content.as_bytes()).await?;
 
         let mut msg_alice = Message::new(Viewtype::File);
-        msg_alice.set_file_and_deduplicate(&alice, &attachment, None, None)?;
+        msg_alice.set_file_and_deduplicate(&alice, &attachment, None)?;
         let alice_chat = alice.create_chat(&bob).await;
         let sent = alice.send_msg(alice_chat.id, &mut msg_alice).await;
         println!("{}", sent.payload());
@@ -4575,7 +4575,7 @@ async fn test_pre_msg_group_consistency() -> Result<()> {
     // Pre-message adds the new member.
     let file_bytes = include_bytes!("../../test-data/image/screenshot.gif");
     let mut msg = Message::new(Viewtype::Image);
-    msg.set_file_from_bytes(alice, "a.jpg", file_bytes, None)?;
+    msg.set_file_from_bytes(alice, "a.jpg", file_bytes)?;
     let full_msg = alice.send_msg(alice_chat_id, &mut msg).await;
     let pre_msg = alice.pop_sent_msg().await;
     let msg = bob.recv_msg(&pre_msg).await;
@@ -4900,7 +4900,6 @@ async fn test_receive_vcard() -> Result<()> {
                 }
             )
             .as_bytes(),
-            None,
         )
         .unwrap();
 
@@ -5689,7 +5688,7 @@ async fn test_mark_message_as_delivered_only_after_sent_out_fully() -> Result<()
 
     let file_bytes = include_bytes!("../../test-data/image/screenshot.gif");
     let mut msg = Message::new(Viewtype::Image);
-    msg.set_file_from_bytes(alice, "a.jpg", file_bytes, None)?;
+    msg.set_file_from_bytes(alice, "a.jpg", file_bytes)?;
     let msg_id = chat::send_msg(alice, alice_chat_id, &mut msg)
         .await
         .unwrap();

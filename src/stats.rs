@@ -276,12 +276,7 @@ async fn send_stats(context: &Context) -> Result<ChatId> {
 
     let stats = get_stats(context).await?;
 
-    msg.set_file_from_bytes(
-        context,
-        "statistics.txt",
-        stats.as_bytes(),
-        Some("text/plain"),
-    )?;
+    msg.set_file_from_bytes(context, "statistics.txt", stats.as_bytes())?;
 
     chat::send_msg(context, chat_id, &mut msg)
         .await

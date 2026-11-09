@@ -130,7 +130,7 @@ mod tests {
         let alice = &tcm.alice().await;
 
         let mut file_msg = Message::new(Viewtype::File);
-        file_msg.set_file_from_bytes(alice, "test.bin", &vec![0u8; 1_000_000], None)?;
+        file_msg.set_file_from_bytes(alice, "test.bin", &vec![0u8; 1_000_000])?;
         let post_msg_metadata = PostMsgMetadata::from_msg(alice, &file_msg).await?;
         assert_eq!(
             post_msg_metadata,
@@ -154,7 +154,7 @@ mod tests {
 
         let (width, height) = (1080, 1920);
         let test_img = create_test_image(width, height)?;
-        image_msg.set_file_from_bytes(alice, "vacation.png", &test_img, None)?;
+        image_msg.set_file_from_bytes(alice, "vacation.png", &test_img)?;
         // this is usually done while sending,
         // but we don't send it here, so we need to call it ourself
         image_msg.try_calc_and_set_dimensions(alice).await?;

@@ -26,7 +26,7 @@ async fn test_sending_pre_message() -> Result<()> {
         .await;
 
     let mut msg = Message::new(Viewtype::File);
-    msg.set_file_from_bytes(alice, "test.bin", &[0u8; 300_000], None)?;
+    msg.set_file_from_bytes(alice, "test.bin", &[0u8; 300_000])?;
     msg.set_text("test".to_owned());
 
     // assert that test attachment is bigger than limit
@@ -135,7 +135,7 @@ async fn test_selfavatar_and_autocrypt_gossip_goto_pre_message() -> Result<()> {
         .await;
 
     let mut msg = Message::new(Viewtype::File);
-    msg.set_file_from_bytes(alice, "test.bin", &[0u8; 300_000], None)?;
+    msg.set_file_from_bytes(alice, "test.bin", &[0u8; 300_000])?;
     msg.set_text("test".to_owned());
 
     // assert that test attachment is bigger than limit
@@ -190,7 +190,7 @@ async fn test_unencrypted_gets_no_pre_message() -> Result<()> {
         .await;
 
     let mut msg = Message::new(Viewtype::File);
-    msg.set_file_from_bytes(alice, "test.bin", &vec![0u8; 300_000], None)?;
+    msg.set_file_from_bytes(alice, "test.bin", &vec![0u8; 300_000])?;
     msg.set_text("test".to_owned());
 
     let msg_id = chat::send_msg(alice, chat.id, &mut msg).await?;
@@ -290,7 +290,7 @@ async fn test_not_sending_pre_message_for_small_attachment() -> Result<()> {
     let chat = alice.create_chat(bob).await;
 
     let mut msg = Message::new(Viewtype::File);
-    msg.set_file_from_bytes(alice, "test.bin", &vec![0u8; 100_000], None)?;
+    msg.set_file_from_bytes(alice, "test.bin", &vec![0u8; 100_000])?;
     msg.set_text("test".to_owned());
 
     // assert that test attachment is smaller than limit
@@ -337,7 +337,6 @@ async fn test_render_webxdc_status_update_object_range() -> Result<()> {
             &t,
             "minimal.xdc",
             include_bytes!("../../../test-data/webxdc/minimal.xdc"),
-            None,
         )?;
         let instance_msg_id = send_msg(&t, chat_id, &mut instance).await?;
         assert_eq!(instance.viewtype, Viewtype::Webxdc);

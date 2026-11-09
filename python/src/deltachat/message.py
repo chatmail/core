@@ -111,12 +111,11 @@ class Message:
         use `basename` instead."""
         return from_dc_charpointer(lib.dc_msg_get_file(self._dc_msg))
 
-    def set_file(self, path, mime_type=None):
-        """set file for this message from path and mime_type."""
-        mtype = ffi.NULL if mime_type is None else as_dc_charpointer(mime_type)
+    def set_file(self, path):
+        """set file for this message from path."""
         if not os.path.exists(path):
             raise ValueError(f"path does not exist: {path!r}")
-        lib.dc_msg_set_file_and_deduplicate(self._dc_msg, as_dc_charpointer(path), ffi.NULL, mtype)
+        lib.dc_msg_set_file_and_deduplicate(self._dc_msg, as_dc_charpointer(path), ffi.NULL, ffi.NULL)
 
     @props.with_doc
     def basename(self) -> str:

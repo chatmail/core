@@ -1035,7 +1035,7 @@ Content-Disposition: attachment; filename="location.kml"
         let file = alice.get_blobdir().join(file_name);
         tokio::fs::write(&file, bytes).await?;
         let mut msg = Message::new(Viewtype::Image);
-        msg.set_file_and_deduplicate(&alice, &file, Some("logo.png"), None)?;
+        msg.set_file_and_deduplicate(&alice, &file, Some("logo.png"))?;
         let sent = alice.send_msg(alice_chat.id, &mut msg).await;
         let alice_msg = Message::load_from_db(&alice, sent.sender_msg_id).await?;
         assert_eq!(alice_msg.has_location(), false);

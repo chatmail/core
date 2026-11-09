@@ -286,7 +286,7 @@ async fn test_lost_pre_msg() -> Result<()> {
 
     let file_bytes = include_bytes!("../../../test-data/image/screenshot.gif");
     let mut msg = Message::new(Viewtype::Image);
-    msg.set_file_from_bytes(alice, "a.jpg", file_bytes, None)?;
+    msg.set_file_from_bytes(alice, "a.jpg", file_bytes)?;
     msg.set_text("populate".to_string());
     let full_msg = alice.send_msg(alice_chat_id, &mut msg).await;
     let _pre_msg = alice.pop_sent_msg().await;
@@ -314,7 +314,7 @@ async fn pre_msg_mdn_before_sending_full(text: &str) -> Result<()> {
 
     let file_bytes = include_bytes!("../../../test-data/image/screenshot.gif");
     let mut msg = Message::new(Viewtype::Image);
-    msg.set_file_from_bytes(alice, "a.jpg", file_bytes, None)?;
+    msg.set_file_from_bytes(alice, "a.jpg", file_bytes)?;
     msg.set_text(text.to_string());
     chat::send_msg(alice, alice_chat_id, &mut msg).await?;
     let rev_order = false;
@@ -363,7 +363,7 @@ async fn test_post_msg_bad_sender() -> Result<()> {
     let file_bytes = include_bytes!("../../../test-data/image/screenshot.gif");
 
     let mut msg_alice = Message::new(Viewtype::Image);
-    msg_alice.set_file_from_bytes(alice, "a.jpg", file_bytes, None)?;
+    msg_alice.set_file_from_bytes(alice, "a.jpg", file_bytes)?;
     let post_msg_alice = alice.send_msg(chat_id_alice, &mut msg_alice).await;
     let pre_msg_alice = alice.pop_sent_msg().await;
     let msg_bob = bob.recv_msg(&pre_msg_alice).await;
@@ -374,7 +374,7 @@ async fn test_post_msg_bad_sender() -> Result<()> {
     chat_id_fiona.accept(fiona).await?;
     let mut msg_fiona = Message::new(Viewtype::Image);
     msg_fiona.rfc724_mid = msg_alice.rfc724_mid.clone();
-    msg_fiona.set_file_from_bytes(fiona, "a.jpg", file_bytes, None)?;
+    msg_fiona.set_file_from_bytes(fiona, "a.jpg", file_bytes)?;
     let post_msg_fiona = fiona.send_msg(chat_id_fiona, &mut msg_fiona).await;
     let _pre_msg = fiona.pop_sent_msg().await;
     bob.recv_msg_trash(&post_msg_fiona).await;
@@ -402,7 +402,7 @@ async fn test_lost_pre_msg_vs_new_member() -> Result<()> {
     let file_bytes = include_bytes!("../../../test-data/image/screenshot.gif");
 
     let mut msg_alice = Message::new(Viewtype::Image);
-    msg_alice.set_file_from_bytes(alice, "a.jpg", file_bytes, None)?;
+    msg_alice.set_file_from_bytes(alice, "a.jpg", file_bytes)?;
     let post_msg_alice = alice.send_msg(chat_id_alice, &mut msg_alice).await;
     let _pre_msg = alice.pop_sent_msg().await;
     let msg_bob = bob.recv_msg(&post_msg_alice).await;
@@ -464,7 +464,6 @@ async fn test_receive_normal_message() -> Result<()> {
         alice,
         "test.bin",
         &vec![0u8; (PRE_MSG_ATTACHMENT_SIZE_THRESHOLD - 10_000) as usize],
-        None,
     )?;
     msg.set_text("test".to_owned());
     let msg_id = chat::send_msg(alice, alice_group_id, &mut msg).await?;
@@ -642,7 +641,6 @@ async fn test_webxdc_updates_in_post_message_after_pre_message() -> Result<()> {
         alice,
         "first.xdc",
         include_bytes!("../../../test-data/webxdc/minimal.xdc"),
-        None,
     )?;
     send_msg(alice, alice_chat_id, &mut unrelated_xdc).await?;
     let bob_unrelated_webxdc = bob.recv_msg(&alice.pop_sent_msg().await).await;
@@ -650,7 +648,7 @@ async fn test_webxdc_updates_in_post_message_after_pre_message() -> Result<()> {
     let big_webxdc_app = big_webxdc_app().await?;
 
     let mut alice_instance = Message::new(Viewtype::Webxdc);
-    alice_instance.set_file_from_bytes(alice, "test.xdc", &big_webxdc_app, None)?;
+    alice_instance.set_file_from_bytes(alice, "test.xdc", &big_webxdc_app)?;
     alice_instance.set_text("Test".to_string());
     alice_chat_id
         .set_draft(alice, Some(&mut alice_instance))
@@ -700,7 +698,7 @@ async fn test_large_webxdc_without_text() -> Result<()> {
     let bob_chat_id = bob.create_chat_id(alice).await;
     let big_webxdc_app = big_webxdc_app().await?;
     let mut bob_instance = Message::new(Viewtype::Webxdc);
-    bob_instance.set_file_from_bytes(bob, "test.xdc", &big_webxdc_app, None)?;
+    bob_instance.set_file_from_bytes(bob, "test.xdc", &big_webxdc_app)?;
     bob_chat_id.set_draft(bob, Some(&mut bob_instance)).await?;
     bob.send_webxdc_status_update(bob_instance.id, r#"{"payload":42, "info":"i"}"#)
         .await?;
@@ -741,7 +739,7 @@ async fn test_webxdc_updates_in_post_message_after_deleted_pre_message() -> Resu
     let big_webxdc_app = big_webxdc_app().await?;
 
     let mut alice_instance = Message::new(Viewtype::Webxdc);
-    alice_instance.set_file_from_bytes(alice, "test.xdc", &big_webxdc_app, None)?;
+    alice_instance.set_file_from_bytes(alice, "test.xdc", &big_webxdc_app)?;
     alice_instance.set_text("Test".to_string());
     alice_chat_id
         .set_draft(alice, Some(&mut alice_instance))
@@ -788,7 +786,7 @@ async fn test_webxdc_updates_in_post_message_without_pre_message() -> Result<()>
     let big_webxdc_app = big_webxdc_app().await?;
 
     let mut alice_instance = Message::new(Viewtype::Webxdc);
-    alice_instance.set_file_from_bytes(alice, "test.xdc", &big_webxdc_app, None)?;
+    alice_instance.set_file_from_bytes(alice, "test.xdc", &big_webxdc_app)?;
     alice_instance.set_text("Test".to_string());
     alice_chat_id
         .set_draft(alice, Some(&mut alice_instance))

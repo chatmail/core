@@ -15,7 +15,7 @@ impl Context {
     pub async fn set_webxdc_integration(&self, file: &str) -> Result<()> {
         let chat_id = ChatId::create_for_contact(self, ContactId::SELF).await?;
         let mut msg = Message::new(Viewtype::Webxdc);
-        msg.set_file_and_deduplicate(self, Path::new(&file), None, None)?;
+        msg.set_file_and_deduplicate(self, Path::new(&file), None)?;
         msg.hidden = true;
         msg.param.set_int(Param::WebxdcIntegration, 1);
         msg.param.set_int(Param::GuaranteeE2ee, 1); // needed to pass `internet_access` requirements
@@ -190,7 +190,6 @@ mod tests {
             &t,
             "mapstest.xdc",
             include_bytes!("../../test-data/webxdc/mapstest-integration-unset.xdc"),
-            None,
         )?;
         t.send_msg(self_chat.id, &mut msg).await;
         assert_integration(&t, "with some icon").await?; // still the default integration
@@ -201,7 +200,6 @@ mod tests {
             &t,
             "mapstest.xdc",
             include_bytes!("../../test-data/webxdc/mapstest-integration-set.xdc"),
-            None,
         )?;
         let sent = t.send_msg(self_chat.id, &mut msg).await;
         let info = msg.get_webxdc_info(&t).await?;

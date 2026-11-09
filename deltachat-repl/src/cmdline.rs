@@ -867,7 +867,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             } else {
                 Viewtype::File
             });
-            msg.set_file_and_deduplicate(&context, Path::new(arg1), None, None)?;
+            msg.set_file_and_deduplicate(&context, Path::new(arg1), None)?;
             msg.set_text(arg2.to_string());
             chat::send_msg(&context, sel_chat.as_ref().unwrap().get_id(), &mut msg).await?;
         }

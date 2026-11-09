@@ -2132,7 +2132,7 @@ async fn test_sticker(filename: &str, bytes: &[u8], w: i32, h: i32) -> Result<()
     tokio::fs::write(&file, bytes).await?;
 
     let mut msg = Message::new(Viewtype::Sticker);
-    msg.set_file_and_deduplicate(&alice, &file, Some(filename), None)?;
+    msg.set_file_and_deduplicate(&alice, &file, Some(filename))?;
 
     let sent_msg = alice.send_msg(alice_chat.id, &mut msg).await;
 
@@ -2208,7 +2208,7 @@ async fn test_sticker_no_heuristics() {
 
     // Send a sticker.
     let mut msg = Message::new(Viewtype::Sticker);
-    msg.set_file_and_deduplicate(alice, &file, Some("sticker.jpg"), None)
+    msg.set_file_and_deduplicate(alice, &file, Some("sticker.jpg"))
         .unwrap();
     let file = msg.get_file(alice).unwrap();
     let sent_msg = alice.send_msg(alice_chat.id, &mut msg).await;
@@ -2217,7 +2217,7 @@ async fn test_sticker_no_heuristics() {
 
     // Send a sticker reusing the file.
     let mut msg = Message::new(Viewtype::Sticker);
-    msg.set_file_and_deduplicate(alice, &file, Some("sticker.jpg"), None)
+    msg.set_file_and_deduplicate(alice, &file, Some("sticker.jpg"))
         .unwrap();
     let sent_msg = alice.send_msg(alice_chat.id, &mut msg).await;
     let msg = bob.recv_msg(&sent_msg).await;
@@ -2225,7 +2225,7 @@ async fn test_sticker_no_heuristics() {
 
     // Set sticker as a draft, then send it.
     let mut msg = Message::new(Viewtype::Sticker);
-    msg.set_file_and_deduplicate(alice, &file, Some("sticker.jpg"), None)
+    msg.set_file_and_deduplicate(alice, &file, Some("sticker.jpg"))
         .unwrap();
     alice_chat
         .id
@@ -2252,7 +2252,7 @@ async fn test_sticker_forward() -> Result<()> {
     let file = alice.get_blobdir().join(file_name);
     tokio::fs::write(&file, bytes).await?;
     let mut msg = Message::new(Viewtype::Sticker);
-    msg.set_file_and_deduplicate(&alice, &file, Some("sticker.jpg"), None)?;
+    msg.set_file_and_deduplicate(&alice, &file, Some("sticker.jpg"))?;
 
     // send sticker to bob
     let sent_msg = alice.send_msg(alice_chat.get_id(), &mut msg).await;
@@ -4623,7 +4623,7 @@ async fn test_get_chat_media() -> Result<()> {
         let file = t.get_blobdir().join(name);
         tokio::fs::write(&file, bytes).await?;
         let mut msg = Message::new(msg_type);
-        msg.set_file_and_deduplicate(t, &file, Some(name), None)?;
+        msg.set_file_and_deduplicate(t, &file, Some(name))?;
         send_msg(t, chat_id, &mut msg).await
     }
 
@@ -4775,7 +4775,6 @@ async fn test_get_chat_media_webxdc_order() -> Result<()> {
         &alice,
         "test1.xdc",
         include_bytes!("../../test-data/webxdc/minimal.xdc"),
-        None,
     )?;
     let instance1_id = send_msg(&alice, chat.id, &mut instance1).await?;
 
@@ -4784,7 +4783,6 @@ async fn test_get_chat_media_webxdc_order() -> Result<()> {
         &alice,
         "test2.xdc",
         include_bytes!("../../test-data/webxdc/minimal.xdc"),
-        None,
     )?;
     let instance2_id = send_msg(&alice, chat.id, &mut instance2).await?;
 
@@ -4829,7 +4827,7 @@ async fn test_blob_renaming() -> Result<()> {
     let file = alice.get_blobdir().join("harmless_file.\u{202e}txt.exe");
     fs::write(&file, "aaa").await?;
     let mut msg = Message::new(Viewtype::File);
-    msg.set_file_and_deduplicate(&alice, &file, Some("harmless_file.\u{202e}txt.exe"), None)?;
+    msg.set_file_and_deduplicate(&alice, &file, Some("harmless_file.\u{202e}txt.exe"))?;
     let msg = bob.recv_msg(&alice.send_msg(chat_id, &mut msg).await).await;
 
     // the file bob receives should not contain BIDI-control characters
@@ -5511,7 +5509,7 @@ async fn test_jpeg_with_png_ext() -> Result<()> {
     let file = alice.get_blobdir().join("screenshot.png");
     tokio::fs::write(&file, bytes).await?;
     let mut msg = Message::new(Viewtype::Image);
-    msg.set_file_and_deduplicate(&alice, &file, Some("screenshot.png"), None)?;
+    msg.set_file_and_deduplicate(&alice, &file, Some("screenshot.png"))?;
 
     let alice_chat = alice.create_chat(&bob).await;
     let sent_msg = alice.send_msg(alice_chat.get_id(), &mut msg).await;
@@ -5533,7 +5531,7 @@ async fn test_nonimage_with_png_ext() -> Result<()> {
     for vt in [Viewtype::Image, Viewtype::File] {
         tokio::fs::write(&file, bytes).await?;
         let mut msg = Message::new(vt);
-        msg.set_file_and_deduplicate(alice, &file, Some("screenshot.png"), None)?;
+        msg.set_file_and_deduplicate(alice, &file, Some("screenshot.png"))?;
         let sent_msg = alice.send_msg(alice_chat.get_id(), &mut msg).await;
         assert_eq!(msg.viewtype, Viewtype::File);
         assert_eq!(msg.get_filemime().unwrap(), "application/octet-stream");
@@ -6447,7 +6445,7 @@ async fn test_forward_msgs_2ctx_with_file() -> Result<()> {
     tokio::fs::write(&file, file_bytes).await?;
 
     let mut msg = Message::new(Viewtype::File);
-    msg.set_file_and_deduplicate(alice, &file, Some("test.txt"), Some("text/plain"))?;
+    msg.set_file_and_deduplicate(alice, &file, Some("test.txt"))?;
     msg.set_text("Here's a file".to_string());
 
     alice.send_msg(alice_self_chat.id, &mut msg).await;
@@ -6495,7 +6493,7 @@ async fn test_forward_msgs_2ctx_missing_blob() -> Result<()> {
     tokio::fs::write(&file, file_bytes).await?;
 
     let mut msg = Message::new(Viewtype::File);
-    msg.set_file_and_deduplicate(alice, &file, Some("test.txt"), Some("text/plain"))?;
+    msg.set_file_and_deduplicate(alice, &file, Some("test.txt"))?;
     msg.set_text("File message".to_string());
 
     alice.send_msg(alice_self_chat.id, &mut msg).await;

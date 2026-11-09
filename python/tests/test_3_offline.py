@@ -377,7 +377,7 @@ class TestOfflineChat:
             ("r", None, "application/octet-stream"),
             ("r.txt", None, "text/plain"),
             ("r.txt", "text/plain", "text/plain"),
-            ("r.txt", "image/png", "image/png"),
+            ("r.txt", "image/png", "text/plain"),
         ],
     )
     def test_message_file(self, chat1, data, lp, fn, typein, typeout):

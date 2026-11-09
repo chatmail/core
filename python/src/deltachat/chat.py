@@ -2,7 +2,6 @@
 
 import calendar
 import json
-import mimetypes
 import os
 from datetime import datetime, timezone
 from typing import Optional
@@ -316,16 +315,16 @@ class Chat:
             raise ValueError("The message could not be sent. Does the chat exist?")
         return Message.from_db(self.account, msg_id)
 
-    def send_file(self, path, mime_type="application/octet-stream"):
+    def send_file(self, path, mime_type=None):
         """send a file and return the resulting Message instance.
 
         :param path: path to the file.
-        :param mime_type: the mime-type of this file, defaults to application/octet-stream.
+        :param mime_type: deprecated, don't pass it.
         :raises ValueError: if message can not be send/chat does not exist.
         :returns: the resulting :class:`deltachat.message.Message` instance
         """
         msg = Message.new_empty(self.account, view_type="file")
-        msg.set_file(path, mime_type)
+        msg.set_file(path)
         sent_id = lib.dc_send_msg(self.account._dc_context, self.id, msg._dc_msg)
         if sent_id == 0:
             raise ValueError("message could not be sent")
@@ -338,9 +337,8 @@ class Chat:
         :raises ValueError: if message can not be send/chat does not exist.
         :returns: the resulting :class:`deltachat.message.Message` instance
         """
-        mime_type = mimetypes.guess_type(path)[0]
         msg = Message.new_empty(self.account, view_type="image")
-        msg.set_file(path, mime_type)
+        msg.set_file(path)
         sent_id = lib.dc_send_msg(self.account._dc_context, self.id, msg._dc_msg)
         if sent_id == 0:
             raise ValueError("message could not be sent")

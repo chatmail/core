@@ -21,7 +21,6 @@ async fn test_can_communicate() {
             alice,
             "minimal.xdc",
             include_bytes!("../../test-data/webxdc/minimal.xdc"),
-            None,
         )
         .unwrap();
 
@@ -186,7 +185,6 @@ async fn test_duplicated_out_of_order_advertisement() -> Result<()> {
         alice,
         "minimal.xdc",
         include_bytes!("../../test-data/webxdc/minimal.xdc"),
-        None,
     )?;
 
     send_msg(alice, alice_chat.id, &mut instance).await?;
@@ -250,7 +248,6 @@ async fn test_can_reconnect() {
             alice,
             "minimal.xdc",
             include_bytes!("../../test-data/webxdc/minimal.xdc"),
-            None,
         )
         .unwrap();
 
@@ -435,7 +432,6 @@ async fn test_parallel_connect() {
             alice,
             "minimal.xdc",
             include_bytes!("../../test-data/webxdc/minimal.xdc"),
-            None,
         )
         .unwrap();
     connect_alice_bob(alice, chat, &mut instance, bob).await
@@ -455,7 +451,6 @@ async fn test_webxdc_resend() {
             alice,
             "minimal.xdc",
             include_bytes!("../../test-data/webxdc/minimal.xdc"),
-            None,
         )
         .unwrap();
 

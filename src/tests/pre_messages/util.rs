@@ -22,7 +22,7 @@ pub async fn send_large_file_message<'a>(
         Viewtype::Vcard => "test.vcf",
         _ => "test.bin",
     };
-    msg.set_file_from_bytes(sender, file_name, content, None)?;
+    msg.set_file_from_bytes(sender, file_name, content)?;
     msg.set_text("test".to_owned());
 
     // assert that test attachment is bigger than limit

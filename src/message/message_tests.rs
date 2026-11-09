@@ -345,7 +345,7 @@ async fn test_msg_seen_on_imap_when_downloaded() -> Result<()> {
 
     let file_bytes = include_bytes!("../../test-data/image/screenshot.png");
     let mut msg = Message::new(Viewtype::Image);
-    msg.set_file_from_bytes(bob, "a.jpg", file_bytes, None)?;
+    msg.set_file_from_bytes(bob, "a.jpg", file_bytes)?;
     let sent_msg = bob.send_msg(bob_chat_id, &mut msg).await;
     let pre_msg = bob.pop_sent_msg().await;
     let msg = alice.recv_msg(&pre_msg).await;
@@ -385,7 +385,7 @@ async fn test_pre_and_post_msgs_deleted_ext(reorder: bool) -> Result<()> {
 
     let file_bytes = include_bytes!("../../test-data/image/screenshot.gif");
     let mut msg = Message::new(Viewtype::Image);
-    msg.set_file_from_bytes(alice, "a.jpg", file_bytes, None)?;
+    msg.set_file_from_bytes(alice, "a.jpg", file_bytes)?;
     let full_msg = alice.send_msg(alice_chat_id, &mut msg).await;
     let pre_msg = alice.pop_sent_msg().await;
 
@@ -721,20 +721,20 @@ async fn test_sanitize_filename_message() -> Result<()> {
     // they need to be removed in case a backup is transferred to another platform
     // and the UI there tries to copy the blob to a file with the original name
     // before passing it to an external program.
-    msg.set_file_from_bytes(t, "/\\:ee.tx*T ", b"hallo", None)?;
+    msg.set_file_from_bytes(t, "/\\:ee.tx*T ", b"hallo")?;
     assert_eq!(msg.get_filename().unwrap(), "ee.txT");
 
     let blob = msg.param.get_file_blob(t)?.unwrap();
     assert_eq!(blob.suffix().unwrap(), "txt");
 
     // The filename shouldn't be empty if there were only illegal characters:
-    msg.set_file_from_bytes(t, "/\\:.txt", b"hallo", None)?;
+    msg.set_file_from_bytes(t, "/\\:.txt", b"hallo")?;
     assert_eq!(msg.get_filename().unwrap(), "file.txt");
 
-    msg.set_file_from_bytes(t, "/\\:", b"hallo", None)?;
+    msg.set_file_from_bytes(t, "/\\:", b"hallo")?;
     assert_eq!(msg.get_filename().unwrap(), "file");
 
-    msg.set_file_from_bytes(t, ".txt", b"hallo", None)?;
+    msg.set_file_from_bytes(t, ".txt", b"hallo")?;
     assert_eq!(msg.get_filename().unwrap(), "file.txt");
 
     Ok(())
@@ -749,7 +749,7 @@ async fn test_send_empty_file() -> Result<()> {
 
     let alice_chat = alice.create_chat(bob).await;
     let mut msg = Message::new(Viewtype::File);
-    msg.set_file_from_bytes(alice, "myfile", b"", None)?;
+    msg.set_file_from_bytes(alice, "myfile", b"")?;
     chat::send_msg(alice, alice_chat.id, &mut msg).await?;
     let sent = alice.pop_sent_msg().await;
 

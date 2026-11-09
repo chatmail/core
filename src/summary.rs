@@ -376,7 +376,7 @@ mod tests {
 
         let file = write_file_to_blobdir(&d).await;
         let mut msg = Message::new(Viewtype::Image);
-        msg.set_file_and_deduplicate(&d, &file, Some("foo.jpg"), None)
+        msg.set_file_and_deduplicate(&d, &file, Some("foo.jpg"))
             .unwrap();
         assert_summary_texts(&msg, ctx, "📷 Image").await; // file names are not added for images
         assert_eq!(
@@ -388,7 +388,7 @@ mod tests {
         let file = write_file_to_blobdir(&d).await;
         let mut msg = Message::new(Viewtype::Image);
         msg.set_text(some_text.to_string());
-        msg.set_file_and_deduplicate(&d, &file, Some("foo.jpg"), None)
+        msg.set_file_and_deduplicate(&d, &file, Some("foo.jpg"))
             .unwrap();
         assert_summary_texts(&msg, ctx, "📷 bla bla").await; // type is visible by emoji if text is set
         assert_eq!(
@@ -404,66 +404,65 @@ mod tests {
 
         let file = write_file_to_blobdir(&d).await;
         let mut msg = Message::new(Viewtype::Video);
-        msg.set_file_and_deduplicate(&d, &file, Some("foo.mp4"), None)
+        msg.set_file_and_deduplicate(&d, &file, Some("foo.mp4"))
             .unwrap();
         assert_summary_texts(&msg, ctx, "🎥 Video").await; // file names are not added for videos
 
         let file = write_file_to_blobdir(&d).await;
         let mut msg = Message::new(Viewtype::Video);
         msg.set_text(some_text.to_string());
-        msg.set_file_and_deduplicate(&d, &file, Some("foo.mp4"), None)
+        msg.set_file_and_deduplicate(&d, &file, Some("foo.mp4"))
             .unwrap();
         assert_summary_texts(&msg, ctx, "🎥 bla bla").await; // type is visible by emoji if text is set
 
         let file = write_file_to_blobdir(&d).await;
         let mut msg = Message::new(Viewtype::Gif);
-        msg.set_file_and_deduplicate(&d, &file, Some("foo.gif"), None)
+        msg.set_file_and_deduplicate(&d, &file, Some("foo.gif"))
             .unwrap();
         assert_summary_texts(&msg, ctx, "GIF").await; // file names are not added for GIFs
 
         let file = write_file_to_blobdir(&d).await;
         let mut msg = Message::new(Viewtype::Gif);
         msg.set_text(some_text.to_string());
-        msg.set_file_and_deduplicate(&d, &file, Some("foo.gif"), None)
+        msg.set_file_and_deduplicate(&d, &file, Some("foo.gif"))
             .unwrap();
         assert_summary_texts(&msg, ctx, "GIF \u{2013} bla bla").await; // file names are not added for GIFs
 
         let file = write_file_to_blobdir(&d).await;
         let mut msg = Message::new(Viewtype::Sticker);
-        msg.set_file_and_deduplicate(&d, &file, Some("foo.png"), None)
+        msg.set_file_and_deduplicate(&d, &file, Some("foo.png"))
             .unwrap();
         assert_summary_texts(&msg, ctx, "Sticker").await; // file names are not added for stickers
 
         let file = write_file_to_blobdir(&d).await;
         let mut msg = Message::new(Viewtype::Voice);
-        msg.set_file_and_deduplicate(&d, &file, Some("foo.mp3"), None)
+        msg.set_file_and_deduplicate(&d, &file, Some("foo.mp3"))
             .unwrap();
         assert_summary_texts(&msg, ctx, "🎤 Voice message").await; // file names are not added for voice messages
 
         let file = write_file_to_blobdir(&d).await;
         let mut msg = Message::new(Viewtype::Voice);
         msg.set_text(some_text.clone());
-        msg.set_file_and_deduplicate(&d, &file, Some("foo.mp3"), None)
+        msg.set_file_and_deduplicate(&d, &file, Some("foo.mp3"))
             .unwrap();
         assert_summary_texts(&msg, ctx, "🎤 bla bla").await;
 
         let file = write_file_to_blobdir(&d).await;
         let mut msg = Message::new(Viewtype::Audio);
-        msg.set_file_and_deduplicate(&d, &file, Some("foo.mp3"), None)
+        msg.set_file_and_deduplicate(&d, &file, Some("foo.mp3"))
             .unwrap();
         assert_summary_texts(&msg, ctx, "🎵 foo.mp3").await; // file name is added for audio
 
         let file = write_file_to_blobdir(&d).await;
         let mut msg = Message::new(Viewtype::Audio);
         msg.set_text(some_text.clone());
-        msg.set_file_and_deduplicate(&d, &file, Some("foo.mp3"), None)
+        msg.set_file_and_deduplicate(&d, &file, Some("foo.mp3"))
             .unwrap();
         assert_summary_texts(&msg, ctx, "🎵 foo.mp3 \u{2013} bla bla").await; // file name and text added for audio
 
         let mut msg = Message::new(Viewtype::File);
         let bytes = include_bytes!("../test-data/webxdc/with-minimal-manifest.xdc");
-        msg.set_file_from_bytes(ctx, "foo.xdc", bytes, None)
-            .unwrap();
+        msg.set_file_from_bytes(ctx, "foo.xdc", bytes).unwrap();
         chat_id.set_draft(ctx, Some(&mut msg)).await.unwrap();
         assert_eq!(msg.viewtype, Viewtype::Webxdc);
         assert_summary_texts(&msg, ctx, "📱 nice app!").await;
@@ -473,19 +472,19 @@ mod tests {
 
         let file = write_file_to_blobdir(&d).await;
         let mut msg = Message::new(Viewtype::File);
-        msg.set_file_and_deduplicate(&d, &file, Some("foo.bar"), None)
+        msg.set_file_and_deduplicate(&d, &file, Some("foo.bar"))
             .unwrap();
         assert_summary_texts(&msg, ctx, "📎 foo.bar").await; // file name is added for files
 
         let file = write_file_to_blobdir(&d).await;
         let mut msg = Message::new(Viewtype::File);
         msg.set_text(some_text.clone());
-        msg.set_file_and_deduplicate(&d, &file, Some("foo.bar"), None)
+        msg.set_file_and_deduplicate(&d, &file, Some("foo.bar"))
             .unwrap();
         assert_summary_texts(&msg, ctx, "📎 foo.bar \u{2013} bla bla").await; // file name is added for files
 
         let mut msg = Message::new(Viewtype::Vcard);
-        msg.set_file_from_bytes(ctx, "foo.vcf", b"", None).unwrap();
+        msg.set_file_from_bytes(ctx, "foo.vcf", b"").unwrap();
         chat_id.set_draft(ctx, Some(&mut msg)).await.unwrap();
         // If a vCard can't be parsed, the message becomes `Viewtype::File`.
         assert_eq!(msg.viewtype, Viewtype::File);
@@ -503,7 +502,6 @@ mod tests {
                   FN:Alice Wonderland\n\
                   EMAIL;TYPE=work:alice@example.org\n\
                   END:VCARD",
-                None,
             )
             .unwrap();
             chat_id.set_draft(ctx, Some(&mut msg)).await.unwrap();
@@ -520,7 +518,7 @@ mod tests {
         let file = write_file_to_blobdir(&d).await;
         let mut msg = Message::new(Viewtype::File);
         msg.set_text(some_text.clone());
-        msg.set_file_and_deduplicate(&d, &file, Some("foo.bar"), None)
+        msg.set_file_and_deduplicate(&d, &file, Some("foo.bar"))
             .unwrap();
         msg.param.set_int(Param::Forwarded, 1);
         assert_eq!(
