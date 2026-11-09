@@ -486,6 +486,44 @@ async fn test_sticker_with_exif() {
     .unwrap();
 }
 
+/// Tests that the transparent parts of a PNG recoded into JPEG turn white,
+/// not black.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_recode_transparent_png_to_jpeg_on_white() {
+    let t = TestContext::new().await;
+    let side = 200;
+    let img = image::RgbaImage::from_fn(side, side, |x, y| {
+        if x < 20 || y < 20 {
+            Rgba([0, 0, 0, 0])
+        } else {
+            Rgba([
+                (x * 7 % 256) as u8,
+                (y * 13 % 256) as u8,
+                ((x + y) % 256) as u8,
+                255,
+            ])
+        }
+    });
+    let src = t.dir.path().join("screenshot.png");
+    img.save(&src).unwrap();
+    let mut blob = BlobObject::create_and_deduplicate(&t, &src, &src).unwrap();
+    let viewtype = &mut Viewtype::Image;
+    let name = blob
+        .check_or_recode_to_size(&t, None, viewtype, side, 1_000, false)
+        .unwrap();
+    assert!(name.ends_with(".jpg"), "{name}");
+    tokio::task::block_in_place(move || {
+        let img = ImageReader::open(blob.to_abs_path())
+            .unwrap()
+            .with_guessed_format()
+            .unwrap()
+            .decode()
+            .unwrap();
+        let Rgba([r, g, b, _]) = img.get_pixel(0, 0);
+        assert!(r > 240 && g > 240 && b > 240, "{:?}", img.get_pixel(0, 0));
+    });
+}
+
 /// Tests that RGBA PNG can be recoded into JPEG
 /// by dropping alpha channel.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
