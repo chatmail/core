@@ -3682,7 +3682,7 @@ pub unsafe extern "C" fn dc_msg_set_file_and_deduplicate(
     msg: *mut dc_msg_t,
     file: *const libc::c_char,
     name: *const libc::c_char,
-    filemime: *const libc::c_char,
+    _filemime: *const libc::c_char,
 ) {
     if msg.is_null() || file.is_null() {
         eprintln!("ignoring careless call to dc_msg_set_file_and_deduplicate()");
@@ -3696,7 +3696,6 @@ pub unsafe extern "C" fn dc_msg_set_file_and_deduplicate(
             &ffi_msg.context,
             unsafe { as_path(file) },
             to_opt_string_lossy(name).as_deref(),
-            to_opt_string_lossy(filemime).as_deref(),
         )
         .context("Failed to set file")
         .log_err(&ffi_msg.context)

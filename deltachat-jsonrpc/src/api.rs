@@ -2464,7 +2464,7 @@ impl CommandApi {
         let ctx = self.get_context(account_id).await?;
 
         let mut msg = Message::new(Viewtype::Sticker);
-        msg.set_file_and_deduplicate(&ctx, Path::new(&sticker_path), None, None)?;
+        msg.set_file_and_deduplicate(&ctx, Path::new(&sticker_path), None)?;
 
         let message_id = deltachat::chat::send_msg(&ctx, ChatId::new(chat_id), &mut msg).await?;
         Ok(message_id.to_u32())
@@ -2737,7 +2737,7 @@ impl CommandApi {
         });
         message.set_text(text.unwrap_or_default());
         if let Some(file) = file {
-            message.set_file_and_deduplicate(&ctx, Path::new(&file), filename.as_deref(), None)?;
+            message.set_file_and_deduplicate(&ctx, Path::new(&file), filename.as_deref())?;
         }
         if let Some((latitude, longitude)) = location {
             message.set_location(latitude, longitude);
@@ -2789,7 +2789,7 @@ impl CommandApi {
         ));
         draft.set_text(text.unwrap_or_default());
         if let Some(file) = file {
-            draft.set_file_and_deduplicate(&ctx, Path::new(&file), filename.as_deref(), None)?;
+            draft.set_file_and_deduplicate(&ctx, Path::new(&file), filename.as_deref())?;
         }
         if let Some(id) = quoted_message_id {
             draft

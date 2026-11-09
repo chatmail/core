@@ -21,7 +21,7 @@ async fn test_forwarding_pre_message_empty_text() -> Result<()> {
 
     let pre_message = {
         let mut msg = Message::new(Viewtype::File);
-        msg.set_file_from_bytes(alice, "test.bin", &vec![0u8; 1_000_000], None)?;
+        msg.set_file_from_bytes(alice, "test.bin", &vec![0u8; 1_000_000])?;
         assert!(msg.get_filebytes(alice).await?.unwrap() > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD);
         let msg_id = chat::send_msg(alice, alice_group_id, &mut msg).await?;
         let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
@@ -130,7 +130,7 @@ async fn test_saving_pre_message_empty_text() -> Result<()> {
 
     let pre_message = {
         let mut msg = Message::new(Viewtype::File);
-        msg.set_file_from_bytes(alice, "test.bin", &vec![0u8; 1_000_000], None)?;
+        msg.set_file_from_bytes(alice, "test.bin", &vec![0u8; 1_000_000])?;
         assert!(msg.get_filebytes(alice).await?.unwrap() > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD);
         let msg_id = chat::send_msg(alice, alice_group_id, &mut msg).await?;
         let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;

@@ -4713,7 +4713,7 @@ void            dc_msg_set_override_sender_name(dc_msg_t* msg, const char* name)
  * @param msg The message object. Must not be NULL.
  * @param file The path of the file to attach. Must not be NULL.
  * @param name The original filename of the attachment. If NULL, the current name of `file` will be used instead.
- * @param filemime The MIME type of the file. NULL if you don't know or don't care.
+ * @param filemime Deprecated 2026-11-09, pass NULL here.
  */
 void            dc_msg_set_file_and_deduplicate(dc_msg_t* msg, const char* file, const char* name, const char* filemime);
 

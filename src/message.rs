@@ -1127,7 +1127,6 @@ impl Message {
         context: &Context,
         file: &Path,
         name: Option<&str>,
-        filemime: Option<&str>,
     ) -> Result<()> {
         let name = if let Some(name) = name {
             name.to_string()
@@ -1141,7 +1140,7 @@ impl Message {
         self.param.set(Param::File, blob.as_name());
 
         self.param.set(Param::Filename, name);
-        self.param.set_optional(Param::MimeType, filemime);
+        self.param.remove(Param::MimeType);
 
         Ok(())
     }
@@ -1157,12 +1156,11 @@ impl Message {
         context: &Context,
         name: &str,
         data: &[u8],
-        filemime: Option<&str>,
     ) -> Result<()> {
         let blob = BlobObject::create_and_deduplicate_from_bytes(context, data, name)?;
         self.param.set(Param::Filename, name);
         self.param.set(Param::File, blob.as_name());
-        self.param.set_optional(Param::MimeType, filemime);
+        self.param.remove(Param::MimeType);
 
         Ok(())
     }
@@ -1175,7 +1173,7 @@ impl Message {
             self.viewtype,
         );
         let vcard = contact::make_vcard(context, contacts).await?;
-        self.set_file_from_bytes(context, "vcard.vcf", vcard.as_bytes(), None)
+        self.set_file_from_bytes(context, "vcard.vcf", vcard.as_bytes())
     }
 
     /// Updates message state from the vCard attachment.

@@ -19,7 +19,7 @@ use crate::{message, sql};
 
 fn create_webxdc_instance(t: &TestContext, name: &str, bytes: &[u8]) -> Result<Message> {
     let mut instance = Message::new(Viewtype::File);
-    instance.set_file_from_bytes(t, name, bytes, Some("application/octet-stream"))?;
+    instance.set_file_from_bytes(t, name, bytes)?;
     Ok(instance)
 }
 
@@ -47,7 +47,7 @@ async fn test_send_webxdc_instance() -> Result<()> {
 
     // sending using bad extension is not working, even when setting Viewtype to webxdc
     let mut instance = Message::new(Viewtype::Webxdc);
-    instance.set_file_from_bytes(&t, "index.html", b"<html>ola!</html>", None)?;
+    instance.set_file_from_bytes(&t, "index.html", b"<html>ola!</html>")?;
     assert!(send_msg(&t, chat_id, &mut instance).await.is_err());
     t.assert_warn("cannot be opened as zip-file").await;
     Ok(())
@@ -75,7 +75,6 @@ async fn test_send_invalid_webxdc() -> Result<()> {
         &t,
         "invalid2.xdc",
         include_bytes!("../../test-data/webxdc/invalid-no-zip-but-7z.xdc"),
-        None,
     )?;
     assert!(send_msg(&t, chat_id, &mut instance).await.is_err());
     t.assert_warn("cannot be opened as zip-file").await;

@@ -598,7 +598,7 @@ impl SendImageCheckMediaquality<'_> {
         }
 
         let mut msg = Message::new(viewtype);
-        msg.set_file_and_deduplicate(&alice, &file, Some(&file_name), None)?;
+        msg.set_file_and_deduplicate(&alice, &file, Some(&file_name))?;
         let chat = alice.create_chat(&bob).await;
         if set_draft {
             chat.id.set_draft(&alice, Some(&mut msg)).await.unwrap();
@@ -705,7 +705,7 @@ async fn test_send_big_gif_as_image() -> Result<()> {
         .await
         .context("failed to write file")?;
     let mut msg = Message::new(Viewtype::Image);
-    msg.set_file_and_deduplicate(&alice, &file, Some("file.gif"), None)?;
+    msg.set_file_and_deduplicate(&alice, &file, Some("file.gif"))?;
     let chat = alice.create_chat(&bob).await;
     let sent = alice.send_msg(chat.id, &mut msg).await;
     let bob_msg = bob.recv_msg(&sent).await;
@@ -732,7 +732,7 @@ async fn test_send_gif_as_sticker() -> Result<()> {
         .await
         .context("failed to write file")?;
     let mut msg = Message::new(Viewtype::Sticker);
-    msg.set_file_and_deduplicate(alice, &file, None, None)?;
+    msg.set_file_and_deduplicate(alice, &file, None)?;
     let chat = alice.get_self_chat().await;
     let sent = alice.send_msg(chat.id, &mut msg).await;
     let msg = Message::load_from_db(alice, sent.sender_msg_id).await?;
@@ -763,7 +763,7 @@ async fn test_send_animated_webp_as_image() -> Result<()> {
         .await
         .context("Failed to write file")?;
     let mut msg = Message::new(Viewtype::Image);
-    msg.set_file_and_deduplicate(alice, &file, Some("file.webp"), None)?;
+    msg.set_file_and_deduplicate(alice, &file, Some("file.webp"))?;
 
     let chat = alice.create_chat(bob).await;
     let sent = alice.send_msg(chat.id, &mut msg).await;

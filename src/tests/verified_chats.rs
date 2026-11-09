@@ -345,7 +345,6 @@ async fn test_chat_editor_reordering() -> Result<()> {
         bob,
         "editor.xdc",
         include_bytes!("../../test-data/webxdc/minimal.xdc"),
-        None,
     )?;
     let bob_instance_msg_id = send_msg(bob, bob_chat_id, &mut webxdc_instance).await?;
     let bob_sent_instance_msg = bob.pop_sent_msg().await;

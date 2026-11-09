@@ -653,7 +653,6 @@ impl MessageData {
                 context,
                 Path::new(&file),
                 self.filename.as_deref(),
-                None,
             )?;
         }
         if let Some((latitude, longitude)) = self.location {
