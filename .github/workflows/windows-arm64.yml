@@ -1,0 +1,78 @@
+name: Windows ARM64 RPC server
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-windows-arm64
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Cross-compile Windows ARM64 with Nix
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          show-progress: false
+          persist-credentials: false
+      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+
+      - name: Build binary and Python wheel
+        run: |
+          nix build .#deltachat-rpc-server-win-arm64
+          nix build .#deltachat-rpc-server-win-arm64-wheel --out-link wheel
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: deltachat-rpc-server-win-arm64
+          path: result/bin/deltachat-rpc-server.exe
+          if-no-files-found: error
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v7
+        with:
+          name: deltachat-rpc-server-win-arm64-wheel
+          path: wheel/*.whl
+          if-no-files-found: error
+
+  test:
+    name: Test Linux-built binary on Windows ARM64
+    needs: build
+    runs-on: windows-11-arm
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          show-progress: false
+          persist-credentials: false
+      - uses: actions/download-artifact@v7
+        with:
+          name: deltachat-rpc-server-win-arm64
+          path: binary
+      - uses: actions/download-artifact@v7
+        with:
+          name: deltachat-rpc-server-win-arm64-wheel
+          path: wheel
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: '3.13'
+
+      - name: Check ARM64 executable and JSON-RPC account creation
+        run: python scripts/test-rpc-server-windows-arm64.py binary/deltachat-rpc-server.exe
+
+      - name: Test installed wheel entry point
+        shell: pwsh
+        run: |
+          $wheel = Get-ChildItem wheel/deltachat_rpc_server-*-py3-none-win_arm64.whl
+          python -m pip install --no-deps $wheel.FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          deltachat-rpc-server --version

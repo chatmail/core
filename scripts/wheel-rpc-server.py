@@ -87,6 +87,7 @@ arch2tags = {
     "arm64-v8a-android": "android_21_arm64_v8a",
     "armeabi-v7a-android": "android_21_armeabi_v7a",
     "win64": "win_amd64",
+    "win-arm64": "win_arm64",
     "win32": "win32",
     # macOS versions for platform compatibility tags are taken from https://doc.rust-lang.org/rustc/platform-support.html
     "x86_64-darwin": "macosx_10_7_x86_64",
@@ -106,7 +107,7 @@ def main():
     executable = sys.argv[2]
     tags = arch2tags[arch]
 
-    if arch in ["win32", "win64"]:
+    if arch in ["win32", "win64", "win-arm64"]:
         build_wheel(
             version,
             executable,
