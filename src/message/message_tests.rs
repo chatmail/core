@@ -7,7 +7,7 @@ use crate::config::Config;
 use crate::reaction::send_reaction;
 use crate::receive_imf::receive_imf;
 use crate::test_utils;
-use crate::test_utils::{E2EE_INFO_MSGS, TestContext, TestContextManager};
+use crate::test_utils::{E2EE_INFO_MSGS, TestContext, TestContextManager, receive_encrypted_imf};
 
 #[test]
 fn test_guess_msgtype_from_suffix() {
@@ -498,23 +498,24 @@ async fn test_set_msg_failed_after_mdn() -> Result<()> {
 async fn test_is_bot() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
-    alice.allow_unencrypted().await?;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
 
     // Alice receives an auto-generated non-chat message.
     //
     // This could be a holiday notice,
     // in which case the message should be marked as bot-generated,
     // but the contact should not.
-    receive_imf(
+    receive_encrypted_imf(
         alice,
-        b"From: Claire <claire@example.com>\n\
+        charlie,
+        b"From: Charlie <charlie@example.net>\n\
                     To: alice@example.org\n\
-                    Message-ID: <789@example.com>\n\
+                    Message-ID: <789@example.net>\n\
                     Auto-Submitted: auto-generated\n\
                     Date: Fri, 29 Jan 2021 21:37:55 +0000\n\
                     \n\
                     hello\n",
-        false,
     )
     .await?;
     let msg = alice.get_last_msg().await;
@@ -524,17 +525,17 @@ async fn test_is_bot() -> Result<()> {
     assert!(!contact.is_bot());
 
     // Alice receives a message from Bob the bot.
-    receive_imf(
+    receive_encrypted_imf(
         alice,
-        b"From: Bob <bob@example.com>\n\
+        bob,
+        b"From: Bob <bob@example.net>\n\
                     To: alice@example.org\n\
                     Chat-Version: 1.0\n\
-                    Message-ID: <123@example.com>\n\
+                    Message-ID: <123@example.net>\n\
                     Auto-Submitted: auto-generated\n\
                     Date: Fri, 29 Jan 2021 21:37:55 +0000\n\
                     \n\
                     hello\n",
-        false,
     )
     .await?;
     let msg = alice.get_last_msg().await;
@@ -544,16 +545,16 @@ async fn test_is_bot() -> Result<()> {
     assert!(contact.is_bot());
 
     // Alice receives a message from Bob who is not the bot anymore.
-    receive_imf(
+    receive_encrypted_imf(
         alice,
-        b"From: Bob <bob@example.com>\n\
+        bob,
+        b"From: Bob <bob@example.net>\n\
                     To: alice@example.org\n\
                     Chat-Version: 1.0\n\
-                    Message-ID: <456@example.com>\n\
+                    Message-ID: <456@example.net>\n\
                     Date: Fri, 29 Jan 2021 21:37:55 +0000\n\
                     \n\
                     hello again\n",
-        false,
     )
     .await?;
     let msg = alice.get_last_msg().await;
