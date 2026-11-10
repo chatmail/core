@@ -651,16 +651,18 @@ async fn test_send_webxdc_status_update() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     alice.set_config_bool(Config::BccSelf, true).await?;
-    alice.allow_unencrypted().await?;
     let bob = &tcm.bob().await;
-    bob.allow_unencrypted().await?;
 
     // Alice sends an webxdc instance and a status update
-    let alice_chat = alice.create_email_chat(bob).await;
+    let alice_chat = alice.create_chat(bob).await;
     let alice_instance = send_webxdc_instance(alice, alice_chat.id).await?;
     let sent1 = &alice.pop_sent_msg().await;
     assert_eq!(alice_instance.viewtype, Viewtype::Webxdc);
-    assert!(!sent1.payload().contains("report-type=status-update"));
+    assert!(
+        !bob.parse_msg(sent1)
+            .await
+            .decoded_data_contains("report-type=status-update")
+    );
 
     alice
         .send_webxdc_status_update(alice_instance.id, r#"{"payload" : {"foo":"bar"}}"#)
@@ -678,9 +680,10 @@ async fn test_send_webxdc_status_update() -> Result<()> {
         alice_update.parent(alice).await?.unwrap().id,
         alice_instance.id
     );
-    assert_eq!(alice_chat.id.get_msg_cnt(alice).await?, 1);
-    assert!(sent2.payload().contains("report-type=status-update"));
-    assert!(sent2.payload().contains(BODY_DESCR));
+    assert_eq!(alice_chat.id.get_msg_cnt(alice).await?, E2EE_INFO_MSGS + 1);
+    let parsed2 = bob.parse_msg(sent2).await;
+    assert!(parsed2.decoded_data_contains("report-type=status-update"));
+    assert!(parsed2.decoded_data_contains(BODY_DESCR));
     assert_eq!(
         alice
             .get_webxdc_status_updates(alice_instance.id, StatusUpdateSerial(0))
@@ -704,12 +707,12 @@ async fn test_send_webxdc_status_update() -> Result<()> {
     let bob_chat_id = bob_instance.chat_id;
     assert_eq!(bob_instance.rfc724_mid, alice_instance.rfc724_mid);
     assert_eq!(bob_instance.viewtype, Viewtype::Webxdc);
-    assert_eq!(bob_chat_id.get_msg_cnt(bob).await?, 1);
+    assert_eq!(bob_chat_id.get_msg_cnt(bob).await?, E2EE_INFO_MSGS + 1);
 
     let bob_received_update = bob.recv_msg_opt(sent2).await;
     assert!(bob_received_update.is_none());
     expect_status_update_event(bob, bob_instance.id).await?;
-    assert_eq!(bob_chat_id.get_msg_cnt(bob).await?, 1);
+    assert_eq!(bob_chat_id.get_msg_cnt(bob).await?, E2EE_INFO_MSGS + 1);
 
     assert_eq!(
         bob.get_webxdc_status_updates(bob_instance.id, StatusUpdateSerial(0))
@@ -719,19 +722,21 @@ async fn test_send_webxdc_status_update() -> Result<()> {
 
     // Alice has a second device and also receives messages there
     let alice2 = &tcm.alice().await;
-    alice2.allow_unencrypted().await?;
     alice2.recv_msg(sent1).await;
     alice2.recv_msg_trash(sent2).await;
     let alice2_instance = alice2.get_last_msg().await;
     let alice2_chat_id = alice2_instance.chat_id;
     assert_eq!(alice2_instance.viewtype, Viewtype::Webxdc);
-    assert_eq!(alice2_chat_id.get_msg_cnt(alice2).await?, 1);
+    assert_eq!(
+        alice2_chat_id.get_msg_cnt(alice2).await?,
+        E2EE_INFO_MSGS + 1
+    );
 
     // To support the second device, Alice has enabled bcc_self and will receive their own messages;
     // these messages, however, should be ignored
     alice.recv_msg_opt(sent1).await;
     alice.recv_msg_opt(sent2).await;
-    assert_eq!(alice_chat.id.get_msg_cnt(alice).await?, 1);
+    assert_eq!(alice_chat.id.get_msg_cnt(alice).await?, E2EE_INFO_MSGS + 1);
     assert_eq!(
         alice
             .get_webxdc_status_updates(alice_instance.id, StatusUpdateSerial(0))
