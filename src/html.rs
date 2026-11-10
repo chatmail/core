@@ -348,8 +348,7 @@ mod tests {
     use crate::constants;
     use crate::contact::ContactId;
     use crate::message::Viewtype;
-    use crate::receive_imf::receive_imf;
-    use crate::test_utils::{TestContext, TestContextManager};
+    use crate::test_utils::{TestContext, TestContextManager, receive_encrypted_imf};
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_htmlparse_plain_unspecified() {
@@ -524,16 +523,13 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_html_forwarding() -> Result<()> {
-        // alice receives a non-delta html-message
+        // alice receives a non-delta html-message from bob
         let mut tcm = TestContextManager::new();
         let alice = &tcm.alice().await;
-        alice.allow_unencrypted().await?;
-        let chat = alice
-            .create_chat_with_contact("", "sender@testrun.org")
-            .await;
+        let bob = &tcm.bob().await;
         let raw = include_bytes!("../test-data/message/text_alt_plain_html.eml");
-        receive_imf(alice, raw, false).await.unwrap();
-        let msg = alice.get_last_msg_in(chat.get_id()).await;
+        let received = receive_encrypted_imf(alice, bob, raw).await?;
+        let msg = Message::load_from_db(alice, received.msg_ids[0]).await?;
         assert_ne!(msg.get_from_id(), ContactId::SELF);
         assert!(!msg.is_forwarded());
         assert!(msg.get_text().contains("this is plain"));
@@ -541,8 +537,8 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
         let html = msg.get_id().get_html(alice).await.unwrap().unwrap();
         assert!(html.contains("this is <b>html</b>"));
 
-        // alice: create chat with bob and forward received html-message there
-        let chat_alice = alice.create_chat_with_contact("", "bob@example.net").await;
+        // alice: forward received html-message back to bob
+        let chat_alice = alice.create_chat(bob).await;
         forward_msgs(alice, &[msg.get_id()], chat_alice.get_id())
             .await
             .unwrap();
@@ -558,9 +554,7 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
         check_sender(alice, &chat_alice).await;
 
         // bob: check that bob also got the html-part of the forwarded message
-        let bob = &tcm.bob().await;
-        bob.allow_unencrypted().await?;
-        let chat_bob = bob.create_chat_with_contact("", "alice@example.org").await;
+        let chat_bob = bob.create_chat(alice).await;
         async fn check_receiver(ctx: &TestContext, chat: &Chat, sender: &TestContext) {
             let msg = ctx.recv_msg(&sender.pop_sent_msg().await).await;
             assert_eq!(chat.id, msg.chat_id);
@@ -598,14 +592,11 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
     async fn test_html_save_msg() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let alice = &tcm.alice().await;
-        alice.allow_unencrypted().await?;
+        let bob = &tcm.bob().await;
         // Alice receives a non-delta html-message
-        let chat = alice
-            .create_chat_with_contact("", "sender@testrun.org")
-            .await;
         let raw = include_bytes!("../test-data/message/text_alt_plain_html.eml");
-        receive_imf(alice, raw, false).await?;
-        let msg = alice.get_last_msg_in(chat.get_id()).await;
+        let received = receive_encrypted_imf(alice, bob, raw).await?;
+        let msg = Message::load_from_db(alice, received.msg_ids[0]).await?;
 
         // Alice saves the message
         let self_chat = alice.get_self_chat().await;
@@ -625,20 +616,18 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_html_forwarding_encrypted() {
+    async fn test_html_forwarding_to_saved_messages() {
         let mut tcm = TestContextManager::new();
         // Alice receives a non-delta html-message
         let alice = &tcm.alice().await;
-        alice.allow_unencrypted().await.unwrap();
-        let chat = alice
-            .create_chat_with_contact("", "sender@testrun.org")
-            .await;
+        let bob = &tcm.bob().await;
         let raw = include_bytes!("../test-data/message/text_alt_plain_html.eml");
-        receive_imf(alice, raw, false).await.unwrap();
-        let msg = alice.get_last_msg_in(chat.get_id()).await;
+        let received = receive_encrypted_imf(alice, bob, raw).await.unwrap();
+        let msg = Message::load_from_db(alice, received.msg_ids[0])
+            .await
+            .unwrap();
 
-        // forward the message to saved-messages,
-        // this will encrypt the message as new_alice() has set up keys
+        // forward the message to saved-messages
         let chat = alice.get_self_chat().await;
         forward_msgs(alice, &[msg.get_id()], chat.get_id())
             .await
@@ -694,14 +683,14 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
     async fn test_cp1252_html() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let alice = &tcm.alice().await;
-        alice.allow_unencrypted().await?;
-        receive_imf(
+        let bob = &tcm.bob().await;
+        let received = receive_encrypted_imf(
             alice,
+            bob,
             include_bytes!("../test-data/message/cp1252-html.eml"),
-            false,
         )
         .await?;
-        let msg = alice.get_last_msg().await;
+        let msg = Message::load_from_db(alice, received.msg_ids[0]).await?;
         assert_eq!(msg.viewtype, Viewtype::Text);
         assert!(msg.text.contains("foo bar ä ö ü ß"));
         assert!(msg.has_html());
