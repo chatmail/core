@@ -227,3 +227,22 @@ async fn test_key_contacts_migration_verified() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_migrations_dont_add_columns() -> Result<()> {
+    let migrations = include_str!("../migrations.rs");
+    let num_column_additions = migrations.matches("ADD COLUMN").count();
+
+    // Additional columns make queries on large tables slow,
+    // seehttps://sqlite.org/forum/forumpost/edcd4ecddb.
+    //
+    // If you really want to add a column,
+    // you can increase this number.
+    // Please write a justification into the PR description
+    // why you add a new column rather than a new table.
+    //
+    // In small tables, it is usually fine to add a new column.
+    assert_eq!(num_column_additions, 62);
+
+    Ok(())
+}
