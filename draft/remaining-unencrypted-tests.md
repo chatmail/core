@@ -8,3 +8,5 @@ I will remove them once we remove support for unencrypted.
 - `contact::contact_tests::test_contact_freshness_address_contact`
 - `contact::contact_tests::test_lookup_id_by_addr_recent`
 - `contact::contact_tests::test_lookup_id_by_addr_recent_accepted`
+- `mimeparser::mimeparser_tests::test_ms_exchange_mdn`
+- `mimeparser::mimeparser_tests::test_receive_signed_only`
