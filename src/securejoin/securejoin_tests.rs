@@ -2,7 +2,7 @@ use deltachat_contact_tools::EmailAddress;
 use regex::Regex;
 
 use super::*;
-use crate::chat::{CantSendReason, ChatId, add_contact_to_chat, remove_contact_from_chat};
+use crate::chat::{CantSendReason, Chat, ChatId, add_contact_to_chat, remove_contact_from_chat};
 use crate::chatlist::Chatlist;
 use crate::constants::Chattype;
 use crate::key::self_fingerprint;
@@ -12,7 +12,7 @@ use crate::receive_imf::receive_imf;
 use crate::stock_str::{self, messages_e2ee_info_msg};
 use crate::test_utils::{
     AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, TestContext, TestContextManager,
-    TimeShiftFalsePositiveNote, get_chat_msg, sync,
+    TimeShiftFalsePositiveNote, encrypt_raw_message, get_chat_msg, sync,
 };
 use crate::transport::add_pseudo_transport;
 
@@ -768,20 +768,28 @@ fn manipulate_qr(v3: bool, remove_invite: bool, qr: &mut String) {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_adhoc_group_no_qr() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-    alice.allow_unencrypted().await?;
+    let mut tcm = TestContextManager::new();
+    let alice = tcm.alice().await;
+    let bob = tcm.bob().await;
+    let charlie = tcm.charlie().await;
 
     let mime = br#"Subject: First thread
-Message-ID: first@example.org
+Message-ID: first@example.net
 To: Alice <alice@example.org>, Bob <bob@example.net>
-From: Claire <claire@example.org>
+From: Charlie <charlie@example.net>
 Content-Type: text/plain; charset=utf-8; format=flowed; delsp=no
 
 First thread."#;
+    let raw = encrypt_raw_message(&charlie, &[&alice, &bob], mime).await?;
 
-    receive_imf(&alice, mime, false).await?;
-    let msg = alice.get_last_msg().await;
-    let chat_id = msg.chat_id;
+    let chat_id = receive_imf(&alice, raw.as_bytes(), false)
+        .await?
+        .unwrap()
+        .chat_id;
+    assert_eq!(
+        Chat::load_from_db(&alice, chat_id).await?.typ,
+        Chattype::Group
+    );
 
     assert!(get_securejoin_qr(&alice, Some(chat_id)).await.is_err());
     alice.assert_error("Can't generate QR code").await;
