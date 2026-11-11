@@ -10,3 +10,6 @@ I will remove them once we remove support for unencrypted.
 - `contact::contact_tests::test_lookup_id_by_addr_recent_accepted`
 - `mimeparser::mimeparser_tests::test_ms_exchange_mdn`
 - `mimeparser::mimeparser_tests::test_receive_signed_only`
+- `e2ee::tests::test_cannot_send_unencrypted_by_default`
+- `e2ee::tests::test_chatmail_can_send_unencrypted`
+- `tests::pre_messages::sending::test_unencrypted_gets_no_pre_message`

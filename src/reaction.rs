@@ -1086,8 +1086,9 @@ Content-Disposition: reaction\n\
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_reaction_forwarded_summary() -> Result<()> {
-        let alice = TestContext::new_alice().await;
-        alice.allow_unencrypted().await?;
+        let mut tcm = TestContextManager::new();
+        let alice = tcm.alice().await;
+        let bob = tcm.bob().await;
 
         // Alice adds a message to "Saved Messages"
         let self_chat = alice.get_self_chat().await;
@@ -1102,8 +1103,7 @@ Content-Disposition: reaction\n\
         assert_eq!(reactions.by_contact.len(), 1);
 
         // Alice forwards that message to Bob: Reactions are not forwarded, the message is prefixed by "Forwarded".
-        let bob_id = Contact::create(&alice, "", "bob@example.net").await?;
-        let bob_chat_id = ChatId::create_for_contact(&alice, bob_id).await?;
+        let bob_chat_id = alice.create_chat(&bob).await.id;
         forward_msgs(&alice, &[msg_id], bob_chat_id).await?;
         assert_summary(&alice, "Forwarded: foo").await; // forwarded messages are prefixed
         let chatlist = Chatlist::try_load(&alice, 0, None, None).await.unwrap();
