@@ -1749,7 +1749,7 @@ async fn test_webxdc_delete_event() -> Result<()> {
     Ok(())
 }
 
-/// Sends a webxdc and 30 minutes later an webxdc info message,
+/// Sends a webxdc and 30 minutes later a webxdc info message,
 /// followed by a normal reply and a normal info message.
 /// All in all, these are 4 messages - where only 2 should be deleted together with the webxdc.
 async fn send_instance_and_info(
