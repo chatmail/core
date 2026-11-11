@@ -1429,30 +1429,14 @@ async fn test_markfresh_chat() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_archive_fresh_msgs() -> Result<()> {
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await?;
-
-    async fn msg_from(t: &TestContext, name: &str, num: u32) -> Result<()> {
-        receive_imf(
-            t,
-            format!(
-                "From: {name}@example.net\n\
-                     To: alice@example.org\n\
-                     Message-ID: <{num}@example.org>\n\
-                     Chat-Version: 1.0\n\
-                     Date: Sun, 22 Mar 2022 19:37:57 +0000\n\
-                     \n\
-                     hello\n"
-            )
-            .as_bytes(),
-            false,
-        )
-        .await?;
-        Ok(())
-    }
+    let mut tcm = TestContextManager::new();
+    let t = tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+    let dom = &tcm.dom().await;
 
     // receive some messages in archived+muted chats
-    msg_from(&t, "bob", 1).await?;
+    tcm.send_recv(bob, &t, "hello").await;
     let bob_chat_id = t.get_last_msg().await.get_chat_id();
     bob_chat_id.accept(&t).await?;
     set_muted(&t, bob_chat_id, MuteDuration::Forever).await?;
@@ -1461,29 +1445,29 @@ async fn test_archive_fresh_msgs() -> Result<()> {
         .await?;
     assert_eq!(ChatId::ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 0);
 
-    msg_from(&t, "bob", 2).await?;
+    tcm.send_recv(bob, &t, "hello").await;
     assert_eq!(ChatId::ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 1);
 
-    msg_from(&t, "bob", 3).await?;
+    tcm.send_recv(bob, &t, "hello").await;
     assert_eq!(ChatId::ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 1);
 
-    msg_from(&t, "claire", 4).await?;
-    let claire_chat_id = t.get_last_msg().await.get_chat_id();
-    claire_chat_id.accept(&t).await?;
-    set_muted(&t, claire_chat_id, MuteDuration::Forever).await?;
-    claire_chat_id
+    tcm.send_recv(charlie, &t, "hello").await;
+    let charlie_chat_id = t.get_last_msg().await.get_chat_id();
+    charlie_chat_id.accept(&t).await?;
+    set_muted(&t, charlie_chat_id, MuteDuration::Forever).await?;
+    charlie_chat_id
         .set_visibility(&t, ChatVisibility::Archived)
         .await?;
-    msg_from(&t, "claire", 5).await?;
-    msg_from(&t, "claire", 6).await?;
-    msg_from(&t, "claire", 7).await?;
+    tcm.send_recv(charlie, &t, "hello").await;
+    tcm.send_recv(charlie, &t, "hello").await;
+    tcm.send_recv(charlie, &t, "hello").await;
     assert_eq!(bob_chat_id.get_fresh_msg_cnt(&t).await?, 2);
-    assert_eq!(claire_chat_id.get_fresh_msg_cnt(&t).await?, 3);
+    assert_eq!(charlie_chat_id.get_fresh_msg_cnt(&t).await?, 3);
     assert_eq!(ChatId::ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 2);
 
     // mark one of the archived+muted chats as noticed: check that the archive-link counter is changed as well
     t.evtracker.clear_events();
-    marknoticed_chat(&t, claire_chat_id).await?;
+    marknoticed_chat(&t, charlie_chat_id).await?;
     let ev = t
         .evtracker
         .get_matching(|ev| {
@@ -1504,28 +1488,28 @@ async fn test_archive_fresh_msgs() -> Result<()> {
         }
     );
     assert_eq!(bob_chat_id.get_fresh_msg_cnt(&t).await?, 2);
-    assert_eq!(claire_chat_id.get_fresh_msg_cnt(&t).await?, 0);
+    assert_eq!(charlie_chat_id.get_fresh_msg_cnt(&t).await?, 0);
     assert_eq!(ChatId::ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 1);
 
     // receive some more messages
-    msg_from(&t, "claire", 8).await?;
+    tcm.send_recv(charlie, &t, "hello").await;
     assert_eq!(bob_chat_id.get_fresh_msg_cnt(&t).await?, 2);
-    assert_eq!(claire_chat_id.get_fresh_msg_cnt(&t).await?, 1);
+    assert_eq!(charlie_chat_id.get_fresh_msg_cnt(&t).await?, 1);
     assert_eq!(ChatId::ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 2);
     assert_eq!(t.get_fresh_msgs().await?.len(), 0);
 
-    msg_from(&t, "dave", 9).await?;
-    let dave_chat_id = t.get_last_msg().await.get_chat_id();
-    dave_chat_id.accept(&t).await?;
-    assert_eq!(dave_chat_id.get_fresh_msg_cnt(&t).await?, 1);
+    tcm.send_recv(dom, &t, "hello").await;
+    let dom_chat_id = t.get_last_msg().await.get_chat_id();
+    dom_chat_id.accept(&t).await?;
+    assert_eq!(dom_chat_id.get_fresh_msg_cnt(&t).await?, 1);
     assert_eq!(ChatId::ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 2);
     assert_eq!(t.get_fresh_msgs().await?.len(), 1);
 
     // mark the archived-link as noticed: check that the real chats are noticed as well
     marknoticed_chat(&t, ChatId::ARCHIVED_LINK).await?;
     assert_eq!(bob_chat_id.get_fresh_msg_cnt(&t).await?, 0);
-    assert_eq!(claire_chat_id.get_fresh_msg_cnt(&t).await?, 0);
-    assert_eq!(dave_chat_id.get_fresh_msg_cnt(&t).await?, 1);
+    assert_eq!(charlie_chat_id.get_fresh_msg_cnt(&t).await?, 0);
+    assert_eq!(dom_chat_id.get_fresh_msg_cnt(&t).await?, 1);
     assert_eq!(ChatId::ARCHIVED_LINK.get_fresh_msg_cnt(&t).await?, 0);
     assert_eq!(t.get_fresh_msgs().await?.len(), 1);
 
@@ -1966,24 +1950,14 @@ async fn test_marknoticed_chat() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_contact_request_fresh_messages() -> Result<()> {
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await?;
+    let mut tcm = TestContextManager::new();
+    let t = tcm.alice().await;
+    let bob = &tcm.bob().await;
 
     let chats = Chatlist::try_load(&t, 0, None, None).await?;
     assert_eq!(chats.len(), 0);
 
-    receive_imf(
-        &t,
-        b"From: bob@example.org\n\
-                 To: alice@example.org\n\
-                 Message-ID: <1@example.org>\n\
-                 Chat-Version: 1.0\n\
-                 Date: Sun, 22 Mar 2021 19:37:57 +0000\n\
-                 \n\
-                 hello\n",
-        false,
-    )
-    .await?;
+    tcm.send_recv(bob, &t, "hello").await;
 
     let chats = Chatlist::try_load(&t, 0, None, None).await?;
     assert_eq!(chats.len(), 1);
@@ -1994,11 +1968,11 @@ async fn test_contact_request_fresh_messages() -> Result<()> {
             .unwrap()
             .is_contact_request()
     );
-    assert_eq!(chat_id.get_msg_cnt(&t).await?, 1);
+    assert_eq!(chat_id.get_msg_cnt(&t).await?, E2EE_INFO_MSGS + 1);
     assert_eq!(chat_id.get_fresh_msg_cnt(&t).await?, 1);
     let msgs = get_chat_msgs(&t, chat_id).await?;
-    assert_eq!(msgs.len(), 1);
-    let msg_id = match msgs.first().unwrap() {
+    assert_eq!(msgs.len(), E2EE_INFO_MSGS + 1);
+    let msg_id = match msgs.last().unwrap() {
         ChatItem::Message { msg_id } => *msg_id,
         _ => MsgId::new_unset(),
     };
@@ -5041,27 +5015,28 @@ async fn test_sync_adhoc_grp() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice0 = &tcm.alice().await;
     let alice1 = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let fiona = &tcm.fiona().await;
     for a in [alice0, alice1] {
         a.set_config_bool(Config::SyncMsgs, true).await?;
-        a.allow_unencrypted().await?;
     }
 
+    let raw = test_utils::encrypt_raw_message(
+        alice0,
+        &[bob, fiona],
+        b"Subject: =?utf-8?q?Message_from_alice=40example=2Eorg?=\r\n\
+          From: alice@example.org\r\n\
+          To: <bob@example.net>, <fiona@example.net> \r\n\
+          Date: Mon, 2 Dec 2023 16:59:39 +0000\r\n\
+          Message-ID: <Mr.alices_original_mail@example.org>\r\n\
+          Chat-Version: 1.0\r\n\
+          \r\n\
+          hi\r\n",
+    )
+    .await?;
     let mut chat_ids = Vec::new();
     for a in [alice0, alice1] {
-        let msg = receive_imf(
-            a,
-            b"Subject: =?utf-8?q?Message_from_alice=40example=2Eorg?=\r\n\
-                    From: alice@example.org\r\n\
-                    To: <bob@example.net>, <fiona@example.org> \r\n\
-                    Date: Mon, 2 Dec 2023 16:59:39 +0000\r\n\
-                    Message-ID: <Mr.alices_original_mail@example.org>\r\n\
-                    Chat-Version: 1.0\r\n\
-                    \r\n\
-                    hi\r\n",
-            false,
-        )
-        .await?
-        .unwrap();
+        let msg = receive_imf(a, raw.as_bytes(), false).await?.unwrap();
         chat_ids.push(msg.chat_id);
     }
     let chat1 = Chat::load_from_db(alice1, chat_ids[1]).await?;
@@ -6115,12 +6090,18 @@ async fn test_restore_backup_after_60_days() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_single_chat_no_group_member_timestamps() {
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await.unwrap();
-    let chat = t.create_chat_with_contact("bob", "bob@example.com").await;
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let chat = t.create_chat(bob).await;
     let sent = t.send_text(chat.id, "Hi!").await;
-    let payload = sent.payload;
-    assert!(!payload.contains("Chat-Group-Member-Timestamps:"));
+    let parsed = bob.parse_msg(&sent).await;
+    assert!(
+        parsed
+            .get_header(HeaderDef::ChatGroupMemberTimestamps)
+            .is_none()
+    );
+    assert!(!parsed.decoded_data_contains("Chat-Group-Member-Timestamps:"));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
