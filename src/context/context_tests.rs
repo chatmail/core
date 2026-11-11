@@ -8,7 +8,7 @@ use crate::chatlist::Chatlist;
 use crate::constants::{Chattype, DEFAULT_MAX_SMTP_RCPT_TO};
 use crate::message::Message;
 use crate::receive_imf::receive_imf;
-use crate::test_utils::{E2EE_INFO_MSGS, TestContext, TestContextManager};
+use crate::test_utils::{E2EE_INFO_MSGS, TestContext, TestContextManager, receive_encrypted_imf};
 use crate::tools::{SystemTime, create_outgoing_rfc724_mid};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -53,11 +53,7 @@ async fn test_get_fresh_msgs() {
     assert!(fresh.is_empty())
 }
 
-async fn receive_msg(t: &TestContext, chat: &Chat) {
-    let members = get_chat_contacts(t, chat.id).await.unwrap();
-    let contact = Contact::get_by_id(t, *members.first().unwrap())
-        .await
-        .unwrap();
+async fn receive_msg(t: &TestContext, from: &TestContext) {
     let msg = format!(
         "From: {}\n\
              To: alice@example.org\n\
@@ -66,71 +62,92 @@ async fn receive_msg(t: &TestContext, chat: &Chat) {
              Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
              \n\
              hello\n",
-        contact.get_addr(),
+        from.get_primary_self_addr().await.unwrap(),
         create_outgoing_rfc724_mid()
     );
     println!("{msg}");
-    receive_imf(t, msg.as_bytes(), false).await.unwrap();
+    receive_encrypted_imf(t, from, msg.as_bytes())
+        .await
+        .unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_fresh_msgs_and_muted_chats() {
     // receive various mails in 3 chats
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await.unwrap();
-    let bob = t.create_chat_with_contact("", "bob@g.it").await;
-    let claire = t.create_chat_with_contact("", "claire@g.it").await;
-    let dave = t.create_chat_with_contact("", "dave@g.it").await;
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+    let dom = &tcm.dom().await;
+    let bob_chat = t.create_chat(bob).await;
+    let charlie_chat = t.create_chat(charlie).await;
+    let dom_chat = t.create_chat(dom).await;
     assert_eq!(t.get_fresh_msgs().await.unwrap().len(), 0);
 
-    receive_msg(&t, &bob).await;
-    assert_eq!(get_chat_msgs(&t, bob.id).await.unwrap().len(), 1);
-    assert_eq!(bob.id.get_fresh_msg_cnt(&t).await.unwrap(), 1);
+    receive_msg(t, bob).await;
+    assert_eq!(
+        get_chat_msgs(t, bob_chat.id).await.unwrap().len(),
+        E2EE_INFO_MSGS + 1
+    );
+    assert_eq!(bob_chat.id.get_fresh_msg_cnt(t).await.unwrap(), 1);
     assert_eq!(t.get_fresh_msgs().await.unwrap().len(), 1);
 
-    receive_msg(&t, &claire).await;
-    receive_msg(&t, &claire).await;
-    assert_eq!(get_chat_msgs(&t, claire.id).await.unwrap().len(), 2);
-    assert_eq!(claire.id.get_fresh_msg_cnt(&t).await.unwrap(), 2);
+    receive_msg(t, charlie).await;
+    receive_msg(t, charlie).await;
+    assert_eq!(
+        get_chat_msgs(t, charlie_chat.id).await.unwrap().len(),
+        E2EE_INFO_MSGS + 2
+    );
+    assert_eq!(charlie_chat.id.get_fresh_msg_cnt(t).await.unwrap(), 2);
     assert_eq!(t.get_fresh_msgs().await.unwrap().len(), 3);
 
-    receive_msg(&t, &dave).await;
-    receive_msg(&t, &dave).await;
-    receive_msg(&t, &dave).await;
-    assert_eq!(get_chat_msgs(&t, dave.id).await.unwrap().len(), 3);
-    assert_eq!(dave.id.get_fresh_msg_cnt(&t).await.unwrap(), 3);
+    receive_msg(t, dom).await;
+    receive_msg(t, dom).await;
+    receive_msg(t, dom).await;
+    assert_eq!(
+        get_chat_msgs(t, dom_chat.id).await.unwrap().len(),
+        E2EE_INFO_MSGS + 3
+    );
+    assert_eq!(dom_chat.id.get_fresh_msg_cnt(t).await.unwrap(), 3);
     assert_eq!(t.get_fresh_msgs().await.unwrap().len(), 6);
 
     // mute one of the chats
-    set_muted(&t, claire.id, MuteDuration::Forever)
+    set_muted(t, charlie_chat.id, MuteDuration::Forever)
         .await
         .unwrap();
-    assert_eq!(claire.id.get_fresh_msg_cnt(&t).await.unwrap(), 2);
-    assert_eq!(t.get_fresh_msgs().await.unwrap().len(), 4); // muted claires messages are no longer counted
+    assert_eq!(charlie_chat.id.get_fresh_msg_cnt(t).await.unwrap(), 2);
+    assert_eq!(t.get_fresh_msgs().await.unwrap().len(), 4); // muted charlie's messages are no longer counted
 
     // receive more messages
-    receive_msg(&t, &bob).await;
-    receive_msg(&t, &claire).await;
-    receive_msg(&t, &dave).await;
-    assert_eq!(get_chat_msgs(&t, claire.id).await.unwrap().len(), 3);
-    assert_eq!(claire.id.get_fresh_msg_cnt(&t).await.unwrap(), 3);
-    assert_eq!(t.get_fresh_msgs().await.unwrap().len(), 6); // muted claire is not counted
+    receive_msg(t, bob).await;
+    receive_msg(t, charlie).await;
+    receive_msg(t, dom).await;
+    assert_eq!(
+        get_chat_msgs(t, charlie_chat.id).await.unwrap().len(),
+        E2EE_INFO_MSGS + 3
+    );
+    assert_eq!(charlie_chat.id.get_fresh_msg_cnt(t).await.unwrap(), 3);
+    assert_eq!(t.get_fresh_msgs().await.unwrap().len(), 6); // muted charlie is not counted
 
-    // unmute claire again
-    set_muted(&t, claire.id, MuteDuration::NotMuted)
+    // unmute charlie again
+    set_muted(t, charlie_chat.id, MuteDuration::NotMuted)
         .await
         .unwrap();
-    assert_eq!(claire.id.get_fresh_msg_cnt(&t).await.unwrap(), 3);
-    assert_eq!(t.get_fresh_msgs().await.unwrap().len(), 9); // claire is counted again
+    assert_eq!(charlie_chat.id.get_fresh_msg_cnt(t).await.unwrap(), 3);
+    assert_eq!(t.get_fresh_msgs().await.unwrap().len(), 9); // charlie is counted again
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_fresh_msgs_and_muted_until() {
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await.unwrap();
-    let bob = t.create_chat_with_contact("", "bob@g.it").await;
-    receive_msg(&t, &bob).await;
-    assert_eq!(get_chat_msgs(&t, bob.id).await.unwrap().len(), 1);
+    let mut tcm = TestContextManager::new();
+    let t = tcm.alice().await;
+    let bob_ctx = &tcm.bob().await;
+    let bob = t.create_chat(bob_ctx).await;
+    receive_msg(&t, bob_ctx).await;
+    assert_eq!(
+        get_chat_msgs(&t, bob.id).await.unwrap().len(),
+        E2EE_INFO_MSGS + 1
+    );
 
     // chat is unmuted by default, here and in the following assert(),
     // we check mainly that the SQL-statements in is_muted() and get_fresh_msgs()
@@ -182,12 +199,13 @@ async fn test_get_fresh_msgs_and_muted_until() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_muted_context() -> Result<()> {
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await?;
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let bob = &tcm.bob().await;
     assert_eq!(t.get_fresh_msgs().await.unwrap().len(), 0);
     t.set_config(Config::IsMuted, Some("1")).await?;
-    let chat = t.create_chat_with_contact("", "bob@g.it").await;
-    receive_msg(&t, &chat).await;
+    t.create_chat(bob).await;
+    receive_msg(t, bob).await;
 
     // muted contexts should still show dimmed badge counters eg. in the sidebars,
     // (same as muted chats show dimmed badge counters in the chatlist)
@@ -350,12 +368,11 @@ async fn test_get_info_completeness() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_search_msgs() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-    alice.allow_unencrypted().await?;
+    let mut tcm = TestContextManager::new();
+    let alice = tcm.alice().await;
+    let bob = &tcm.bob().await;
     let self_talk = ChatId::create_for_contact(&alice, ContactId::SELF).await?;
-    let chat = alice
-        .create_chat_with_contact("Bob", "bob@example.org")
-        .await;
+    let chat = alice.create_chat(bob).await;
 
     // Global search finds nothing.
     let res = alice.search_msgs(None, "foo").await?;
@@ -457,11 +474,9 @@ async fn test_search_unaccepted_requests() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_limit_search_msgs() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-    alice.allow_unencrypted().await?;
-    let chat = alice
-        .create_chat_with_contact("Bob", "bob@example.org")
-        .await;
+    let mut tcm = TestContextManager::new();
+    let alice = tcm.alice().await;
+    let chat = alice.create_chat(&tcm.bob().await).await;
 
     // Add 999 messages
     let mut msg = Message::new_text("foobar".to_string());
