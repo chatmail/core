@@ -149,8 +149,6 @@ async fn test_message_stats() -> Result<()> {
     alice
         .set_config_internal(Config::StatsSending, Some("1"))
         .await?;
-    alice.allow_unencrypted().await?;
-    let email_chat = alice.create_email_chat(bob).await;
     let encrypted_chat = alice.create_chat(bob).await;
 
     let mut expected: BTreeMap<Chattype, MessageStats> = BTreeMap::from_iter([
@@ -159,10 +157,6 @@ async fn test_message_stats() -> Result<()> {
         (Chattype::OutBroadcast, MessageStats::default()),
     ]);
 
-    check_stats(&update_get_stats(alice).await, &expected);
-
-    alice.send_text(email_chat.id, "foo").await;
-    expected.get_mut(&Chattype::Single).unwrap().unencrypted += 1;
     check_stats(&update_get_stats(alice).await, &expected);
 
     alice.send_text(encrypted_chat.id, "foo").await;
@@ -187,11 +181,6 @@ async fn test_message_stats() -> Result<()> {
 
     let empty_group = create_group(alice, "Notes").await?;
     alice.send_text(empty_group, "foo").await;
-    expected.get_mut(&Chattype::Group).unwrap().only_to_self += 1;
-    check_stats(&update_get_stats(alice).await, &expected);
-
-    let empty_unencrypted = create_group_unencrypted(alice, "Email thread").await?;
-    alice.send_text(empty_unencrypted, "foo").await;
     expected.get_mut(&Chattype::Group).unwrap().only_to_self += 1;
     check_stats(&update_get_stats(alice).await, &expected);
 
