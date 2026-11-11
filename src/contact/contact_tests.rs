@@ -6,7 +6,9 @@ use crate::chatlist::Chatlist;
 use crate::key::secret_key_to_public_key;
 use crate::receive_imf::receive_imf;
 use crate::securejoin::get_securejoin_qr;
-use crate::test_utils::{self, TestContext, TestContextManager, TimeShiftFalsePositiveNote, sync};
+use crate::test_utils::{
+    self, TestContext, TestContextManager, TimeShiftFalsePositiveNote, receive_encrypted_imf, sync,
+};
 
 #[test]
 fn test_contact_id_values() {
@@ -341,109 +343,112 @@ async fn test_add_or_lookup() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_contact_name_changes() -> Result<()> {
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await?;
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let bob = &tcm.bob().await;
 
     // first message creates contact and single-chat without name set
-    receive_imf(
-        &t,
-        b"From: f@example.org\n\
-                 To: alice@example.org\n\
-                 Subject: foo\n\
-                 Message-ID: <1234-1@example.org>\n\
-                 Chat-Version: 1.0\n\
-                 Date: Sun, 29 May 2022 08:37:57 +0000\n\
-                 \n\
-                 hello one\n",
-        false,
+    let chat_id = receive_encrypted_imf(
+        t,
+        bob,
+        b"From: bob@example.net\r\n\
+          To: alice@example.org\r\n\
+          Subject: foo\r\n\
+          Message-ID: <1234-1@example.net>\r\n\
+          Chat-Version: 1.0\r\n\
+          Date: Sun, 29 May 2022 08:37:57 +0000\r\n\
+          \r\n\
+          hello one\r\n",
     )
-    .await?;
-    let chat_id = t.get_last_msg().await.get_chat_id();
-    chat_id.accept(&t).await?;
-    assert_eq!(Chat::load_from_db(&t, chat_id).await?.name, "f@example.org");
-    let chatlist = Chatlist::try_load(&t, 0, Some("f@example.org"), None).await?;
+    .await?
+    .chat_id;
+    chat_id.accept(t).await?;
+    assert_eq!(
+        Chat::load_from_db(t, chat_id).await?.name,
+        "bob@example.net"
+    );
+    let chatlist = Chatlist::try_load(t, 0, Some("bob@example.net"), None).await?;
     assert_eq!(chatlist.len(), 1);
-    let contacts = get_chat_contacts(&t, chat_id).await?;
+    let contacts = get_chat_contacts(t, chat_id).await?;
     let contact_id = contacts.first().unwrap();
-    let contact = Contact::get_by_id(&t, *contact_id).await?;
+    let contact = Contact::get_by_id(t, *contact_id).await?;
     assert_eq!(contact.get_authname(), "");
     assert_eq!(contact.get_name(), "");
-    assert_eq!(contact.get_display_name(), "f@example.org");
-    let contacts = Contact::get_all(&t, 0, Some("f@example.org")).await?;
-    assert_eq!(contacts.len(), 0);
+    assert_eq!(contact.get_display_name(), "bob@example.net");
+    let contacts = Contact::get_all(t, 0, Some("bob@example.net")).await?;
+    assert_eq!(contacts.len(), 1);
 
     // second message inits the name
-    receive_imf(
-        &t,
-        b"From: Flobbyfoo <f@example.org>\n\
-                 To: alice@example.org\n\
-                 Subject: foo\n\
-                 Message-ID: <1234-2@example.org>\n\
-                 Chat-Version: 1.0\n\
-                 Date: Sun, 29 May 2022 08:38:57 +0000\n\
-                 \n\
-                 hello two\n",
-        false,
+    let chat_id = receive_encrypted_imf(
+        t,
+        bob,
+        b"From: Flobbyfoo <bob@example.net>\r\n\
+          To: alice@example.org\r\n\
+          Subject: foo\r\n\
+          Message-ID: <1234-2@example.net>\r\n\
+          Chat-Version: 1.0\r\n\
+          Date: Sun, 29 May 2022 08:38:57 +0000\r\n\
+          \r\n\
+          hello two\r\n",
     )
-    .await?;
-    let chat_id = t.get_last_msg().await.get_chat_id();
-    assert_eq!(Chat::load_from_db(&t, chat_id).await?.name, "Flobbyfoo");
-    let chatlist = Chatlist::try_load(&t, 0, Some("flobbyfoo"), None).await?;
+    .await?
+    .chat_id;
+    assert_eq!(Chat::load_from_db(t, chat_id).await?.name, "Flobbyfoo");
+    let chatlist = Chatlist::try_load(t, 0, Some("flobbyfoo"), None).await?;
     assert_eq!(chatlist.len(), 1);
-    let contact = Contact::get_by_id(&t, *contact_id).await?;
+    let contact = Contact::get_by_id(t, *contact_id).await?;
     assert_eq!(contact.get_authname(), "Flobbyfoo");
     assert_eq!(contact.get_name(), "");
     assert_eq!(contact.get_display_name(), "Flobbyfoo");
-    let contacts = Contact::get_all(&t, 0, Some("f@example.org")).await?;
-    assert_eq!(contacts.len(), 0);
-    let contacts = Contact::get_all(&t, 0, Some("flobbyfoo")).await?;
-    assert_eq!(contacts.len(), 0);
+    let contacts = Contact::get_all(t, 0, Some("bob@example.net")).await?;
+    assert_eq!(contacts.len(), 1);
+    let contacts = Contact::get_all(t, 0, Some("flobbyfoo")).await?;
+    assert_eq!(contacts.len(), 1);
 
     // third message changes the name
-    receive_imf(
-        &t,
-        b"From: Foo Flobby <f@example.org>\n\
-                 To: alice@example.org\n\
-                 Subject: foo\n\
-                 Message-ID: <1234-3@example.org>\n\
-                 Chat-Version: 1.0\n\
-                 Date: Sun, 29 May 2022 08:39:57 +0000\n\
-                 \n\
-                 hello three\n",
-        false,
+    let chat_id = receive_encrypted_imf(
+        t,
+        bob,
+        b"From: Foo Flobby <bob@example.net>\r\n\
+          To: alice@example.org\r\n\
+          Subject: foo\r\n\
+          Message-ID: <1234-3@example.net>\r\n\
+          Chat-Version: 1.0\r\n\
+          Date: Sun, 29 May 2022 08:39:57 +0000\r\n\
+          \r\n\
+          hello three\r\n",
     )
-    .await?;
-    let chat_id = t.get_last_msg().await.get_chat_id();
-    assert_eq!(Chat::load_from_db(&t, chat_id).await?.name, "Foo Flobby");
-    let chatlist = Chatlist::try_load(&t, 0, Some("Flobbyfoo"), None).await?;
+    .await?
+    .chat_id;
+    assert_eq!(Chat::load_from_db(t, chat_id).await?.name, "Foo Flobby");
+    let chatlist = Chatlist::try_load(t, 0, Some("Flobbyfoo"), None).await?;
     assert_eq!(chatlist.len(), 0);
-    let chatlist = Chatlist::try_load(&t, 0, Some("Foo Flobby"), None).await?;
+    let chatlist = Chatlist::try_load(t, 0, Some("Foo Flobby"), None).await?;
     assert_eq!(chatlist.len(), 1);
-    let contact = Contact::get_by_id(&t, *contact_id).await?;
+    let contact = Contact::get_by_id(t, *contact_id).await?;
     assert_eq!(contact.get_authname(), "Foo Flobby");
     assert_eq!(contact.get_name(), "");
     assert_eq!(contact.get_display_name(), "Foo Flobby");
-    let contacts = Contact::get_all(&t, 0, Some("f@example.org")).await?;
+    let contacts = Contact::get_all(t, 0, Some("bob@example.net")).await?;
+    assert_eq!(contacts.len(), 1);
+    let contacts = Contact::get_all(t, 0, Some("flobbyfoo")).await?;
     assert_eq!(contacts.len(), 0);
-    let contacts = Contact::get_all(&t, 0, Some("flobbyfoo")).await?;
-    assert_eq!(contacts.len(), 0);
-    let contacts = Contact::get_all(&t, 0, Some("Foo Flobby")).await?;
-    assert_eq!(contacts.len(), 0);
+    let contacts = Contact::get_all(t, 0, Some("Foo Flobby")).await?;
+    assert_eq!(contacts.len(), 1);
 
     // change name manually
-    let test_id = Contact::create(&t, "Falk", "f@example.org").await?;
-    assert_eq!(*contact_id, test_id);
-    assert_eq!(Chat::load_from_db(&t, chat_id).await?.name, "Falk");
-    let chatlist = Chatlist::try_load(&t, 0, Some("Falk"), None).await?;
+    contact_id.set_name(t, "Falk").await?;
+    assert_eq!(Chat::load_from_db(t, chat_id).await?.name, "Falk");
+    let chatlist = Chatlist::try_load(t, 0, Some("Falk"), None).await?;
     assert_eq!(chatlist.len(), 1);
-    let contact = Contact::get_by_id(&t, *contact_id).await?;
+    let contact = Contact::get_by_id(t, *contact_id).await?;
     assert_eq!(contact.get_authname(), "Foo Flobby");
     assert_eq!(contact.get_name(), "Falk");
     assert_eq!(contact.get_display_name(), "Falk");
-    let contacts = Contact::get_all(&t, 0, Some("f@example.org")).await?;
-    assert_eq!(contacts.len(), 0);
-    let contacts = Contact::get_all(&t, 0, Some("falk")).await?;
-    assert_eq!(contacts.len(), 0);
+    let contacts = Contact::get_all(t, 0, Some("bob@example.net")).await?;
+    assert_eq!(contacts.len(), 1);
+    let contacts = Contact::get_all(t, 0, Some("falk")).await?;
+    assert_eq!(contacts.len(), 1);
 
     Ok(())
 }
@@ -931,34 +936,22 @@ async fn test_synchronize_status() -> Result<()> {
     // Alice has two devices.
     let alice1 = &tcm.alice().await;
     let alice2 = &tcm.alice().await;
-    alice1.allow_unencrypted().await?;
-    alice2.allow_unencrypted().await?;
 
     // Bob has one device.
     let bob = &tcm.bob().await;
-    bob.allow_unencrypted().await?;
 
     let default_status = alice1.get_config(Config::Selfstatus).await?;
 
     alice1
         .set_config(Config::Selfstatus, Some("New status"))
         .await?;
-    let chat = alice1.create_email_chat(bob).await;
 
-    // Alice sends an unencrypted message to Bob from the first device.
-    send_text_msg(alice1, chat.id, "Hello".to_string()).await?;
-    let sent_msg = alice1.pop_sent_msg().await;
-
-    // Alice's second devices receives a copy of outgoing message.
-    alice2.recv_msg(&sent_msg).await;
-    assert_eq!(alice2.get_config(Config::Selfstatus).await?, default_status);
-
-    // Alice sends encrypted message.
+    // Alice sends a message to Bob from the first device.
     let chat = alice1.create_chat(bob).await;
     send_text_msg(alice1, chat.id, "Hello".to_string()).await?;
     let sent_msg = alice1.pop_sent_msg().await;
 
-    // Alice's second devices receives a copy of second outgoing message.
+    // Alice's second devices receives a copy of outgoing message.
     alice2.recv_msg(&sent_msg).await;
     assert_eq!(alice2.get_config(Config::Selfstatus).await?, default_status);
 
