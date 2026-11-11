@@ -1,5 +1,5 @@
 Received: (Postfix, from userid 1000); Mon, 4 Dec 2006 14:51:39 +0100 (CET)\n\
-From: Hocuri <hocuri1@testrun.org>
+From: Bob <bob@example.net>
 Subject: subj with important info
 To: alice@example.org
 Message-ID: <6e107266-b2bd-e87f-4996-29b000abcfb0@testrun.org>
