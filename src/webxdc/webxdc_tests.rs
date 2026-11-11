@@ -1809,6 +1809,33 @@ async fn test_webxdc_delete_info_msgs_for_me() -> Result<()> {
     Ok(())
 }
 
+/// Alice selects a webxdc together with its info message and deletes both.
+/// This results in the info message being processed twice - once as a child of the instance, and then as being explicitly selected.
+/// This test ensures no unexpected "Record not found" halts deletion.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_webxdc_delete_info_msgs_selected() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let chat_id = alice.create_chat(bob).await.id;
+    let instance_id = send_instance_and_info(alice, &[], chat_id).await?;
+    let cnt = chat_id.get_msg_cnt(alice).await?;
+    let ids_to_delete: Vec<MsgId> = chat::get_chat_msgs(alice, chat_id)
+        .await?
+        .into_iter()
+        .filter_map(|item| match item {
+            chat::ChatItem::Message { msg_id } => Some(msg_id),
+            _ => None,
+        })
+        .collect();
+    assert!(ids_to_delete.contains(&instance_id));
+
+    message::delete_msgs(alice, &ids_to_delete).await?;
+    assert_eq!(chat_id.get_msg_cnt(alice).await?, cnt - ids_to_delete.len());
+
+    Ok(())
+}
+
 /// Alice deletes a webxdc for everyone:
 /// instance+info must be gone on all her devices and for Bob.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

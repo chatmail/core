@@ -1786,8 +1786,10 @@ pub async fn delete_msgs_ext(
     }
 
     for &msg_id in msg_ids {
-        let msg = Message::load_from_db(context, msg_id).await?;
-        delete_msg_locally(context, &msg).await?;
+        // the message may already be deleted together with its webxdc instance
+        if let Some(msg) = Message::load_from_db_optional(context, msg_id).await? {
+            delete_msg_locally(context, &msg).await?;
+        }
     }
     delete_msgs_locally_done(
         context,
