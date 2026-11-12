@@ -15,7 +15,7 @@ use crate::securejoin::get_securejoin_qr;
 use crate::test_utils::{self, TimeShiftFalsePositiveNote};
 use crate::test_utils::{E2EE_INFO_MSGS, TestContext, TestContextManager};
 use crate::tools::{self, SystemTime};
-use crate::{message, sql};
+use crate::{message, pinned_messages, sql};
 
 fn create_webxdc_instance(t: &TestContext, name: &str, bytes: &[u8]) -> Result<Message> {
     let mut instance = Message::new(Viewtype::File);
@@ -1750,8 +1750,8 @@ async fn test_webxdc_delete_event() -> Result<()> {
 }
 
 /// Sends a webxdc and 30 minutes later a webxdc info message,
-/// followed by a normal reply and a normal info message.
-/// All in all, these are 4 messages - where only 2 should be deleted together with the webxdc.
+/// followed by a normal reply, pinning+unpinning the webxdc and a normal info message.
+/// All in all, these are 6 messages - where only 2 should be deleted together with the webxdc.
 async fn send_instance_and_info(
     alice: &TestContext,
     others: &[&TestContext],
@@ -1766,16 +1766,26 @@ async fn send_instance_and_info(
     alice.flush_status_updates().await?;
     let sent2 = alice.pop_sent_msg().await;
 
+    // a normal reply also refer the webxdc, but must not be deleted with it
     let mut reply = Message::new_text("normal reply".to_string());
     reply.set_quote(alice, Some(&instance)).await?;
     let sent3 = alice.send_msg(chat_id, &mut reply).await;
 
+    // pinned/unpinned info messages also refer the webxdc, but must not be deleted with it
+    pinned_messages::set_pinned_state(alice, instance.id, true).await?;
+    let sent4 = alice.pop_sent_msg().await;
+    pinned_messages::set_pinned_state(alice, instance.id, false).await?;
+    let sent5 = alice.pop_sent_msg().await;
+
+    // an unrelated info message, that must not be deleted as well
     chat::add_info_msg(alice, chat_id, "normal info").await?;
 
     for t in others {
         let chat_id = t.recv_msg(&sent1).await.chat_id;
         t.recv_msg_trash(&sent2).await;
         t.recv_msg(&sent3).await;
+        t.recv_msg(&sent4).await;
+        t.recv_msg(&sent5).await;
         chat::add_info_msg(t, chat_id, "normal info").await?;
     }
     Ok(instance.id)
@@ -1901,7 +1911,7 @@ async fn test_webxdc_delete_info_msgs_device_after() -> Result<()> {
         .await?;
     let chat_id = alice.create_chat(bob).await.id;
     send_instance_and_info(alice, &[], chat_id).await?;
-    assert_eq!(chat_id.get_msg_cnt(alice).await?, E2EE_INFO_MSGS + 4);
+    assert_eq!(chat_id.get_msg_cnt(alice).await?, E2EE_INFO_MSGS + 6);
 
     SystemTime::shift(Duration::from_secs(3601));
     ephemeral::delete_expired_messages(alice, tools::time()).await?;
