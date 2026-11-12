@@ -34,10 +34,12 @@ I will remove them once we remove support for unencrypted.
 
 # Tests migrated to encrypted ad-hoc groups
 
-These tests used to receive unencrypted ad-hoc group messages. They now receive an encrypted message without a group ID, sent to multiple recipients, as an encrypting MUA would send it.
+These tests used to receive unencrypted ad-hoc group messages. They now receive an encrypted message without a group ID, sent to multiple recipients, as an encrypting MUA would send it. But right now, core still makes these groups unencrypted, even though the incoming message was encrypted.
 
 In the future, we may just assign these messages to the 1:1 chat with the sender, but whatever we do, we'll need tests for core's behavior for these messages.
 
 - `events::chatlist_events::test_chatlist_events::test_adhoc_group`
 - `securejoin::securejoin_tests::test_adhoc_group_no_qr`
 - `chat::chat_tests::test_sync_adhoc_grp`
+- `receive_imf::receive_imf_tests::test_escaped_recipients`
+- `receive_imf::receive_imf_tests::test_cc_to_contact`
