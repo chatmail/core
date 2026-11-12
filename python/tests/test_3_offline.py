@@ -413,7 +413,6 @@ class TestOfflineChat:
         ac1.set_config("configured_send_server", "example.org")
         ac1.set_config("configured_send_user", "example.org")
         ac1.set_config("configured_send_pw", "example.org")
-        ac1.start_io()
         for i in range(50):
             chat1.send_text("hello")
 
