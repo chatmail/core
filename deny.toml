@@ -55,6 +55,21 @@ ignore = [
     # <https://rustsec.org/advisories/RUSTSEC-2026-0119>
     "RUSTSEC-2026-0119",
 
+    # hickory-proto 0.25.2 panics in SVCB and HTTPS record parsing.
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0487>
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0489>
+    "RUSTSEC-2026-0487",
+    "RUSTSEC-2026-0489",
+
+    # hickory-proto 0.25.2 panic (assertion failure) in zone file parser.
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0490>
+    "RUSTSEC-2026-0490",
+
+    # hickory-proto 0.25.2 "memory amplification",
+    # passing record number from DNS message to Vec::with_capacity()
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0491>
+    "RUSTSEC-2026-0491",
+
     # Timing side channel in ml-dsa dependency of rPGP.
     # We enable PQC for encryption rather than signatures.
     # <https://rustsec.org/advisories/RUSTSEC-2025-0144>
