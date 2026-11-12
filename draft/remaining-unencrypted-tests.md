@@ -21,10 +21,16 @@ I will remove them once we remove support for unencrypted.
 - `chat::chat_tests::test_create_unencrypted_group_chat`
 - `chat::chat_tests::test_no_avatar_in_adhoc_chats`
 - `chat::chat_tests::test_classic_email_chat`
+- `mimefactory::mimefactory_tests::test_mdn_create_unencrypted`
+- `mimefactory::mimefactory_tests::test_no_unencrypted_selfavatar`
+- `mimefactory::mimefactory_tests::test_no_empty_to_header` (in encrypted messages, the outer To: header is always set to hidden-recipients, so this test wouldn't really test anything with encrypted messages)
+- `mimefactory::mimefactory_tests::test_render_unencrypted_msg_basic`
+- `mimefactory::mimefactory_tests::test_render_unencrypted_msg_with_attachment`
 
 ## Securejoin tests that still depend on unencrypted messages; to be decided
 
 - `securejoin::securejoin_tests::test_vc_request_encrypted_at_rest`: without `allow_unencrypted()`, the vc-request is trashed ("Fetched unencrypted message, ignoring").
+- All other tests for legacy securejoin
 
 # Tests migrated to encrypted ad-hoc groups
 
