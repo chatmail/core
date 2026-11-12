@@ -449,9 +449,9 @@ SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ? FROM msgs WHERE id=?1
                         let info_msg_ids = info_msgs_stmt
                             .query_map((chat_id, ContactId::INFO, msg_id), |row| {
                                 row.get::<_, MsgId>(0)
-                            })?
-                            .collect::<rusqlite::Result<Vec<_>>>()?;
+                            })?;
                         for info_msg_id in info_msg_ids {
+                            let info_msg_id = info_msg_id?;
                             del_msg_stmt.execute((info_msg_id, ChatId::TRASH))?;
                             msgs_changed.insert((chat_id, info_msg_id));
                         }
