@@ -9,7 +9,7 @@ Received: from oxbsltgw18.schlund.de ([172.19.249.35]) by
  id 1MpDRv-1kW93Y0lGZ-00qjvh for <holger@somedomain.de>; Thu, 06 Aug 2020
  18:40:31 +0200
 Date: Thu, 6 Aug 2020 18:40:30 +0200 (CEST)
-From: Camping <camping@otherdomain.eu>
+From: Camping <bob@example.net>
 Reply-To: Camping <camping@otherdomain.eu>
 To: Alice <alice@example.org>
 Message-ID: <512278196.1287440.1596732031020@email.ionos.fr>
