@@ -228,6 +228,7 @@ LIMIT 1
         msg_id.trash(context, on_server).await?;
         context.emit_event(EventType::MsgDeleted { chat_id, msg_id });
         context.emit_msgs_changed_without_msg_id(chat_id);
+        context.emit_event(EventType::ChatModified(chat_id));
         chatlist_events::emit_chatlist_item_changed(context, chat_id);
         context.emit_msgs_changed_without_ids();
         chatlist_events::emit_chatlist_changed(context);
