@@ -1,4 +1,3 @@
-import os
 import time
 import urllib.parse
 
@@ -33,7 +32,7 @@ def test_init_transports(acf):
 
 def test_init_transports_test_relay_set(acf):
     """The test relay set replaces the default relays."""
-    domain = os.environ["CHATMAIL_DOMAIN"]
+    domain = acf.get_test_domain()
     account = acf.get_unconfigured_account()
     account.set_config("test_relay_set", domain)
     account.init_transports()

@@ -76,19 +76,19 @@ class RPCAccountFactory:
         """Create a new unconfigured bot."""
         return Bot(self.get_unconfigured_account())
 
+    def get_test_domain(self) -> str:
+        """Return the test relay domain, skipping the test if unset."""
+        return os.environ.get("CHATMAIL_DOMAIN") or pytest.skip("Set CHATMAIL_DOMAIN to run online tests")
+
     def get_credentials(self) -> tuple[str, str]:
         """Generate new credentials for chatmail account."""
-        domain = os.environ.get("CHATMAIL_DOMAIN")
-        if not domain:
-            pytest.skip("Set CHATMAIL_DOMAIN to run online tests")
+        domain = self.get_test_domain()
         username = "ci-" + "".join(random.choice("2345789acdefghjkmnpqrstuvwxyz") for i in range(6))
         return f"{username}@{domain}", f"{username}${username}"
 
     def get_account_qr(self):
         """Return "dcaccount:" QR code for testing chatmail relay."""
-        domain = os.environ.get("CHATMAIL_DOMAIN")
-        if not domain:
-            pytest.skip("Set CHATMAIL_DOMAIN to run online tests")
+        domain = self.get_test_domain()
         return f"dcaccount:{domain}"
 
     @futuremethod
