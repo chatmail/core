@@ -21,11 +21,21 @@ I will remove them once we remove support for unencrypted.
 - `chat::chat_tests::test_create_unencrypted_group_chat`
 - `chat::chat_tests::test_no_avatar_in_adhoc_chats`
 - `chat::chat_tests::test_classic_email_chat`
+- `receive_imf::receive_imf_tests::test_dont_show_noreply_in_contacts_list`
+- `receive_imf::receive_imf_tests::test_dont_show_tokens_in_contacts_list`
+- `receive_imf::receive_imf_tests::test_dont_show_all_outgoing_msgs_in_self_chat` (This was a regression test for server-added `Bcc: <self>` header. But unencrypted headers are anyways ignored for encrypted messages, so the test passes even with the fix reverted)
 - `mimefactory::mimefactory_tests::test_mdn_create_unencrypted`
 - `mimefactory::mimefactory_tests::test_no_unencrypted_selfavatar`
 - `mimefactory::mimefactory_tests::test_no_empty_to_header` (in encrypted messages, the outer To: header is always set to hidden-recipients, so this test wouldn't really test anything with encrypted messages)
 - `mimefactory::mimefactory_tests::test_render_unencrypted_msg_basic`
 - `mimefactory::mimefactory_tests::test_render_unencrypted_msg_with_attachment`
+
+## Tests to adapt once unencrypted is removed
+
+These receive an encrypted message whose signature can't be verified, which core treats like an unencrypted message. Once unencrypted messages are removed, they should check that such messages are ignored.
+
+- `receive_imf::receive_imf_tests::test_forged_from_and_no_valid_signatures`
+- `receive_imf::receive_imf_tests::test_wrong_from_name_and_no_valid_signatures`
 
 ## Securejoin tests that still depend on unencrypted messages; to be decided
 
@@ -34,7 +44,7 @@ I will remove them once we remove support for unencrypted.
 
 # Tests migrated to encrypted ad-hoc groups
 
-These tests used to receive unencrypted ad-hoc group messages. They now receive an encrypted message without a group ID, sent to multiple recipients, as an encrypting MUA would send it. But right now, core still makes these groups unencrypted, even though the incoming message was encrypted.
+These tests used to receive unencrypted ad-hoc group messages. They now receive an encrypted message without a group ID, sent to multiple recipients, as an encrypting MUA would send it. But right now, these groups still have address-contacts as members, which we will remove.
 
 In the future, we may just assign these messages to the 1:1 chat with the sender, but whatever we do, we'll need tests for core's behavior for these messages.
 
@@ -43,3 +53,7 @@ In the future, we may just assign these messages to the 1:1 chat with the sender
 - `chat::chat_tests::test_sync_adhoc_grp`
 - `receive_imf::receive_imf_tests::test_escaped_recipients`
 - `receive_imf::receive_imf_tests::test_cc_to_contact`
+- `receive_imf::receive_imf_tests::test_auto_accept_group_for_bots`
+- `receive_imf::receive_imf_tests::test_adhoc_group_is_shown`
+- `receive_imf::receive_imf_tests::test_adhoc_group_show_accepted_contact_accepted`
+- `receive_imf::receive_imf_tests::test_adhoc_group_show_all`
