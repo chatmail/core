@@ -22,7 +22,7 @@ use crate::key::{load_self_secret_key, secret_key_to_public_key};
 use crate::message;
 use crate::mimeparser::MimeMessage;
 use crate::receive_imf::receive_imf;
-use crate::test_utils::{self, SentMessage};
+use crate::test_utils::{self, SentMessage, receive_encrypted_imf};
 use crate::test_utils::{TestContext, TestContextManager, get_chat_msg};
 use crate::tools::SystemTime;
 
@@ -113,17 +113,18 @@ fn test_header_encoding() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_manually_set_subject() -> Result<()> {
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await?;
-    let chat = t.create_chat_with_contact("bob", "bob@example.org").await;
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let chat_id = t.create_chat_id(bob).await;
 
     let mut msg = Message::new(Viewtype::Text);
     msg.set_subject("Subjeeeeect".to_string());
 
-    let sent_msg = t.send_msg(chat.id, &mut msg).await;
-    let payload = sent_msg.payload();
+    let sent_msg = t.send_msg(chat_id, &mut msg).await;
+    let parsed = bob.parse_msg(&sent_msg).await;
 
-    assert_eq!(payload.match_indices("Subject: Subjeeeeect").count(), 1);
+    assert_eq!(parsed.get_subject().as_deref(), Some("Subjeeeeect"));
 
     Ok(())
 }
@@ -182,17 +183,17 @@ async fn test_subject_from_dc() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_subject_outgoing() {
     // 3. Send the first message to a new contact
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await.unwrap();
+    let mut tcm = TestContextManager::new();
+    let bob = &tcm.bob().await;
 
-    assert_eq!(first_subject_str(t).await, "Message from ...");
+    let t = &tcm.alice().await;
+    assert_eq!(first_subject_str(t, bob).await, "Message from ...");
 
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await.unwrap();
+    let t = &tcm.alice().await;
     t.set_config(Config::Displayname, Some("Alice"))
         .await
         .unwrap();
-    assert_eq!(first_subject_str(t).await, "Message from Alice");
+    assert_eq!(first_subject_str(t, bob).await, "Message from Alice");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -231,8 +232,8 @@ async fn test_subject_mdn() {
     let mut tcm = TestContextManager::new();
     let t = &tcm.alice().await;
     let bob = &tcm.bob().await;
-    t.allow_unencrypted().await.unwrap();
-    receive_imf(
+    receive_encrypted_imf(
+        t,
         t,
         b"From: alice@example.org\r\n\
           To: bob@example.net\r\n\
@@ -242,7 +243,6 @@ async fn test_subject_mdn() {
           Date: Sun, 22 Mar 2020 22:37:56 +0000\r\n\
           \r\n\
           hello\r\n",
-        false,
     )
     .await
     .unwrap();
@@ -501,26 +501,16 @@ async fn test_subject_in_group() -> Result<()> {
     Ok(())
 }
 
-async fn first_subject_str(t: TestContext) -> String {
-    let contact_id = Contact::add_or_lookup(
-        &t,
-        "Dave",
-        &ContactAddress::new("dave@example.com").unwrap(),
-        Origin::ManuallyCreated,
-    )
-    .await
-    .unwrap()
-    .0;
-
-    let chat_id = ChatId::create_for_contact(&t, contact_id).await.unwrap();
+async fn first_subject_str(t: &TestContext, recipient: &TestContext) -> String {
+    let chat_id = t.create_chat_id(recipient).await;
 
     let mut new_msg = Message::new_text("Hi".to_string());
     new_msg.chat_id = chat_id;
-    chat::send_msg(&t, chat_id, &mut new_msg).await.unwrap();
+    chat::send_msg(t, chat_id, &mut new_msg).await.unwrap();
 
-    let mf = MimeFactory::from_msg(&t, new_msg).await.unwrap();
+    let mf = MimeFactory::from_msg(t, new_msg).await.unwrap();
 
-    mf.subject_str(&t).await.unwrap()
+    mf.subject_str(t).await.unwrap()
 }
 
 // In `imf_raw`, From has to be bob@example.net, To has to be alice@example.org
@@ -729,25 +719,23 @@ async fn test_remove_member_bcc() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
     let charlie = &tcm.charlie().await;
-    alice.allow_unencrypted().await?;
 
     let alice_addr = alice.get_primary_self_addr().await?;
     let bob_addr = bob.get_primary_self_addr().await?;
     let charlie_addr = charlie.get_primary_self_addr().await?;
 
-    let bob_id = alice.add_or_lookup_address_contact_id(bob).await;
-    let charlie_id = alice.add_or_lookup_address_contact_id(charlie).await;
+    let charlie_id = alice.add_or_lookup_contact_id(charlie).await;
 
-    let alice_chat_id = create_group_unencrypted(alice, "foo").await?;
-    add_contact_to_chat(alice, alice_chat_id, bob_id).await?;
-    add_contact_to_chat(alice, alice_chat_id, charlie_id).await?;
+    let alice_chat_id = alice
+        .create_group_with_members("foo", &[bob, charlie])
+        .await;
     send_text_msg(alice, alice_chat_id, "Creating a group".to_string()).await?;
 
     remove_contact_from_chat(alice, alice_chat_id, charlie_id).await?;
     let remove = alice.pop_sent_msg().await;
-    let remove_payload = remove.payload();
-    let parsed = mailparse::parse_mail(remove_payload.as_bytes())?;
-    let to = parsed
+    let parsed = bob.parse_msg(&remove).await;
+    let decrypted = mailparse::parse_mail(&parsed.decoded_data)?;
+    let to = decrypted
         .headers
         .get_first_header("To")
         .context("no To: header parsed")?;
@@ -765,13 +753,6 @@ async fn test_remove_member_bcc() -> Result<()> {
         }
     }
 
-    alice
-        .assert_warn("No good message identifying the chat found")
-        .await;
-    alice
-        .assert_warn("No good message identifying the chat found")
-        .await;
-
     Ok(())
 }
 
@@ -779,19 +760,20 @@ async fn test_remove_member_bcc() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_from_before_autocrypt() -> Result<()> {
     // create chat with bob
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await?;
-    let chat = t.create_chat_with_contact("bob", "bob@example.org").await;
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let chat_id = t.create_chat_id(bob).await;
 
-    // send message to bob: that should get multipart/mixed because of the avatar moved to inner header;
-    // make sure, `Subject:` stays in the outer header (imf header)
     let mut msg = Message::new_text("this is the text!".to_string());
 
-    let sent_msg = t.send_msg(chat.id, &mut msg).await;
-    let payload = sent_msg.payload();
+    let sent_msg = t.send_msg(chat_id, &mut msg).await;
+    let parsed = bob.parse_msg(&sent_msg).await;
+    let payload = str::from_utf8(&parsed.decoded_data)?;
 
-    assert_eq!(payload.match_indices("Autocrypt:").count(), 1);
-    assert_eq!(payload.match_indices("From:").count(), 1);
+    assert_eq!(payload.match_indices("\r\nAutocrypt:").count(), 1);
+    assert_eq!(payload.match_indices("From:").count(), 2);
+    assert_eq!(payload.match_indices("HP-Outer: From:").count(), 1);
 
     assert!(payload.match_indices("From:").next() < payload.match_indices("Autocrypt:").next());
 
