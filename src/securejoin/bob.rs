@@ -130,10 +130,13 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
                 progress: JoinerProgress::RequestWithAuthSent.into_u16(),
             });
         } else {
+            // Add `bobstate` record before sending `vc-request-pubkey` message.
+            // Otherwise it is possible that we receive and ignore `vc-pubkey` reply
+            // because the entry is not found.
+            insert_new_db_entry(context, invite.clone(), private_chat_id).await?;
+
             send_handshake_message(context, &invite, private_chat_id, BobHandshakeMsg::Request)
                 .await?;
-
-            insert_new_db_entry(context, invite.clone(), private_chat_id).await?;
         }
     }
 
