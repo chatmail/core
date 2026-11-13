@@ -1721,8 +1721,9 @@ pub async fn delete_msgs_ext(
             !delete_for_all || msg.from_id == ContactId::SELF,
             "Can delete only own messages for others"
         );
+        let unique_and_created_locally = msg.get_info_type() == SystemMessage::WebxdcInfoMessage;
         ensure!(
-            !delete_for_all || msg.get_showpadlock(),
+            !delete_for_all || msg.get_showpadlock() || unique_and_created_locally,
             "Cannot request deletion of unencrypted message for others"
         );
 

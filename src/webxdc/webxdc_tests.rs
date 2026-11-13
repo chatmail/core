@@ -1919,6 +1919,45 @@ async fn test_webxdc_delete_info_msgs_device_after() -> Result<()> {
     Ok(())
 }
 
+/// Alice deletes a webxdc info message for everyone.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_webxdc_delete_info_msg_manually_for_all() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    // Alice creates a group with Bob, sends a webxdc and an update
+    let chat_id = alice.create_group_with_members("grp", &[bob]).await;
+    let instance = send_webxdc_instance(alice, chat_id).await?;
+    let sent1 = alice.pop_sent_msg().await;
+    let bob_instance = bob.recv_msg(&sent1).await;
+    let alice2_instance = alice2.recv_msg(&sent1).await;
+    alice
+        .send_webxdc_status_update(instance.id, r#"{"payload": 0, "info": "i"}"#)
+        .await?;
+    alice.flush_status_updates().await?;
+    let sent2 = alice.pop_sent_msg().await;
+    bob.recv_msg_trash(&sent2).await;
+    assert_eq!(bob.get_last_msg().await.text, "i");
+
+    // Alice deletes the info message, that is deleted for Bob as well
+    let info_id = alice.get_last_msg().await.id;
+    message::delete_msgs_ext(alice, &[info_id], true).await?;
+    let sent3 = alice.pop_sent_msg().await;
+    assert_eq!(alice.get_last_msg().await.id, instance.id);
+    bob.recv_msg_trash(&sent3).await;
+    assert_eq!(bob.get_last_msg().await.id, bob_instance.id);
+
+    // Alice's other device receives the delete request before the status update;
+    // no info message is added
+    alice2.recv_msg_trash(&sent3).await;
+    alice2.assert_warn("not found").await;
+    alice2.recv_msg_trash(&sent2).await;
+    assert_eq!(alice2.get_last_msg().await.id, alice2_instance.id);
+    Ok(())
+}
+
 /// Tests extensibility of WebXDC updates.
 ///
 /// If an update sent by WebXDC contains unknown properties,
