@@ -15,7 +15,7 @@ use crate::securejoin::get_securejoin_qr;
 use crate::test_utils::{self, TimeShiftFalsePositiveNote};
 use crate::test_utils::{E2EE_INFO_MSGS, TestContext, TestContextManager};
 use crate::tools::{self, SystemTime};
-use crate::{message, sql};
+use crate::{message, pinned_messages, sql};
 
 fn create_webxdc_instance(t: &TestContext, name: &str, bytes: &[u8]) -> Result<Message> {
     let mut instance = Message::new(Viewtype::File);
@@ -1745,6 +1745,177 @@ async fn test_webxdc_delete_event() -> Result<()> {
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::WebxdcInstanceDeleted { .. }))
         .await;
+    Ok(())
+}
+
+/// Sends a webxdc and 30 minutes later a webxdc info message,
+/// followed by a normal reply, pinning+unpinning the webxdc and a normal info message.
+/// All in all, these are 6 messages - where only 2 should be deleted together with the webxdc.
+async fn send_instance_and_info(
+    alice: &TestContext,
+    others: &[&TestContext],
+    chat_id: ChatId,
+) -> Result<MsgId> {
+    let instance = send_webxdc_instance(alice, chat_id).await?;
+    let sent1 = alice.pop_sent_msg().await;
+    SystemTime::shift(Duration::from_secs(1800));
+    alice
+        .send_webxdc_status_update(instance.id, r#"{"info":"i1", "payload":1}"#)
+        .await?;
+    alice.flush_status_updates().await?;
+    let sent2 = alice.pop_sent_msg().await;
+
+    // a normal reply also refer the webxdc, but must not be deleted with it
+    let mut reply = Message::new_text("normal reply".to_string());
+    reply.set_quote(alice, Some(&instance)).await?;
+    let sent3 = alice.send_msg(chat_id, &mut reply).await;
+
+    // pinned/unpinned info messages also refer the webxdc, but must not be deleted with it
+    pinned_messages::set_pinned_state(alice, instance.id, true).await?;
+    let sent4 = alice.pop_sent_msg().await;
+    pinned_messages::set_pinned_state(alice, instance.id, false).await?;
+    let sent5 = alice.pop_sent_msg().await;
+
+    // an unrelated info message, that must not be deleted as well
+    chat::add_info_msg(alice, chat_id, "normal info").await?;
+
+    for t in others {
+        let chat_id = t.recv_msg(&sent1).await.chat_id;
+        t.recv_msg_trash(&sent2).await;
+        t.recv_msg(&sent3).await;
+        t.recv_msg(&sent4).await;
+        t.recv_msg(&sent5).await;
+        chat::add_info_msg(t, chat_id, "normal info").await?;
+    }
+    Ok(instance.id)
+}
+
+/// Alice deletes a webxdc manually for herself:
+/// instance+info must be gone on all her devices, for Bob nothing changes.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_webxdc_delete_info_msgs_for_me() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    for t in [alice, alice2] {
+        t.set_config_bool(Config::SyncMsgs, true).await?;
+    }
+    let chat_id = alice.create_chat(bob).await.id;
+    let instance_id = send_instance_and_info(alice, &[alice2, bob], chat_id).await?;
+    let alice2_chat_id = alice2.get_last_msg().await.chat_id;
+    let bob_chat_id = bob.get_last_msg().await.chat_id;
+    let cnt = chat_id.get_msg_cnt(alice).await?;
+    assert_eq!(alice2_chat_id.get_msg_cnt(alice2).await?, cnt);
+    assert_eq!(bob_chat_id.get_msg_cnt(bob).await?, cnt);
+
+    message::delete_msgs(alice, &[instance_id]).await?;
+    assert_eq!(chat_id.get_msg_cnt(alice).await?, cnt - 2);
+    test_utils::sync(alice, alice2).await;
+    assert_eq!(alice2_chat_id.get_msg_cnt(alice2).await?, cnt - 2);
+    assert_eq!(bob_chat_id.get_msg_cnt(bob).await?, cnt);
+
+    Ok(())
+}
+
+/// Alice selects a webxdc together with its info message and deletes both.
+/// This results in the info message being processed twice - once as a child of the instance, and then as being explicitly selected.
+/// This test ensures no unexpected "Record not found" halts deletion.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_webxdc_delete_info_msgs_selected() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let chat_id = alice.create_chat(bob).await.id;
+    let instance_id = send_instance_and_info(alice, &[], chat_id).await?;
+    let cnt = chat_id.get_msg_cnt(alice).await?;
+    let ids_to_delete: Vec<MsgId> = chat::get_chat_msgs(alice, chat_id)
+        .await?
+        .into_iter()
+        .filter_map(|item| match item {
+            chat::ChatItem::Message { msg_id } => Some(msg_id),
+            _ => None,
+        })
+        .collect();
+    assert!(ids_to_delete.contains(&instance_id));
+
+    message::delete_msgs(alice, &ids_to_delete).await?;
+    assert_eq!(chat_id.get_msg_cnt(alice).await?, cnt - ids_to_delete.len());
+
+    Ok(())
+}
+
+/// Alice deletes a webxdc for everyone:
+/// instance+info must be gone on all her devices and for Bob.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_webxdc_delete_info_msgs_for_all() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let chat_id = alice.create_chat(bob).await.id;
+    let instance_id = send_instance_and_info(alice, &[alice2, bob], chat_id).await?;
+    let alice2_chat_id = alice2.get_last_msg().await.chat_id;
+    let bob_chat_id = bob.get_last_msg().await.chat_id;
+    let cnt = chat_id.get_msg_cnt(alice).await?;
+
+    message::delete_msgs_ext(alice, &[instance_id], true).await?;
+    let sent4 = alice.pop_sent_msg().await;
+    alice2.recv_msg_trash(&sent4).await;
+    bob.recv_msg_trash(&sent4).await;
+    assert_eq!(chat_id.get_msg_cnt(alice).await?, cnt - 2);
+    assert_eq!(alice2_chat_id.get_msg_cnt(alice2).await?, cnt - 2);
+    assert_eq!(bob_chat_id.get_msg_cnt(bob).await?, cnt - 2);
+
+    Ok(())
+}
+
+/// Alice's webxdc instance gets deleted by ephemeral timer:
+/// instance+info must be deleted once the instance is deleted, even if the info would have more time before deletion.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_webxdc_delete_info_msgs_ephemeral() -> Result<()> {
+    let _n = TimeShiftFalsePositiveNote;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let chat_id = alice.create_chat(bob).await.id;
+    chat_id
+        .set_ephemeral_timer(
+            alice,
+            ephemeral::Timer::Enabled {
+                duration: 3600.try_into()?,
+            },
+        )
+        .await?;
+    send_instance_and_info(alice, &[], chat_id).await?;
+    let cnt = chat_id.get_msg_cnt(alice).await?;
+
+    SystemTime::shift(Duration::from_secs(1801)); // note the additional shift in send_instance_and_info()
+    ephemeral::delete_expired_messages(alice, tools::time()).await?;
+    assert_eq!(chat_id.get_msg_cnt(alice).await?, cnt - 2);
+
+    Ok(())
+}
+
+/// Alice's webxdc instance gets deleted by `delete_device_after`:
+/// instance+info must be deleted once the instance is deleted, even if the info would have more time before deletion.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_webxdc_delete_info_msgs_device_after() -> Result<()> {
+    let _n = TimeShiftFalsePositiveNote;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    alice
+        .set_config(Config::DeleteDeviceAfter, Some("3600"))
+        .await?;
+    let chat_id = alice.create_chat(bob).await.id;
+    send_instance_and_info(alice, &[], chat_id).await?;
+    assert_eq!(chat_id.get_msg_cnt(alice).await?, E2EE_INFO_MSGS + 6);
+
+    SystemTime::shift(Duration::from_secs(3601));
+    ephemeral::delete_expired_messages(alice, tools::time()).await?;
+    assert_eq!(chat_id.get_msg_cnt(alice).await?, 0);
+
     Ok(())
 }
 

@@ -423,7 +423,7 @@ pub(crate) async fn delete_expired_messages(context: &Context, now: i64) -> Resu
         let (msgs_changed, webxdc_deleted, pinned_chat_ids) = context
             .sql
             .transaction(|transaction| {
-                let mut msgs_changed = Vec::with_capacity(rows.len());
+                let mut msgs_changed = BTreeSet::new();
                 let mut webxdc_deleted = Vec::new();
 
                 // IDs of the chats in which pinned messages were deleted.
@@ -439,13 +439,29 @@ SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ? FROM msgs WHERE id=?1
                 )?;
                 let mut del_location_stmt =
                     transaction.prepare("DELETE FROM locations WHERE independent=1 AND id=?")?;
+                let mut info_msgs_stmt = transaction.prepare(
+                    "SELECT id FROM msgs WHERE chat_id=? AND to_id=? AND mime_in_reply_to=
+                     (SELECT rfc724_mid FROM msgs WHERE id=?)",
+                )?;
                 for (msg_id, chat_id, viewtype, is_pinned, location_id) in rows {
+                    if viewtype == Viewtype::Webxdc {
+                        // delete webxdc info messages together with their webxdc instance
+                        let info_msg_ids = info_msgs_stmt
+                            .query_map((chat_id, ContactId::INFO, msg_id), |row| {
+                                row.get::<_, MsgId>(0)
+                            })?;
+                        for info_msg_id in info_msg_ids {
+                            let info_msg_id = info_msg_id?;
+                            del_msg_stmt.execute((info_msg_id, ChatId::TRASH))?;
+                            msgs_changed.insert((chat_id, info_msg_id));
+                        }
+                    }
                     del_msg_stmt.execute((msg_id, ChatId::TRASH))?;
                     if location_id > 0 {
                         del_location_stmt.execute((location_id,))?;
                     }
 
-                    msgs_changed.push((chat_id, msg_id));
+                    msgs_changed.insert((chat_id, msg_id));
                     if viewtype == Viewtype::Webxdc {
                         webxdc_deleted.push(msg_id)
                     }

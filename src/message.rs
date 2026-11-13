@@ -1649,6 +1649,23 @@ pub(crate) async fn delete_msg_locally(context: &Context, msg: &Message) -> Resu
 
     if msg.viewtype == Viewtype::Webxdc {
         context.emit_event(EventType::WebxdcInstanceDeleted { msg_id: msg.id });
+
+        // delete webxdc info messages together with their webxdc instance
+        let info_msg_ids = context
+            .sql
+            .query_map_vec(
+                "SELECT id FROM msgs WHERE chat_id=? AND to_id=? AND mime_in_reply_to=?",
+                (msg.chat_id, ContactId::INFO, &msg.rfc724_mid),
+                |row| Ok(row.get::<_, MsgId>(0)?),
+            )
+            .await?;
+        for msg_id in info_msg_ids {
+            msg_id.trash(context, false).await?;
+            context.emit_event(EventType::MsgDeleted {
+                chat_id: msg.chat_id,
+                msg_id,
+            });
+        }
     }
 
     Ok(())
@@ -1767,8 +1784,10 @@ pub async fn delete_msgs_ext(
     }
 
     for &msg_id in msg_ids {
-        let msg = Message::load_from_db(context, msg_id).await?;
-        delete_msg_locally(context, &msg).await?;
+        // the message may already be deleted together with its webxdc instance
+        if let Some(msg) = Message::load_from_db_optional(context, msg_id).await? {
+            delete_msg_locally(context, &msg).await?;
+        }
     }
     delete_msgs_locally_done(
         context,
