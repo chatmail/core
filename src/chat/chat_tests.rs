@@ -1847,6 +1847,7 @@ async fn test_add_info_msg_with_cmd() -> Result<()> {
         None,
         None,
         None,
+        None,
     )
     .await?;
 

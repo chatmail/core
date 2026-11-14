@@ -638,6 +638,7 @@ pub(crate) async fn send_msg_to_smtp(context: &Context, smtp: &mut Smtp, rowid: 
                         None,
                         None,
                         None,
+                        None,
                     )
                     .await?;
                 };

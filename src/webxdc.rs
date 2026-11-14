@@ -43,7 +43,7 @@ use crate::context::Context;
 use crate::events::EventType;
 use crate::key::self_fingerprint;
 use crate::log::warn;
-use crate::message::{Message, MessageState, MsgId, Viewtype};
+use crate::message::{Message, MessageState, MsgId, Viewtype, rfc724_mid_exists};
 use crate::mimefactory::RECOMMENDED_FILE_SIZE;
 use crate::mimeparser::SystemMessage;
 use crate::param::Param;
@@ -348,7 +348,15 @@ impl Context {
             param_changed = true;
         }
 
-        if can_info_msg && let Some(ref info) = status_update_item.info {
+        // if possible and requested, add an info message.
+        // the message is added with a unique Message-ID, so a sender can delete it for everyone later.
+        let uid = status_update_item.uid.clone().unwrap_or_else(create_id);
+        let info_mid = format!("{uid}@webxdc.localhost");
+
+        if can_info_msg
+            && let Some(ref info) = status_update_item.info
+            && rfc724_mid_exists(self, &info_mid).await?.is_none()
+        {
             let info_msg_id = self
                 .get_overwritable_info_msg_id(&instance, from_id)
                 .await?;
@@ -374,6 +382,7 @@ impl Context {
                     Some(&instance),
                     Some(from_id),
                     None,
+                    Some(&info_mid),
                 )
                 .await?;
             }

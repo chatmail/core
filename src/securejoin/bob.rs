@@ -179,6 +179,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
                     None,
                     None,
                     None,
+                    None,
                 )
                 .await?;
             }
