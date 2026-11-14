@@ -497,6 +497,7 @@ impl ChatId {
             None,
             None,
             None,
+            None,
         )
         .await?;
         Ok(())
@@ -515,6 +516,7 @@ impl ChatId {
             SystemMessage::Unknown,
             Some(sort_timestamp),
             time(),
+            None,
             None,
             None,
             None,
@@ -2900,6 +2902,7 @@ async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -> Result<Ve
             None,
             None,
             None,
+            None,
         )
         .await?;
         bail!(
@@ -4944,8 +4947,10 @@ pub(crate) async fn add_info_msg_with_cmd(
     parent: Option<&Message>,
     from_id: Option<ContactId>,
     added_removed_id: Option<ContactId>,
+    // Message-ID to use or None to create one
+    rfc724_mid: Option<&str>,
 ) -> Result<MsgId> {
-    let rfc724_mid = create_outgoing_rfc724_mid();
+    let rfc724_mid = rfc724_mid.map_or_else(create_outgoing_rfc724_mid, str::to_string);
     let ephemeral_timer = chat_id.get_ephemeral_timer(context).await?;
 
     let mut param = Params::new();
@@ -5003,6 +5008,7 @@ pub(crate) async fn add_info_msg(context: &Context, chat_id: ChatId, text: &str)
         SystemMessage::Unknown,
         None,
         time(),
+        None,
         None,
         None,
         None,

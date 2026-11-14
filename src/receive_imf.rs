@@ -1930,6 +1930,7 @@ async fn add_parts(
                         None,
                         None,
                         None,
+                        None,
                     )
                     .await?;
                 }
@@ -2039,6 +2040,7 @@ async fn add_parts(
             None,
             None,
             added_removed_id,
+            None,
         )
         .await?;
     }

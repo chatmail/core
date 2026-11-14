@@ -382,10 +382,9 @@ impl Context {
                     Some(&instance),
                     Some(from_id),
                     None,
+                    Some(&info_mid),
                 )
                 .await?;
-                let query = "UPDATE msgs SET rfc724_mid=? WHERE id=?";
-                self.sql.execute(query, (&info_mid, notify_msg_id)).await?;
             }
 
             if let Some(ref href) = status_update_item.href {
