@@ -1,4 +1,3 @@
-use deltachat_contact_tools::ContactAddress;
 use mail_builder::headers::Header;
 use mailparse::{MailHeaderMap, addrparse_header};
 use pgp::armor;
@@ -11,12 +10,12 @@ use std::time::Duration;
 
 use super::*;
 use crate::chat::{
-    self, ChatId, add_contact_to_chat, create_group, create_group_unencrypted,
+    self, ChatId, add_contact_to_chat, create_group,
     remove_contact_from_chat, send_text_msg,
 };
 use crate::chatlist::Chatlist;
 use crate::constants;
-use crate::contact::{Origin, import_public_key, import_vcard};
+use crate::contact::{import_public_key, import_vcard};
 use crate::headerdef::HeaderDef;
 use crate::key::{load_self_secret_key, secret_key_to_public_key};
 use crate::message;

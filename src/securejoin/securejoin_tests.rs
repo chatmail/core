@@ -12,7 +12,7 @@ use crate::receive_imf::receive_imf;
 use crate::stock_str::{self, messages_e2ee_info_msg};
 use crate::test_utils::{
     AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, TestContext, TestContextManager,
-    TimeShiftFalsePositiveNote, encrypt_raw_message, get_chat_msg, sync,
+    TimeShiftFalsePositiveNote, get_chat_msg, sync,
 };
 use crate::transport::add_pseudo_transport;
 

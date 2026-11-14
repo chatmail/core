@@ -539,7 +539,7 @@ mod tests {
     use crate::chat::{forward_msgs, get_chat_msgs, marknoticed_chat, send_text_msg};
     use crate::chatlist::Chatlist;
     use crate::config::Config;
-    use crate::contact::Contact;
+    
     use crate::key::{load_self_public_key, load_self_secret_key};
     use crate::message::{MessageState, Viewtype, delete_msgs, markseen_msgs};
     use crate::pgp::{SeipdVersion, pk_encrypt};

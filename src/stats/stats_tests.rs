@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use super::*;
 use crate::chat::{
-    Chat, create_broadcast, create_group, create_group_unencrypted, get_chat_contacts,
+    Chat, create_broadcast, create_group, get_chat_contacts,
 };
 use crate::imap::ServerMetadata;
 use crate::mimeparser::SystemMessage;

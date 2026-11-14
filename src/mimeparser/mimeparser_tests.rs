@@ -1,10 +1,8 @@
 use mailparse::ParsedMail;
-use std::mem;
 
 use super::*;
 use crate::{
     chat,
-    chatlist::Chatlist,
     constants::{self, Blocked, DC_DESIRED_TEXT_LEN, DC_ELLIPSIS},
     contact::Contact,
     key,
@@ -1214,8 +1212,8 @@ async fn test_add_subj_to_multimedia_msg() {
     assert_eq!(msg.error(), None);
     assert_eq!(msg.chat_blocked, Blocked::Request);
     assert_eq!(msg.state, MessageState::InFresh);
-    assert_eq!(msg.get_filebytes(&t).await.unwrap().unwrap(), 2115);
-    assert!(msg.get_file(&t).is_some());
+    assert_eq!(msg.get_filebytes(t).await.unwrap().unwrap(), 2115);
+    assert!(msg.get_file(t).is_some());
     assert_eq!(msg.get_filename().unwrap(), "avatar64x64.png");
     assert_eq!(msg.get_width(), 64);
     assert_eq!(msg.get_height(), 64);

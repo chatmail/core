@@ -7,7 +7,6 @@ use crate::chat::{Chat, MuteDuration, get_chat_contacts, get_chat_msgs, send_msg
 use crate::chatlist::Chatlist;
 use crate::constants::{Chattype, DEFAULT_MAX_SMTP_RCPT_TO};
 use crate::message::Message;
-use crate::receive_imf::receive_imf;
 use crate::test_utils::{E2EE_INFO_MSGS, TestContext, TestContextManager, receive_encrypted_imf};
 use crate::tools::{SystemTime, create_outgoing_rfc724_mid};
 

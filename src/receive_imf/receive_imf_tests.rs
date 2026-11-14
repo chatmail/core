@@ -12,18 +12,17 @@ use crate::chatlist::Chatlist;
 use crate::constants::DC_GCL_FOR_FORWARDING;
 use crate::contact;
 use crate::headerdef::HeaderDefMap as _;
-use crate::imap::{create_message_id, prefetch_should_download};
+use crate::imap::prefetch_should_download;
 use crate::imex::{ImexMode, imex};
 use crate::key;
-use crate::mimefactory::{self, render_queued_mail_with_context};
+use crate::mimefactory::{self};
 use crate::securejoin::get_securejoin_qr;
 use crate::smtp;
-use crate::smtp::queue::{Encryption, QueuedMail};
 use crate::test_utils::{self, receive_encrypted_imf};
 use crate::test_utils::{
     E2EE_INFO_MSGS, TestContext, TestContextManager, alice_keypair, get_chat_msg,
 };
-use crate::tools::{SystemTime, create_outgoing_rfc724_mid, time};
+use crate::tools::{SystemTime, time};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_outgoing() -> Result<()> {
