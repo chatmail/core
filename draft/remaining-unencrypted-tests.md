@@ -65,19 +65,28 @@ I will remove them once we remove support for unencrypted.
 - `receive_imf::receive_imf_tests::test_mailing_list_bot`
 - `receive_imf::receive_imf_tests::test_ignore_footer_status_from_mailinglist`
 - `receive_imf::receive_imf_tests::test_list_from`
+- `receive_imf::receive_imf_tests::test_escaped_recipients` (tests address-contacts)
+- `receive_imf::receive_imf_tests::test_cc_to_contact` (tests address-contacts)
+- `receive_imf::receive_imf_tests::test_auto_accept_group_for_bots` (duplicate of `test_auto_accept_encrypted_group_for_bots` for encrypted groups)
+- `receive_imf::receive_imf_tests::test_adhoc_group_is_shown`
+- `receive_imf::receive_imf_tests::test_adhoc_groups_merge`
+- `receive_imf::receive_imf_tests::test_chat_assignment_private_classical_reply` (private replies in encrypted groups are covered by `test_chat_assignment_private_chat_reply`, `test_outgoing_private_reply_multidevice` and `test_no_private_reply_to_blocked_account`)
+- `receive_imf::receive_imf_tests::test_chat_assignment_nonprivate_classical_reply` (reply assignment by `In-Reply-To` in encrypted groups is covered by `test_in_reply_to`)
+- `chat::chat_tests::test_sync_adhoc_grp`
+- `securejoin::securejoin_tests::test_adhoc_group_no_qr` (there won't be groups without group ID anymore)
+- `receive_imf::receive_imf_tests::test_chat_assignment_adhoc`
+- `receive_imf::receive_imf_tests::test_alias_support_answer_from_dc_chat_group`
+- `receive_imf::receive_imf_tests::test_alias_support_answer_from_dc_chat_nongroup`
+- `receive_imf::receive_imf_tests::test_alias_support_answer_from_dc_nonchat_group`
+- `receive_imf::receive_imf_tests::test_alias_support_answer_from_dc_nonchat_nongroup`
+- `receive_imf::receive_imf_tests::test_alias_support_answer_from_nondc_chat_group`
+- `receive_imf::receive_imf_tests::test_alias_support_answer_from_nondc_chat_nongroup`
+- `receive_imf::receive_imf_tests::test_alias_support_answer_from_nondc_nonchat_group`
+- `receive_imf::receive_imf_tests::test_alias_support_answer_from_nondc_nonchat_nongroup`
 
-## Tests to adapt once unencrypted is removed
+## NDN tests
 
-These receive an encrypted message whose signature can't be verified, which core treats like an unencrypted message. Once unencrypted messages are removed, they should check that such messages are ignored.
-
-TODO: Actually, these tests can be adapted now already by removing the allow_unencrypted() call and checking that these messages are ignored.
-
-- `receive_imf::receive_imf_tests::test_forged_from_and_no_valid_signatures`
-- `receive_imf::receive_imf_tests::test_wrong_from_name_and_no_valid_signatures`
-
-## NDN tests; to be decided
-
-Servers never encrypt NDNs (bounces), so these tests still receive unencrypted messages.
+Servers never encrypt NDNs (bounces), so these tests still receive unencrypted messages. I'll likely do a PR that removes these tests along with NDN support.
 
 - `receive_imf::receive_imf_tests::test_parse_ndn_tiscali`
 - `receive_imf::receive_imf_tests::test_parse_ndn_testrun`
@@ -104,11 +113,6 @@ These tests used to receive unencrypted ad-hoc group messages. They now receive 
 In the future, we may just assign these messages to the 1:1 chat with the sender, but whatever we do, we'll need tests for core's behavior for these messages.
 
 - `events::chatlist_events::test_chatlist_events::test_adhoc_group`
-- `securejoin::securejoin_tests::test_adhoc_group_no_qr`
-- `chat::chat_tests::test_sync_adhoc_grp`
-- `receive_imf::receive_imf_tests::test_escaped_recipients`
-- `receive_imf::receive_imf_tests::test_cc_to_contact`
-- `receive_imf::receive_imf_tests::test_auto_accept_group_for_bots`
-- `receive_imf::receive_imf_tests::test_adhoc_group_is_shown`
 - `receive_imf::receive_imf_tests::test_adhoc_group_show_accepted_contact_accepted`
 - `receive_imf::receive_imf_tests::test_adhoc_group_show_all`
+- `receive_imf::receive_imf_tests::test_adhoc_grp_name_no_prefix`

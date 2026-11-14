@@ -5014,28 +5014,27 @@ async fn test_sync_adhoc_grp() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice0 = &tcm.alice().await;
     let alice1 = &tcm.alice().await;
-    let bob = &tcm.bob().await;
-    let fiona = &tcm.fiona().await;
     for a in [alice0, alice1] {
         a.set_config_bool(Config::SyncMsgs, true).await?;
+        a.allow_unencrypted().await?;
     }
 
-    let raw = test_utils::encrypt_raw_message(
-        alice0,
-        &[bob, fiona],
-        b"Subject: =?utf-8?q?Message_from_alice=40example=2Eorg?=\r\n\
-          From: alice@example.org\r\n\
-          To: <bob@example.net>, <fiona@example.net> \r\n\
-          Date: Mon, 2 Dec 2023 16:59:39 +0000\r\n\
-          Message-ID: <Mr.alices_original_mail@example.org>\r\n\
-          Chat-Version: 1.0\r\n\
-          \r\n\
-          hi\r\n",
-    )
-    .await?;
     let mut chat_ids = Vec::new();
     for a in [alice0, alice1] {
-        let msg = receive_imf(a, raw.as_bytes(), false).await?.unwrap();
+        let msg = receive_imf(
+            a,
+            b"Subject: =?utf-8?q?Message_from_alice=40example=2Eorg?=\r\n\
+                    From: alice@example.org\r\n\
+                    To: <bob@example.net>, <fiona@example.org> \r\n\
+                    Date: Mon, 2 Dec 2023 16:59:39 +0000\r\n\
+                    Message-ID: <Mr.alices_original_mail@example.org>\r\n\
+                    Chat-Version: 1.0\r\n\
+                    \r\n\
+                    hi\r\n",
+            false,
+        )
+        .await?
+        .unwrap();
         chat_ids.push(msg.chat_id);
     }
     let chat1 = Chat::load_from_db(alice1, chat_ids[1]).await?;
