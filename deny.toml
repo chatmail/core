@@ -61,6 +61,24 @@ ignore = [
     "RUSTSEC-2026-0487",
     "RUSTSEC-2026-0489",
 
+    # hickory-proto 0.25.2 incorrect DNSSEC validation
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0504>
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0505>
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0511> (NSEC)
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0512>
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0514>
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0530>
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0531>
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0532> (NSEC3)
+    "RUSTSEC-2026-0504",
+    "RUSTSEC-2026-0505",
+    "RUSTSEC-2026-0511",
+    "RUSTSEC-2026-0512",
+    "RUSTSEC-2026-0514",
+    "RUSTSEC-2026-0530",
+    "RUSTSEC-2026-0531",
+    "RUSTSEC-2026-0532",
+
     # hickory-proto 0.25.2 panic (assertion failure) in zone file parser.
     # <https://rustsec.org/advisories/RUSTSEC-2026-0490>
     "RUSTSEC-2026-0490",
