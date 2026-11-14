@@ -460,7 +460,7 @@ mod tests {
         remove_contact_from_chat, send_text_msg, set_chat_name,
     };
     use crate::config::Config;
-    
+
     use crate::securejoin::get_securejoin_qr;
     use crate::stock_str::StockMessage;
     use crate::test_utils::TestContext;

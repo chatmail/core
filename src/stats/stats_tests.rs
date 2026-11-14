@@ -1,9 +1,7 @@
 use std::time::Duration;
 
 use super::*;
-use crate::chat::{
-    Chat, create_broadcast, create_group, get_chat_contacts,
-};
+use crate::chat::{Chat, create_broadcast, create_group, get_chat_contacts};
 use crate::imap::ServerMetadata;
 use crate::mimeparser::SystemMessage;
 use crate::qr::check_qr;

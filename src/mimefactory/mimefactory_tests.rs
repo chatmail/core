@@ -10,8 +10,7 @@ use std::time::Duration;
 
 use super::*;
 use crate::chat::{
-    self, ChatId, add_contact_to_chat, create_group,
-    remove_contact_from_chat, send_text_msg,
+    self, ChatId, add_contact_to_chat, create_group, remove_contact_from_chat, send_text_msg,
 };
 use crate::chatlist::Chatlist;
 use crate::constants;
