@@ -6094,10 +6094,9 @@ async fn test_single_chat_no_group_member_timestamps() {
     let chat = t.create_chat(bob).await;
     let sent = t.send_text(chat.id, "Hi!").await;
     let parsed = bob.parse_msg(&sent).await;
-    assert!(
-        parsed
-            .get_header(HeaderDef::ChatGroupMemberTimestamps)
-            .is_none()
+    assert_eq!(
+        parsed.header_exists(HeaderDef::ChatGroupMemberTimestamps),
+        false
     );
     assert!(!parsed.decoded_data_contains("Chat-Group-Member-Timestamps:"));
 }
