@@ -459,6 +459,7 @@ mod tests {
         add_contact_to_chat, create_broadcast, create_group, get_chat_contacts,
         remove_contact_from_chat, send_text_msg, set_chat_name,
     };
+    use crate::config::Config;
     use crate::receive_imf::receive_imf;
     use crate::securejoin::get_securejoin_qr;
     use crate::stock_str::StockMessage;
@@ -650,23 +651,13 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_search_single_chat() -> anyhow::Result<()> {
-        let t = TestContext::new_alice().await;
-        t.allow_unencrypted().await?;
+        let mut tcm = TestContextManager::new();
+        let t = tcm.alice().await;
+        let bob = tcm.bob().await;
+        bob.set_config(Config::Displayname, Some("Bob Authname"))
+            .await?;
 
-        // receive a single chat message
-        receive_imf(
-            &t,
-            b"From: Bob Authname <bob@example.org>\n\
-                 To: alice@example.org\n\
-                 Subject: foo\n\
-                 Message-ID: <msg1234@example.org>\n\
-                 Chat-Version: 1.0\n\
-                 Date: Sun, 22 Mar 2021 22:37:57 +0000\n\
-                 \n\
-                 hello foo\n",
-            false,
-        )
-        .await?;
+        tcm.send_recv(&bob, &t, "hello foo").await;
 
         let chats = Chatlist::try_load(&t, 0, Some("Bob Authname"), None).await?;
         // Contact request should be searchable
@@ -687,8 +678,7 @@ mod tests {
         assert_eq!(chats.get_chat_id(0).unwrap(), chat_id);
 
         // change the name of the contact; this also changes the name of the single chat
-        let test_id = Contact::create(&t, "Bob Nickname", "bob@example.org").await?;
-        assert_eq!(contact_id, test_id);
+        contact_id.set_name(&t, "Bob Nickname").await?;
         let chat = Chat::load_from_db(&t, chat_id).await?;
         assert_eq!(chat.get_name(), "Bob Nickname");
         let chats = Chatlist::try_load(&t, 0, Some("bob authname"), None).await?;
@@ -697,8 +687,7 @@ mod tests {
         assert_eq!(chats.len(), 1);
 
         // revert contact to authname, this again changes the name of the single chat
-        let test_id = Contact::create(&t, "", "bob@example.org").await?;
-        assert_eq!(contact_id, test_id);
+        contact_id.set_name(&t, "").await?;
         let chat = Chat::load_from_db(&t, chat_id).await?;
         assert_eq!(chat.get_name(), "Bob Authname");
         let chats = Chatlist::try_load(&t, 0, Some("bob authname"), None).await?;
@@ -711,23 +700,12 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_search_single_chat_without_authname() -> anyhow::Result<()> {
-        let t = TestContext::new_alice().await;
-        t.allow_unencrypted().await?;
+        let mut tcm = TestContextManager::new();
+        let t = tcm.alice().await;
+        let bob = tcm.bob().await;
 
         // receive a single chat message without authname set
-        receive_imf(
-            &t,
-            b"From: bob@example.org\n\
-                 To: alice@example.org\n\
-                 Subject: foo\n\
-                 Message-ID: <msg5678@example.org>\n\
-                 Chat-Version: 1.0\n\
-                 Date: Sun, 22 Mar 2021 22:38:57 +0000\n\
-                 \n\
-                 hello foo\n",
-            false,
-        )
-        .await?;
+        tcm.send_recv(&bob, &t, "hello foo").await;
 
         let msg = t.get_last_msg().await;
         let chat_id = msg.get_chat_id();
@@ -735,30 +713,28 @@ mod tests {
         let contacts = get_chat_contacts(&t, chat_id).await?;
         let contact_id = *contacts.first().unwrap();
         let chat = Chat::load_from_db(&t, chat_id).await?;
-        assert_eq!(chat.get_name(), "bob@example.org");
+        assert_eq!(chat.get_name(), "bob@example.net");
 
         // check, the single chat can be found using chatlist search query
-        let chats = Chatlist::try_load(&t, 0, Some("bob@example.org"), None).await?;
+        let chats = Chatlist::try_load(&t, 0, Some("bob@example.net"), None).await?;
         assert_eq!(chats.len(), 1);
         assert_eq!(chats.get_chat_id(0)?, chat_id);
 
         // change the name of the contact; this also changes the name of the single chat
-        let test_id = Contact::create(&t, "Bob Nickname", "bob@example.org").await?;
-        assert_eq!(contact_id, test_id);
+        contact_id.set_name(&t, "Bob Nickname").await?;
         let chat = Chat::load_from_db(&t, chat_id).await?;
         assert_eq!(chat.get_name(), "Bob Nickname");
-        let chats = Chatlist::try_load(&t, 0, Some("bob@example.org"), None).await?;
+        let chats = Chatlist::try_load(&t, 0, Some("bob@example.net"), None).await?;
         assert_eq!(chats.len(), 0); // email-addresses are searchable in contacts, not in chats
         let chats = Chatlist::try_load(&t, 0, Some("Bob Nickname"), None).await?;
         assert_eq!(chats.len(), 1);
         assert_eq!(chats.get_chat_id(0)?, chat_id);
 
         // revert name change, this again changes the name of the single chat to the email-address
-        let test_id = Contact::create(&t, "", "bob@example.org").await?;
-        assert_eq!(contact_id, test_id);
+        contact_id.set_name(&t, "").await?;
         let chat = Chat::load_from_db(&t, chat_id).await?;
-        assert_eq!(chat.get_name(), "bob@example.org");
-        let chats = Chatlist::try_load(&t, 0, Some("bob@example.org"), None).await?;
+        assert_eq!(chat.get_name(), "bob@example.net");
+        let chats = Chatlist::try_load(&t, 0, Some("bob@example.net"), None).await?;
         assert_eq!(chats.len(), 1);
         let chats = Chatlist::try_load(&t, 0, Some("bob nickname"), None).await?;
         assert_eq!(chats.len(), 0);

@@ -12,15 +12,18 @@ use crate::chatlist::Chatlist;
 use crate::constants::DC_GCL_FOR_FORWARDING;
 use crate::contact;
 use crate::headerdef::HeaderDefMap as _;
-use crate::imap::prefetch_should_download;
+use crate::imap::{create_message_id, prefetch_should_download};
 use crate::imex::{ImexMode, imex};
 use crate::key;
-use crate::mimefactory;
+use crate::mimefactory::{self, render_queued_mail_with_context};
 use crate::securejoin::get_securejoin_qr;
 use crate::smtp;
-use crate::test_utils;
-use crate::test_utils::{TestContext, TestContextManager, alice_keypair, get_chat_msg};
-use crate::tools::{SystemTime, time};
+use crate::smtp::queue::{Encryption, QueuedMail};
+use crate::test_utils::{self, receive_encrypted_imf};
+use crate::test_utils::{
+    E2EE_INFO_MSGS, TestContext, TestContextManager, alice_keypair, get_chat_msg,
+};
+use crate::tools::{SystemTime, create_outgoing_rfc724_mid, time};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_outgoing() -> Result<()> {
@@ -50,109 +53,141 @@ async fn test_bad_from() {
 
 static MSGRMSG: &[u8] =
     b"Received: (Postfix, from userid 1000); Mon, 4 Dec 2006 14:51:39 +0100 (CET)\n\
-                    From: Bob <bob@example.com>\n\
+                    From: Bob <bob@example.net>\n\
                     To: alice@example.org\n\
                     Chat-Version: 1.0\n\
                     Subject: Chat: hello\n\
-                    Message-ID: <Mr.1111@example.com>\n\
+                    Message-ID: <Mr.1111@example.net>\n\
                     Date: Sun, 22 Mar 2020 22:37:55 +0000\n\
                     \n\
                     hello\n";
 
 static SINGLE_NOREPLY_MAIL: &[u8] =
     b"Received: (Postfix, from userid 1000); Mon, 4 Dec 2006 14:51:39 +0100 (CET)\n\
-                    From: Bob <bob@example.com>\n\
+                    From: Bob <bob@example.net>\n\
                     To: alice@example.org\n\
                     Subject: Chat: hello\n\
-                    Message-ID: <2222@example.com>\n\
+                    Message-ID: <2222@example.net>\n\
                     Date: Sun, 22 Mar 2020 22:37:56 +0000\n\
                     \n\
                     hello\n";
 
 static GRP_MAIL: &[u8] =
     b"Received: (Postfix, from userid 1000); Mon, 4 Dec 2006 14:51:39 +0100 (CET)\n\
-                    From: bob@example.com\n\
-                    To: alice@example.org, claire@example.com\n\
-                    Subject: group with Alice, Bob and Claire\n\
-                    Message-ID: <3333@example.com>\n\
+                    From: bob@example.net\n\
+                    To: alice@example.org, charlie@example.net\n\
+                    Subject: group with Alice, Bob and Charlie\n\
+                    Message-ID: <3333@example.net>\n\
                     Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
                     \n\
                     hello\n";
 
+/// Receives `GRP_MAIL`, sent by Bob to Alice and Charlie, on Alice's device.
+async fn receive_grp_mail(
+    alice: &TestContext,
+    bob: &TestContext,
+    charlie: &TestContext,
+) -> Result<Option<ReceivedMsg>> {
+    let raw = test_utils::encrypt_raw_message(bob, &[alice, charlie], GRP_MAIL).await?;
+    receive_imf(alice, raw.as_bytes(), false).await
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_adhoc_group_is_shown() {
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await.unwrap();
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
 
-    let chats = Chatlist::try_load(&t, 0, None, None).await.unwrap();
+    let chats = Chatlist::try_load(t, 0, None, None).await.unwrap();
     assert_eq!(chats.len(), 0);
 
-    receive_imf(&t, MSGRMSG, false).await.unwrap();
-    let chats = Chatlist::try_load(&t, 0, None, None).await.unwrap();
+    receive_encrypted_imf(t, bob, MSGRMSG).await.unwrap();
+    let chats = Chatlist::try_load(t, 0, None, None).await.unwrap();
     assert_eq!(chats.len(), 1);
 
-    receive_imf(&t, SINGLE_NOREPLY_MAIL, false).await.unwrap();
-    let chats = Chatlist::try_load(&t, 0, None, None).await.unwrap();
+    receive_encrypted_imf(t, bob, SINGLE_NOREPLY_MAIL)
+        .await
+        .unwrap();
+    let chats = Chatlist::try_load(t, 0, None, None).await.unwrap();
     assert_eq!(chats.len(), 1);
 
-    receive_imf(&t, GRP_MAIL, false).await.unwrap();
-    let chats = Chatlist::try_load(&t, 0, None, None).await.unwrap();
+    receive_grp_mail(t, bob, charlie).await.unwrap();
+    let chats = Chatlist::try_load(t, 0, None, None).await.unwrap();
     assert_eq!(chats.len(), 2);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_adhoc_group_show_accepted_contact_accepted() {
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await.unwrap();
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
 
     // accept Bob by accepting a delta-message from Bob
-    receive_imf(&t, MSGRMSG, false).await.unwrap();
-    let chats = Chatlist::try_load(&t, 0, None, None).await.unwrap();
+    receive_encrypted_imf(t, bob, MSGRMSG).await.unwrap();
+    let chats = Chatlist::try_load(t, 0, None, None).await.unwrap();
     assert_eq!(chats.len(), 1);
     let chat_id = chats.get_chat_id(0).unwrap();
     assert!(!chat_id.is_special());
-    let chat = chat::Chat::load_from_db(&t, chat_id).await.unwrap();
+    let chat = chat::Chat::load_from_db(t, chat_id).await.unwrap();
     assert!(chat.is_contact_request());
-    chat_id.accept(&t).await.unwrap();
-    let chat = chat::Chat::load_from_db(&t, chat_id).await.unwrap();
+    chat_id.accept(t).await.unwrap();
+    let chat = chat::Chat::load_from_db(t, chat_id).await.unwrap();
     assert_eq!(chat.typ, Chattype::Single);
     assert_eq!(chat.name, "Bob");
-    assert_eq!(chat::get_chat_contacts(&t, chat_id).await.unwrap().len(), 1);
-    assert_eq!(chat::get_chat_msgs(&t, chat_id).await.unwrap().len(), 1);
+    assert_eq!(chat::get_chat_contacts(t, chat_id).await.unwrap().len(), 1);
+    assert_eq!(
+        chat::get_chat_msgs(t, chat_id).await.unwrap().len(),
+        E2EE_INFO_MSGS + 1
+    );
 
     // receive a non-delta-message from Bob, shows up because of the show_emails setting
-    receive_imf(&t, SINGLE_NOREPLY_MAIL, false).await.unwrap();
+    receive_encrypted_imf(t, bob, SINGLE_NOREPLY_MAIL)
+        .await
+        .unwrap();
 
-    assert_eq!(chat::get_chat_msgs(&t, chat_id).await.unwrap().len(), 2);
+    assert_eq!(
+        chat::get_chat_msgs(t, chat_id).await.unwrap().len(),
+        E2EE_INFO_MSGS + 2
+    );
 
     // let Bob create an adhoc-group by a non-delta-message, shows up because of the show_emails setting
-    receive_imf(&t, GRP_MAIL, false).await.unwrap();
-    let chats = Chatlist::try_load(&t, 0, None, None).await.unwrap();
+    receive_grp_mail(t, bob, charlie).await.unwrap();
+    let chats = Chatlist::try_load(t, 0, None, None).await.unwrap();
     assert_eq!(chats.len(), 2);
     let chat_id = chats.get_chat_id(0).unwrap();
-    let chat = chat::Chat::load_from_db(&t, chat_id).await.unwrap();
+    let chat = chat::Chat::load_from_db(t, chat_id).await.unwrap();
     assert_eq!(chat.typ, Chattype::Group);
-    assert_eq!(chat.name, "group with Alice, Bob and Claire");
-    assert_eq!(chat::get_chat_contacts(&t, chat_id).await.unwrap().len(), 3);
+    assert_eq!(chat.name, "group with Alice, Bob and Charlie");
+    // The encrypted message created an unencrypted ad-hoc group where self is not a member,
+    // i.e. only Bob and Charlie are members:
+    assert_eq!(chat::get_chat_contacts(t, chat_id).await.unwrap().len(), 2);
+    assert!(!chat.is_self_in_chat(t).await.unwrap());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_adhoc_group_show_all() {
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await.unwrap();
-    receive_imf(&t, GRP_MAIL, false).await.unwrap();
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+    receive_grp_mail(t, bob, charlie).await.unwrap();
 
     // adhoc-group with unknown contacts with show_emails=all will show up in a single chat
-    let chats = Chatlist::try_load(&t, 0, None, None).await.unwrap();
+    let chats = Chatlist::try_load(t, 0, None, None).await.unwrap();
     assert_eq!(chats.len(), 1);
     let chat_id = chats.get_chat_id(0).unwrap();
-    let chat = chat::Chat::load_from_db(&t, chat_id).await.unwrap();
+    let chat = chat::Chat::load_from_db(t, chat_id).await.unwrap();
     assert!(chat.is_contact_request());
-    chat_id.accept(&t).await.unwrap();
-    let chat = chat::Chat::load_from_db(&t, chat_id).await.unwrap();
+    chat_id.accept(t).await.unwrap();
+    let chat = chat::Chat::load_from_db(t, chat_id).await.unwrap();
     assert_eq!(chat.typ, Chattype::Group);
-    assert_eq!(chat.name, "group with Alice, Bob and Claire");
-    assert_eq!(chat::get_chat_contacts(&t, chat_id).await.unwrap().len(), 3);
+    assert_eq!(chat.name, "group with Alice, Bob and Charlie");
+    // The encrypted message created an unencrypted ad-hoc group where self is not a member,
+    // i.e. only Bob and Charlie are members:
+    assert_eq!(chat::get_chat_contacts(t, chat_id).await.unwrap().len(), 2);
+    assert!(!chat.is_self_in_chat(t).await.unwrap());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -275,16 +310,14 @@ async fn test_mdn_and_alias() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_mdn_without_message_reference() -> Result<()> {
     let alice = TestContext::new_alice().await;
-    alice
-        .set_config_bool(Config::ForceEncryption, false)
-        .await?;
+
     let contacts = Contact::get_real_cnt(&alice).await?;
     let chatlist_len = Chatlist::try_load(&alice, 0, None, None).await?.len();
 
-    receive_imf(
+    receive_encrypted_imf(
         &alice,
+        &TestContext::new_bob().await,
         include_bytes!("../../test-data/message/mdn_without_message_reference.eml"),
-        false,
     )
     .await?;
 
@@ -388,51 +421,48 @@ async fn test_no_message_id_header() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_escaped_from() {
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await.unwrap();
-    let contact_id = Contact::create(&t, "foobar", "foobar@example.com")
-        .await
-        .unwrap();
-    let chat_id = ChatId::create_for_contact(&t, contact_id).await.unwrap();
-    receive_imf(
-            &t,
-            b"From: =?UTF-8?B?0JjQvNGPLCDQpNCw0LzQuNC70LjRjw==?= <foobar@example.com>\n\
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let received = receive_encrypted_imf(
+            t,
+            bob,
+            b"From: =?UTF-8?B?0JjQvNGPLCDQpNCw0LzQuNC70LjRjw==?= <bob@example.net>\n\
                  To: alice@example.org\n\
                  Subject: foo\n\
-                 Message-ID: <asdklfjjaweofi@example.com>\n\
+                 Message-ID: <asdklfjjaweofi@example.net>\n\
                  Chat-Version: 1.0\n\
-                 Chat-Disposition-Notification-To: =?UTF-8?B?0JjQvNGPLCDQpNCw0LzQuNC70LjRjw==?= <foobar@example.com>\n\
+                 Chat-Disposition-Notification-To: =?UTF-8?B?0JjQvNGPLCDQpNCw0LzQuNC70LjRjw==?= <bob@example.net>\n\
                  Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
                  \n\
                  hello\n",
-            false,
         ).await.unwrap();
+    let msg = Message::load_from_db(t, received.msg_ids[0]).await.unwrap();
     assert_eq!(
-        Contact::get_by_id(&t, contact_id)
+        Contact::get_by_id(t, msg.from_id)
             .await
             .unwrap()
             .get_authname(),
         "Имя, Фамилия",
     );
-    let msg = get_chat_msg(&t, chat_id, 0, 1).await;
     assert_eq!(msg.text, "hello");
-
-    // MDN request from unencrypted message is ignored.
-    assert!(msg.param.get_int(Param::WantsMdn).is_none());
+    assert_eq!(msg.param.get_int(Param::WantsMdn), Some(1));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_escaped_recipients() {
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await.unwrap();
-    Contact::create(&t, "foobar", "foobar@example.com")
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+    Contact::create(t, "foobar", "bob@example.net")
         .await
         .unwrap();
 
-    let carl_contact_id = Contact::add_or_lookup(
-        &t,
-        "Carl",
-        &ContactAddress::new("carl@host.tld").unwrap(),
+    let charlie_contact_id = Contact::add_or_lookup(
+        t,
+        "Charlie",
+        &ContactAddress::new("charlie@example.net").unwrap(),
         Origin::IncomingUnknownFrom,
     )
     .await
@@ -441,26 +471,27 @@ async fn test_escaped_recipients() {
 
     // We test with non-chat message here
     // because chat messages are not expected to have `Cc` header.
-    receive_imf(
-        &t,
-        b"From: Foobar <foobar@example.com>\n\
+    let raw = test_utils::encrypt_raw_message(
+        bob,
+        &[t, charlie],
+        b"From: Foobar <bob@example.net>\n\
                  To: =?UTF-8?B?0JjQvNGPLCDQpNCw0LzQuNC70LjRjw==?= alice@example.org\n\
-                 Cc: =?utf-8?q?=3Ch2=3E?= <carl@host.tld>\n\
+                 Cc: =?utf-8?q?=3Ch2=3E?= <charlie@example.net>\n\
                  Subject: foo\n\
-                 Message-ID: <asdklfjjaweofi@example.com>\n\
+                 Message-ID: <asdklfjjaweofi@example.net>\n\
                  Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
                  \n\
                  hello\n",
-        false,
     )
     .await
     .unwrap();
-    let contact = Contact::get_by_id(&t, carl_contact_id).await.unwrap();
+    receive_imf(t, raw.as_bytes(), false).await.unwrap();
+    let contact = Contact::get_by_id(t, charlie_contact_id).await.unwrap();
     assert_eq!(contact.get_name(), "");
     assert_eq!(contact.get_display_name(), "h2");
 
-    let chats = Chatlist::try_load(&t, 0, None, None).await.unwrap();
-    let msg = Message::load_from_db(&t, chats.get_msg_id(0).unwrap().unwrap())
+    let chats = Chatlist::try_load(t, 0, None, None).await.unwrap();
+    let msg = Message::load_from_db(t, chats.get_msg_id(0).unwrap().unwrap())
         .await
         .unwrap();
     assert_eq!(msg.text, "foo – hello");
@@ -470,16 +501,18 @@ async fn test_escaped_recipients() {
 /// if existing contact has low enough origin.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_cc_to_contact() {
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await.unwrap();
-    Contact::create(&t, "foobar", "foobar@example.com")
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+    Contact::create(t, "foobar", "bob@example.net")
         .await
         .unwrap();
 
-    let carl_contact_id = Contact::add_or_lookup(
-        &t,
+    let charlie_contact_id = Contact::add_or_lookup(
+        t,
         "garabage",
-        &ContactAddress::new("carl@host.tld").unwrap(),
+        &ContactAddress::new("charlie@example.net").unwrap(),
         Origin::IncomingUnknownFrom,
     )
     .await
@@ -488,24 +521,25 @@ async fn test_cc_to_contact() {
 
     // We use non-chat message here
     // because chat messages are not expected to have `Cc` header.
-    receive_imf(
-        &t,
+    let raw = test_utils::encrypt_raw_message(
+        bob,
+        &[t, charlie],
         b"Received: (Postfix, from userid 1000); Mon, 4 Dec 2006 14:51:39 +0100 (CET)\n\
-                 From: Foobar <foobar@example.com>\n\
+                 From: Foobar <bob@example.net>\n\
                  To: alice@example.org\n\
-                 Cc: Carl <carl@host.tld>\n\
+                 Cc: Charlie <charlie@example.net>\n\
                  Subject: foo\n\
-                 Message-ID: <asdklfjjaweofi@example.com>\n\
+                 Message-ID: <asdklfjjaweofi@example.net>\n\
                  Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
                  \n\
                  hello\n",
-        false,
     )
     .await
     .unwrap();
-    let contact = Contact::get_by_id(&t, carl_contact_id).await.unwrap();
+    receive_imf(t, raw.as_bytes(), false).await.unwrap();
+    let contact = Contact::get_by_id(t, charlie_contact_id).await.unwrap();
     assert_eq!(contact.get_name(), "");
-    assert_eq!(contact.get_display_name(), "Carl");
+    assert_eq!(contact.get_display_name(), "Charlie");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -824,6 +858,19 @@ async fn test_concat_multiple_ndns() -> Result<()> {
     Ok(())
 }
 
+async fn encrypt_and_load_imf(
+    context: &TestContext,
+    from: &TestContext,
+    imf_raw: &[u8],
+) -> Message {
+    let received_msg = receive_encrypted_imf(context, from, imf_raw)
+        .await
+        .expect("receive_imf failure");
+    assert_eq!(received_msg.msg_ids.len(), 1);
+    let msg_id = received_msg.msg_ids[0];
+    Message::load_from_db(context, msg_id).await.unwrap()
+}
+
 async fn load_imf_email(context: &Context, imf_raw: &[u8]) -> Message {
     let received_msg = receive_imf(context, imf_raw, false)
         .await
@@ -836,9 +883,15 @@ async fn load_imf_email(context: &Context, imf_raw: &[u8]) -> Message {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_html_only_mail() {
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await.unwrap();
-    let msg = load_imf_email(&t, include_bytes!("../../test-data/message/wrong-html.eml")).await;
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let msg = encrypt_and_load_imf(
+        t,
+        bob,
+        include_bytes!("../../test-data/message/wrong-html.eml"),
+    )
+    .await;
     assert_eq!(
         msg.text,
         "Guten Abend,\n\nLots of text\n\ntext with Umlaut ä...\n\nMfG\n\n--------------------------------------\n\n[Camping ](https://example.com/)\n\nsomeaddress\n\nsometown"
@@ -1581,10 +1634,12 @@ YEAAAAAA!.
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_pdf_filename_simple() {
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await.unwrap();
-    let msg = load_imf_email(
-        &t,
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let msg = encrypt_and_load_imf(
+        t,
+        bob,
         include_bytes!("../../test-data/message/pdf_filename_simple.eml"),
     )
     .await;
@@ -1602,10 +1657,12 @@ async fn test_pdf_filename_simple() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_pdf_filename_continuation() {
     // test filenames split across multiple header lines, see rfc 2231
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await.unwrap();
-    let msg = load_imf_email(
-        &t,
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let msg = encrypt_and_load_imf(
+        t,
+        bob,
         include_bytes!("../../test-data/message/pdf_filename_continuation.eml"),
     )
     .await;
@@ -1628,21 +1685,22 @@ async fn test_pdf_filename_continuation() {
 /// that wants the image to be kept in the chat.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_many_images() {
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await.unwrap();
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let bob = &tcm.bob().await;
 
-    receive_imf(
-        &t,
+    let msg = encrypt_and_load_imf(
+        t,
+        bob,
         include_bytes!("../../test-data/message/many_images_amazon_via_apple_mail.eml"),
-        false,
     )
-    .await
-    .unwrap();
-    let msg = t.get_last_msg().await;
+    .await;
     assert_eq!(msg.viewtype, Viewtype::Image);
     assert!(msg.has_html());
-    let chat = Chat::load_from_db(&t, msg.chat_id).await.unwrap();
-    assert_eq!(get_chat_msgs(&t, chat.id).await.unwrap().len(), 1);
+    assert_eq!(
+        get_chat_msgs(t, msg.chat_id).await.unwrap().len(),
+        E2EE_INFO_MSGS + 1
+    );
 }
 
 /// Test that classical MUA messages are assigned to group chats based on the `In-Reply-To`
@@ -2124,23 +2182,16 @@ Message content",
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_duplicate_message() -> Result<()> {
     // Test that duplicate messages are ignored based on the Message-ID
-    let alice = TestContext::new_alice().await;
-    alice.allow_unencrypted().await?;
-
-    let bob_contact_id = Contact::add_or_lookup(
-        &alice,
-        "Bob",
-        &ContactAddress::new("bob@example.org").unwrap(),
-        Origin::IncomingUnknownFrom,
-    )
-    .await?
-    .0;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
 
     let first_message = b"Received: from [127.0.0.1]
 Subject: First message
-Message-ID: <first@example.org>
+Message-ID: <first@example.net>
 To: Alice <alice@example.org>
-From: Bob1 <bob@example.org>
+From: Bob1 <bob@example.net>
 Chat-Version: 1.0
 
 Message content
@@ -2150,9 +2201,9 @@ First signature";
 
     let second_message = b"Received: from [127.0.0.1]
 Subject: Second message
-Message-ID: <second@example.org>
+Message-ID: <second@example.net>
 To: Alice <alice@example.org>
-From: Bob2 <bob@example.org>
+From: Bob2 <bob@example.net>
 Chat-Version: 1.0
 
 Message content
@@ -2160,21 +2211,23 @@ Message content
 -- 
 Second signature";
 
-    receive_imf(&alice, first_message, false).await?;
-    let contact = Contact::get_by_id(&alice, bob_contact_id).await?;
+    let first_message = test_utils::encrypt_raw_message(bob, &[alice], first_message).await?;
+    receive_imf(alice, first_message.as_bytes(), false).await?;
+    let contact = Contact::get_by_id(alice, bob_contact_id).await?;
     assert_eq!(contact.get_status(), "First signature");
     assert_eq!(contact.get_display_name(), "Bob1");
 
-    receive_imf(&alice, second_message, false).await?;
-    let contact = Contact::get_by_id(&alice, bob_contact_id).await?;
+    receive_encrypted_imf(alice, bob, second_message).await?;
+    let contact = Contact::get_by_id(alice, bob_contact_id).await?;
     assert_eq!(contact.get_status(), "Second signature");
     assert_eq!(contact.get_display_name(), "Bob2");
 
     // Duplicate message, should be ignored
-    receive_imf(&alice, first_message, false).await?;
+    let received = receive_imf(alice, first_message.as_bytes(), false).await?;
+    assert!(received.is_none());
 
     // No change because last message is duplicate of the first.
-    let contact = Contact::get_by_id(&alice, bob_contact_id).await?;
+    let contact = Contact::get_by_id(alice, bob_contact_id).await?;
     assert_eq!(contact.get_status(), "Second signature");
     assert_eq!(contact.get_display_name(), "Bob2");
 
@@ -2264,20 +2317,14 @@ Original signature updated",
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_ignore_old_status_updates() -> Result<()> {
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await?;
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let bob_id = t.add_or_lookup_contact_id(bob).await;
 
-    let bob_id = Contact::add_or_lookup(
-        &t,
-        "",
-        &ContactAddress::new("bob@example.net")?,
-        Origin::AddressBook,
-    )
-    .await?
-    .0;
-
-    receive_imf(
-        &t,
+    receive_encrypted_imf(
+        t,
+        bob,
         b"From: Bob <bob@example.net>
 To: Alice <alice@example.org>
 Message-ID: <2@example.org>
@@ -2287,16 +2334,16 @@ body
 
 --
 sig wednesday",
-        false,
     )
     .await?;
     let chat_id = t.get_last_msg().await.chat_id;
-    let bob = Contact::get_by_id(&t, bob_id).await?;
-    assert_eq!(bob.get_status(), "sig wednesday");
-    assert_eq!(get_chat_msgs(&t, chat_id).await?.len(), 1);
+    let bob_contact = Contact::get_by_id(t, bob_id).await?;
+    assert_eq!(bob_contact.get_status(), "sig wednesday");
+    assert_eq!(get_chat_msgs(t, chat_id).await?.len(), E2EE_INFO_MSGS + 1);
 
-    receive_imf(
-        &t,
+    receive_encrypted_imf(
+        t,
+        bob,
         b"From: Bob <bob@example.net>
 To: Alice <alice@example.org>
 Message-ID: <1@example.org>
@@ -2306,15 +2353,15 @@ body
 
 --
 sig tuesday",
-        false,
     )
     .await?;
-    let bob = Contact::get_by_id(&t, bob_id).await?;
-    assert_eq!(bob.get_status(), "sig wednesday");
-    assert_eq!(get_chat_msgs(&t, chat_id).await?.len(), 2);
+    let bob_contact = Contact::get_by_id(t, bob_id).await?;
+    assert_eq!(bob_contact.get_status(), "sig wednesday");
+    assert_eq!(get_chat_msgs(t, chat_id).await?.len(), E2EE_INFO_MSGS + 2);
 
-    receive_imf(
-        &t,
+    receive_encrypted_imf(
+        t,
+        bob,
         b"From: Bob <bob@example.net>
 To: Alice <alice@example.org>
 Message-ID: <3@example.org>
@@ -2324,12 +2371,11 @@ body
 
 --
 sig thursday",
-        false,
     )
     .await?;
-    let bob = Contact::get_by_id(&t, bob_id).await?;
-    assert_eq!(bob.get_status(), "sig thursday");
-    assert_eq!(get_chat_msgs(&t, chat_id).await?.len(), 3);
+    let bob_contact = Contact::get_by_id(t, bob_id).await?;
+    assert_eq!(bob_contact.get_status(), "sig thursday");
+    assert_eq!(get_chat_msgs(t, chat_id).await?.len(), E2EE_INFO_MSGS + 3);
 
     Ok(())
 }
@@ -2759,20 +2805,17 @@ async fn test_read_receipts_dont_unmark_bots() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_gmx_forwarded_msg() -> Result<()> {
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await?;
+    let t = &TestContext::new_alice().await;
 
-    receive_imf(
-        &t,
+    let msg = encrypt_and_load_imf(
+        t,
+        t,
         include_bytes!("../../test-data/message/gmx-forward.eml"),
-        false,
     )
-    .await?;
-
-    let msg = t.get_last_msg().await;
+    .await;
     assert!(msg.has_html());
     assert_eq!(
-        msg.id.get_html(&t).await?.unwrap().replace("\r\n", "\n"),
+        msg.id.get_html(t).await?.unwrap().replace("\r\n", "\n"),
         "<html><head></head><body><div style=\"font-family: Verdana;font-size: 12.0px;\"><div>&nbsp;</div>\n\n<div>&nbsp;\n<div>&nbsp;\n<div data-darkreader-inline-border-left=\"\" name=\"quote\" style=\"margin: 10px 5px 5px 10px; padding: 10px 0px 10px 10px; border-left: 2px solid rgb(195, 217, 229); overflow-wrap: break-word; --darkreader-inline-border-left:#274759;\">\n<div style=\"margin:0 0 10px 0;\"><b>Gesendet:</b>&nbsp;Donnerstag, 12. August 2021 um 15:52 Uhr<br/>\n<b>Von:</b>&nbsp;&quot;Claire&quot; &lt;claire@example.org&gt;<br/>\n<b>An:</b>&nbsp;alice@example.org<br/>\n<b>Betreff:</b>&nbsp;subject</div>\n\n<div name=\"quoted-content\">bodytext</div>\n</div>\n</div>\n</div></div></body></html>\n\n"
     );
 
@@ -3130,12 +3173,16 @@ async fn test_auto_accept_for_bots() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_auto_accept_group_for_bots() -> Result<()> {
-    let t = TestContext::new_alice().await;
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
     t.set_config_bool(Config::Bot, true).await.unwrap();
-    t.allow_unencrypted().await.unwrap();
-    let msg = load_imf_email(&t, GRP_MAIL).await;
+    let received = receive_grp_mail(t, bob, charlie).await?.unwrap();
+    let msg = Message::load_from_db(t, received.msg_ids[0]).await?;
 
-    let chat = chat::Chat::load_from_db(&t, msg.chat_id).await?;
+    let chat = chat::Chat::load_from_db(t, msg.chat_id).await?;
+    assert_eq!(chat.typ, Chattype::Group);
     assert!(!chat.is_contact_request());
     Ok(())
 }
@@ -3409,11 +3456,10 @@ async fn test_outgoing_undecryptable() -> Result<()> {
     Ok(())
 }
 
-/// Tests that a message from Thunderbird with an Autocrypt header is assigned to the key-contact.
+/// Tests reception of an encrypted message from Thunderbird with an Autocrypt header.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_thunderbird_autocrypt() -> Result<()> {
     let t = TestContext::new_bob().await;
-    t.allow_unencrypted().await?;
 
     let raw = include_bytes!("../../test-data/message/thunderbird_with_autocrypt.eml");
     let received_msg = receive_imf(&t, raw, false).await?.unwrap();
@@ -3423,11 +3469,10 @@ async fn test_thunderbird_autocrypt() -> Result<()> {
 
     let message = Message::load_from_db(&t, msg_id).await?;
     assert!(message.get_showpadlock());
-
-    let from_id = message.from_id;
-
-    let from_contact = Contact::get_by_id(&t, from_id).await?;
-    assert!(from_contact.is_key_contact());
+    assert_eq!(
+        message.text,
+        "Test – This is encrypted, signed, and has an Autocrypt Header without prefer-encrypt=mutual."
+    );
 
     Ok(())
 }
@@ -3461,7 +3506,6 @@ async fn test_issuer_fingerprint() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_prefer_encrypt_mutual_if_encrypted() -> Result<()> {
     let t = TestContext::new_bob().await;
-    t.allow_unencrypted().await?;
 
     // The message has public key attached *and* Autocrypt header.
     //
@@ -3485,9 +3529,9 @@ async fn test_prefer_encrypt_mutual_if_encrypted() -> Result<()> {
     let alice_contact = Contact::get_by_id(&t, alice_id).await?;
     assert!(alice_contact.is_key_contact());
 
-    // The message without the Autocrypt header
-    // cannot be assigned to the contact even if it
-    // is encrypted and signed.
+    // The signature of the message without the Autocrypt header
+    // cannot be checked, so the message is treated as unencrypted and trashed,
+    // even though it is encrypted and signed.
     //
     // This could be fixed by looking up
     // the key by the issuer fingerprint
@@ -3495,17 +3539,8 @@ async fn test_prefer_encrypt_mutual_if_encrypted() -> Result<()> {
     // but this is not done yet.
     let raw = include_bytes!("../../test-data/message/thunderbird_encrypted_signed.eml");
     let received_msg = receive_imf(&t, raw, false).await?.unwrap();
-
-    assert_eq!(received_msg.msg_ids.len(), 1);
-    let msg_id = received_msg.msg_ids[0];
-
-    let message = Message::load_from_db(&t, msg_id).await?;
-    assert!(!message.get_showpadlock());
-
-    let alice_email_id = message.from_id;
-    assert_ne!(alice_email_id, alice_id);
-    let alice_address_contact = Contact::get_by_id(&t, alice_email_id).await?;
-    assert!(!alice_address_contact.is_key_contact());
+    assert!(received_msg.chat_id.is_trash());
+    t.assert_warn("Fetched unencrypted message, ignoring").await;
 
     Ok(())
 }
@@ -3590,20 +3625,18 @@ async fn test_thunderbird_autocrypt_unencrypted() -> Result<()> {
 
 /// Alice receives an encrypted, but unsigned message.
 ///
-/// Test that the message is displayed without any errors,
-/// but also without a padlock.
+/// Test that the message is treated as unencrypted and trashed.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_thunderbird_unsigned() -> Result<()> {
     let alice = TestContext::new_alice().await;
-    alice.allow_unencrypted().await.unwrap();
 
     // Alice receives an unsigned message from Bob.
     let raw = include_bytes!("../../test-data/message/thunderbird_encrypted_unsigned.eml");
-    receive_imf(&alice, raw, false).await?.unwrap();
-
-    let msg = alice.get_last_msg().await;
-    assert!(!msg.get_showpadlock());
-    assert!(msg.error().is_none());
+    let received = receive_imf(&alice, raw, false).await?.unwrap();
+    assert!(received.chat_id.is_trash());
+    alice
+        .assert_warn("Fetched unencrypted message, ignoring")
+        .await;
 
     Ok(())
 }
@@ -4635,24 +4668,21 @@ async fn test_group_add_remove_member_missing_key() -> Result<()> {
 async fn test_older_message_from_2nd_device() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
-    alice.allow_unencrypted().await?;
-    let chat_id = alice
-        .create_chat_with_contact("", "bob@example.net")
-        .await
-        .id;
+    let bob = &tcm.bob().await;
+    let chat_id = alice.create_chat_id(bob).await;
     alice.send_text(chat_id, "We share this account").await;
-    let received = receive_imf(
+    let raw = test_utils::encrypt_raw_message(
         alice,
+        &[bob],
         b"From: alice@example.org\n\
           To: bob@example.net\n\
           Message-ID: <1234-2-4@example.org>\n\
           Date: Sat, 07 Dec 1970 19:00:26 +0000\n\
           \n\
           I'm Alice too\n",
-        true,
     )
-    .await?
-    .unwrap();
+    .await?;
+    let received = receive_imf(alice, raw.as_bytes(), true).await?.unwrap();
     alice
         .golden_test_chat(
             received.chat_id,
@@ -4788,11 +4818,12 @@ async fn test_forged_from() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_multiline_iso_8859_1_subject() -> Result<()> {
-    let t = &TestContext::new_alice().await;
-    t.allow_unencrypted().await?;
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let bob = &tcm.bob().await;
     let mail = b"Received: (Postfix, from userid 1000); Mon, 4 Dec 2006 14:51:39 +0100 (CET)\n\
-        From: bob@example.com\n\
-        To: alice@example.org, claire@example.com\n\
+        From: bob@example.net\n\
+        To: alice@example.org\n\
         Subject:\n \
         =?iso-8859-1?Q?Weihnachten_&_Silvester:_Feiern,_genie=DFen_&_entspannen_i?=\n \
         =?iso-8859-1?Q?nmitten_der_Weing=E4rten?=\n\
@@ -4800,8 +4831,7 @@ async fn test_multiline_iso_8859_1_subject() -> Result<()> {
         Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
         \n\
         hello\n";
-    receive_imf(t, mail, false).await?;
-    let msg = t.get_last_msg().await;
+    let msg = encrypt_and_load_imf(t, bob, mail).await;
     assert_eq!(
         msg.get_subject(),
         "Weihnachten & Silvester: Feiern, genießen & entspannen inmitten der Weingärten"
@@ -5380,23 +5410,23 @@ async fn test_outgoing_unencrypted_chat_assignment() {
 async fn test_incoming_reply_with_date_in_past() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
-    alice.allow_unencrypted().await?;
+    let bob = &tcm.bob().await;
 
-    let msg0 = receive_imf(
+    let msg0 = receive_encrypted_imf(
         alice,
+        bob,
         b"From: bob@example.net\n\
           To: alice@example.org\n\
           Message-ID: <message@example.net>\n\
           Date: Sun, 22 Mar 2020 22:22:22 +0000\n\
           \n\
           This device has an atomic clock\n",
-        false,
     )
-    .await?
-    .unwrap();
+    .await?;
 
-    let msg1 = receive_imf(
+    let msg1 = receive_encrypted_imf(
         alice,
+        bob,
         b"From: bob@example.net\n\
           To: alice@example.org\n\
           Message-ID: <message1@example.net>\n\
@@ -5404,10 +5434,8 @@ async fn test_incoming_reply_with_date_in_past() -> Result<()> {
           Date: Sun, 22 Mar 2020 11:11:11 +0000\n\
           \n\
           And this one has a wind-up clock\n",
-        false,
     )
-    .await?
-    .unwrap();
+    .await?;
     assert_eq!(msg1.chat_id, msg0.chat_id);
     assert!(msg1.sort_timestamp >= msg0.sort_timestamp);
     assert_eq!(
@@ -5636,9 +5664,9 @@ async fn test_lookup_key_contact_by_address_self() -> Result<()> {
 async fn test_calendar_alternative() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let t = &tcm.alice().await;
-    t.allow_unencrypted().await?;
+    let bob = &tcm.bob().await;
     let raw = include_bytes!("../../test-data/message/calendar-alternative.eml");
-    let msg = receive_imf(t, raw, false).await?.unwrap();
+    let msg = receive_encrypted_imf(t, bob, raw).await?;
     assert_eq!(msg.msg_ids.len(), 1);
 
     let calendar_msg = Message::load_from_db(t, msg.msg_ids[0]).await?;

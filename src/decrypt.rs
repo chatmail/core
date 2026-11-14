@@ -389,8 +389,9 @@ pub(crate) fn validate_detached_signature<'a, 'b>(
 
 #[cfg(test)]
 mod tests {
+    use mailparse::MailHeaderMap as _;
+
     use super::*;
-    use crate::receive_imf::receive_imf;
     use crate::test_utils::TestContext;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -424,11 +425,20 @@ mod tests {
         assert!(get_attachment_mime(&mail).is_some());
 
         let bob = TestContext::new_bob().await;
-        bob.allow_unencrypted().await?;
-        receive_imf(&bob, attachment_mime, false).await?;
-        let msg = bob.get_last_msg().await;
-        // Subject should be prepended because the attachment doesn't have "Chat-Version".
-        assert_eq!(msg.text, "Hello, Bob! – Hello from Thunderbird!");
+        let (mut decrypted, expected_sender_fingerprint) = decrypt(&bob, &mail).await?.unwrap();
+        assert_eq!(expected_sender_fingerprint, None);
+        let decrypted = decrypted.as_data_vec()?;
+        let decrypted = mailparse::parse_mail(&decrypted)?;
+        assert_eq!(decrypted.ctype.mimetype, "multipart/signed");
+        let signed_part = &decrypted.subparts[0];
+        assert_eq!(
+            signed_part.headers.get_first_value("Subject").unwrap(),
+            "Hello, Bob!"
+        );
+        assert_eq!(
+            signed_part.subparts[0].get_body()?,
+            "Hello from Thunderbird!\r\n\r\n"
+        );
 
         Ok(())
     }
@@ -438,13 +448,24 @@ mod tests {
         // Long "mixed-up" mail as received when sending an encrypted message using Delta Chat
         // Desktop via MS Exchange (actually made with TB though).
         let mixed_up_mime = include_bytes!("../test-data/message/mixed-up-long.eml");
+
         let bob = TestContext::new_bob().await;
-        bob.allow_unencrypted().await?;
-        receive_imf(&bob, mixed_up_mime, false).await?;
-        let msg = bob.get_last_msg().await;
-        assert!(!msg.get_text().is_empty());
-        assert!(msg.has_html());
-        assert!(msg.id.get_html(&bob).await?.unwrap().len() > 40000);
+        let mail = mailparse::parse_mail(mixed_up_mime)?;
+        let (mut decrypted, expected_sender_fingerprint) = decrypt(&bob, &mail).await?.unwrap();
+        assert_eq!(expected_sender_fingerprint, None);
+        let decrypted = decrypted.as_data_vec()?;
+        let decrypted = mailparse::parse_mail(&decrypted)?;
+        assert_eq!(decrypted.ctype.mimetype, "multipart/signed");
+        let text_part = &decrypted.subparts[0].subparts[0];
+        assert_eq!(text_part.ctype.mimetype, "text/plain");
+        let text = text_part.get_body()?;
+        assert!(text.starts_with("//! # Blob directory management."));
+        assert!(text.len() > 50000);
+
+        assert!(get_autocrypt_mime(&mail).is_none());
+        assert!(get_mixed_up_mime(&mail).is_some());
+        assert!(get_attachment_mime(&mail).is_none());
+
         Ok(())
     }
 }
