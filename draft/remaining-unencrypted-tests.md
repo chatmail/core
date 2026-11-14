@@ -29,13 +29,68 @@ I will remove them once we remove support for unencrypted.
 - `mimefactory::mimefactory_tests::test_no_empty_to_header` (in encrypted messages, the outer To: header is always set to hidden-recipients, so this test wouldn't really test anything with encrypted messages)
 - `mimefactory::mimefactory_tests::test_render_unencrypted_msg_basic`
 - `mimefactory::mimefactory_tests::test_render_unencrypted_msg_with_attachment`
+- `receive_imf::receive_imf_tests::test_outgoing_classic_mail_creates_chat`
+- `receive_imf::receive_imf_tests::test_bcc_not_a_group` (This was a regression test receiving a message where the `To` addr is the same as `From`, but we don't really look at `To` if the message is encrypted, so that this test passes even with the fix reverted)
+- `receive_imf::receive_imf_tests::test_outgoing_undecryptable` (undecryptable messages are trashed, so the "multiple devices" device message and the other `decryption_error` code paths in `receive_imf.rs` are unreachable with `force_encryption`)
+- `receive_imf::receive_imf_tests::test_unencrypted_doesnt_goto_self_chat`
+- `receive_imf::receive_imf_tests::test_unencrypted_group_id_no_recipients`
+- `receive_imf::receive_imf_tests::test_small_unencrypted_group`
+- `receive_imf::receive_imf_tests::test_outgoing_unencrypted_chat_assignment`
+- `receive_imf::receive_imf_tests::test_thunderbird_autocrypt_unencrypted`
+- `receive_imf::receive_imf_tests::test_thunderbird_unsigned_with_unencrypted_subject`
+- `receive_imf::receive_imf_tests::test_mua_user_adds_member`
+- `receive_imf::receive_imf_tests::test_mua_user_adds_recipient_to_single_chat`
+- `receive_imf::receive_imf_tests::test_mua_cant_remove`
+- `receive_imf::receive_imf_tests::test_mua_can_add`
+- `receive_imf::receive_imf_tests::test_mua_can_readd`
+- `receive_imf::receive_imf_tests::test_github_mailing_list`
+- `receive_imf::receive_imf_tests::test_classic_mailing_list`
+- `receive_imf::receive_imf_tests::test_other_device_writes_to_mailinglist`
+- `receive_imf::receive_imf_tests::test_block_mailing_list`
+- `receive_imf::receive_imf_tests::test_mailing_list_decide_block_then_unblock`
+- `receive_imf::receive_imf_tests::test_mailing_list_decide_not_now`
+- `receive_imf::receive_imf_tests::test_mailing_list_decide_accept`
+- `receive_imf::receive_imf_tests::test_mailing_list_multiple_names_in_subject`
+- `receive_imf::receive_imf_tests::test_majordomo_mailing_list`
+- `receive_imf::receive_imf_tests::test_mailchimp_mailing_list`
+- `receive_imf::receive_imf_tests::test_dhl_mailing_list`
+- `receive_imf::receive_imf_tests::test_dpd_mailing_list`
+- `receive_imf::receive_imf_tests::test_xt_local_mailing_list`
+- `receive_imf::receive_imf_tests::test_xing_mailing_list`
+- `receive_imf::receive_imf_tests::test_ttline_mailing_list`
+- `receive_imf::receive_imf_tests::test_mailing_list_with_mimepart_footer`
+- `receive_imf::receive_imf_tests::test_mailing_list_with_mimepart_footer_signed`
+- `receive_imf::receive_imf_tests::test_apply_mailinglist_changes_assigned_by_reply`
+- `receive_imf::receive_imf_tests::test_mailing_list_chat_message`
+- `receive_imf::receive_imf_tests::test_mailing_list_bot`
+- `receive_imf::receive_imf_tests::test_ignore_footer_status_from_mailinglist`
+- `receive_imf::receive_imf_tests::test_list_from`
 
 ## Tests to adapt once unencrypted is removed
 
 These receive an encrypted message whose signature can't be verified, which core treats like an unencrypted message. Once unencrypted messages are removed, they should check that such messages are ignored.
 
+TODO: Actually, these tests can be adapted now already by removing the allow_unencrypted() call and checking that these messages are ignored.
+
 - `receive_imf::receive_imf_tests::test_forged_from_and_no_valid_signatures`
 - `receive_imf::receive_imf_tests::test_wrong_from_name_and_no_valid_signatures`
+
+## NDN tests; to be decided
+
+Servers never encrypt NDNs (bounces), so these tests still receive unencrypted messages.
+
+- `receive_imf::receive_imf_tests::test_parse_ndn_tiscali`
+- `receive_imf::receive_imf_tests::test_parse_ndn_testrun`
+- `receive_imf::receive_imf_tests::test_parse_ndn_testrun_2`
+- `receive_imf::receive_imf_tests::test_parse_ndn_yahoo`
+- `receive_imf::receive_imf_tests::test_parse_ndn_gmail`
+- `receive_imf::receive_imf_tests::test_parse_ndn_gmx`
+- `receive_imf::receive_imf_tests::test_parse_ndn_posteo`
+- `receive_imf::receive_imf_tests::test_parse_ndn_with_attachment`
+- `receive_imf::receive_imf_tests::test_parse_ndn_group_msg`
+- `receive_imf::receive_imf_tests::test_concat_multiple_ndns`
+- `receive_imf::receive_imf_tests::test_resend_after_ndn`
+- `receive_imf::receive_imf_tests::test_parse_dsn_relayed`
 
 ## Securejoin tests that still depend on unencrypted messages; to be decided
 
