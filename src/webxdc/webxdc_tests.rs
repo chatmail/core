@@ -1921,7 +1921,7 @@ async fn test_webxdc_delete_info_msgs_device_after() -> Result<()> {
 
 /// Alice deletes a webxdc info message for everyone.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_webxdc_delete_info_msg_manually_for_all() -> Result<()> {
+async fn test_webxdc_delete_info_msg_manually() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let alice2 = &tcm.alice().await;
@@ -1929,12 +1929,12 @@ async fn test_webxdc_delete_info_msg_manually_for_all() -> Result<()> {
 
     // Alice creates a group with Bob, sends a webxdc and an update
     let chat_id = alice.create_group_with_members("grp", &[bob]).await;
-    let instance = send_webxdc_instance(alice, chat_id).await?;
+    let alice_instance = send_webxdc_instance(alice, chat_id).await?;
     let sent1 = alice.pop_sent_msg().await;
     let bob_instance = bob.recv_msg(&sent1).await;
     let alice2_instance = alice2.recv_msg(&sent1).await;
     alice
-        .send_webxdc_status_update(instance.id, r#"{"payload": 0, "info": "i"}"#)
+        .send_webxdc_status_update(alice_instance.id, r#"{"payload": 0, "info": "i"}"#)
         .await?;
     alice.flush_status_updates().await?;
     let sent2 = alice.pop_sent_msg().await;
@@ -1945,16 +1945,51 @@ async fn test_webxdc_delete_info_msg_manually_for_all() -> Result<()> {
     let info_id = alice.get_last_msg().await.id;
     message::delete_msgs_ext(alice, &[info_id], true).await?;
     let sent3 = alice.pop_sent_msg().await;
-    assert_eq!(alice.get_last_msg().await.id, instance.id);
+    assert_eq!(alice.get_last_msg().await.id, alice_instance.id);
     bob.recv_msg_trash(&sent3).await;
     assert_eq!(bob.get_last_msg().await.id, bob_instance.id);
 
-    // Alice's other device receives the delete request before the status update;
+    // Alice's second device receives the delete request before the status update;
     // no info message is added
     alice2.recv_msg_trash(&sent3).await;
     alice2.assert_warn("not found").await;
     alice2.recv_msg_trash(&sent2).await;
     assert_eq!(alice2.get_last_msg().await.id, alice2_instance.id);
+    Ok(())
+}
+
+/// Alice's second device deletes a webxdc info message created by Alice's first device.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_webxdc_delete_info_msg_manually_from_second_device() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    // Alice creates a group with Bob, sends a webxdc and an update
+    let chat_id = alice.create_group_with_members("grp", &[bob]).await;
+    let alice_instance = send_webxdc_instance(alice, chat_id).await?;
+    let sent1 = alice.pop_sent_msg().await;
+    let bob_instance = bob.recv_msg(&sent1).await;
+    let alice2_instance = alice2.recv_msg(&sent1).await;
+    alice
+        .send_webxdc_status_update(alice_instance.id, r#"{"payload": 0, "info": "i"}"#)
+        .await?;
+    alice.flush_status_updates().await?;
+    let sent2 = alice.pop_sent_msg().await;
+    bob.recv_msg_trash(&sent2).await;
+    alice2.recv_msg_trash(&sent2).await;
+    assert_eq!(alice2.get_last_msg().await.text, "i");
+
+    // Alice's second device deletes the info message, that is deleted everywhere
+    let info_id = alice2.get_last_msg().await.id;
+    message::delete_msgs_ext(alice2, &[info_id], true).await?;
+    let sent3 = alice2.pop_sent_msg().await;
+    assert_eq!(alice2.get_last_msg().await.id, alice2_instance.id);
+    alice.recv_msg_trash(&sent3).await;
+    assert_eq!(alice.get_last_msg().await.id, alice_instance.id);
+    bob.recv_msg_trash(&sent3).await;
+    assert_eq!(bob.get_last_msg().await.id, bob_instance.id);
     Ok(())
 }
 
