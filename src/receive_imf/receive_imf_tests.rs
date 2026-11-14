@@ -3456,11 +3456,10 @@ async fn test_outgoing_undecryptable() -> Result<()> {
     Ok(())
 }
 
-/// Tests that a message from Thunderbird with an Autocrypt header is assigned to the key-contact.
+/// Tests reception of an encrypted message from Thunderbird with an Autocrypt header.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_thunderbird_autocrypt() -> Result<()> {
     let t = TestContext::new_bob().await;
-    t.allow_unencrypted().await?;
 
     let raw = include_bytes!("../../test-data/message/thunderbird_with_autocrypt.eml");
     let received_msg = receive_imf(&t, raw, false).await?.unwrap();
@@ -3470,11 +3469,10 @@ async fn test_thunderbird_autocrypt() -> Result<()> {
 
     let message = Message::load_from_db(&t, msg_id).await?;
     assert!(message.get_showpadlock());
-
-    let from_id = message.from_id;
-
-    let from_contact = Contact::get_by_id(&t, from_id).await?;
-    assert!(from_contact.is_key_contact());
+    assert_eq!(
+        message.text,
+        "Test – This is encrypted, signed, and has an Autocrypt Header without prefer-encrypt=mutual."
+    );
 
     Ok(())
 }
@@ -3508,7 +3506,6 @@ async fn test_issuer_fingerprint() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_prefer_encrypt_mutual_if_encrypted() -> Result<()> {
     let t = TestContext::new_bob().await;
-    t.allow_unencrypted().await?;
 
     // The message has public key attached *and* Autocrypt header.
     //
@@ -3532,9 +3529,9 @@ async fn test_prefer_encrypt_mutual_if_encrypted() -> Result<()> {
     let alice_contact = Contact::get_by_id(&t, alice_id).await?;
     assert!(alice_contact.is_key_contact());
 
-    // The message without the Autocrypt header
-    // cannot be assigned to the contact even if it
-    // is encrypted and signed.
+    // The signature of the message without the Autocrypt header
+    // cannot be checked, so the message is treated as unencrypted and trashed,
+    // even though it is encrypted and signed.
     //
     // This could be fixed by looking up
     // the key by the issuer fingerprint
@@ -3542,17 +3539,8 @@ async fn test_prefer_encrypt_mutual_if_encrypted() -> Result<()> {
     // but this is not done yet.
     let raw = include_bytes!("../../test-data/message/thunderbird_encrypted_signed.eml");
     let received_msg = receive_imf(&t, raw, false).await?.unwrap();
-
-    assert_eq!(received_msg.msg_ids.len(), 1);
-    let msg_id = received_msg.msg_ids[0];
-
-    let message = Message::load_from_db(&t, msg_id).await?;
-    assert!(!message.get_showpadlock());
-
-    let alice_email_id = message.from_id;
-    assert_ne!(alice_email_id, alice_id);
-    let alice_address_contact = Contact::get_by_id(&t, alice_email_id).await?;
-    assert!(!alice_address_contact.is_key_contact());
+    assert!(received_msg.chat_id.is_trash());
+    t.assert_warn("Fetched unencrypted message, ignoring").await;
 
     Ok(())
 }
@@ -3637,20 +3625,18 @@ async fn test_thunderbird_autocrypt_unencrypted() -> Result<()> {
 
 /// Alice receives an encrypted, but unsigned message.
 ///
-/// Test that the message is displayed without any errors,
-/// but also without a padlock.
+/// Test that the message is treated as unencrypted and trashed.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_thunderbird_unsigned() -> Result<()> {
     let alice = TestContext::new_alice().await;
-    alice.allow_unencrypted().await.unwrap();
 
     // Alice receives an unsigned message from Bob.
     let raw = include_bytes!("../../test-data/message/thunderbird_encrypted_unsigned.eml");
-    receive_imf(&alice, raw, false).await?.unwrap();
-
-    let msg = alice.get_last_msg().await;
-    assert!(!msg.get_showpadlock());
-    assert!(msg.error().is_none());
+    let received = receive_imf(&alice, raw, false).await?.unwrap();
+    assert!(received.chat_id.is_trash());
+    alice
+        .assert_warn("Fetched unencrypted message, ignoring")
+        .await;
 
     Ok(())
 }
