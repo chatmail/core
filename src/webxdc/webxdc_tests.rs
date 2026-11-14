@@ -1993,6 +1993,58 @@ async fn test_webxdc_delete_info_msg_manually_from_second_device() -> Result<()>
     Ok(())
 }
 
+/// Bob creates and deletes webxdc info message in webxdc sent by Alice.
+/// When Alice resends the webxdc, Bob's info messages are not recreated,
+/// so cannot be taken over by Alice.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_webxdc_delete_info_msg_manually_of_non_sender() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+
+    // Alice creates a group with Bob and sends a webxdc, Bob sends an update
+    let chat_id = alice.create_group_with_members("grp", &[bob]).await;
+    let alice_instance = send_webxdc_instance(alice, chat_id).await?;
+    let bob_instance = bob.recv_msg(&alice.pop_sent_msg().await).await;
+    bob_instance.chat_id.accept(bob).await?;
+    bob.send_webxdc_status_update(
+        bob_instance.id,
+        r#"{"payload": 0, "info": "Hi, this is bob sending in webxdc sent by Alice"}"#,
+    )
+    .await?;
+    bob.flush_status_updates().await?;
+    alice.recv_msg_trash(&bob.pop_sent_msg().await).await;
+    let info = alice.get_last_msg().await;
+    assert_eq!(info.text, "Hi, this is bob sending in webxdc sent by Alice");
+
+    // Alice cannot delete Bob's info message for others
+    assert!(
+        message::delete_msgs_ext(alice, &[info.id], true)
+            .await
+            .is_err()
+    );
+
+    // Alice adds Charlie and resends the webxdc, Charlie gets no info message
+    let charlie_id = alice.add_or_lookup_contact_id(charlie).await;
+    add_contact_to_chat(alice, chat_id, charlie_id).await?;
+    charlie.recv_msg(&alice.pop_sent_msg().await).await;
+    resend_msgs(alice, &[alice_instance.id]).await?;
+    let charlie_instance = charlie.recv_msg(&alice.pop_sent_msg().await).await;
+    alice.flush_status_updates().await?;
+    charlie.recv_msg_trash(&alice.pop_sent_msg().await).await;
+    assert_eq!(charlie.get_last_msg().await.id, charlie_instance.id);
+
+    // Bob deletes his info message, that is deleted for Alice as well
+    let info_id = bob.get_last_msg().await.id;
+    message::delete_msgs_ext(bob, &[info_id], true).await?;
+    assert_eq!(bob.get_last_msg().await.id, bob_instance.id);
+    let msg_cnt = chat_id.get_msg_cnt(alice).await?;
+    alice.recv_msg_trash(&bob.pop_sent_msg().await).await;
+    assert_eq!(chat_id.get_msg_cnt(alice).await?, msg_cnt - 1);
+    Ok(())
+}
+
 /// Tests extensibility of WebXDC updates.
 ///
 /// If an update sent by WebXDC contains unknown properties,
