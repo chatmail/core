@@ -4947,7 +4947,9 @@ pub(crate) async fn add_info_msg_with_cmd(
     parent: Option<&Message>,
     from_id: Option<ContactId>,
     added_removed_id: Option<ContactId>,
-    // Message-ID to use or None to create one
+    // Message-ID to use, or None to create a random one, which then differs between devices.
+    // For deletion on all own devices, the Message-ID must be the same on all devices.
+    // For deletion for everyone, the Message-ID must be the same for all members.
     rfc724_mid: Option<&str>,
 ) -> Result<MsgId> {
     let rfc724_mid = rfc724_mid.map_or_else(create_outgoing_rfc724_mid, str::to_string);

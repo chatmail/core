@@ -1930,7 +1930,7 @@ async fn add_parts(
                         None,
                         None,
                         None,
-                        None,
+                        Some(&format!("implicit-timer-change.{rfc724_mid}")),
                     )
                     .await?;
                 }
@@ -2029,7 +2029,9 @@ async fn add_parts(
         chat_id
     };
 
-    for (group_changes_msg, cmd, added_removed_id) in group_changes.extra_msgs {
+    for (i, (group_changes_msg, cmd, added_removed_id)) in
+        group_changes.extra_msgs.into_iter().enumerate()
+    {
         chat::add_info_msg_with_cmd(
             context,
             chat_id,
@@ -2040,7 +2042,7 @@ async fn add_parts(
             None,
             None,
             added_removed_id,
-            None,
+            Some(&format!("extra-group-change-{i}.{rfc724_mid}")),
         )
         .await?;
     }
