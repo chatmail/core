@@ -337,11 +337,6 @@ async fn test_unencrypted_chats_migration_device_msg() -> Result<()> {
 
         let shown = chat::was_device_msg_ever_added(t, "unencrypted-device-msg").await?;
         assert_eq!(shown, expect_device_msg);
-
-        // This assert will need to be removed once we remove the ForceEncryption config,
-        // but it is useful for now to check that the logic is implemented correctly:
-        let allow_unencrypted = !t.get_config_bool(Config::ForceEncryption).await?;
-        assert_eq!(shown, allow_unencrypted && has_legacy_data);
     }
     Ok(())
 }

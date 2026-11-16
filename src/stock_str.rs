@@ -322,11 +322,6 @@ pub enum StockMessage {
     #[strum(props(fallback = "Member %1$s added."))]
     MsgAddMember = 173,
 
-    #[strum(props(
-        fallback = "⚠️ Your email provider %1$s requires end-to-end encryption which is not setup yet."
-    ))]
-    InvalidUnencryptedMail = 174,
-
     #[strum(props(fallback = "You reacted %1$s to \"%2$s\""))]
     MsgYouReacted = 176,
 
@@ -1204,11 +1199,6 @@ pub(crate) fn part_of_total_used(context: &Context, part: &str, total: &str) -> 
     translated(context, StockMessage::PartOfTotallUsed)
         .replace1(part)
         .replace2(total)
-}
-
-/// Stock string: `⚠️ Your email provider %1$s requires end-to-end encryption which is not setup yet. Tap to learn more.`.
-pub(crate) async fn unencrypted_email(context: &Context, provider: &str) -> String {
-    translated(context, StockMessage::InvalidUnencryptedMail).replace1(provider)
 }
 
 /// Stock string: `The attachment contains anonymous usage statistics, which helps us improve Delta Chat. Thank you!`
