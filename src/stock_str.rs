@@ -437,6 +437,17 @@ https://delta.chat/donate"))]
 
     #[strum(props(fallback = "Message unpinned by %1$s."))]
     MsgMessageUnpinnedBy = 247,
+
+    #[strum(props(
+        fallback = "To keep Delta Chat simpler and more secure, it no longer sends or receives messages that aren't end-to-end encrypted.
+
+Nothing is lost: your encrypted chats work as before, and old unencrypted chats remain readable.
+
+To keep sending and receiving unencrypted email, use a regular email app. You can find your email password in Delta Chat under \"Settings → Advanced → Relays\": tap (or right-click) your address and choose \"Edit Relay\".
+
+To keep chatting with someone, send them an invite link."
+    ))]
+    NoMoreUnencrypted = 250,
 }
 
 impl StockMessage {
@@ -641,6 +652,11 @@ pub(crate) async fn msg_unpinned(context: &Context, by_contact: ContactId) -> St
         translated(context, StockMessage::MsgMessageUnpinnedBy)
             .replace1(&by_contact.get_stock_name(context).await)
     }
+}
+
+/// Stock that informs that Delta Chat no longer supports sending and receiving unencrypted.
+pub(crate) fn no_more_unencrypted(context: &Context) -> String {
+    translated(context, StockMessage::NoMoreUnencrypted)
 }
 
 /// Stock string, one of:
