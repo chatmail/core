@@ -523,10 +523,7 @@ pub(crate) async fn receive_imf_inner(
         return trash().await;
     }
 
-    if !mime_parser.was_encrypted()
-        && mime_parser.get_header(HeaderDef::SecureJoin).is_none()
-        && context.get_config_bool(Config::ForceEncryption).await?
-    {
+    if !mime_parser.was_encrypted() && mime_parser.get_header(HeaderDef::SecureJoin).is_none() {
         warn!(context, "Fetched unencrypted message, ignoring");
         return trash().await;
     }

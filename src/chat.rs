@@ -2841,8 +2841,7 @@ async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -> Result<Ve
         || (!msg
             .param
             .get_bool(Param::ForcePlaintext)
-            .unwrap_or_default()
-            && context.get_config_bool(Config::ForceEncryption).await?);
+            .unwrap_or_default());
     let mimefactory = match MimeFactory::from_msg(context, msg.clone()).await {
         Ok(mf) => mf,
         Err(err) => {
@@ -2890,9 +2889,10 @@ async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -> Result<Ve
     let (queued_msg, side_effects) = queued_msg_pair;
 
     if needs_encryption && !is_encrypted {
-        let addr = context.get_primary_self_addr().await?;
-        let text =
-            stock_str::unencrypted_email(context, addr.split('@').nth(1).unwrap_or_default()).await;
+        let text: String = stock_str::error(
+            context,
+            "Can't send unencrypted messages. See the 'Device Messages' chat for details.",
+        );
         message::set_msg_failed(context, msg, &text).await?;
         add_info_msg_with_cmd(
             context,
