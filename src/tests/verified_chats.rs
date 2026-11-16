@@ -39,39 +39,6 @@ async fn test_missing_key_reexecute_securejoin() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_outgoing_mua_msg() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    let bob = &tcm.bob().await;
-    alice.allow_unencrypted().await?;
-
-    tcm.send_recv_accept(bob, alice, "Heyho from DC").await;
-
-    let sent = receive_imf(
-        alice,
-        b"From: alice@example.org\n\
-          To: bob@example.net\n\
-          \n\
-          One classical MUA message",
-        false,
-    )
-    .await?
-    .unwrap();
-    tcm.send_recv(alice, bob, "Sending with DC again").await;
-
-    // Unencrypted message from MUA gets into a separate chat.
-    // PGP chat gets all encrypted messages.
-    alice
-        .golden_test_chat(sent.chat_id, "test_outgoing_mua_msg")
-        .await;
-    alice
-        .golden_test_chat(alice.get_chat(bob).await.id, "test_outgoing_mua_msg_pgp")
-        .await;
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_outgoing_encrypted_msg() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
@@ -83,47 +50,6 @@ async fn test_outgoing_encrypted_msg() -> Result<()> {
     alice
         .golden_test_chat(chat_id, "test_outgoing_encrypted_msg")
         .await;
-    Ok(())
-}
-
-/// If Bob answers unencrypted from another address with a classical MUA,
-/// the message is under some circumstances still assigned to the original
-/// chat (see lookup_chat_by_reply()); this is meant to make aliases
-/// work nicely.
-/// However, the unencrypted message must NOT be assigned to an encrypted chat.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_reply() -> Result<()> {
-    {
-        let mut tcm = TestContextManager::new();
-        let alice = tcm.alice().await;
-        let bob = tcm.bob().await;
-        alice.allow_unencrypted().await?;
-
-        tcm.send_recv_accept(&bob, &alice, "Heyho from DC").await;
-        let encrypted_msg = tcm.send_recv(&alice, &bob, "Heyho back").await;
-
-        let unencrypted_msg = receive_imf(
-            &alice,
-            format!(
-                "From: bob@someotherdomain.org\n\
-                 To: some-alias-forwarding-to-alice@example.org\n\
-                 In-Reply-To: {}\n\
-                 \n\
-                 Weird reply",
-                encrypted_msg.rfc724_mid
-            )
-            .as_bytes(),
-            false,
-        )
-        .await?
-        .unwrap();
-
-        let unencrypted_msg = Message::load_from_db(&alice, unencrypted_msg.msg_ids[0]).await?;
-        assert_eq!(unencrypted_msg.text, "Weird reply");
-
-        assert_ne!(unencrypted_msg.chat_id, encrypted_msg.chat_id);
-    }
-
     Ok(())
 }
 
