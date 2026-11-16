@@ -1724,12 +1724,6 @@ impl EventTracker {
         .await
     }
 
-    /// Wait for the next IncomingMsg event.
-    pub async fn wait_next_incoming_message(&self) {
-        self.get_matching(|evt| matches!(evt, EventType::IncomingMsg { .. }))
-            .await;
-    }
-
     /// Clears event queue.
     pub fn clear_events(&self) {
         while let Ok(_ev) = self.try_recv() {}

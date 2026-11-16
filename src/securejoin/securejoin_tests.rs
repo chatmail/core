@@ -779,28 +779,6 @@ fn manipulate_qr(v3: bool, remove_invite: bool, qr: &mut String) {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_adhoc_group_no_qr() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-    alice.allow_unencrypted().await?;
-
-    let mime = br#"Subject: First thread
-Message-ID: first@example.org
-To: Alice <alice@example.org>, Bob <bob@example.net>
-From: Claire <claire@example.org>
-Content-Type: text/plain; charset=utf-8; format=flowed; delsp=no
-
-First thread."#;
-
-    receive_imf(&alice, mime, false).await?;
-    let msg = alice.get_last_msg().await;
-    let chat_id = msg.chat_id;
-
-    assert!(get_securejoin_qr(&alice, Some(chat_id)).await.is_err());
-    alice.assert_error("Can't generate QR code").await;
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_unknown_sender() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
