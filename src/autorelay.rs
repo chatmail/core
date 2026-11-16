@@ -32,6 +32,7 @@ const DEFAULT_RELAY_CANDIDATES: &[&str] = &[
     "chat.adminforge.de", // iroh relay 404s
     "chat.me.ke",
     "chat.nuvon.app",
+    "chat.privatehill.org",
     "chat.tinydispatch.org",
     "chat.vim.wtf",
     "chatmail.au",
