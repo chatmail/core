@@ -12,7 +12,6 @@ use async_smtp::{EmailAddress, SmtpTransport};
 use rusqlite::OptionalExtension as _;
 use tokio::task;
 
-use crate::chat::{ChatId, add_info_msg_with_cmd};
 use crate::contact::{Contact, ContactId};
 use crate::context::Context;
 use crate::events::EventType;
@@ -25,7 +24,6 @@ use crate::net::proxy::ProxyConfig;
 use crate::net::session::SessionBufStream;
 use crate::scheduler::connectivity::ConnectivityStore;
 use crate::smtp::queue::QueuedMail;
-use crate::stock_str::unencrypted_email;
 use crate::tools::{self, time_elapsed};
 use crate::transport::{
     ConfiguredLoginParam, ConfiguredServerLoginParam, prioritize_server_login_params,
@@ -609,40 +607,7 @@ pub(crate) async fn send_msg_to_smtp(context: &Context, smtp: &mut Smtp, rowid: 
             info!(context, "{info_msg}.");
             context.emit_event(EventType::SmtpMessageSent(info_msg));
         }
-        SendResult::Failure(ref err) => {
-            if err
-                .to_string()
-                .to_lowercase()
-                .contains("invalid unencrypted mail")
-            {
-                let res = context
-                    .sql
-                    .query_row_optional(
-                        "SELECT chat_id, timestamp FROM msgs WHERE id=?;",
-                        (msg_id,),
-                        |row| Ok((row.get::<_, ChatId>(0)?, row.get::<_, i64>(1)?)),
-                    )
-                    .await?;
-
-                if let Some((chat_id, timestamp_sort)) = res {
-                    let text =
-                        unencrypted_email(context, from_addr.split('@').nth(1).unwrap_or_default())
-                            .await;
-                    add_info_msg_with_cmd(
-                        context,
-                        chat_id,
-                        &text,
-                        crate::mimeparser::SystemMessage::InvalidUnencryptedMail,
-                        Some(timestamp_sort),
-                        timestamp_sort,
-                        None,
-                        None,
-                        None,
-                        None,
-                    )
-                    .await?;
-                };
-            }
+        SendResult::Failure(_) => {
             context
                 .sql
                 .execute("DELETE FROM smtp2 WHERE id=?", (rowid,))

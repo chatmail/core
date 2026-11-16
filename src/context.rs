@@ -979,12 +979,6 @@ impl Context {
             self.get_config_bool(Config::TeamProfile).await?.to_string(),
         );
         res.insert(
-            "force_encryption",
-            self.get_config_bool(Config::ForceEncryption)
-                .await?
-                .to_string(),
-        );
-        res.insert(
             "last_autorelay",
             self.get_config_i64(Config::LastAutorelay)
                 .await?
