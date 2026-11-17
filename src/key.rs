@@ -23,7 +23,6 @@ use tokio::runtime::Handle;
 
 use crate::context::Context;
 use crate::events::EventType;
-use crate::log::LogExt;
 use crate::tools::{self, time_elapsed};
 
 fn key_armor_options() -> pgp::composed::ArmorOptions<'static> {
@@ -435,26 +434,6 @@ pub(crate) async fn load_self_secret_key(context: &Context) -> Result<SignedSecr
             Ok(secret)
         }
     }
-}
-
-pub(crate) async fn load_self_secret_keyring(context: &Context) -> Result<Vec<SignedSecretKey>> {
-    let keys = context
-        .sql
-        .query_map_vec(
-            r#"SELECT private_key
-               FROM keypairs
-               ORDER BY id=(SELECT value FROM config WHERE keyname='key_id') DESC"#,
-            (),
-            |row| {
-                let bytes: Vec<u8> = row.get(0)?;
-                Ok(bytes)
-            },
-        )
-        .await?
-        .into_iter()
-        .filter_map(|bytes| SignedSecretKey::from_slice(&bytes).log_err(context).ok())
-        .collect();
-    Ok(keys)
 }
 
 impl DcKey for SignedPublicKey {
