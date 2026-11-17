@@ -4504,10 +4504,8 @@ async fn test_outgoing_msg_forgery() -> Result<()> {
     // We need Bob only to encrypt the forged message to Alice's key, actually Bob doesn't
     // participate in the scenario.
     let bob = &tcm.unconfigured().await;
-    assert_eq!(crate::key::load_self_secret_keyring(bob).await?.len(), 0);
     bob.configure_addr("bob@example.net").await;
     imex(bob, ImexMode::ImportSelfKeys, export_dir.path(), None).await?;
-    assert_eq!(crate::key::load_self_secret_keyring(bob).await?.len(), 1);
     bob.assert_warn("Failed to import secret key").await;
     let malice = &tcm.unconfigured().await;
     malice.configure_addr(alice_addr).await;
@@ -4516,7 +4514,6 @@ async fn test_outgoing_msg_forgery() -> Result<()> {
         .send_recv_accept(bob, malice, "hi from bob")
         .await
         .chat_id;
-    assert_eq!(crate::key::load_self_secret_keyring(bob).await?.len(), 1);
 
     let sent_msg = malice.send_text(malice_chat_id, "hi from malice").await;
     let msg = alice.recv_msg_opt(&sent_msg).await;

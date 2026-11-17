@@ -23,7 +23,7 @@ use crate::constants::Chattype;
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::key::self_fingerprint;
-use crate::key::{Fingerprint, SignedPublicKey, load_self_secret_keyring};
+use crate::key::{Fingerprint, SignedPublicKey, load_self_secret_key};
 use crate::token::Namespace;
 
 /// Tries to decrypt the message,
@@ -89,11 +89,11 @@ pub(crate) async fn decrypt(
         .await??
     } else {
         // Message is asymmetrically encrypted
-        let secret_keys: Vec<SignedSecretKey> = load_self_secret_keyring(context).await?;
+        let secret_key: SignedSecretKey = load_self_secret_key(context).await?;
         expected_sender_fingerprint = None;
 
         tokio::task::spawn_blocking(move || -> Result<Message<'_>> {
-            let secret_keys: Vec<&SignedSecretKey> = secret_keys.iter().collect();
+            let secret_keys: Vec<&SignedSecretKey> = vec![&secret_key];
             let ring = TheRing {
                 secret_keys,
                 decrypt_options,

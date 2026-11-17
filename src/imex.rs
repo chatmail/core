@@ -892,7 +892,6 @@ mod tests {
         // Importing a second key is not allowed anymore,
         // even as a non-default key.
         assert_eq!(key::load_self_secret_key(alice).await?, old_key);
-        assert_eq!(key::load_self_secret_keyring(alice).await?, vec![old_key]);
 
         let msg = alice.recv_msg(&sent).await;
         assert!(msg.get_showpadlock());

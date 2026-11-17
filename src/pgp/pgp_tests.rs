@@ -17,7 +17,7 @@ use pgp::packet::PublicKeyEncryptedSessionKey;
 
 async fn decrypt_bytes(
     bytes: Vec<u8>,
-    private_keys_for_decryption: &[SignedSecretKey],
+    secret_key: &SignedSecretKey,
     auth_tokens_for_decryption: &[String],
 ) -> Result<pgp::composed::Message<'static>> {
     let t = &TestContext::new().await;
@@ -28,9 +28,6 @@ async fn decrypt_bytes(
     for secret in auth_tokens_for_decryption {
         token::save(t, token::Namespace::Auth, None, secret, 0).await?;
     }
-    let [secret_key] = private_keys_for_decryption else {
-        panic!("Only one private key is allowed anymore");
-    };
     store_self_keypair(t, secret_key).await?;
 
     let mime_message = wrap_encrypted_part(bytes.try_into().unwrap());
@@ -42,14 +39,14 @@ async fn decrypt_bytes(
 
 async fn pk_decrypt_and_validate<'a>(
     ctext: &'a [u8],
-    private_keys_for_decryption: &'a [SignedSecretKey],
+    private_key_for_decryption: &'a SignedSecretKey,
     public_keys_for_validation: &[SignedPublicKey],
 ) -> Result<(
     pgp::composed::Message<'static>,
     HashMap<Fingerprint, Vec<Fingerprint>>,
     Vec<u8>,
 )> {
-    let mut msg = decrypt_bytes(ctext.to_vec(), private_keys_for_decryption, &[]).await?;
+    let mut msg = decrypt_bytes(ctext.to_vec(), private_key_for_decryption, &[]).await?;
     let content = msg.as_data_vec()?;
     let ret_signature_fingerprints = valid_signature_fingerprints(&msg, public_keys_for_validation);
 
@@ -137,10 +134,9 @@ async fn test_encrypt_unsigned() {
     )
     .unwrap();
 
-    let decrypt_keyring = vec![KEYS.bob_secret.clone()];
     let sig_check_keyring = vec![KEYS.alice_public.clone()];
     let (msg, valid_signatures, content) =
-        pk_decrypt_and_validate(ctext.as_bytes(), &decrypt_keyring, &sig_check_keyring)
+        pk_decrypt_and_validate(ctext.as_bytes(), &KEYS.bob_secret, &sig_check_keyring)
             .await
             .unwrap();
     assert_eq!(content, CLEARTEXT);
@@ -151,11 +147,10 @@ async fn test_encrypt_unsigned() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_decrypt_signed() {
     // Check decrypting as Alice
-    let decrypt_keyring = vec![KEYS.alice_secret.clone()];
     let sig_check_keyring = vec![KEYS.alice_public.clone()];
     let (_msg, valid_signatures, content) = pk_decrypt_and_validate(
         ctext_signed().await.as_bytes(),
-        &decrypt_keyring,
+        &KEYS.alice_secret,
         &sig_check_keyring,
     )
     .await
@@ -167,11 +162,10 @@ async fn test_decrypt_signed() {
     }
 
     // Check decrypting as Bob
-    let decrypt_keyring = vec![KEYS.bob_secret.clone()];
     let sig_check_keyring = vec![KEYS.alice_public.clone()];
     let (_msg, valid_signatures, content) = pk_decrypt_and_validate(
         ctext_signed().await.as_bytes(),
-        &decrypt_keyring,
+        &KEYS.bob_secret,
         &sig_check_keyring,
     )
     .await
@@ -185,9 +179,8 @@ async fn test_decrypt_signed() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_decrypt_no_sig_check() {
-    let keyring = vec![KEYS.alice_secret.clone()];
     let (_msg, valid_signatures, content) =
-        pk_decrypt_and_validate(ctext_signed().await.as_bytes(), &keyring, &[])
+        pk_decrypt_and_validate(ctext_signed().await.as_bytes(), &KEYS.alice_secret, &[])
             .await
             .unwrap();
     assert_eq!(content, CLEARTEXT);
@@ -197,11 +190,10 @@ async fn test_decrypt_no_sig_check() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_decrypt_signed_no_key() {
     // The validation does not have the public key of the signer.
-    let decrypt_keyring = vec![KEYS.bob_secret.clone()];
     let sig_check_keyring = vec![KEYS.bob_public.clone()];
     let (_msg, valid_signatures, content) = pk_decrypt_and_validate(
         ctext_signed().await.as_bytes(),
-        &decrypt_keyring,
+        &KEYS.bob_secret,
         &sig_check_keyring,
     )
     .await
@@ -212,10 +204,9 @@ async fn test_decrypt_signed_no_key() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_decrypt_unsigned() {
-    let decrypt_keyring = vec![KEYS.bob_secret.clone()];
     let ctext_unsigned = include_bytes!("../../test-data/message/ctext_unsigned.asc");
     let (_msg, valid_signatures, content) =
-        pk_decrypt_and_validate(ctext_unsigned, &decrypt_keyring, &[])
+        pk_decrypt_and_validate(ctext_unsigned, &KEYS.bob_secret, &[])
             .await
             .unwrap();
     assert_eq!(content, CLEARTEXT);
@@ -288,7 +279,7 @@ async fn test_dont_decrypt_expensive_message_ext(
 
     // Trying to decrypt it should fail with a helpful error message:
 
-    let bob_private_keyring = crate::key::load_self_secret_keyring(bob).await?;
+    let bob_private_keyring = crate::key::load_self_secret_key(bob).await?;
     let res = decrypt_bytes(
         ctext.into(),
         &bob_private_keyring,
@@ -325,8 +316,8 @@ async fn test_decryption_error_msg() -> Result<()> {
     )?;
 
     // Trying to decrypt it should fail with an OK error message:
-    let bob_private_keyring = crate::key::load_self_secret_keyring(bob).await?;
-    let error = decrypt_bytes(ctext.into(), &bob_private_keyring, &[])
+    let bob_private_key = crate::key::load_self_secret_key(bob).await?;
+    let error = decrypt_bytes(ctext.into(), &bob_private_key, &[])
         .await
         .unwrap_err();
 
