@@ -13,6 +13,10 @@ ignore = [
     # Unmaintained paste
     "RUSTSEC-2024-0436",
 
+    # Unmaintained chrono
+    # <https://github.com/chatmail/async-imap/issues/165>
+    "RUSTSEC-2026-0543",
+
     # Unmaintained pin-utils
     # <https://rustsec.org/advisories/RUSTSEC-2026-0441>
     "RUSTSEC-2026-0441",
@@ -70,6 +74,9 @@ ignore = [
     # <https://rustsec.org/advisories/RUSTSEC-2026-0530>
     # <https://rustsec.org/advisories/RUSTSEC-2026-0531>
     # <https://rustsec.org/advisories/RUSTSEC-2026-0532> (NSEC3)
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0549>
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0550>
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0551>
     "RUSTSEC-2026-0504",
     "RUSTSEC-2026-0505",
     "RUSTSEC-2026-0511",
@@ -78,6 +85,9 @@ ignore = [
     "RUSTSEC-2026-0530",
     "RUSTSEC-2026-0531",
     "RUSTSEC-2026-0532",
+    "RUSTSEC-2026-0549",
+    "RUSTSEC-2026-0550",
+    "RUSTSEC-2026-0551",
 
     # hickory-proto 0.25.2 panic (assertion failure) in zone file parser.
     # <https://rustsec.org/advisories/RUSTSEC-2026-0490>
