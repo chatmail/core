@@ -140,7 +140,11 @@ pub async fn has_backup(_context: &Context, dir_name: &Path) -> Result<String> {
 
 async fn set_self_key(context: &Context, armored: &str) -> Result<()> {
     let secret_key = SignedSecretKey::from_asc(armored)?;
-    key::store_self_keypair(context, &secret_key).await?;
+    let new_secret_key = key::store_self_keypair(context, secret_key.clone()).await?;
+    ensure!(
+        new_secret_key == secret_key,
+        "Failed to import key because we already have a key"
+    );
 
     info!(
         context,
@@ -900,8 +904,8 @@ mod tests {
 
         alice
             .assert_warns_or_errors(&[
+                "Failed to import key because we already have a key",
                 "rPGP error: unexpected block type: PGP PUBLIC KEY BLOCK",
-                "UNIQUE constraint failed",
                 "IMEX failed to complete",
                 "No private keys found in",
             ])

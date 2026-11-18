@@ -20,6 +20,7 @@ use pgp::ser::Serialize;
 use pgp::types::SigningKey as _;
 use pgp::types::{CompressionAlgorithm, KeyDetails, KeyVersion};
 use rand_old::thread_rng;
+use rusqlite::OptionalExtension as _;
 use tokio::runtime::Handle;
 
 use crate::context::Context;
@@ -292,12 +293,6 @@ pub(crate) fn secret_key_to_public_key(
 ///
 /// Returns `None` if no secret key is generated yet.
 pub(crate) async fn load_self_public_key_opt(context: &Context) -> Result<Option<SignedPublicKey>> {
-    let mut lock = context.self_public_key.lock().await;
-
-    if let Some(ref public_key) = *lock {
-        return Ok(Some(public_key.clone()));
-    }
-
     let Some(secret_key_bytes) = context
         .sql
         .query_row_optional(
@@ -332,7 +327,6 @@ pub(crate) async fn load_self_public_key_opt(context: &Context) -> Result<Option
     let all_addrs = context.get_self_addrs().await?.join(",");
     let signed_public_key =
         secret_key_to_public_key(signed_secret_key, timestamp, &addr, &all_addrs)?;
-    *lock = Some(signed_public_key.clone());
 
     Ok(Some(signed_public_key))
 }
@@ -476,10 +470,14 @@ impl DcKey for SignedSecretKey {
     }
 }
 
+/// Generates a new secret key and tries to store it.
+///
+/// Returns stored key. If the key is already stored,
+/// e.g. because this function is called twice concurrently,
+/// throws away generated key and returns the old key.
 async fn generate_keypair(context: &Context) -> Result<SignedSecretKey> {
     let addr = context.get_primary_self_addr().await?;
     let addr = EmailAddress::new(&addr)?;
-    let _public_key_guard = context.self_public_key.lock().await;
 
     // Check if the key appeared while we were waiting on the lock.
     match load_keypair(context).await? {
@@ -491,7 +489,7 @@ async fn generate_keypair(context: &Context) -> Result<SignedSecretKey> {
                 .spawn_blocking(move || crate::pgp::create_keypair(addr))
                 .await??;
 
-            store_self_keypair(context, &keypair).await?;
+            let keypair = store_self_keypair(context, keypair).await?;
             info!(
                 context,
                 "Keypair generated in {:.3}s.",
@@ -528,13 +526,12 @@ pub(crate) async fn load_keypair(context: &Context) -> Result<Option<SignedSecre
 
 /// Stores own keypair in the database and sets it as a default.
 ///
-/// Fails if we already have a key, so it is not possible to
-/// have more than one key for new setups. Existing setups
-/// may still have more than one key for compatibility.
+/// If we already have a key, returns existing key.
+/// Otherwise returns just stored key.
 pub(crate) async fn store_self_keypair(
     context: &Context,
-    signed_secret_key: &SignedSecretKey,
-) -> Result<()> {
+    signed_secret_key: SignedSecretKey,
+) -> Result<SignedSecretKey> {
     // This public key is stored in the database
     // only for backwards compatibility.
     //
@@ -543,11 +540,30 @@ pub(crate) async fn store_self_keypair(
     // which adds relay list to the signature.
     let signed_public_key = signed_secret_key.to_public_key();
     let mut config_cache_lock = context.sql.config_cache.write().await;
-    let new_key_id = context
+    let signed_secret_key = context
         .sql
         .transaction(|transaction| {
+            if let Some(old_secret_key_bytes) = transaction
+                .query_row(
+                    "
+SELECT private_key FROM keypairs
+WHERE id=(SELECT value FROM config WHERE keyname='key_id')",
+                    (),
+                    |row| {
+                        let bytes: Vec<u8> = row.get(0)?;
+                        Ok(bytes)
+                    },
+                )
+                .optional()
+                .context("Failed to select own secret key")?
+            {
+                // Key already exists, return it.
+                let old_signed_secret_key = SignedSecretKey::from_slice(&old_secret_key_bytes)?;
+                return Ok(old_signed_secret_key);
+            }
+
             let public_key = DcKey::to_bytes(&signed_public_key);
-            let secret_key = DcKey::to_bytes(signed_secret_key);
+            let secret_key = DcKey::to_bytes(&signed_secret_key);
 
             // private_key and public_key columns
             // are UNIQUE since migration 107,
@@ -570,22 +586,25 @@ pub(crate) async fn store_self_keypair(
                 "INSERT INTO config (keyname, value) VALUES ('key_id', ?)",
                 (new_key_id,),
             )?;
-            Ok(new_key_id)
+            Ok(signed_secret_key)
         })
         .await?;
     context.emit_event(EventType::AccountsItemChanged);
-    config_cache_lock.insert("key_id".to_string(), Some(new_key_id.to_string()));
-    Ok(())
+    config_cache_lock.remove("key_id");
+    Ok(signed_secret_key)
 }
 
 /// Saves a keypair as the default keys.
 ///
 /// This API is used for testing purposes
 /// to avoid generating the key in tests.
-/// Use import/export APIs instead.
 pub async fn preconfigure_keypair(context: &Context, secret_data: &str) -> Result<()> {
     let secret = SignedSecretKey::from_asc(secret_data)?;
-    store_self_keypair(context, &secret).await?;
+    let new_secret = store_self_keypair(context, secret.clone()).await?;
+    ensure!(
+        new_secret == secret,
+        "New key is not stored, another key already exists"
+    );
     Ok(())
 }
 
@@ -873,12 +892,12 @@ i8pcjGO+IZffvyZJVRWfVooBJmWWbPB1pueo3tx8w3+fcuzpxz+RLFKaPyqXO+dD
                 .unwrap()
         };
         assert_eq!(nrows().await, 0);
-        store_self_keypair(&ctx, &KEYPAIR).await.unwrap();
+        store_self_keypair(&ctx, KEYPAIR.clone()).await.unwrap();
         assert_eq!(nrows().await, 1);
 
-        // Saving a second key fails.
-        let res = store_self_keypair(&ctx, &KEYPAIR).await;
-        assert!(res.is_err());
+        // Saving a second key returns the old key.
+        let res = store_self_keypair(&ctx, KEYPAIR.clone()).await.unwrap();
+        assert_eq!(res, *KEYPAIR);
 
         assert_eq!(nrows().await, 1);
     }

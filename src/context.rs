@@ -10,7 +10,6 @@ use std::time::Duration;
 
 use anyhow::{Result, bail, ensure};
 use async_channel::{self as channel, Receiver, Sender};
-use pgp::composed::SignedPublicKey;
 use ratelimit::Ratelimit;
 use tokio::sync::{Mutex, Notify, RwLock};
 
@@ -313,13 +312,6 @@ pub struct InnerContext {
     /// the standard library's OnceLock is enough, and it's a lot smaller in memory.
     pub(crate) self_fingerprint: OnceLock<String>,
 
-    /// OpenPGP certificate aka Transferrable Public Key.
-    ///
-    /// It is generated on first use from the secret key stored in the database.
-    ///
-    /// Mutex is also held while generating the key to avoid generating the key twice.
-    pub(crate) self_public_key: Mutex<Option<SignedPublicKey>>,
-
     /// `Connectivity` values for the relays, unordered. Used to compute the aggregate connectivity,
     /// see [`Context::get_connectivity()`].
     pub(crate) connectivities: parking_lot::Mutex<Vec<ConnectivityStore>>,
@@ -499,7 +491,6 @@ impl Context {
             spki_hash_store: SpkiHashStore::new(),
             iroh: Arc::new(RwLock::new(None)),
             self_fingerprint: OnceLock::new(),
-            self_public_key: Mutex::new(None),
             connectivities: parking_lot::Mutex::new(Vec::new()),
             next_keyupdate_check: AtomicI64::new(0),
         };
