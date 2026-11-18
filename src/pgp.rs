@@ -113,14 +113,20 @@ fn select_pk_for_encryption(
                 return None;
             }
 
+            let created_at = subkey.created_at().as_secs();
+
+            if created_at > now.as_secs() {
+                // The key is not valid yet.
+                //
+                // Practically this means the contact had the clock set in the future when generating the key
+                // and we better use another subkey, or our clock is in the past.
+                return None;
+            }
+
             if let Some(expiration_duration) = signature
                 .key_expiration_time()
                 .filter(|duration| duration.as_secs() != 0)
-                && now.as_secs()
-                    > subkey
-                        .created_at()
-                        .as_secs()
-                        .saturating_add(expiration_duration.as_secs())
+                && now.as_secs() > created_at.saturating_add(expiration_duration.as_secs())
             {
                 // Key is expired.
                 return None;
