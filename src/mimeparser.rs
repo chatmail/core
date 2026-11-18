@@ -15,7 +15,7 @@ use mime::Mime;
 
 use crate::aheader::Aheader;
 use crate::blob::BlobObject;
-use crate::chat::{Chat, ChatId};
+use crate::chat::ChatId;
 use crate::config::Config;
 use crate::constants;
 use crate::contact::{ContactId, import_public_key};
@@ -27,7 +27,7 @@ use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::key::{self, DcKey, Fingerprint, SignedPublicKey};
 use crate::log::warn;
-use crate::message::{self, Message, MsgId, Viewtype, get_vcard_summary, set_msg_failed};
+use crate::message::{self, MsgId, Viewtype, get_vcard_summary};
 use crate::param::{Param, Params};
 use crate::simplify::{SimplifiedText, simplify};
 use crate::sync::SyncItems;
@@ -105,7 +105,6 @@ pub(crate) struct MimeMessage {
     pub(crate) user_avatar: Option<AvatarAction>,
     pub(crate) group_avatar: Option<AvatarAction>,
     pub(crate) mdn_reports: Vec<Report>,
-    pub(crate) delivery_report: Option<DeliveryReport>,
 
     /// Parsed `Chat-Broadcast-States` header, if any:
     /// accumulated reaction updates sent by a broadcast channel owner.
@@ -650,7 +649,6 @@ impl MimeMessage {
             webxdc_status_update: None,
             user_avatar: None,
             group_avatar: None,
-            delivery_report: None,
             broadcast_reactions: None,
             footer: None,
             is_mime_modified: false,
@@ -671,7 +669,6 @@ impl MimeMessage {
 
                 let part = Part {
                     typ: Viewtype::Text,
-                    msg_raw: Some(txt.to_string()),
                     msg: txt.to_string(),
                     // Don't change the error prefix for now,
                     // receive_imf.rs:lookup_chat_by_reply() checks it.
@@ -694,7 +691,6 @@ impl MimeMessage {
         }
         parser.maybe_remove_bad_parts();
         parser.maybe_remove_inline_mailinglist_footer();
-        parser.heuristically_parse_ndn(context).await;
         parser.parse_headers(context).await?;
         parser.decoded_data = mail_raw;
 
@@ -882,9 +878,7 @@ impl MimeMessage {
         self.parse_avatar_headers(context)?;
         self.parse_videochat_headers();
         self.parse_broadcast_reactions_header();
-        if self.delivery_report.is_none() {
-            self.squash_attachment_parts();
-        }
+        self.squash_attachment_parts();
 
         if !context.get_config_bool(Config::Bot).await?
             && let Some(ref subject) = self.get_subject()
@@ -1249,22 +1243,6 @@ impl MimeMessage {
 
                             any_part_added = true;
                         }
-                        // Some providers, e.g. Tiscali, forget to set the report-type. So, if it's None, assume that it might be delivery-status
-                        Some("delivery-status") | None => {
-                            if let Some(report) = self.process_delivery_status(context, mail)? {
-                                self.delivery_report = Some(report);
-                            }
-
-                            // Add all parts (we need another part, preferably text/plain, to show as an error message)
-                            for cur_data in &mail.subparts {
-                                if self
-                                    .parse_mime_recursive(context, cur_data, is_related)
-                                    .await?
-                                {
-                                    any_part_added = true;
-                                }
-                            }
-                        }
                         Some("multi-device-sync") => {
                             if let Some(second) = mail.subparts.get(1) {
                                 self.add_single_part_if_known(context, second, is_related)
@@ -1277,7 +1255,7 @@ impl MimeMessage {
                                     .await?;
                             }
                         }
-                        Some(_) => {
+                        _ => {
                             for cur_data in &mail.subparts {
                                 if self
                                     .parse_mime_recursive(context, cur_data, is_related)
@@ -1448,7 +1426,6 @@ impl MimeMessage {
                             if let Some(quote) = simplified_quote {
                                 part.param.set(Param::Quote, quote);
                             }
-                            part.msg_raw = Some(decoded_data);
                             self.do_add_single_part(part);
                         }
 
@@ -1808,80 +1785,6 @@ impl MimeMessage {
         }))
     }
 
-    fn process_delivery_status(
-        &self,
-        context: &Context,
-        report: &mailparse::ParsedMail<'_>,
-    ) -> Result<Option<DeliveryReport>> {
-        // Assume failure.
-        let mut failure = true;
-
-        if let Some(status_part) = report.subparts.get(1) {
-            // RFC 3464 defines `message/delivery-status`
-            // RFC 6533 defines `message/global-delivery-status`
-            if status_part.ctype.mimetype != "message/delivery-status"
-                && status_part.ctype.mimetype != "message/global-delivery-status"
-            {
-                warn!(
-                    context,
-                    "Second part of Delivery Status Notification is not message/delivery-status or message/global-delivery-status, ignoring"
-                );
-                return Ok(None);
-            }
-
-            let status_body = status_part.get_body_raw()?;
-
-            // Skip per-message fields.
-            let (_, sz) = mailparse::parse_headers(&status_body)?;
-
-            // Parse first set of per-recipient fields
-            if let Some(status_body) = status_body.get(sz..) {
-                let (status_fields, _) = mailparse::parse_headers(status_body)?;
-                if let Some(action) = status_fields.get_first_value("action") {
-                    if action != "failed" {
-                        info!(context, "DSN with {:?} action", action);
-                        failure = false;
-                    }
-                } else {
-                    warn!(context, "DSN without action");
-                }
-            } else {
-                warn!(context, "DSN without per-recipient fields");
-            }
-        } else {
-            // No message/delivery-status part.
-            return Ok(None);
-        }
-
-        // parse as mailheaders
-        if let Some(original_msg) = report.subparts.get(2).filter(|p| {
-            p.ctype.mimetype.contains("rfc822")
-                || p.ctype.mimetype == "message/global"
-                || p.ctype.mimetype == "message/global-headers"
-        }) {
-            let report_body = original_msg.get_body_raw()?;
-            let (report_fields, _) = mailparse::parse_headers(&report_body)?;
-
-            if let Some(original_message_id) = report_fields
-                .get_header_value(HeaderDef::MessageId)
-                .and_then(|v| parse_message_id(&v).ok())
-            {
-                return Ok(Some(DeliveryReport {
-                    rfc724_mid: original_message_id,
-                    failure,
-                }));
-            }
-
-            warn!(
-                context,
-                "ignoring unknown ndn-notification, Message-Id: {:?}",
-                report_fields.get_header_value(HeaderDef::MessageId)
-            );
-        }
-
-        Ok(None)
-    }
-
     fn maybe_remove_bad_parts(&mut self) {
         let good_parts = self.parts.iter().filter(|p| !p.dehtml_failed).count();
         if good_parts == 0 {
@@ -1941,40 +1844,8 @@ impl MimeMessage {
         }
     }
 
-    /// Some providers like GMX and Yahoo do not send standard NDNs (Non Delivery notifications).
-    /// If you improve heuristics here you might also have to change prefetch_should_download() in imap/mod.rs.
-    /// Also you should add a test in receive_imf.rs (there already are lots of test_parse_ndn_* tests).
-    async fn heuristically_parse_ndn(&mut self, context: &Context) {
-        let maybe_ndn = if let Some(from) = self.get_header(HeaderDef::From_) {
-            let from = from.to_ascii_lowercase();
-            from.contains("mailer-daemon") || from.contains("mail-daemon")
-        } else {
-            false
-        };
-        if maybe_ndn && self.delivery_report.is_none() {
-            for original_message_id in self
-                .parts
-                .iter()
-                .filter_map(|part| part.msg_raw.as_ref())
-                .flat_map(|part| part.lines())
-                .filter_map(|line| line.split_once("Message-ID:"))
-                .filter_map(|(_, message_id)| parse_message_id(message_id).ok())
-            {
-                if let Ok(Some(_)) = message::rfc724_mid_exists(context, &original_message_id).await
-                {
-                    self.delivery_report = Some(DeliveryReport {
-                        rfc724_mid: original_message_id,
-                        failure: true,
-                    })
-                }
-            }
-        }
-    }
-
-    /// Handle reports
-    /// (MDNs = Message Disposition Notification, the message was read
-    /// and NDNs = Non delivery notification, the message could not be delivered)
-    pub async fn handle_reports(&self, context: &Context, from_id: ContactId, parts: &[Part]) {
+    /// Handles MDNs (Message Disposition Notifications, i.e. read receipts).
+    pub async fn handle_mdns(&self, context: &Context, from_id: ContactId) {
         for report in &self.mdn_reports {
             for original_message_id in report
                 .original_message_id
@@ -1986,18 +1857,6 @@ impl MimeMessage {
                 {
                     warn!(context, "Could not handle MDN: {err:#}.");
                 }
-            }
-        }
-
-        if let Some(delivery_report) = &self.delivery_report
-            && delivery_report.failure
-        {
-            let error = parts
-                .iter()
-                .find(|p| p.typ == Viewtype::Text)
-                .map(|p| p.msg.clone());
-            if let Err(err) = handle_ndn(context, delivery_report, error).await {
-                warn!(context, "Could not handle NDN: {err:#}.");
             }
         }
     }
@@ -2103,13 +1962,6 @@ pub(crate) struct Report {
     pub additional_message_ids: Vec<String>,
 }
 
-/// Delivery Status Notification (RFC 3464, RFC 6533)
-#[derive(Debug)]
-pub(crate) struct DeliveryReport {
-    pub rfc724_mid: String,
-    pub failure: bool,
-}
-
 pub(crate) fn parse_message_ids(ids: &str) -> Vec<String> {
     // take care with mailparse::msgidparse() that is pretty untolerant eg. wrt missing `<` or `>`
     let mut msgids = Vec::new();
@@ -2179,9 +2031,6 @@ pub struct Part {
 
     /// Message text to be displayed in the chat.
     pub msg: String,
-
-    /// Message text to be displayed in message info.
-    pub msg_raw: Option<String>,
 
     /// Size of the MIME part in bytes.
     pub bytes: usize,
@@ -2462,59 +2311,6 @@ async fn handle_mdn(
         chatlist_events::emit_chatlist_item_changed(context, chat_id);
     }
     context.emit_event(EventType::MsgReadCountChanged { chat_id, msg_id });
-    Ok(())
-}
-
-/// Marks a message as failed after an ndn (non-delivery-notification) arrived.
-/// Where appropriate, also adds an info message telling the user which of the recipients of a group message failed.
-async fn handle_ndn(
-    context: &Context,
-    failed: &DeliveryReport,
-    error: Option<String>,
-) -> Result<()> {
-    if failed.rfc724_mid.is_empty() {
-        return Ok(());
-    }
-
-    // The NDN might be for a message-id that had attachments and was sent from a non-Delta Chat client.
-    // In this case we need to mark multiple "msgids" as failed that all refer to the same message-id.
-    let msg_ids = context
-        .sql
-        .query_map_vec(
-            "SELECT id FROM msgs
-                WHERE rfc724_mid=? AND from_id=1",
-            (&failed.rfc724_mid,),
-            |row| {
-                let msg_id: MsgId = row.get(0)?;
-                Ok(msg_id)
-            },
-        )
-        .await?;
-
-    let error = if let Some(error) = error {
-        error
-    } else {
-        "Delivery to at least one recipient failed.".to_string()
-    };
-    let err_msg = &error;
-
-    for msg_id in msg_ids {
-        let mut message = Message::load_from_db(context, msg_id).await?;
-        let chat = Chat::load_from_db(context, message.chat_id).await?;
-        if chat.typ == constants::Chattype::Single {
-            let aggregated_error = message
-                .error
-                .as_ref()
-                .map(|err| format!("{err}\n\n{err_msg}"));
-            set_msg_failed(
-                context,
-                &mut message,
-                aggregated_error.as_ref().unwrap_or(err_msg),
-            )
-            .await?;
-        }
-    }
-
     Ok(())
 }
 
