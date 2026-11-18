@@ -5,7 +5,7 @@ use crate::{
     chat,
     constants::{self, Blocked, DC_DESIRED_TEXT_LEN, DC_ELLIPSIS},
     key,
-    message::MessageState,
+    message::{Message, MessageState},
     receive_imf::receive_imf,
     securejoin::QrInvite,
     test_utils::{self, TestContext, TestContextManager, receive_encrypted_imf},
