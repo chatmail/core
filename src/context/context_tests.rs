@@ -3,7 +3,9 @@ use strum::IntoEnumIterator;
 use tempfile::tempdir;
 
 use super::*;
-use crate::chat::{Chat, MuteDuration, get_chat_contacts, get_chat_msgs, send_msg, set_muted};
+use crate::chat::{
+    Chat, MuteDuration, add_device_msg, get_chat_contacts, get_chat_msgs, send_msg, set_muted,
+};
 use crate::chatlist::Chatlist;
 use crate::constants::{Chattype, DEFAULT_MAX_SMTP_RCPT_TO};
 use crate::message::Message;
@@ -475,28 +477,28 @@ async fn test_search_unaccepted_requests() -> Result<()> {
 async fn test_limit_search_msgs() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
-    let chat = alice.create_chat(&tcm.bob().await).await;
 
     // Add 999 messages
     let mut msg = Message::new_text("foobar".to_string());
     for _ in 0..999 {
-        send_msg(&alice, chat.id, &mut msg).await?;
+        add_device_msg(&alice, None, Some(&mut msg)).await?;
     }
     let res = alice.search_msgs(None, "foo").await?;
     assert_eq!(res.len(), 999);
 
     // Add one more message, no limit yet
-    send_msg(&alice, chat.id, &mut msg).await?;
+    add_device_msg(&alice, None, Some(&mut msg)).await?;
     let res = alice.search_msgs(None, "foo").await?;
     assert_eq!(res.len(), 1000);
 
     // Add one more message, that one is truncated then
-    send_msg(&alice, chat.id, &mut msg).await?;
+    add_device_msg(&alice, None, Some(&mut msg)).await?;
     let res = alice.search_msgs(None, "foo").await?;
     assert_eq!(res.len(), 1000);
 
     // In-chat should not be not limited
-    let res = alice.search_msgs(Some(chat.id), "foo").await?;
+    let device_chat_id = ChatId::get_for_contact(&alice, ContactId::DEVICE).await?;
+    let res = alice.search_msgs(Some(device_chat_id), "foo").await?;
     assert_eq!(res.len(), 1001);
 
     Ok(())
