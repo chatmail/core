@@ -520,23 +520,11 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
             .await?;
     }
 
-    for (force_encryption, other_transport, bcc_self) in [
-        (false, false, false),
-        (false, false, true),
-        (false, true, false),
-        (false, true, true),
-        (true, false, false),
-        (true, false, true),
-        (true, true, false),
-        (true, true, true),
-    ] {
-        println!(
-            "Testing combination force_encryption={force_encryption}, other_transport={other_transport}, bcc_self={bcc_self}"
-        );
+    for (other_transport, bcc_self) in [(false, false), (false, true), (true, false), (true, true)]
+    {
+        println!("Testing combination other_transport={other_transport}, bcc_self={bcc_self}");
 
         t.set_config_bool(Config::BccSelf, bcc_self).await?;
-        t.set_config_bool(Config::ForceEncryption, force_encryption)
-            .await?;
 
         delete_expired_imap_messages(
             &t,
@@ -560,7 +548,7 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
         assert_eq!(is_deleted(&t, "no_expire@localhost").await?, !bcc_self);
         assert_eq!(
             is_deleted(&t, "no_expire_unencrypted@localhost").await?,
-            force_encryption && !bcc_self
+            !bcc_self
         );
         assert_eq!(is_deleted(&t, "future@localhost").await?, !bcc_self);
         assert_eq!(is_deleted(&t, "expired_post@localhost").await?, true);
@@ -575,9 +563,8 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
         reset_targets(&t).await;
     }
 
-    // With BccSelf=true, non-expired messages are kept even if `force_encryption` is true
+    // With BccSelf=true, non-expired messages are kept
     t.set_config_bool(Config::BccSelf, true).await?;
-    t.set_config_bool(Config::ForceEncryption, true).await?;
     delete_expired_imap_messages(&t, transport_id).await?;
     assert_eq!(is_deleted(&t, "expired@localhost").await?, true);
     assert_eq!(is_deleted(&t, "no_expire@localhost").await?, false);

@@ -65,15 +65,17 @@ mod test_chatlist_events {
     use crate::{
         EventType,
         chat::{
-            self, ChatId, ChatVisibility, MuteDuration, create_broadcast, create_group, set_muted,
+            self, Chat, ChatId, ChatVisibility, MuteDuration, create_broadcast, create_group,
+            set_muted,
         },
         config::Config,
+        constants::Chattype,
         contact::Contact,
         message::{self, Message, MessageState},
         reaction,
         receive_imf::receive_imf,
         securejoin::{get_securejoin_qr, join_securejoin},
-        test_utils::{TestContext, TestContextManager},
+        test_utils::{self, TestContext, TestContextManager},
     };
 
     use crate::tools::SystemTime;
@@ -522,18 +524,25 @@ mod test_chatlist_events {
     /// AdHoc (Groups without a group ID.) group receiving
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_adhoc_group() -> Result<()> {
-        let alice = TestContext::new_alice().await;
-        alice.allow_unencrypted().await?;
+        let mut tcm = TestContextManager::new();
+        let alice = tcm.alice().await;
+        let bob = tcm.bob().await;
+        let charlie = tcm.charlie().await;
         let mime = br#"Subject: First thread
 Message-ID: first@example.org
 To: Alice <alice@example.org>, Bob <bob@example.net>
-From: Claire <claire@example.org>
+From: Charlie <charlie@example.net>
 Content-Type: text/plain; charset=utf-8; format=flowed; delsp=no
 
 First thread."#;
+        let raw = test_utils::encrypt_raw_message(&charlie, &[&alice, &bob], mime).await?;
 
         alice.evtracker.clear_events();
-        receive_imf(&alice, mime, false).await?;
+        let received = receive_imf(&alice, raw.as_bytes(), false).await?.unwrap();
+        assert_eq!(
+            Chat::load_from_db(&alice, received.chat_id).await?.typ,
+            Chattype::Group
+        );
         wait_for_chatlist(&alice).await;
 
         Ok(())

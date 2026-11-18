@@ -2,7 +2,7 @@ use deltachat_contact_tools::EmailAddress;
 use regex::Regex;
 
 use super::*;
-use crate::chat::{CantSendReason, ChatId, add_contact_to_chat, remove_contact_from_chat};
+use crate::chat::{CantSendReason, Chat, ChatId, add_contact_to_chat, remove_contact_from_chat};
 use crate::chatlist::Chatlist;
 use crate::constants::Chattype;
 use crate::key::self_fingerprint;
