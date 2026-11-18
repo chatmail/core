@@ -710,6 +710,7 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
         context
             .set_config_internal(Config::LastHousekeeping, None)
             .await?;
+        context.scheduler.interrupt_inbox().await;
         context.scheduler.interrupt_smtp().await;
 
         Ok(())

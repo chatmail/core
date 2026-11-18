@@ -872,7 +872,15 @@ def test_delete_available_msg(acf, tmp_path, direct_imap, delete_chat):
     path = tmp_path / "large"
     path.write_bytes(os.urandom(download_limit + 1))
     msg_alice = chat_alice.send_file(str(path))
-    msg_bob = bob.wait_for_incoming_msg()
+    # Delete only once the post-message is fetched too.
+    msg_bob, post_msg_seen = None, False
+    while msg_bob is None or not post_msg_seen:
+        event = bob.wait_for_event()
+        if event.kind == EventType.INCOMING_MSG:
+            msg_bob = bob.get_message_by_id(event.msg_id)
+        elif event.kind == EventType.INFO and "available_post_msgs: 1," in event.msg:
+            post_msg_seen = True
+    bob.wait_for_event(EventType.IMAP_INBOX_IDLE)
     msg_bob_snapshot = msg_bob.get_snapshot()
     assert msg_bob_snapshot.download_state == DownloadState.AVAILABLE
     chat_bob = bob.get_chat_by_id(msg_bob_snapshot.chat_id)
@@ -894,15 +902,8 @@ def test_delete_available_msg(acf, tmp_path, direct_imap, delete_chat):
         if not delete_chat:
             acc.wait_for_event(EventType.MSG_DELETED)
         acc_direct_imap = direct_imap(acc)
-        # Messages may be deleted separately
-        while True:
-            acc.wait_for_event(EventType.IMAP_MESSAGE_DELETED)
-            while True:
-                event = acc.wait_for_event()
-                if event.kind == EventType.INFO and "Close/expunge succeeded." in event.msg:
-                    break
-            if len(acc_direct_imap.get_all_messages()) == 0:
-                break
+        while acc_direct_imap.get_all_messages():
+            time.sleep(0.1)
 
 
 def test_delete_fully_downloaded_msg(acf, tmp_path, direct_imap):
