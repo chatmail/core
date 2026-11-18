@@ -17,6 +17,7 @@ use pgp::packet::{
     SubpacketData,
 };
 use pgp::ser::Serialize;
+use pgp::types::SigningKey as _;
 use pgp::types::{CompressionAlgorithm, KeyDetails, KeyVersion};
 use rand_old::thread_rng;
 use tokio::runtime::Handle;
@@ -230,11 +231,37 @@ pub(crate) fn secret_key_to_public_key(
 
     let direct_signatures = {
         let mut rng = thread_rng();
-        let mut direct_key_signature_config = SignatureConfig::from_key(
-            &mut rng,
-            &signed_secret_key.primary_key,
-            SignatureType::Key,
-        )?;
+        let mut direct_key_signature_config = match signed_secret_key.primary_key.version() {
+            KeyVersion::V6 => {
+                // Reuse the salt from existing Direct Key Signature to make signature deterministic.
+                // Signatures are salted since V6, but we want all devices to generate exactly the same signatures.
+                // Advantages of salted signatures still apply, we choose the salt on our own:
+                // <https://www.rfc-editor.org/rfc/rfc9580.html#name-advantages-of-salted-signat>
+                let old_direct_key_signature = signed_secret_key
+                    .details
+                    .direct_signatures
+                    .first()
+                    .context("Failed to get old direct key signature")?;
+                let old_direct_key_signature_config = old_direct_key_signature
+                    .config()
+                    .context("Failed to get old direct key signature config")?;
+                let salt = match old_direct_key_signature_config.version_specific {
+                    pgp::packet::SignatureVersionSpecific::V6 { ref salt } => salt.clone(),
+                    _ => bail!("V6 key with non-V6 direct key signature"),
+                };
+                SignatureConfig::v6_with_salt(
+                    SignatureType::Key,
+                    signed_secret_key.primary_key.algorithm(),
+                    signed_secret_key.primary_key.hash_alg(),
+                    salt,
+                )
+            }
+            _ => SignatureConfig::from_key(
+                &mut rng,
+                &signed_secret_key.primary_key,
+                SignatureType::Key,
+            )?,
+        };
         direct_key_signature_config.hashed_subpackets = common_subpackets()?;
         let notation = Notation {
             readable: true,
