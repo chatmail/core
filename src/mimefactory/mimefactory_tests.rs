@@ -407,7 +407,6 @@ async fn test_mdn_autocrypt_throttle() -> Result<()> {
     bob.sql
         .execute("UPDATE transports SET add_timestamp=?", (time(),))
         .await?;
-    *bob.self_public_key.lock().await = None;
     assert!(mdn_has_aheader(&bob, &alice, &rcvd).await?);
     assert!(!mdn_has_aheader(&bob, &alice, &rcvd).await?);
 

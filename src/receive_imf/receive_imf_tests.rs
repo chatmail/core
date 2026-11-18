@@ -5638,7 +5638,7 @@ async fn test_outgoing_determined_by_signature() -> Result<()> {
     assert!(!alice.is_self_addr(different_from).await?);
     let alice_dev2 = &tcm.unconfigured().await;
     alice_dev2.configure_addr(different_from).await;
-    key::store_self_keypair(alice_dev2, &alice_keypair()).await?;
+    key::store_self_keypair(alice_dev2, alice_keypair()).await?;
     assert_ne!(alice.get_primary_self_addr().await?, different_from);
 
     // Send message from alice_dev2 and check alice sees it as outgoing

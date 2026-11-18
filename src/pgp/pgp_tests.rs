@@ -28,7 +28,8 @@ async fn decrypt_bytes(
     for secret in auth_tokens_for_decryption {
         token::save(t, token::Namespace::Auth, None, secret, 0).await?;
     }
-    store_self_keypair(t, secret_key).await?;
+    let new_secret_key = store_self_keypair(t, secret_key.clone()).await?;
+    assert_eq!(new_secret_key, *secret_key);
 
     let mime_message = wrap_encrypted_part(bytes.try_into().unwrap());
     let rendered = part_to_bytes(mime_message);
