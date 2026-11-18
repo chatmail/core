@@ -688,6 +688,7 @@ mod tests {
     use crate::test_utils::{TestContext, TestContextManager, alice_keypair};
     use crate::tools::SystemTime;
     use crate::transport::add_pseudo_transport;
+    use pretty_assertions::assert_eq;
 
     static KEYPAIR: LazyLock<SignedSecretKey> = LazyLock::new(alice_keypair);
 
