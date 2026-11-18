@@ -975,19 +975,21 @@ def test_connectivity(acfactory, lp):
     ac1._evtracker.wait_for_connectivity(dc.const.DC_CONNECTIVITY_NOT_CONNECTED)
 
     ac1.start_io()
-    ac1._evtracker.wait_for_connectivity(dc.const.DC_CONNECTIVITY_CONNECTING)
-    ac1._evtracker.wait_for_connectivity_change(dc.const.DC_CONNECTIVITY_CONNECTING, dc.const.DC_CONNECTIVITY_WORKING)
-    ac1._evtracker.wait_for_connectivity_change(dc.const.DC_CONNECTIVITY_WORKING, dc.const.DC_CONNECTIVITY_CONNECTED)
+    ac1._evtracker.wait_for_connectivity(dc.const.DC_CONNECTIVITY_CONNECTED)
 
     lp.sec(
         "Test that after calling start_io(), maybe_network() and waiting for `DC_CONNECTIVITY_CONNECTED`, "
         "all messages are fetched",
     )
 
+    # ac1's IO would expunge the message before the direct IDLE sees it.
+    ac1.stop_io()
+    ac1._evtracker.wait_for_connectivity(dc.const.DC_CONNECTIVITY_NOT_CONNECTED)
     ac1.direct_imap.select_config_folder("inbox")
     with ac1.direct_imap.idle() as idle1:
         ac2.create_chat(ac1).send_text("Hi")
         idle1.wait_for_new_message()
+    ac1.start_io()
     ac1.maybe_network()
     ac1._evtracker.wait_for_connectivity(dc.const.DC_CONNECTIVITY_CONNECTED)
     msgs = ac1.create_chat(ac2).get_messages()
