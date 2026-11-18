@@ -1226,12 +1226,6 @@ ORDER BY id"
         chat_id
     }
 
-    /// Allow reception of unencrypted messages.
-    pub async fn allow_unencrypted(&self) -> Result<()> {
-        self.set_config_bool(Config::ForceEncryption, false).await?;
-        Ok(())
-    }
-
     /// Asserts a warning containing `pat` should be logged.
     ///
     /// Delegates to [`InnerLogSink::assert_warn`].

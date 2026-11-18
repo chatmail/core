@@ -86,11 +86,14 @@ def test_delivery_status_failed(acf: RPCAccountFactory) -> None:
     """
     Test change status on chatlistitem when status changes failed
     """
-    (alice,) = acf.get_online_accounts(1)
-    alice.set_config("force_encryption", "0")
+    alice, bob = acf.get_online_accounts(2)
 
-    invalid_contact = alice.create_contact("example@example.com", "invalid address")
-    invalid_chat = alice.get_chat_by_id(alice._rpc.create_chat_by_contact_id(alice.id, invalid_contact.id))
+    # Create a contact with Bob's key, but a non-existing address
+    bob_addr = bob.get_config("addr")
+    vcard = bob.self_contact.make_vcard()
+    assert bob_addr in vcard
+    (invalid_contact,) = alice.import_vcard(vcard.replace(bob_addr, "example@example.com"))
+    invalid_chat = invalid_contact.create_chat()
 
     alice.clear_all_events()
 
