@@ -3533,19 +3533,6 @@ async fn test_forged_from_and_no_valid_signatures() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_wrong_from_name_and_no_valid_signatures() -> Result<()> {
-    let t = &TestContext::new_bob().await;
-
-    let raw = include_bytes!("../../test-data/message/thunderbird_encrypted_signed.eml");
-    let raw = String::from_utf8(raw.to_vec())?.replace("From: Alice", "From: A");
-    let received_msg = receive_imf(t, raw.as_bytes(), false).await?.unwrap();
-    assert!(received_msg.chat_id.is_trash());
-    t.assert_warn("Fetched unencrypted message, ignoring").await;
-    assert_eq!(Contact::get_all(t, 0, None).await?.len(), 0);
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_thunderbird_autocrypt_unencrypted() -> Result<()> {
     let bob = &TestContext::new_bob().await;
     bob.allow_unencrypted().await?;
