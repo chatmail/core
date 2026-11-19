@@ -8,6 +8,7 @@ use anyhow::{Context as _, Result, bail};
 use rusqlite::{Connection, OpenFlags, Row, config::DbConfig, types::ValueRef};
 use tokio::sync::RwLock;
 
+use crate::blob::BlobObject;
 use crate::chat::{ChatId, add_device_msg};
 use crate::config::Config;
 use crate::context::Context;
@@ -208,9 +209,39 @@ impl Sql {
 
     /// Updates SQL schema to the latest version.
     pub async fn run_migrations(&self, context: &Context) -> Result<()> {
-        migrations::run(context, self)
+        // (1) update low-level database structure.
+        // this should be done before updates that use high-level objects that
+        // rely themselves on the low-level structure.
+
+        let recode_avatar = migrations::run(context, self)
             .await
-            .context("failed to run migrations")
+            .context("failed to run migrations")?;
+
+        // (2) updates that require high-level objects
+        // the structure is complete now and all objects are usable
+
+        if recode_avatar && let Some(avatar) = context.get_config(Config::Selfavatar).await? {
+            let mut blob = BlobObject::from_path(context, Path::new(&avatar))?;
+            match blob.recode_to_avatar_size(context).await {
+                Ok(()) => {
+                    if let Some(path) = blob.to_abs_path().to_str() {
+                        context
+                            .set_config_internal(Config::Selfavatar, Some(path))
+                            .await?;
+                    } else {
+                        warn!(context, "Setting selfavatar failed: non-UTF-8 filename");
+                    }
+                }
+                Err(e) => {
+                    warn!(context, "Migrations can't recode avatar, removing. {:#}", e);
+                    context
+                        .set_config_internal(Config::Selfavatar, None)
+                        .await?
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Opens the provided database and runs any necessary migrations.
