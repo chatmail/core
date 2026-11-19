@@ -25,6 +25,16 @@ use crate::events::EventType;
 use crate::log::LogExt;
 use crate::tools::{self, time_elapsed};
 
+fn key_armor_options() -> pgp::composed::ArmorOptions<'static> {
+    pgp::composed::ArmorOptions {
+        headers: None,
+
+        // Explicitly disable optional CRC24 footer.
+        // It is enabled by default in rPGP 0.21.1.
+        include_checksum: false,
+    }
+}
+
 /// Convenience trait for working with keys.
 ///
 /// This trait is implemented for rPGP's [SignedPublicKey] and
@@ -427,7 +437,7 @@ impl DcKey for SignedPublicKey {
         // Because we write to a Vec<u8> the io::Write impls never
         // fail and we can hide this error.
         let mut buf = Vec::new();
-        self.to_armored_writer(&mut buf, Default::default())
+        self.to_armored_writer(&mut buf, key_armor_options())
             .unwrap_or_default();
         std::string::String::from_utf8(buf).unwrap_or_default()
     }
@@ -448,7 +458,7 @@ impl DcKey for SignedSecretKey {
         // Because we write to a Vec<u8> the io::Write impls never
         // fail and we can hide this error.  The string is always ASCII.
         let mut buf = Vec::new();
-        self.to_armored_writer(&mut buf, Default::default())
+        self.to_armored_writer(&mut buf, key_armor_options())
             .unwrap_or_default();
         std::string::String::from_utf8(buf).unwrap_or_default()
     }

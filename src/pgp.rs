@@ -29,6 +29,15 @@ use crate::key::{DcKey, Fingerprint};
 /// Preferred symmetric encryption algorithm.
 const SYMMETRIC_KEY_ALGORITHM: SymmetricKeyAlgorithm = SymmetricKeyAlgorithm::AES128;
 
+fn message_armor_options() -> pgp::composed::ArmorOptions<'static> {
+    pgp::composed::ArmorOptions {
+        headers: None,
+
+        // Explicitly enable optional CRC24 footer to avoid rejection by filtermail <0.7.10.
+        include_checksum: true,
+    }
+}
+
 /// Create a new key pair.
 ///
 /// Both secret and public key consist of signing primary key and encryption subkey
@@ -234,7 +243,7 @@ pub fn pk_encrypt(
                     msg.compression(CompressionAlgorithm::ZLIB);
                 }
 
-                msg.to_armored_string(&mut rng, Default::default())?
+                msg.to_armored_string(&mut rng, message_armor_options())?
             }
             SeipdVersion::V2 => {
                 let mut msg = msg.seipd_v2(
@@ -263,7 +272,7 @@ pub fn pk_encrypt(
                     msg.compression(CompressionAlgorithm::ZLIB);
                 }
 
-                msg.to_armored_string(&mut rng, Default::default())?
+                msg.to_armored_string(&mut rng, message_armor_options())?
             }
         };
 
@@ -360,7 +369,7 @@ pub fn symm_encrypt_message(
             msg.compression(CompressionAlgorithm::ZLIB);
         }
 
-        let encoded_msg = msg.to_armored_string(&mut rng, Default::default())?;
+        let encoded_msg = msg.to_armored_string(&mut rng, message_armor_options())?;
 
         Ok(encoded_msg)
     })
