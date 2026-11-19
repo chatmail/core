@@ -823,7 +823,7 @@ AND EXISTS (
 
     Ok(())
 }
-    
+
 impl Sql {
     async fn set_db_version(&self, version: i32) -> Result<()> {
         self.set_raw_config_int(VERSION_CFG, version).await?;
@@ -886,7 +886,7 @@ impl Sql {
 }
 
 #[expect(clippy::arithmetic_side_effects)]
-pub async fn run(context: &Context, sql: &Sql) -> Result<()> {
+pub async fn run(context: &Context, sql: &Sql) -> Result<bool> {
     let mut exists_before_update = false;
     let mut dbversion_before_update = DBVERSION;
 
@@ -923,6 +923,7 @@ pub async fn run(context: &Context, sql: &Sql) -> Result<()> {
     }
 
     let dbversion = dbversion_before_update;
+    let mut recode_avatar = false;
 
     if dbversion < 1 {
         sql.execute_migration(
@@ -1297,7 +1298,7 @@ CREATE TABLE imap_sync (folder TEXT PRIMARY KEY, uidvalidity INTEGER DEFAULT 0, 
             .await?;
     }
     if dbversion < 77 {
-        // removed
+        recode_avatar = true;
         sql.set_db_version(77).await?;
     }
     if dbversion < 78 {
@@ -2850,7 +2851,7 @@ CREATE TABLE smtp_failure (
     }
     info!(context, "Database version: v{new_version}.");
 
-    Ok(())
+    Ok(recode_avatar)
 }
 
 #[cfg(test)]
