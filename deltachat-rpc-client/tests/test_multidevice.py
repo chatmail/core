@@ -51,8 +51,16 @@ def test_one_account_send_bcc_setting(acf, log, direct_imap):
     log.section("send out message with bcc to ourselves")
     msg_out = chat.send_text("message2")
 
-    # wait for send out (BCC)
-    ac1.wait_for_event(EventType.SMTP_MESSAGE_SENT)
+    # Wait for send out (BCC) and sender device marking its BCC-self copy as seen
+    # which a fast relay might deliver before SMTP is done.
+    sent = False
+    marked = False
+    while not (sent and marked):
+        event = ac1.wait_for_event()
+        if event.kind == EventType.SMTP_MESSAGE_SENT:
+            sent = True
+        elif event.kind == EventType.INFO and event.msg.endswith("Marked messages 1 in folder INBOX as seen."):
+            marked = True
     assert ac1.get_config("bcc_self") == "1"
 
     # Second client receives only the second message, but not the first.
@@ -61,12 +69,6 @@ def test_one_account_send_bcc_setting(acf, log, direct_imap):
 
     ev_msg = ac1_clone.wait_for_event(EventType.MSGS_CHANGED)
     assert ac1_clone.get_message_by_id(ev_msg.msg_id).get_snapshot().text == msg_out.get_snapshot().text
-
-    # BCC-self messages are marked as seen by the sender device.
-    while True:
-        event = ac1.wait_for_event()
-        if event.kind == EventType.INFO and event.msg.endswith("Marked messages 1 in folder INBOX as seen."):
-            break
 
     # Check that the message is marked as seen on IMAP.
     ac1_direct_imap = direct_imap(ac1)
