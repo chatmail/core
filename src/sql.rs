@@ -14,6 +14,7 @@ use crate::context::Context;
 use crate::ephemeral::start_ephemeral_timers;
 use crate::imex::{self, BLOBS_BACKUP_NAME};
 use crate::log::{LogExt, warn};
+use crate::message::Message;
 use crate::net::dns::prune_dns_cache;
 use crate::net::http::http_cache_cleanup;
 use crate::net::prune_connection_history;
@@ -207,24 +208,9 @@ impl Sql {
 
     /// Updates SQL schema to the latest version.
     pub async fn run_migrations(&self, context: &Context) -> Result<()> {
-        // (1) update low-level database structure.
-        // this should be done before updates that use high-level objects that
-        // rely themselves on the low-level structure.
-
-        let show_unencrypted_device_msg = migrations::run(context, self)
+        migrations::run(context, self)
             .await
-            .context("failed to run migrations")?;
-
-        // (2) updates that require high-level objects
-        // the structure is complete now and all objects are usable
-
-        if show_unencrypted_device_msg {
-            let txt = stock_str::no_more_unencrypted(context);
-            let mut msg = crate::message::Message::new_text(txt);
-            add_device_msg(context, Some("unencrypted-device-msg"), Some(&mut msg)).await?;
-        }
-
-        Ok(())
+            .context("failed to run migrations")
     }
 
     /// Opens the provided database and runs any necessary migrations.
@@ -782,6 +768,29 @@ async fn incremental_vacuum(context: &Context) -> Result<()> {
             Ok(())
         })
         .await
+}
+
+/// Adds a device message about the removal of unencrypted messages
+/// if the unencrypted-chats migration requested it.
+/// This can be removed about a year after 2026-11.
+///
+/// This is not done in the migration itself
+/// because the stock strings aren't set yet when migrations run.
+pub(crate) async fn maybe_add_unencrypted_device_msg(context: &Context) -> Result<()> {
+    if !context
+        .sql
+        .get_raw_config_bool(migrations::SHOW_UNENCRYPTED_DEVICE_MSG)
+        .await?
+    {
+        return Ok(());
+    }
+    let mut msg = Message::new_text(stock_str::no_more_unencrypted(context));
+    add_device_msg(context, Some("unencrypted-device-msg"), Some(&mut msg)).await?;
+    context
+        .sql
+        .set_raw_config(migrations::SHOW_UNENCRYPTED_DEVICE_MSG, None)
+        .await?;
+    Ok(())
 }
 
 /// Cleanup the account to restore some storage and optimize the database.

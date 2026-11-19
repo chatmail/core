@@ -22,6 +22,10 @@ use crate::transport::ConfiguredLoginParam;
 
 const DBVERSION: i32 = 68;
 const VERSION_CFG: &str = "dbversion";
+
+/// Raw config key that is set by the unencrypted-chats migration
+/// if the device message about the removal of unencrypted messages should be shown.
+pub(crate) const SHOW_UNENCRYPTED_DEVICE_MSG: &str = "show_unencrypted_device_msg";
 const TABLES: &str = include_str!("./tables.sql");
 
 #[cfg(test)]
@@ -717,9 +721,7 @@ pub(crate) async fn msgs_to_key_contacts(context: &Context) -> Result<()> {
 fn unencrypted_chats_migration(
     context: &Context,
     transaction: &mut rusqlite::Transaction<'_>,
-) -> Result<bool> {
-    let mut show_unencrypted_device_msg = false;
-
+) -> Result<()> {
     // Migrate:
     // - all unencrypted (i.e. ad-hoc) groups to have 0 members
     // - all chats of type Mailinglist into a group with 0 members
@@ -810,15 +812,18 @@ AND EXISTS (
             (),
         )?;
         if force_encryption == Some("0".to_string()) {
-            show_unencrypted_device_msg = true;
+            transaction.execute(
+                "INSERT OR REPLACE INTO config (keyname, value) VALUES (?, '1')",
+                (SHOW_UNENCRYPTED_DEVICE_MSG,),
+            )?;
         }
     }
 
     transaction.execute("DROP TABLE temp.legacy_unencrypted_chats", ())?;
 
-    Ok(show_unencrypted_device_msg)
+    Ok(())
 }
-
+    
 impl Sql {
     async fn set_db_version(&self, version: i32) -> Result<()> {
         self.set_raw_config_int(VERSION_CFG, version).await?;
@@ -881,7 +886,7 @@ impl Sql {
 }
 
 #[expect(clippy::arithmetic_side_effects)]
-pub async fn run(context: &Context, sql: &Sql) -> Result<bool> {
+pub async fn run(context: &Context, sql: &Sql) -> Result<()> {
     let mut exists_before_update = false;
     let mut dbversion_before_update = DBVERSION;
 
@@ -918,7 +923,6 @@ pub async fn run(context: &Context, sql: &Sql) -> Result<bool> {
     }
 
     let dbversion = dbversion_before_update;
-    let mut show_unencrypted_device_msg = false;
 
     if dbversion < 1 {
         sql.execute_migration(
@@ -2819,11 +2823,11 @@ CREATE TABLE smtp_failure (
         .await?;
     }
 
-    inc_and_check(&mut migration_version, 170)?;
+    inc_and_check(&mut migration_version, 171)?;
     if dbversion < migration_version {
         sql.execute_migration_transaction(
             |transaction| {
-                show_unencrypted_device_msg = unencrypted_chats_migration(context, transaction)?;
+                unencrypted_chats_migration(context, transaction)?;
 
                 Ok(())
             },
@@ -2846,7 +2850,7 @@ CREATE TABLE smtp_failure (
     }
     info!(context, "Database version: v{new_version}.");
 
-    Ok(show_unencrypted_device_msg)
+    Ok(())
 }
 
 #[cfg(test)]

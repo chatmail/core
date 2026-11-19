@@ -2891,7 +2891,7 @@ async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -> Result<Ve
     if needs_encryption && !is_encrypted {
         let text: String = stock_str::error(
             context,
-            "Can't send unencrypted messages. See the 'Device Messages' chat for details.",
+            "Can't send unencrypted messages. Tap for more info.",
         );
         message::set_msg_failed(context, msg, &text).await?;
         add_info_msg_with_cmd(

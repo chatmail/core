@@ -485,6 +485,10 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
     }
 
     maybe_add_time_based_warnings(ctx).await;
+    sql::maybe_add_unencrypted_device_msg(ctx)
+        .await
+        .log_err(ctx)
+        .ok();
 
     match ctx.get_config_i64(Config::LastHousekeeping).await {
         Ok(last_housekeeping_time) => {

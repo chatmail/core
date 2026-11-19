@@ -251,10 +251,10 @@ async fn test_migrations_dont_add_columns() -> Result<()> {
     Ok(())
 }
 
-/// Creates a context right before the unencrypted-chats migration (v169).
+/// Creates a context right before the unencrypted-chats migration (v171).
 async fn context_before_unencrypted_migration() -> TestContext {
     STOP_MIGRATIONS_AT
-        .scope(168, async move { TestContext::new_alice().await })
+        .scope(170, async move { TestContext::new_alice().await })
         .await
 }
 
@@ -335,8 +335,17 @@ async fn test_unencrypted_chats_migration_device_msg() -> Result<()> {
         }
         t.sql.run_migrations(t).await?;
 
+        // The device message is only added later from the IMAP loop, after the stock strings are set.
+        assert!(!chat::was_device_msg_ever_added(t, "unencrypted-device-msg").await?);
+
+        crate::sql::maybe_add_unencrypted_device_msg(t).await?;
         let shown = chat::was_device_msg_ever_added(t, "unencrypted-device-msg").await?;
         assert_eq!(shown, expect_device_msg);
+        assert!(
+            !t.sql
+                .get_raw_config_bool(SHOW_UNENCRYPTED_DEVICE_MSG)
+                .await?
+        );
     }
     Ok(())
 }
