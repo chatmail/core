@@ -182,7 +182,8 @@ async fn test_migration_flags() -> Result<()> {
     // as migrations::run() was already executed on context creation,
     // another call should not result in any action needed.
     // this test catches some bugs where dbversion was forgotten to be persisted.
-    migrations::run(&t, &t.sql).await?;
+    let recode_avatar = migrations::run(&t, &t.sql).await?;
+    assert!(!recode_avatar);
 
     info!(&t, "test_migration_flags: XXX END MARKER");
 
