@@ -32,7 +32,7 @@ pub use crate::login_param::EnteredLoginParam;
 use crate::net::proxy::ProxyConfig;
 use crate::provider::{self, Protocol, Socket};
 use crate::qr::{Qr, check_qr, login_param_from_account_qr, login_param_from_login_qr};
-use crate::smtp::Smtp;
+use crate::smtp;
 use crate::sync::Sync::Nosync;
 use crate::tools::time;
 use crate::transport::{
@@ -507,25 +507,17 @@ pub(crate) async fn configure(
         let context_smtp = ctx.clone();
         let smtp_param = configured_param.smtp.clone();
         let smtp_password = configured_param.smtp_password.clone();
-        let smtp_addr = configured_param.addr.clone();
-
-        let transport_id = 0;
 
         let proxy_config2 = proxy_config.clone();
         let smtp_config_task = task::spawn(async move {
-            let mut smtp = Smtp::new();
-            smtp.connect(
+            smtp::Connection::new(
                 &context_smtp,
                 &smtp_param,
                 &smtp_password,
                 &proxy_config2,
-                &smtp_addr,
-                transport_id,
                 strict_tls,
             )
-            .await?;
-
-            Ok::<(), anyhow::Error>(())
+            .await
         });
 
         emit_progress(ctx, 600);
@@ -533,6 +525,7 @@ pub(crate) async fn configure(
         // Configure IMAP
 
         let (_s, r) = async_channel::bounded(1);
+        let transport_id = 0;
         let mut imap = Imap::new(ctx, transport_id, configured_param.clone(), r).await?;
         let imap_session = match imap.connect(ctx).await {
             Ok(imap_session) => imap_session,
