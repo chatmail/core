@@ -1322,6 +1322,43 @@ def test_immediate_autodelete(acf, direct_imap, log):
     assert ev.msg_id == sent_msg.id
 
 
+def test_turning_bcc_self_off_keeps_earlier_msgs(acf, direct_imap, log):
+    """Turning `bcc_self` off doesn't delete messages that were downloaded while it was on."""
+    alice, bob = acf.get_online_accounts(2)
+    bob.set_config("bcc_self", "1")
+    alice_chat = alice.create_chat(bob)
+    bob.create_chat(alice)
+
+    log.section("bob: receive a message with bcc_self on")
+    alice_chat.send_text("first")
+    assert bob.wait_for_incoming_msg().get_snapshot().text == "first"
+    bob_direct_imap = direct_imap(bob)
+    uids = {msg.uid for msg in bob_direct_imap.get_all_messages()}
+    assert uids
+
+    log.section("bob: receive a message with bcc_self off")
+    bob.set_config("bcc_self", "0")
+    alice_chat.send_text("second")
+    assert bob.wait_for_incoming_msg().get_snapshot().text == "second"
+
+    log.section("bob: check that only the second message is deleted on the server")
+    bob.wait_for_event(EventType.IMAP_MESSAGE_DELETED)
+    while True:
+        event = bob.wait_for_event()
+        if event.kind == EventType.INFO and "Close/expunge succeeded." in event.msg:
+            break
+
+    def server_uids():
+        # Selecting the folder again updates the view of the mailbox.
+        bob_direct_imap.select_folder("INBOX")
+        return {msg.uid for msg in bob_direct_imap.get_all_messages()}
+
+    # Wait for the deletion of messages that may arrive later, e.g. a key update report.
+    while not (remaining := server_uids()) <= uids:
+        time.sleep(1)
+    assert remaining == uids
+
+
 def test_background_fetch(acf, dc):
     ac1, ac2 = acf.get_online_accounts(2)
     ac1.stop_io()
