@@ -25,6 +25,7 @@ use crate::chat::{self, add_device_msg};
 use crate::config::Config;
 use crate::constants::DC_VERSION_STR;
 use crate::context::Context;
+use crate::download::DownloadState;
 use crate::ensure_and_debug_assert;
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
@@ -584,6 +585,7 @@ impl Imap {
             .get_config_parsed(Config::DownloadLimit)
             .await?
             .filter(|&l| 0 < l);
+        let bcc_self = context.get_config_bool(Config::BccSelf).await?;
 
         // Store the info about IMAP messages in the database.
         for (uid, ref fetch_response) in msgs {
@@ -601,9 +603,23 @@ impl Imap {
                 .context("imap fetch response does not contain size")?;
 
             let delete = if let Some(message_id) = &message_id {
-                message::rfc724_mid_exists_ext(context, message_id, "deleted=1")
+                if message::rfc724_mid_exists_ext(context, message_id, "deleted=1")
                     .await?
                     .is_some_and(|(_msg_id, deleted)| deleted)
+                {
+                    info!(context, "Deleting locally deleted message {message_id}.");
+                    true
+                } else if !bcc_self
+                    && is_encrypted_copy_of_downloaded_msg(context, &headers, message_id).await?
+                {
+                    info!(
+                        context,
+                        "Deleting copy of already downloaded message {message_id}."
+                    );
+                    true
+                } else {
+                    false
+                }
             } else {
                 false
             };
@@ -611,10 +627,6 @@ impl Imap {
             // Generate a fake Message-ID to identify the message in the database
             // if the message has no real Message-ID.
             let message_id = message_id.unwrap_or_else(create_message_id);
-
-            if delete {
-                info!(context, "Deleting locally deleted message {message_id}.");
-            }
 
             let target = if delete { "" } else { folder };
 
@@ -1021,9 +1033,12 @@ impl Session {
             return Ok(());
         }
 
+        let transport_id = self.transport_id();
+        let uidvalidity = get_uidvalidity(context, transport_id, folder).await?;
+        let bcc_self = context.get_config_bool(Config::BccSelf).await?;
+
         for (request_uids, set) in build_sequence_sets(&request_uids)? {
             info!(context, "Starting UID FETCH of message set \"{}\".", set);
-            let transport_id = self.transport_id();
             let mut fetch_responses = self
                 .uid_fetch(&set, BODY_FULL)
                 .await
@@ -1125,6 +1140,11 @@ impl Session {
                         "Failed to update last_rcvd_timestamp of transport {}",
                         transport_id
                     ))?;
+
+                if res.is_ok() && !bcc_self {
+                    mark_msg_for_deletion(context, transport_id, folder, request_uid, uidvalidity)
+                        .await?;
+                }
 
                 // If there was an error receiving the message, show a device message:
                 let received_msg = match res {
@@ -1562,11 +1582,7 @@ pub(crate) async fn prefetch_should_download(
     // but for compatibility we still download legacy `Secure-Join: vc-request` messages.
     let is_legacy_securejoin = headers.get_header_value(HeaderDef::SecureJoin).is_some();
 
-    let is_encrypted = headers
-        .get_header_value(HeaderDef::ContentType)
-        .is_some_and(|content_type| {
-            mailparse::parse_content_type(&content_type).mimetype == "multipart/encrypted"
-        });
+    let is_encrypted = is_encrypted(headers);
 
     if flags.any(|f| f == Flag::Draft) {
         info!(context, "Ignoring draft message");
@@ -1575,6 +1591,58 @@ pub(crate) async fn prefetch_should_download(
 
     let should_download = !blocked_contact && (is_legacy_securejoin || is_encrypted);
     Ok(should_download)
+}
+
+fn is_encrypted(headers: &[mailparse::MailHeader<'_>]) -> bool {
+    headers
+        .get_header_value(HeaderDef::ContentType)
+        .is_some_and(|content_type| {
+            mailparse::parse_content_type(&content_type).mimetype == "multipart/encrypted"
+        })
+}
+
+/// Returns whether a newly seen message is a copy of an already downloaded message,
+/// e.g. a copy that arrived on another transport.
+///
+/// Unencrypted copies are not considered, so that an old unencrypted email that appears with a new
+/// UID (e.g. because the user moved it with a classical MUA) is not deleted.
+async fn is_encrypted_copy_of_downloaded_msg(
+    context: &Context,
+    headers: &[mailparse::MailHeader<'_>],
+    message_id: &str,
+) -> Result<bool> {
+    if !is_encrypted(headers) {
+        return Ok(false);
+    }
+    context
+        .sql
+        .exists(
+            "SELECT COUNT(*) FROM msgs
+             WHERE (rfc724_mid=?1 AND download_state=?2)
+                OR pre_rfc724_mid=?1",
+            (message_id, DownloadState::Done),
+        )
+        .await
+}
+
+/// Marks the `imap` row of a message for deletion on the server.
+/// Used if there are no other devices (`bcc_self` is off).
+async fn mark_msg_for_deletion(
+    context: &Context,
+    transport_id: u32,
+    folder: &str,
+    uid: u32,
+    uidvalidity: u32,
+) -> Result<()> {
+    context
+        .sql
+        .execute(
+            "UPDATE imap SET target=''
+             WHERE transport_id=? AND folder=? AND uid=? AND uidvalidity=?",
+            (transport_id, folder, uid, uidvalidity),
+        )
+        .await?;
+    Ok(())
 }
 
 /// Schedule marking the message as Seen on IMAP by adding all known IMAP messages corresponding to

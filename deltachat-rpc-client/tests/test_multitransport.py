@@ -382,6 +382,27 @@ def test_background_fetch_no_duplicates(acf, direct_imap, dc):
     assert len(messages_with_text(alice_chat, "hello")) == 1
 
 
+def test_downloaded_msg_deleted_on_all_transports(acf, direct_imap):
+    """With `bcc_self` off, a message is deleted on all relays
+    after it was downloaded from one relay."""
+    alice, _alice_chat, bob_chat = alice_with_two_transports_and_bob(acf)
+    assert alice.get_config("bcc_self") == "0"
+    imaps = [direct_imap(alice, transport["addr"], transport["password"]) for transport in alice.list_transports()]
+    assert len(imaps) == 2
+
+    alice.stop_io()
+    bob_chat.send_text("hello")
+    for imap in imaps:
+        wait_for_imap_message(imap)
+
+    alice.start_io()
+    assert alice.wait_for_incoming_msg().get_snapshot().text == "hello"
+    # Wait until all messages on all relays have been deleted:
+    for imap in imaps:
+        while imap.get_all_messages():
+            time.sleep(0.1)
+
+
 def test_multitransport_mdn(acf):
     """Test sending an MDN right after configuring two transports."""
     alice, bob = acf.get_online_accounts(2)

@@ -73,10 +73,8 @@ use serde::{Deserialize, Serialize};
 use tokio::time::timeout;
 
 use crate::chat::{ChatId, ChatIdBlocked, send_msg};
-use crate::config::Config;
 use crate::contact::ContactId;
 use crate::context::Context;
-use crate::download::DownloadState;
 use crate::events::EventType;
 use crate::log::{LogExt, warn};
 use crate::message::{Message, MessageState, MsgId, Viewtype};
@@ -634,47 +632,8 @@ pub(crate) async fn ephemeral_loop(context: &Context, interrupt_receiver: Receiv
     }
 }
 
-/// Driven by `imap`: with `bcc_self` off and `force_encryption` on core deletes downloaded
-/// messages from the server and their `imap` rows with them, leaving rows only for messages
-/// it does not download.
-const MARK_DOWNLOADED_FOR_DELETION: &str = "
-    UPDATE imap
-    SET target=''
-    WHERE transport_id=?1 AND target!=''
-    AND (EXISTS (
-            SELECT 1 FROM msgs
-            WHERE rfc724_mid=imap.rfc724_mid
-              AND id>9
-              AND ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR download_state=?3))
-        OR EXISTS (
-            SELECT 1 FROM msgs
-            WHERE pre_rfc724_mid=imap.rfc724_mid
-              AND pre_rfc724_mid!=''
-              AND id>9))";
-
-/// Driven by `imap` like [`MARK_DOWNLOADED_FOR_DELETION`]: with `bcc_self` and
-/// `force_encryption` off core deletes only encrypted and expired messages from the server,
-/// so the rows of other messages remain.
-const MARK_ENCRYPTED_FOR_DELETION: &str = "
-    UPDATE imap
-    SET target=''
-    WHERE transport_id=?1 AND target!=''
-    AND (EXISTS (
-            SELECT 1 FROM msgs
-            WHERE rfc724_mid=imap.rfc724_mid
-              AND id>9
-              AND ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR
-                   ((param GLOB '*\nc=1*' OR param GLOB 'c=1*') AND download_state=?3)))
-        OR EXISTS (
-            SELECT 1 FROM msgs
-            WHERE pre_rfc724_mid=imap.rfc724_mid
-              AND pre_rfc724_mid!=''
-              AND id>9
-              AND ((ephemeral_timestamp!=0 AND ephemeral_timestamp<=?2) OR
-                   (param GLOB '*\nc=1*' OR param GLOB 'c=1*'))))";
-
-/// Driven by `msgs_index8`: in multi-device mode core leaves downloaded messages on the server,
-/// so the `imap` table keeps a row for every message core has not deleted there.
+/// Driven by `msgs_index8`, because the `imap` table may keep a row for every message
+/// on the server, e.g. in multi-device mode, where downloaded messages are left on the server.
 const MARK_EXPIRED_FOR_DELETION: &str = "
     UPDATE imap
     SET target=''
@@ -696,50 +655,11 @@ pub(crate) async fn delete_expired_imap_messages(
     context: &Context,
     transport_id: u32,
 ) -> Result<()> {
-    let now = time();
-
-    let bcc_self = context.get_config_bool(Config::BccSelf).await?;
-    if should_delete_all_downloaded_messages(context).await? {
-        // This is the only device using this relay.
-        // Mark all downloaded messages for deletion, because they are not needed anymore.
-        //
-        // For pre- and post-messages, `rfc724_mid` contains the post-message's Message-Id.
-        // The pre-message's Message-Id is in pre_rfc724_mid, if it exists.
-        //
-        // Pre-messages can be deleted even if the message wasn't fully downloaded yet,
-        // because it's only the post-message that hasn't been downloaded.
-        context
-            .sql
-            .execute(
-                MARK_DOWNLOADED_FOR_DELETION,
-                (transport_id, now, DownloadState::Done),
-            )
-            .await?;
-    } else if bcc_self {
-        // There may be other devices using this relay,
-        // either because there is multi-device or because this is a classical email server.
-        // Only delete expired ephemeral messages.
-        context
-            .sql
-            .execute(MARK_EXPIRED_FOR_DELETION, (transport_id, now))
-            .await?;
-    } else {
-        // Single device, but unencrypted messages are allowed.
-        // Delete all expired and encrypted messages.
-        context
-            .sql
-            .execute(
-                MARK_ENCRYPTED_FOR_DELETION,
-                (transport_id, now, DownloadState::Done),
-            )
-            .await?;
-    }
-
+    context
+        .sql
+        .execute(MARK_EXPIRED_FOR_DELETION, (transport_id, time()))
+        .await?;
     Ok(())
-}
-
-pub(crate) async fn should_delete_all_downloaded_messages(context: &Context) -> Result<bool> {
-    Ok(!context.get_config_bool(Config::BccSelf).await?)
 }
 
 /// Start ephemeral timers for seen messages if they are not started
