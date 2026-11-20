@@ -1,9 +1,10 @@
 use super::*;
 use crate::{
     EventType,
-    chat::{self, ChatId, add_contact_to_chat, resend_msgs, send_msg},
+    chat::{self, ChatId, add_contact_to_chat, create_broadcast, resend_msgs, send_msg},
     message::{Message, Viewtype},
     receive_imf::receive_imf,
+    securejoin::get_securejoin_qr,
     test_utils::{TestContext, TestContextManager},
 };
 
@@ -585,4 +586,37 @@ async fn test_leave_webxdc_realtime_uninitialized() {
     assert!(alice.ctx.iroh.read().await.is_none());
     leave_webxdc_realtime(alice, MsgId::new(1)).await.unwrap();
     assert!(alice.ctx.iroh.read().await.is_none());
+}
+
+/// Tests that a channel subscriber can advertise itself to the channel owner.
+/// The channel owner is still in control
+/// as they can decide to not post apps with realtime support,
+/// to delete apps,
+/// or not to post apps at all.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_broadcast_subscriber_advertisement() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_chat_id = create_broadcast(alice, "Channel".to_string()).await?;
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
+    tcm.exec_securejoin_qr(bob, alice, &qr).await;
+
+    let mut instance = Message::new(Viewtype::Webxdc);
+    instance.set_file_from_bytes(
+        alice,
+        "minimal.xdc",
+        include_bytes!("../../test-data/webxdc/minimal.xdc"),
+    )?;
+    send_msg(alice, alice_chat_id, &mut instance).await?;
+    let bob_webxdc = bob.recv_msg(&alice.pop_sent_msg().await).await;
+
+    send_webxdc_realtime_advertisement(bob, bob_webxdc.id).await?;
+    alice.recv_msg_trash(&bob.pop_sent_msg().await).await;
+    let ev = EventType::WebxdcRealtimeAdvertisementReceived {
+        msg_id: instance.id,
+    };
+    alice.evtracker.get_matching(|e: &EventType| *e == ev).await;
+    Ok(())
 }
