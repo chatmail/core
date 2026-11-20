@@ -4,7 +4,6 @@ use super::*;
 use crate::chat::{Chat, get_chat_contacts, send_text_msg};
 use crate::chatlist::Chatlist;
 use crate::key::secret_key_to_public_key;
-use crate::receive_imf::receive_imf;
 use crate::securejoin::get_securejoin_qr;
 use crate::test_utils::{
     self, TestContext, TestContextManager, TimeShiftFalsePositiveNote, receive_encrypted_imf, sync,
@@ -1090,27 +1089,6 @@ async fn test_contact_freshness_blocked() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_contact_freshness_address_contact() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-    alice.allow_unencrypted().await?;
-    let bob = tcm.bob().await;
-    bob.allow_unencrypted().await?;
-
-    // Alice sends a message to Bob
-    let alice_chat = alice.create_email_chat(&bob).await;
-    let sent_msg = alice.send_text(alice_chat.id, "moin").await;
-
-    // Bob receives message, contact's freshness is "normal", even though the messages was just received
-    let msg = bob.recv_msg(&sent_msg).await;
-    let contact = Contact::get_by_id(&bob, msg.from_id).await?;
-    assert!(!contact.is_key_contact());
-    assert_eq!(contact.get_freshness(), Freshness::Normal);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_was_seen_recently_event() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
@@ -1151,51 +1129,6 @@ async fn test_was_seen_recently_event() -> Result<()> {
     bob.assert_warn("receiving from an empty and closed channel")
         .await;
     Ok(())
-}
-
-async fn test_lookup_id_by_addr_recent_ext(accept_unencrypted_chat: bool) -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let bob = &tcm.bob().await;
-    bob.allow_unencrypted().await?;
-
-    let raw = include_bytes!("../../test-data/message/thunderbird_with_autocrypt.eml");
-    assert!(std::str::from_utf8(raw)?.contains("Date: Thu, 24 Nov 2022 20:05:57 +0100"));
-    let received_msg = receive_imf(bob, raw, false).await?.unwrap();
-    received_msg.chat_id.accept(bob).await?;
-
-    let raw = r#"From: Alice <alice@example.org>
-To: bob@example.net
-Message-ID: message$TIME@example.org
-Content-Type: text/plain; charset=utf-8; format=flowed; delsp=no
-Date: Thu, 24 Nov 2022 $TIME +0100
-
-Hi"#
-    .to_string();
-    for (time, is_key_contact) in [("20:05:57", true), ("20:05:58", !accept_unencrypted_chat)] {
-        let raw = raw.replace("$TIME", time);
-        let received_msg = receive_imf(bob, raw.as_bytes(), false).await?.unwrap();
-        if accept_unencrypted_chat {
-            received_msg.chat_id.accept(bob).await?;
-        }
-        let contact_id = Contact::lookup_id_by_addr(bob, "alice@example.org", Origin::Unknown)
-            .await?
-            .unwrap();
-        let contact = Contact::get_by_id(bob, contact_id).await?;
-        assert_eq!(contact.is_key_contact(), is_key_contact);
-    }
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_lookup_id_by_addr_recent() -> Result<()> {
-    let accept_unencrypted_chat = true;
-    test_lookup_id_by_addr_recent_ext(accept_unencrypted_chat).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_lookup_id_by_addr_recent_accepted() -> Result<()> {
-    let accept_unencrypted_chat = false;
-    test_lookup_id_by_addr_recent_ext(accept_unencrypted_chat).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

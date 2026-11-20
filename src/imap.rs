@@ -1546,13 +1546,6 @@ pub(crate) async fn prefetch_should_download(
     // We do not know the Message-ID or the Message-ID is missing (in this case, we create one in
     // the further process).
 
-    let maybe_ndn = if let Some(from) = headers.get_header_value(HeaderDef::From_) {
-        let from = from.to_ascii_lowercase();
-        from.contains("mailer-daemon") || from.contains("mail-daemon")
-    } else {
-        false
-    };
-
     let from = match mimeparser::get_from(headers) {
         Some(f) => f,
         None => return Ok(false),
@@ -1580,11 +1573,7 @@ pub(crate) async fn prefetch_should_download(
         return Ok(false);
     }
 
-    let should_download = maybe_ndn
-        || (!blocked_contact
-            && (is_legacy_securejoin
-                || is_encrypted
-                || !context.get_config_bool(Config::ForceEncryption).await?));
+    let should_download = !blocked_contact && (is_legacy_securejoin || is_encrypted);
     Ok(should_download)
 }
 

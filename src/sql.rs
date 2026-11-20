@@ -9,18 +9,19 @@ use rusqlite::{Connection, OpenFlags, Row, config::DbConfig, types::ValueRef};
 use tokio::sync::RwLock;
 
 use crate::blob::BlobObject;
-use crate::chat::ChatId;
+use crate::chat::{ChatId, add_device_msg};
 use crate::config::Config;
 use crate::context::Context;
 use crate::ephemeral::start_ephemeral_timers;
 use crate::imex::{self, BLOBS_BACKUP_NAME};
-use crate::location;
 use crate::log::{LogExt, warn};
+use crate::message::Message;
 use crate::net::dns::prune_dns_cache;
 use crate::net::http::http_cache_cleanup;
 use crate::net::prune_connection_history;
 use crate::param::{Param, Params};
 use crate::tools::{SystemTime, delete_file, time};
+use crate::{location, stock_str};
 
 /// Extension to [`rusqlite::ToSql`] trait
 /// which also includes [`Send`] and [`Sync`].
@@ -667,6 +668,43 @@ impl Sql {
     }
 }
 
+pub(crate) trait TransactionExt {
+    /// Used for executing `SELECT COUNT` statements only. Returns the resulting count.
+    fn count(&self, query: &str, params: impl rusqlite::Params + Send) -> Result<usize>;
+
+    /// Executes a query which is expected to return one row and one
+    /// column. If the query does not return any rows, returns `Ok(None)`.
+    fn query_get_value<T>(
+        &self,
+        query: &str,
+        params: impl rusqlite::Params + Send,
+    ) -> Result<Option<T>>
+    where
+        T: rusqlite::types::FromSql + Send + 'static;
+}
+
+impl TransactionExt for rusqlite::Transaction<'_> {
+    fn count(&self, query: &str, params: impl rusqlite::Params + Send) -> Result<usize> {
+        let count: isize = self.query_row(query, params, |row| row.get(0))?;
+        Ok(usize::try_from(count)?)
+    }
+
+    fn query_get_value<T>(
+        &self,
+        query: &str,
+        params: impl rusqlite::Params + Send,
+    ) -> Result<Option<T>>
+    where
+        T: rusqlite::types::FromSql + Send + 'static,
+    {
+        match self.query_row(query, params, |row| row.get::<_, T>(0)) {
+            Ok(res) => Ok(Some(res)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(err) => Err(err.into()),
+        }
+    }
+}
+
 /// Creates a new SQLite connection.
 ///
 /// `path` is the database path.
@@ -761,6 +799,29 @@ async fn incremental_vacuum(context: &Context) -> Result<()> {
             Ok(())
         })
         .await
+}
+
+/// Adds a device message about the removal of unencrypted messages
+/// if the unencrypted-chats migration requested it.
+/// This can be removed about a year after 2026-11.
+///
+/// This is not done in the migration itself
+/// because the stock strings aren't set yet when migrations run.
+pub(crate) async fn maybe_add_unencrypted_device_msg(context: &Context) -> Result<()> {
+    if !context
+        .sql
+        .get_raw_config_bool(migrations::SHOW_UNENCRYPTED_DEVICE_MSG)
+        .await?
+    {
+        return Ok(());
+    }
+    let mut msg = Message::new_text(stock_str::no_more_unencrypted(context));
+    add_device_msg(context, Some("unencrypted-device-msg"), Some(&mut msg)).await?;
+    context
+        .sql
+        .set_raw_config(migrations::SHOW_UNENCRYPTED_DEVICE_MSG, None)
+        .await?;
+    Ok(())
 }
 
 /// Cleanup the account to restore some storage and optimize the database.

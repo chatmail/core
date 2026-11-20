@@ -275,47 +275,6 @@ async fn test_subject_mdn() {
     assert_eq!("Re: Hello, Bob", mf.subject_str(t).await.unwrap());
 }
 
-/// Tests that MDN for unencrypted message can be created without throwing an error.
-///
-/// We do not send unencrypted MDNs, but do not want SMTP loop to get stuck
-/// if we somehow request the creation of unencrypted MDN.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_mdn_create_unencrypted() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-    alice.allow_unencrypted().await?;
-    alice
-        .set_config(Config::Displayname, Some("Alice Exampleorg"))
-        .await?;
-    let bob = tcm.bob().await;
-    bob.allow_unencrypted().await?;
-    bob.set_config(Config::Displayname, Some("Bob Examplenet"))
-        .await?;
-    bob.set_config(Config::Selfstatus, Some("Bob Examplenet"))
-        .await?;
-    bob.set_config_bool(Config::MdnsEnabled, true).await?;
-
-    // MDN for unencrypted message.
-    // Should not happen, but should also not throw an error.
-    let mut msg = Message::new(Viewtype::Text);
-    let chat_alice = alice.create_email_chat(&bob).await.id;
-    let sent = alice.send_msg(chat_alice, &mut msg).await;
-
-    let rcvd = bob.recv_msg(&sent).await;
-    message::markseen_msgs(&bob, vec![rcvd.id]).await?;
-    let queued_mdn = mdn(&bob, rcvd.from_id, &rcvd.rfc724_mid, vec![]).await?;
-
-    // Only sending MDN to self (if BCC-self is enabled) because address-contact recipient has no key.
-    assert!(queued_mdn.recipients.is_empty());
-
-    // MDNs are always encrypted, even if requested for unencrypted message.
-    assert!(queued_mdn.encryption.is_encrypted());
-
-    bob.assert_warn("has no key, sending to self").await;
-
-    Ok(())
-}
-
 /// Tests that MDNs sent in reply to encrypted messages are encrypted
 /// and MDNs for unencrypted messages are not created.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -671,42 +630,6 @@ async fn test_render_reply() {
         .unwrap();
 }
 
-/// Tests that avatar is not sent in unencrypted messages.
-///
-/// Avatars for address-contacts are not displayed anyway.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_no_unencrypted_selfavatar() -> anyhow::Result<()> {
-    // create chat with bob, set selfavatar
-    let t = TestContext::new_alice().await;
-    t.allow_unencrypted().await?;
-    let chat = t.create_chat_with_contact("bob", "bob@example.org").await;
-
-    let file = t.dir.path().join("avatar.png");
-    let bytes = include_bytes!("../../test-data/image/avatar64x64.png");
-    tokio::fs::write(&file, bytes).await?;
-    t.set_config(Config::Selfavatar, Some(file.to_str().unwrap()))
-        .await?;
-
-    let mut msg = Message::new_text("this is the text!".to_string());
-
-    let sent_msg = t.send_msg(chat.id, &mut msg).await;
-    let payload = sent_msg.payload();
-
-    // The message has a single MIME part.
-    assert_eq!(payload.match_indices("multipart/").count(), 0);
-
-    assert_eq!(payload.match_indices("Message-ID:").count(), 1);
-    assert_eq!(payload.match_indices("Subject:").count(), 1);
-    assert_eq!(payload.match_indices("Autocrypt:").count(), 1);
-    assert_eq!(payload.match_indices("Chat-User-Avatar:").count(), 0);
-    assert_eq!(payload.match_indices("text/plain").count(), 1);
-    assert_eq!(payload.match_indices("Message-ID:").count(), 1);
-
-    assert_eq!(payload.match_indices("this is the text!").count(), 1);
-
-    Ok(())
-}
-
 /// Test that removed member address does not go into the `To:` field.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_remove_member_bcc() -> Result<()> {
@@ -913,27 +836,6 @@ async fn test_bcc_self() -> Result<()> {
     Ok(())
 }
 
-/// Regression test: mimefactory should never create an empty to header,
-/// also not if the Selftalk parameter is missing
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_no_empty_to_header() -> Result<()> {
-    let alice = &TestContext::new_alice().await;
-    alice.allow_unencrypted().await?;
-    let mut self_chat = alice.get_self_chat().await;
-    self_chat.param.remove(Param::Selftalk);
-    self_chat.update_param(alice).await?;
-
-    let payload = alice.send_text(self_chat.id, "Hi").await.payload;
-    assert!(
-        // It would be equally fine if the payload contained `To: alice@example.org` or similar,
-        // as long as it's a valid header
-        payload.contains("To: \"hidden-recipients\":;"),
-        "Payload doesn't contain correct To: header: {payload}"
-    );
-
-    Ok(())
-}
-
 /// Parses ASCII-armored message and checks that it only has PKESK and SEIPD packets.
 ///
 /// Panics if SEIPD packets are not of expected version.
@@ -1049,119 +951,6 @@ Version: 1
 Content-Type: application/octet-stream; charset="utf-8"
 Content-Transfer-Encoding: 7bit
 
-"#
-    .replace("\n", "\r\n");
-    assert_eq!(
-        unencrypted, expected,
-        "---------------- Actual: ----------------
-{unencrypted}
------------------------------------------
-actual (debug print): {unencrypted:?}
-expected (debug print): {expected:?}"
-    );
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_render_unencrypted_msg_basic() -> Result<()> {
-    let alice = &TestContext::new_alice().await;
-    alice.allow_unencrypted().await?;
-
-    let chat = alice
-        .create_chat_with_contact("Bob", "bob@example.net")
-        .await;
-    let sent = alice.send_text(chat.id, "Hello!").await;
-    let unencrypted = normalized_payload(sent).await;
-
-    let expected = r#"From: <alice@example.org>
-Message-ID: <MESSAGE_ID@localhost>
-MIME-Version: 1.0
-Autocrypt: addr=alice@example.org; prefer-encrypt=mutual;
- keydata=mDMEXlh13RYJKwYBBAHaRw8BAQdAzfVIAleCXMJrq8VeLlEVof6ITCviMktKjmcBKAu4m5
- DCtAQfFggAZgUCXlh13RYhBC5vossjtTLXKGNLWGSwj2Gp7ZRDAhsDAh4JBAsJCAcFFQgJCgsDFgIB
- AycJAgIZASwUgAAAAAASABFyZWxheXNAY2hhdG1haWwuYXRhbGljZUBleGFtcGxlLm9yZwAAb1QA/0
- HbvPN3/Vn02Gk1dcQMEcyGyETld9dSsRo8uwHAyW35AQCrFJjAQFLTud7XK61uYt9BC/QHipCfIGbq
- X1FjMbTUC80TPGFsaWNlQGV4YW1wbGUub3JnPsKRBBMWCAA5BQJeWHXdFiEELm+iyyO1MtcoY0tYZL
- CPYantlEMCGwMCHgkECwkIBwUVCAkKCwMWAgEDJwkCAhkBAAoJEGSwj2Gp7ZRD1m4A/iOifEzIOiP8
- wW0O8I/sg69gQtG8Czn4MsVV6Ea1EyIqAP4uByHaUJdy8MSQPfv/Usr09KsidNgy2Jh37yg82fKUBr
- g4BF5Ydd0SCisGAQQBl1UBBQEBB0AG7cjWy2SFAU8KnltlubVW67rFiyfp01JrRe6Xqy22HQMBCAeI
- eAQYFggAIBYhBC5vossjtTLXKGNLWGSwj2Gp7ZRDBQJeWHXdAhsMAAoJEGSwj2Gp7ZRDLo8BAObE8G
- nsGVwKzNqCvHeWgJsqhjS3C6gvSlV3tEm9XmF6AQDXucIyVfoBwoyMh2h6cSn/ATn5QJb35pgo+ivp
- 3jsMAg==
-Content-Type: text/plain; charset="utf-8"
-Date: DATE
-To: <bob@example.net>
-Subject: Message from ...
-References: <MESSAGE_ID@localhost>
-Chat-Version: 1.0
-Content-Transfer-Encoding: 7bit
-
-Hello!"#
-        .replace("\n", "\r\n");
-    assert_eq!(
-        unencrypted, expected,
-        "---------------- Actual: ----------------
-{unencrypted}
------------------------------------------
-actual (debug print): {unencrypted:?}
-expected (debug print): {expected:?}"
-    );
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_render_unencrypted_msg_with_attachment() -> Result<()> {
-    let alice = &TestContext::new_alice().await;
-    alice.allow_unencrypted().await?;
-
-    let chat = alice
-        .create_chat_with_contact("Bob", "bob@example.net")
-        .await;
-    let mut msg = Message::new(Viewtype::File);
-    msg.set_text("Hello!".to_string());
-    msg.set_file_from_bytes(alice, "foo.bar", b"content")?;
-    let sent = alice.send_msg(chat.id, &mut msg).await;
-    let unencrypted = normalized_payload(sent).await;
-
-    let expected = r#"From: <alice@example.org>
-Message-ID: <MESSAGE_ID@localhost>
-MIME-Version: 1.0
-Autocrypt: addr=alice@example.org; prefer-encrypt=mutual;
- keydata=mDMEXlh13RYJKwYBBAHaRw8BAQdAzfVIAleCXMJrq8VeLlEVof6ITCviMktKjmcBKAu4m5
- DCtAQfFggAZgUCXlh13RYhBC5vossjtTLXKGNLWGSwj2Gp7ZRDAhsDAh4JBAsJCAcFFQgJCgsDFgIB
- AycJAgIZASwUgAAAAAASABFyZWxheXNAY2hhdG1haWwuYXRhbGljZUBleGFtcGxlLm9yZwAAb1QA/0
- HbvPN3/Vn02Gk1dcQMEcyGyETld9dSsRo8uwHAyW35AQCrFJjAQFLTud7XK61uYt9BC/QHipCfIGbq
- X1FjMbTUC80TPGFsaWNlQGV4YW1wbGUub3JnPsKRBBMWCAA5BQJeWHXdFiEELm+iyyO1MtcoY0tYZL
- CPYantlEMCGwMCHgkECwkIBwUVCAkKCwMWAgEDJwkCAhkBAAoJEGSwj2Gp7ZRD1m4A/iOifEzIOiP8
- wW0O8I/sg69gQtG8Czn4MsVV6Ea1EyIqAP4uByHaUJdy8MSQPfv/Usr09KsidNgy2Jh37yg82fKUBr
- g4BF5Ydd0SCisGAQQBl1UBBQEBB0AG7cjWy2SFAU8KnltlubVW67rFiyfp01JrRe6Xqy22HQMBCAeI
- eAQYFggAIBYhBC5vossjtTLXKGNLWGSwj2Gp7ZRDBQJeWHXdAhsMAAoJEGSwj2Gp7ZRDLo8BAObE8G
- nsGVwKzNqCvHeWgJsqhjS3C6gvSlV3tEm9XmF6AQDXucIyVfoBwoyMh2h6cSn/ATn5QJb35pgo+ivp
- 3jsMAg==
-Content-Type: multipart/mixed;
- boundary="BOUNDARY"
-Date: DATE
-To: <bob@example.net>
-Subject: Message from ...
-References: <MESSAGE_ID@localhost>
-Chat-Version: 1.0
-
-
---BOUNDARY
-Content-Type: text/plain; charset="utf-8"
-Content-Transfer-Encoding: 7bit
-
-Hello!
---BOUNDARY
-Content-Type: application/octet-stream
-Content-Disposition: attachment; filename="foo.bar"
-Content-Transfer-Encoding: base64
-
-Y29udGVudA==
-
---BOUNDARY--
 "#
     .replace("\n", "\r\n");
     assert_eq!(

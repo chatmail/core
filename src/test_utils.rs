@@ -1226,12 +1226,6 @@ ORDER BY id"
         chat_id
     }
 
-    /// Allow reception of unencrypted messages.
-    pub async fn allow_unencrypted(&self) -> Result<()> {
-        self.set_config_bool(Config::ForceEncryption, false).await?;
-        Ok(())
-    }
-
     /// Asserts a warning containing `pat` should be logged.
     ///
     /// Delegates to [`InnerLogSink::assert_warn`].
@@ -1722,12 +1716,6 @@ impl EventTracker {
             _ => false,
         })
         .await
-    }
-
-    /// Wait for the next IncomingMsg event.
-    pub async fn wait_next_incoming_message(&self) {
-        self.get_matching(|evt| matches!(evt, EventType::IncomingMsg { .. }))
-            .await;
     }
 
     /// Clears event queue.

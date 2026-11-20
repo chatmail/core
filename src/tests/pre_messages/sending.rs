@@ -179,39 +179,6 @@ async fn test_selfavatar_and_autocrypt_gossip_goto_pre_message() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_unencrypted_gets_no_pre_message() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    alice.allow_unencrypted().await?;
-
-    let chat = alice
-        .create_chat_with_contact("example", "email@example.org")
-        .await;
-
-    let mut msg = Message::new(Viewtype::File);
-    msg.set_file_from_bytes(alice, "test.bin", &vec![0u8; 300_000])?;
-    msg.set_text("test".to_owned());
-
-    let msg_id = chat::send_msg(alice, chat.id, &mut msg).await?;
-    let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
-
-    assert_eq!(smtp_rows.len(), 1);
-    let message_bytes = smtp_rows
-        .first()
-        .expect("first element exists")
-        .payload
-        .as_bytes();
-    let message = mailparse::parse_mail(message_bytes)?;
-    assert!(
-        message
-            .headers
-            .get_first_header(HeaderDef::ChatIsPostMessage.get_headername())
-            .is_none(),
-    );
-    Ok(())
-}
-
 /// Tests that no pre message is sent for normal message
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_not_sending_pre_message_no_attachment() -> Result<()> {
