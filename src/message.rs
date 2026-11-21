@@ -1543,7 +1543,7 @@ pub(crate) fn guess_msgtype_from_path_suffix(path: &Path) -> Option<(Viewtype, &
         // make sure, all target UIs support that type.
         //
         // it is a non-goal to support as many formats as possible in-app.
-        // additional parser come at security and maintainance costs and
+        // additional parser come at security and maintenance costs and
         // should only be added when strictly neccessary,
         // eg. when a format comes from the camera app on a significant number of devices.
         // it is okay, when eg. dragging some video from a browser results in a "File"
