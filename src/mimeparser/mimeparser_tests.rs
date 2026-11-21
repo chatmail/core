@@ -1253,7 +1253,7 @@ async fn test_mime_modified_alt_plain() {
     assert_eq!(
         mimeparser.parts[0].msg,
         "mime-modified test – \
-        mime-modified should not be set set as there is no html and no special stuff;\n\
+        mime-modified should not be set as there is no html and no special stuff;\n\
         although not being a delta-message.\n\
         test some special html-characters as < > and & but also \" and ' :)"
     );
