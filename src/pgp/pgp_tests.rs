@@ -284,7 +284,7 @@ async fn test_dont_decrypt_expensive_message_ext(
         msg.encrypt_with_password(&mut rng, s2k, &shared_secret_pw)?;
     }
 
-    let ctext = msg.to_armored_string(&mut rng, Default::default())?;
+    let ctext = msg.to_armored_string(&mut rng, message_armor_options())?;
 
     // Trying to decrypt it should fail with a helpful error message:
 

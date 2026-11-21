@@ -1,6 +1,5 @@
 //! Cryptographic key module.
 
-use std::collections::BTreeMap;
 use std::fmt::{self, Write as _};
 use std::io::Cursor;
 
@@ -25,6 +24,16 @@ use crate::context::Context;
 use crate::events::EventType;
 use crate::log::LogExt;
 use crate::tools::{self, time_elapsed};
+
+fn key_armor_options() -> pgp::composed::ArmorOptions<'static> {
+    pgp::composed::ArmorOptions {
+        headers: None,
+
+        // Explicitly disable optional CRC24 footer.
+        // It is enabled by default in rPGP 0.21.1.
+        include_checksum: false,
+    }
+}
 
 /// Convenience trait for working with keys.
 ///
@@ -109,12 +118,9 @@ pub trait DcKey: Serialize + Deserializable + Clone {
     }
 
     /// Serialise the key to ASCII-armored representation.
-    ///
-    /// Each header line must be terminated by `\r\n`.  Only allows setting one
-    /// header as a simplification since that's the only way it's used so far.
     // Since .to_armored_string() are actual methods on SignedPublicKey and
     // SignedSecretKey we can not generically implement this.
-    fn to_asc(&self, header: Option<(&str, &str)>) -> String;
+    fn to_asc(&self) -> String;
 
     /// The fingerprint for the key.
     fn dc_fingerprint(&self) -> Fingerprint;
@@ -425,15 +431,13 @@ pub(crate) async fn load_self_secret_keyring(context: &Context) -> Result<Vec<Si
 }
 
 impl DcKey for SignedPublicKey {
-    fn to_asc(&self, header: Option<(&str, &str)>) -> String {
+    fn to_asc(&self) -> String {
         // Not using .to_armored_string() to make clear *why* it is
         // safe to ignore this error.
         // Because we write to a Vec<u8> the io::Write impls never
         // fail and we can hide this error.
-        let headers =
-            header.map(|(key, value)| BTreeMap::from([(key.to_string(), vec![value.to_string()])]));
         let mut buf = Vec::new();
-        self.to_armored_writer(&mut buf, headers.as_ref().into())
+        self.to_armored_writer(&mut buf, key_armor_options())
             .unwrap_or_default();
         std::string::String::from_utf8(buf).unwrap_or_default()
     }
@@ -448,15 +452,13 @@ impl DcKey for SignedPublicKey {
 }
 
 impl DcKey for SignedSecretKey {
-    fn to_asc(&self, header: Option<(&str, &str)>) -> String {
+    fn to_asc(&self) -> String {
         // Not using .to_armored_string() to make clear *why* it is
         // safe to do these unwraps.
         // Because we write to a Vec<u8> the io::Write impls never
         // fail and we can hide this error.  The string is always ASCII.
-        let headers =
-            header.map(|(key, value)| BTreeMap::from([(key.to_string(), vec![value.to_string()])]));
         let mut buf = Vec::new();
-        self.to_armored_writer(&mut buf, headers.as_ref().into())
+        self.to_armored_writer(&mut buf, key_armor_options())
             .unwrap_or_default();
         std::string::String::from_utf8(buf).unwrap_or_default()
     }
@@ -735,12 +737,12 @@ i8pcjGO+IZffvyZJVRWfVooBJmWWbPB1pueo3tx8w3+fcuzpxz+RLFKaPyqXO+dD
     #[test]
     fn test_asc_roundtrip() {
         let key = KEYPAIR.clone().to_public_key();
-        let asc = key.to_asc(Some(("spam", "ham")));
+        let asc = key.to_asc();
         let key2 = SignedPublicKey::from_asc(&asc).unwrap();
         assert_eq!(key, key2);
 
         let key = KEYPAIR.clone();
-        let asc = key.to_asc(Some(("spam", "ham")));
+        let asc = key.to_asc();
         let key2 = SignedSecretKey::from_asc(&asc).unwrap();
         assert_eq!(key, key2);
     }
