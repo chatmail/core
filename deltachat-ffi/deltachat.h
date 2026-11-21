@@ -469,7 +469,6 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  *                       0 = Everybody (except explicitly blocked contacts),
  *                       1 = Contacts (default, does not include contact requests),
  *                       2 = Nobody (calls never result in a notification).
- * - `force_encryption` = 1 (default) to force encryption, 0 to allow unencrypted messages.
  *
  * Also, there are configs that are only needed
  * if you want to use the deprecated dc_configure() API, such as:
@@ -4463,9 +4462,8 @@ int             dc_msg_is_info                (const dc_msg_t* msg);
  * - DC_INFO_MEMBER_REMOVED_FROM_GROUP (5) - "Member CONTACT removed by OTHER_CONTACT"
  * - DC_INFO_EPHEMERAL_TIMER_CHANGED (10) - "Disappearing messages CHANGED_TO by CONTACT"
  * - DC_INFO_PROTECTION_ENABLED (11) - Info-message for "Chat is protected"
- * - DC_INFO_INVALID_UNENCRYPTED_MAIL (13) - Info-message for "Provider requires end-to-end encryption which is not setup yet",
- *   the UI should change the corresponding string using #DC_STR_INVALID_UNENCRYPTED_MAIL
- *   and also offer a way to fix the encryption, eg. by a button offering a QR scan
+ * - DC_INFO_INVALID_UNENCRYPTED_MAIL (13) - Info-message that a message could not be sent because it could not be encrypted;
+ *   the UI may offer a way to fix the encryption, eg. by a button offering a QR scan
  * - DC_INFO_WEBXDC_INFO_MESSAGE (32) - Info-message created by webxdc app sending `update.info`
  * - DC_INFO_CHAT_E2EE (50) - Info-message for "Chat is end-to-end-encrypted"
  * - DC_INFO_GROUP_DESCRIPTION_CHANGED (70) - Info-message "Description changed", UI should open the profile with the description
@@ -7111,13 +7109,6 @@ void dc_event_unref(dc_event_t* event);
 ///
 /// `%1$s` will be replaced by the added member's name.
 #define DC_STR_MESSAGE_ADD_MEMBER 173
-
-/// "Your email provider %1$s requires end-to-end encryption which is not setup yet."
-///
-/// Used as info messages when a message cannot be sent because it cannot be encrypted.
-///
-/// `%1$s` will be replaced by the provider's domain.
-#define DC_STR_INVALID_UNENCRYPTED_MAIL 174
 
 /// "You reacted %1$s to '%2$s'"
 ///

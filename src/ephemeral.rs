@@ -739,8 +739,7 @@ pub(crate) async fn delete_expired_imap_messages(
 }
 
 pub(crate) async fn should_delete_all_downloaded_messages(context: &Context) -> Result<bool> {
-    Ok(!context.get_config_bool(Config::BccSelf).await?
-        && context.get_config_bool(Config::ForceEncryption).await?)
+    Ok(!context.get_config_bool(Config::BccSelf).await?)
 }
 
 /// Start ephemeral timers for seen messages if they are not started
