@@ -722,7 +722,7 @@ where
     // Delete the file if it already exists.
     delete_file(context, &path).await.ok();
 
-    let content = key.to_asc(None).into_bytes();
+    let content = key.to_asc().into_bytes();
     write_file(context, &path, &content)
         .await
         .with_context(|| format!("cannot write key to {}", path.display()))?;
@@ -810,7 +810,7 @@ mod tests {
         let filename = format!("{blobdir}/{filename}");
         let bytes = tokio::fs::read(&filename).await.unwrap();
 
-        assert_eq!(bytes, key.to_asc(None).into_bytes());
+        assert_eq!(bytes, key.to_asc().into_bytes());
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -831,7 +831,7 @@ mod tests {
         let filename = format!("{blobdir}/{filename}");
         let bytes = tokio::fs::read(&filename).await.unwrap();
 
-        assert_eq!(bytes, key.to_asc(None).into_bytes());
+        assert_eq!(bytes, key.to_asc().into_bytes());
 
         let alice = &TestContext::new().await;
         if let Err(err) = imex(alice, ImexMode::ImportSelfKeys, Path::new(&filename), None).await {
