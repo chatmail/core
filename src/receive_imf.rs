@@ -207,7 +207,7 @@ async fn get_to_and_past_contact_ids(
     //
     // Note that this is not necessarily the chat we want to assign the message to.
     // In case of an outgoing private reply to a group message we may
-    // lookup the address of receipient in the list of addresses used in the group,
+    // lookup the address of recipient in the list of addresses used in the group,
     // but want to assign the message to a single chat.
     let chat_id = match chat_assignment {
         ChatAssignment::Trash => None,
@@ -816,7 +816,7 @@ pub(crate) async fn receive_imf_inner(
                 && let Some(msg) =
                     Message::load_by_rfc724_mid_optional(context, rfc724_mid_orig).await?
             {
-                // The messsage is a post-message and pre-message exists.
+                // The message is a post-message and pre-message exists.
                 // Assign status update to existing message because just received post-message will be trashed.
                 Some(msg)
             } else {

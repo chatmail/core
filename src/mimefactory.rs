@@ -121,7 +121,7 @@ pub struct MimeFactory {
     /// config-name while `from_displayname` is set to the overridden name.
     /// From the perspective of the receiver,
     /// a set `Sender:`-header is used as an indicator that the name is overridden;
-    /// names are alsways read from the `From:`-header.
+    /// names are always read from the `From:`-header.
     sender_displayname: Option<String>,
 
     selfstatus: String,
