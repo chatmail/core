@@ -93,7 +93,7 @@ const REACTION_BROADCAST_PERIOD: i64 = 10 * 60;
 /// Starts broadcasting if last broadcasting is more than `REACTION_BROADCAST_PERIOD` seconds in the past.
 ///
 /// Moreover, also broadcast if `lst_broadcast_time` is in the future:
-/// That way we're not stuck e.g. if the clock was accidentally set to one year in the future and then rewinded back.
+/// That way we're not stuck e.g. if the clock was accidentally set to one year in the future and then rewound back.
 pub(crate) async fn maybe_broadcast_reactions(context: &Context) -> Result<()> {
     let now = time();
     let last_broadcast_time = context

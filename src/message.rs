@@ -638,7 +638,7 @@ impl Message {
 
     /// Returns additional text which is appended to the message's text field
     /// when it is loaded from the database.
-    /// Currently this is used to add infomation to pre-messages of what the download will be and how large it is
+    /// Currently this is used to add information to pre-messages of what the download will be and how large it is
     fn get_additional_text(
         context: &Context,
         download_state: DownloadState,

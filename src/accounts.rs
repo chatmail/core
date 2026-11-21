@@ -486,7 +486,7 @@ impl Accounts {
             let mut lock = self.background_fetch_interrupt_sender.lock();
             if (*lock).is_some() {
                 // Another background_fetch() is already running,
-                // return immeidately.
+                // return immediately.
                 None
             } else {
                 *lock = Some(sender);

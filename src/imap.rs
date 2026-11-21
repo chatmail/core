@@ -1108,7 +1108,7 @@ impl Session {
                 let Some(rfc724_mid) = uid_message_ids.get(&request_uid) else {
                     error!(
                         context,
-                        "No Message-ID corresponding to UID {} passed in uid_messsage_ids.",
+                        "No Message-ID corresponding to UID {} passed in uid_message_ids.",
                         request_uid
                     );
                     continue;

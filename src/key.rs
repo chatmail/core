@@ -185,7 +185,7 @@ pub(crate) fn secret_key_to_public_key(
         ])
     };
 
-    // RFC 4880 required that Transferrable Public Key (aka OpenPGP Certificate)
+    // RFC 4880 required that Transferable Public Key (aka OpenPGP Certificate)
     // contains at least one User ID:
     // <https://www.rfc-editor.org/rfc/rfc4880#section-11.1>
     // RFC 9580 does not require User ID even for V4 certificates anymore:

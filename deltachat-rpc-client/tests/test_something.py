@@ -1025,7 +1025,7 @@ def test_no_markseen_in_team_profile(team_profile, acf):
     # Send a message and wait until it arrives
     # in order to wait until Bob2 gets the markseen message.
     # This also tests that outgoing messages
-    # don't mark preceeding messages as seen in team profiles.
+    # don't mark preceding messages as seen in team profiles.
     bob_chat_alice.send_text("Outgoing message")
     while True:
         outgoing = bob2.wait_for_msg(EventType.MSGS_CHANGED)

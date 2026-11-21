@@ -691,7 +691,7 @@ async fn test_delete_msgs_sync() -> Result<()> {
     alice2.set_config_bool(Config::SyncMsgs, true).await?;
     bob.set_config_bool(Config::SyncMsgs, true).await?;
 
-    // Alice sends a messsage and receives it on the other device
+    // Alice sends a message and receives it on the other device
     let sent1 = alice.send_text(alice_chat_id, "foo").await;
     assert_eq!(alice_chat_id.get_msg_cnt(alice).await?, E2EE_INFO_MSGS + 1);
 

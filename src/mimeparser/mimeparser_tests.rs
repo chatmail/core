@@ -211,7 +211,7 @@ async fn test_get_attachment_filename_encoded_words_windows1251() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_attachment_filename_encoded_words_cont() {
-    // test continued encoded-words and also test apostropes work that way
+    // test continued encoded-words and also test apostrophes work that way
     let t = TestContext::new().await;
     let mail = load_mail_with_attachment(
         &t,

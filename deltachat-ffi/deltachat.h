@@ -1136,7 +1136,7 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  * - callee is already in a call:
  *   what to do depends on the capabilities of UI to handle calls.
  *   if UI cannot handle multiple calls, an easy approach would be to decline the new call automatically
- *   and make that visble to the user in the call, e.g. by a notification
+ *   and make that visible to the user in the call, e.g. by a notification
  *
  * - timeout:
  *   after 1 minute without action,
@@ -5110,7 +5110,7 @@ int64_t         dc_contact_get_last_seen     (const dc_contact_t* contact);
 /**
  * Get the contact's freshness.
  *
- * The UI shall hightlight contacts that are recently seen by a little green dot on the avatar
+ * The UI shall highlight contacts that are recently seen by a little green dot on the avatar
  * and contacts that were not seen for a long time by a string below the contact name (e.g. "Seen 2 months ago")
  *
  * To get the time a contact was seen, use dc_contact_get_last_seen().
@@ -5366,7 +5366,7 @@ int64_t         dc_lot_get_timestamp     (const dc_lot_t* lot);
  * and UI will be informed via #DC_EVENT_MSGS_CHANGED as usual.
  *
  * Do not start ringing when seeing this message;
- * the mesage may belong e.g. to an old missed call.
+ * the message may belong e.g. to an old missed call.
  *
  * Instead, ringing should start on the event #DC_EVENT_INCOMING_CALL
  */
@@ -5694,7 +5694,7 @@ char* dc_jsonrpc_blocking_call(dc_jsonrpc_instance_t* jsonrpc_instance, const ch
 /**
  * @class dc_event_channel_t
  *
- * Opaque object that is used to create an event emitter which can be used log events during startup of an accounts manger.
+ * Opaque object that is used to create an event emitter which can be used log events during startup of an accounts manager.
  * Only used for dc_accounts_new_with_event_channel().
  * To use it:
  *   1. create an events channel with `dc_event_channel_new()`.

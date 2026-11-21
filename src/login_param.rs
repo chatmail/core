@@ -74,7 +74,7 @@ pub struct EnteredImapLoginParam {
 
     /// Folder to watch.
     ///
-    /// If empty, user has not entered anything and it shuold expand to "INBOX" later.
+    /// If empty, user has not entered anything and it should expand to "INBOX" later.
     #[serde(default)]
     pub folder: String,
 
