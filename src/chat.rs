@@ -4695,7 +4695,7 @@ pub(crate) async fn resend_msgs_ext(
             msg.param.set(Param::Arg4, to_fingerprint.clone());
             if let Some(json) = broadcast_reactions::render_json(context, &[msg.id]).await? {
                 // The returned reaction array for the message may be empty,
-                // so rejoining members get reactions cleared as neccessary.
+                // so rejoining members get reactions cleared as necessary.
                 msg.param.set(Param::BroadcastReactions, json);
             }
         }
