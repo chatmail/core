@@ -36,7 +36,7 @@ impl Message {
         self.mime_modified || self.truncated_text.is_some()
     }
 
-    /// Set HTML-part part of a message that is about to be sent.
+    /// Set HTML part of a message that is about to be sent.
     /// The HTML-part is written to the database before sending and
     /// used as the `text/html` part in the MIME-structure.
     ///
