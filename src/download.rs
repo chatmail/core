@@ -6,11 +6,12 @@ use anyhow::{Result, anyhow, bail, ensure};
 use deltachat_derive::{FromSql, ToSql};
 use serde::{Deserialize, Serialize};
 
+use crate::config::Config;
 use crate::context::Context;
 use crate::imap::session::Session;
 use crate::log::warn;
 use crate::message::{self, Message, MsgId, rfc724_mid_exists};
-use crate::{EventType, chatlist_events, ephemeral};
+use crate::{EventType, chatlist_events};
 
 pub(crate) mod post_msg_metadata;
 pub(crate) use post_msg_metadata::PostMsgMetadata;
@@ -163,9 +164,9 @@ pub(crate) async fn download_msg(
         .fetch_single_msg(context, &server_folder, server_uid, rfc724_mid)
         .await?;
 
-    if ephemeral::should_delete_all_downloaded_messages(context).await? {
-        // Now that the message was downloaded, it likely needs to be deleted;
-        // trigger a re-check by interrupting the inbox folder.
+    if !context.get_config_bool(Config::BccSelf).await? {
+        // Now that the message was downloaded, it was likely marked for deletion;
+        // trigger the deletion by interrupting the inbox folder.
         // This is mainly needed to make the tests pass;
         // on real devices, it would be fine to delete the message at the next iteration.
         context.scheduler.interrupt_inbox().await;

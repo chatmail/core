@@ -429,7 +429,7 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
     //  "expired_*@localhost"   - has pre-msg, expired ephemeral message, not downloaded yet
     //  "no_expire_*@localhost" - has pre-msg, non-ephemeral, not downloaded yet
     //  "future_*@localhost"    - has pre-msg, not expired yet, not downloaded yet
-    //  "done_*@localhost"      - Fully downloaded -> post- message can be deleted
+    //  "done_*@localhost"      - has pre-msg, non-ephemeral, fully downloaded
     //
     // The tuple is (rfc724_mid, ephemeral_timestamp, download_state, pre_rfc724_mid, is_encrypted)
     let msgs: [(&str, i64, DownloadState, &str, bool); 8] = [
@@ -544,21 +544,13 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
             continue;
         }
 
-        assert_eq!(is_deleted(&t, "expired@localhost").await?, true);
-        assert_eq!(is_deleted(&t, "no_expire@localhost").await?, !bcc_self);
-        assert_eq!(
-            is_deleted(&t, "no_expire_unencrypted@localhost").await?,
-            !bcc_self
-        );
-        assert_eq!(is_deleted(&t, "future@localhost").await?, !bcc_self);
-        assert_eq!(is_deleted(&t, "expired_post@localhost").await?, true);
-        assert_eq!(is_deleted(&t, "expired_pre@localhost").await?, true);
-        assert_eq!(is_deleted(&t, "no_expire_post@localhost").await?, false);
-        assert_eq!(is_deleted(&t, "no_expire_pre@localhost").await?, !bcc_self);
-        assert_eq!(is_deleted(&t, "future_post@localhost").await?, false);
-        assert_eq!(is_deleted(&t, "future_pre@localhost").await?, !bcc_self);
-        assert_eq!(is_deleted(&t, "done_pre@localhost").await?, !bcc_self);
-        assert_eq!(is_deleted(&t, "done_post@localhost").await?, !bcc_self);
+        // Only expired messages are deleted. Whether downloaded messages are deleted is decided
+        // when they are downloaded, so existing rows of non-expired messages are kept
+        // even if `bcc_self` is off.
+        for rfc724_mid in &rfc724_mids {
+            let expired = rfc724_mid.starts_with("expired");
+            assert_eq!(is_deleted(&t, rfc724_mid).await?, expired, "{rfc724_mid}");
+        }
 
         reset_targets(&t).await;
     }
@@ -580,9 +572,7 @@ async fn test_expiration_queries_do_not_scan_msgs() -> Result<()> {
     let mut scans = Vec::new();
     for (name, query) in [
         ("NEXT_EPHEMERAL_TIMESTAMP", NEXT_EPHEMERAL_TIMESTAMP),
-        ("MARK_DOWNLOADED_FOR_DELETION", MARK_DOWNLOADED_FOR_DELETION),
         ("MARK_EXPIRED_FOR_DELETION", MARK_EXPIRED_FOR_DELETION),
-        ("MARK_ENCRYPTED_FOR_DELETION", MARK_ENCRYPTED_FOR_DELETION),
     ] {
         for step in t.query_plan(query).await? {
             // These statements run after every IMAP fetch or sent message. `SCAN msgs` reads

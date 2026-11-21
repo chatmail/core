@@ -141,3 +141,83 @@ async fn test_loop_queries_do_not_scan_imap() -> Result<()> {
     assert!(scans.is_empty(), "{scans:#?}");
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_mark_downloaded_msg_for_deletion() -> Result<()> {
+    let t = TestContext::new_alice().await;
+    let transport_id = 1;
+    let uidvalidity = 100;
+
+    for (transport_id, folder, uid, uidvalidity) in [
+        (transport_id, "INBOX", 1, uidvalidity),
+        (transport_id, "INBOX", 2, uidvalidity),
+        (transport_id, "INBOX", 1, uidvalidity + 1),
+        (transport_id, "Other", 1, uidvalidity),
+        (transport_id + 1, "INBOX", 1, uidvalidity),
+    ] {
+        t.sql
+            .execute(
+                "INSERT INTO imap (transport_id, rfc724_mid, folder, uid, uidvalidity, target)
+                 VALUES (?,'msg@localhost',?,?,?,?)",
+                (transport_id, folder, uid, uidvalidity, folder),
+            )
+            .await?;
+    }
+
+    mark_msg_for_deletion(&t, transport_id, "INBOX", 1, uidvalidity).await?;
+
+    let marked: Vec<(u32, String, u32, u32)> = t
+        .sql
+        .query_map_vec(
+            "SELECT transport_id, folder, uid, uidvalidity FROM imap WHERE target=''",
+            (),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .await?;
+    assert_eq!(
+        marked,
+        vec![(transport_id, "INBOX".to_string(), 1, uidvalidity)]
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_is_encrypted_copy_of_downloaded_msg() -> Result<()> {
+    let t = TestContext::new_alice().await;
+
+    // (rfc724_mid, pre_rfc724_mid, download_state)
+    let msgs = [
+        ("done@localhost", "", DownloadState::Done),
+        (
+            "available_post@localhost",
+            "pre@localhost",
+            DownloadState::Available,
+        ),
+    ];
+    for (rfc724_mid, pre_rfc724_mid, download_state) in msgs {
+        t.sql
+            .execute(
+                "INSERT INTO msgs (rfc724_mid, pre_rfc724_mid, download_state) VALUES (?,?,?)",
+                (rfc724_mid, pre_rfc724_mid, download_state),
+            )
+            .await?;
+    }
+
+    let encrypted = b"Content-Type: multipart/encrypted; protocol=\"application/pgp-encrypted\"; boundary=\"x\"\r\n\r\n";
+    let unencrypted = b"Content-Type: text/plain\r\n\r\n";
+    for (headers, message_id, expected) in [
+        (&encrypted[..], "done@localhost", true),
+        (&unencrypted[..], "done@localhost", false),
+        (&encrypted[..], "pre@localhost", true),
+        (&encrypted[..], "available_post@localhost", false),
+        (&encrypted[..], "unknown@localhost", false),
+    ] {
+        let (headers, _) = mailparse::parse_headers(headers)?;
+        assert_eq!(
+            is_encrypted_copy_of_downloaded_msg(&t, &headers, message_id).await?,
+            expected,
+            "{message_id}"
+        );
+    }
+    Ok(())
+}
