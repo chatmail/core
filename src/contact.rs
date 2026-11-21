@@ -6,6 +6,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
+use crate::pgp::minimize_autocrypt_certificate;
 use anyhow::{Context as _, Result, bail, ensure};
 use async_channel::{self as channel, Receiver, Sender};
 use base64::Engine as _;
@@ -308,7 +309,10 @@ pub async fn make_vcard(context: &Context, contacts: &[ContactId]) -> Result<Str
     let mut vcard_contacts = Vec::with_capacity(contacts.len());
     for id in contacts {
         let c = Contact::get_by_id(context, *id).await?;
-        let key = c.public_key(context).await?.map(|k| k.to_base64());
+        let key = c
+            .public_key(context)
+            .await?
+            .map(|k| minimize_autocrypt_certificate(&k).to_base64());
         let profile_image = match c.get_profile_image_ext(context, false).await? {
             None => None,
             Some(path) => tokio::fs::read(path)
