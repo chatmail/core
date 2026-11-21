@@ -3796,7 +3796,7 @@ pub(crate) async fn remove_from_chat_contacts_table(
 ///
 /// Note that if we call this function,
 /// and then receive a message from another device
-/// that doesn't know that this this member was removed
+/// that doesn't know that this member was removed
 /// then the group membership algorithm will wrongly re-add this member.
 pub(crate) async fn remove_from_chat_contacts_table_without_trace(
     context: &Context,
