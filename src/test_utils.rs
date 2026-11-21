@@ -387,9 +387,10 @@ impl TestContextBuilder {
 
             let test_context = TestContext::new_internal(Some(unused_name)).await;
             test_context.configure_addr(&addr).await;
-            key::store_self_keypair(&test_context, &key_pair)
+            let new_key_pair = key::store_self_keypair(&test_context, key_pair.clone())
                 .await
                 .expect("Failed to save key");
+            assert_eq!(new_key_pair, key_pair);
 
             if let Some(offset) = self.id_offset {
                 test_context
@@ -571,8 +572,6 @@ impl TestContext {
             )
             .await
             .unwrap();
-        // Invalidate the cached self key so that it is regenerated with the new list.
-        self.self_public_key.lock().await.take();
     }
 
     pub async fn set_sending_addr(&mut self, addr: &str) {

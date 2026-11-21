@@ -17,13 +17,18 @@ use pgp::packet::{
     SubpacketData,
 };
 use pgp::ser::Serialize;
+use pgp::types::SigningKey as _;
+use pgp::types::Timestamp as PgpTimestamp;
 use pgp::types::{CompressionAlgorithm, KeyDetails, KeyVersion};
 use rand_old::thread_rng;
+use rusqlite::OptionalExtension as _;
 use tokio::runtime::Handle;
 
+use crate::config::Config;
 use crate::context::Context;
 use crate::events::EventType;
-use crate::log::LogExt;
+use crate::pgp::autocrypt2::Autocrypt2Tsk;
+use crate::pgp::pgp_time;
 use crate::tools::{self, time_elapsed};
 
 /// Convenience trait for working with keys.
@@ -156,7 +161,7 @@ pub(crate) fn secret_key_to_public_key(
         };
 
         Ok(vec![
-            Subpacket::regular(SubpacketData::SignatureCreationTime(timestamp))?,
+            Subpacket::critical(SubpacketData::SignatureCreationTime(timestamp))?,
             Subpacket::regular(SubpacketData::IssuerFingerprint(
                 signed_secret_key.fingerprint(),
             ))?,
@@ -230,11 +235,37 @@ pub(crate) fn secret_key_to_public_key(
 
     let direct_signatures = {
         let mut rng = thread_rng();
-        let mut direct_key_signature_config = SignatureConfig::from_key(
-            &mut rng,
-            &signed_secret_key.primary_key,
-            SignatureType::Key,
-        )?;
+        let mut direct_key_signature_config = match signed_secret_key.primary_key.version() {
+            KeyVersion::V6 => {
+                // Reuse the salt from existing Direct Key Signature to make signature deterministic.
+                // Signatures are salted since V6, but we want all devices to generate exactly the same signatures.
+                // Advantages of salted signatures still apply, we choose the salt on our own:
+                // <https://www.rfc-editor.org/rfc/rfc9580.html#name-advantages-of-salted-signat>
+                let old_direct_key_signature = signed_secret_key
+                    .details
+                    .direct_signatures
+                    .first()
+                    .context("Failed to get old direct key signature")?;
+                let old_direct_key_signature_config = old_direct_key_signature
+                    .config()
+                    .context("Failed to get old direct key signature config")?;
+                let salt = match old_direct_key_signature_config.version_specific {
+                    pgp::packet::SignatureVersionSpecific::V6 { ref salt } => salt.clone(),
+                    _ => bail!("V6 key with non-V6 direct key signature"),
+                };
+                SignatureConfig::v6_with_salt(
+                    SignatureType::Key,
+                    signed_secret_key.primary_key.algorithm(),
+                    signed_secret_key.primary_key.hash_alg(),
+                    salt,
+                )
+            }
+            _ => SignatureConfig::from_key(
+                &mut rng,
+                &signed_secret_key.primary_key,
+                SignatureType::Key,
+            )?,
+        };
         direct_key_signature_config.hashed_subpackets = common_subpackets()?;
         let notation = Notation {
             readable: true,
@@ -266,12 +297,6 @@ pub(crate) fn secret_key_to_public_key(
 ///
 /// Returns `None` if no secret key is generated yet.
 pub(crate) async fn load_self_public_key_opt(context: &Context) -> Result<Option<SignedPublicKey>> {
-    let mut lock = context.self_public_key.lock().await;
-
-    if let Some(ref public_key) = *lock {
-        return Ok(Some(public_key.clone()));
-    }
-
     let Some(secret_key_bytes) = context
         .sql
         .query_row_optional(
@@ -289,6 +314,13 @@ pub(crate) async fn load_self_public_key_opt(context: &Context) -> Result<Option
         return Ok(None);
     };
     let signed_secret_key = SignedSecretKey::from_slice(&secret_key_bytes)?;
+    let signed_secret_key = match Autocrypt2Tsk::try_from(signed_secret_key) {
+        Ok(mut autocrypt2_tsk) => {
+            autocrypt2_tsk.ratchet_until(pgp_time())?;
+            autocrypt2_tsk.into_inner()
+        }
+        Err(tsk) => tsk,
+    };
     let timestamp = context
         .sql
         .query_get_value::<u32>(
@@ -306,7 +338,6 @@ pub(crate) async fn load_self_public_key_opt(context: &Context) -> Result<Option
     let all_addrs = context.get_self_addrs().await?.join(",");
     let signed_public_key =
         secret_key_to_public_key(signed_secret_key, timestamp, &addr, &all_addrs)?;
-    *lock = Some(signed_public_key.clone());
 
     Ok(Some(signed_public_key))
 }
@@ -395,33 +426,22 @@ pub(crate) async fn load_self_secret_key(context: &Context) -> Result<SignedSecr
             },
         )
         .await?;
-    match private_key {
-        Some(bytes) => SignedSecretKey::from_slice(&bytes),
-        None => {
-            let secret = generate_keypair(context).await?;
-            Ok(secret)
+    let tsk = match private_key {
+        Some(bytes) => SignedSecretKey::from_slice(&bytes)?,
+        None => generate_keypair(context).await?,
+    };
+    match Autocrypt2Tsk::try_from(tsk) {
+        Ok(mut autocrypt2_tsk) => {
+            // For secret key we ratchet it into the future
+            // so we can decrypt messages in case we have another device
+            // that has clock running ahead of our device and advertising a key created in the future.
+            // We don't do this for the public key that we advertise ourselves in Autocrypt header.
+            let t = PgpTimestamp::from_secs(pgp_time().as_secs().saturating_add(24 * 10 * 3600));
+            autocrypt2_tsk.ratchet_until(t)?;
+            Ok(autocrypt2_tsk.into_inner())
         }
+        Err(tsk) => Ok(tsk),
     }
-}
-
-pub(crate) async fn load_self_secret_keyring(context: &Context) -> Result<Vec<SignedSecretKey>> {
-    let keys = context
-        .sql
-        .query_map_vec(
-            r#"SELECT private_key
-               FROM keypairs
-               ORDER BY id=(SELECT value FROM config WHERE keyname='key_id') DESC"#,
-            (),
-            |row| {
-                let bytes: Vec<u8> = row.get(0)?;
-                Ok(bytes)
-            },
-        )
-        .await?
-        .into_iter()
-        .filter_map(|bytes| SignedSecretKey::from_slice(&bytes).log_err(context).ok())
-        .collect();
-    Ok(keys)
 }
 
 impl DcKey for SignedPublicKey {
@@ -470,10 +490,14 @@ impl DcKey for SignedSecretKey {
     }
 }
 
+/// Generates a new secret key and tries to store it.
+///
+/// Returns stored key. If the key is already stored,
+/// e.g. because this function is called twice concurrently,
+/// throws away generated key and returns the old key.
 async fn generate_keypair(context: &Context) -> Result<SignedSecretKey> {
     let addr = context.get_primary_self_addr().await?;
     let addr = EmailAddress::new(&addr)?;
-    let _public_key_guard = context.self_public_key.lock().await;
 
     // Check if the key appeared while we were waiting on the lock.
     match load_keypair(context).await? {
@@ -481,11 +505,19 @@ async fn generate_keypair(context: &Context) -> Result<SignedSecretKey> {
         None => {
             let start = tools::Time::now();
             info!(context, "Generating keypair.");
-            let keypair = Handle::current()
-                .spawn_blocking(move || crate::pgp::create_keypair(addr))
-                .await??;
+            let keypair = if context.get_config_bool(Config::Autocrypt2).await? {
+                let now = pgp_time();
+                let autocrypt2_tsk = Handle::current()
+                    .spawn_blocking(move || Autocrypt2Tsk::new(now))
+                    .await??;
+                autocrypt2_tsk.into_inner()
+            } else {
+                Handle::current()
+                    .spawn_blocking(move || crate::pgp::create_keypair(addr))
+                    .await??
+            };
 
-            store_self_keypair(context, &keypair).await?;
+            let keypair = store_self_keypair(context, keypair).await?;
             info!(
                 context,
                 "Keypair generated in {:.3}s.",
@@ -522,13 +554,12 @@ pub(crate) async fn load_keypair(context: &Context) -> Result<Option<SignedSecre
 
 /// Stores own keypair in the database and sets it as a default.
 ///
-/// Fails if we already have a key, so it is not possible to
-/// have more than one key for new setups. Existing setups
-/// may still have more than one key for compatibility.
+/// If we already have a key, returns existing key.
+/// Otherwise returns just stored key.
 pub(crate) async fn store_self_keypair(
     context: &Context,
-    signed_secret_key: &SignedSecretKey,
-) -> Result<()> {
+    signed_secret_key: SignedSecretKey,
+) -> Result<SignedSecretKey> {
     // This public key is stored in the database
     // only for backwards compatibility.
     //
@@ -537,11 +568,30 @@ pub(crate) async fn store_self_keypair(
     // which adds relay list to the signature.
     let signed_public_key = signed_secret_key.to_public_key();
     let mut config_cache_lock = context.sql.config_cache.write().await;
-    let new_key_id = context
+    let signed_secret_key = context
         .sql
         .transaction(|transaction| {
+            if let Some(old_secret_key_bytes) = transaction
+                .query_row(
+                    "
+SELECT private_key FROM keypairs
+WHERE id=(SELECT value FROM config WHERE keyname='key_id')",
+                    (),
+                    |row| {
+                        let bytes: Vec<u8> = row.get(0)?;
+                        Ok(bytes)
+                    },
+                )
+                .optional()
+                .context("Failed to select own secret key")?
+            {
+                // Key already exists, return it.
+                let old_signed_secret_key = SignedSecretKey::from_slice(&old_secret_key_bytes)?;
+                return Ok(old_signed_secret_key);
+            }
+
             let public_key = DcKey::to_bytes(&signed_public_key);
-            let secret_key = DcKey::to_bytes(signed_secret_key);
+            let secret_key = DcKey::to_bytes(&signed_secret_key);
 
             // private_key and public_key columns
             // are UNIQUE since migration 107,
@@ -564,22 +614,25 @@ pub(crate) async fn store_self_keypair(
                 "INSERT INTO config (keyname, value) VALUES ('key_id', ?)",
                 (new_key_id,),
             )?;
-            Ok(new_key_id)
+            Ok(signed_secret_key)
         })
         .await?;
     context.emit_event(EventType::AccountsItemChanged);
-    config_cache_lock.insert("key_id".to_string(), Some(new_key_id.to_string()));
-    Ok(())
+    config_cache_lock.remove("key_id");
+    Ok(signed_secret_key)
 }
 
 /// Saves a keypair as the default keys.
 ///
 /// This API is used for testing purposes
 /// to avoid generating the key in tests.
-/// Use import/export APIs instead.
 pub async fn preconfigure_keypair(context: &Context, secret_data: &str) -> Result<()> {
     let secret = SignedSecretKey::from_asc(secret_data)?;
-    store_self_keypair(context, &secret).await?;
+    let new_secret = store_self_keypair(context, secret.clone()).await?;
+    ensure!(
+        new_secret == secret,
+        "New key is not stored, another key already exists"
+    );
     Ok(())
 }
 
@@ -663,6 +716,7 @@ mod tests {
     use crate::test_utils::{TestContext, TestContextManager, alice_keypair};
     use crate::tools::SystemTime;
     use crate::transport::add_pseudo_transport;
+    use pretty_assertions::assert_eq;
 
     static KEYPAIR: LazyLock<SignedSecretKey> = LazyLock::new(alice_keypair);
 
@@ -867,12 +921,12 @@ i8pcjGO+IZffvyZJVRWfVooBJmWWbPB1pueo3tx8w3+fcuzpxz+RLFKaPyqXO+dD
                 .unwrap()
         };
         assert_eq!(nrows().await, 0);
-        store_self_keypair(&ctx, &KEYPAIR).await.unwrap();
+        store_self_keypair(&ctx, KEYPAIR.clone()).await.unwrap();
         assert_eq!(nrows().await, 1);
 
-        // Saving a second key fails.
-        let res = store_self_keypair(&ctx, &KEYPAIR).await;
-        assert!(res.is_err());
+        // Saving a second key returns the old key.
+        let res = store_self_keypair(&ctx, KEYPAIR.clone()).await.unwrap();
+        assert_eq!(res, *KEYPAIR);
 
         assert_eq!(nrows().await, 1);
     }
