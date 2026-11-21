@@ -2688,7 +2688,9 @@ async fn prepare_send_msg(
             msg.param.get_int(Param::Reaction).unwrap_or_default() != 0
                 || matches!(
                     msg.param.get_cmd(),
-                    SystemMessage::MemberRemovedFromGroup | SystemMessage::SecurejoinMessage
+                    SystemMessage::MemberRemovedFromGroup
+                        | SystemMessage::SecurejoinMessage
+                        | SystemMessage::IrohNodeAddr
                 )
         }
         CantSendReason::MissingKey => msg
