@@ -13,6 +13,8 @@ from queue import Empty, Queue
 from threading import Thread
 from typing import Any, Iterator, Optional
 
+logger = logging.getLogger(__name__)
+
 
 class JsonRpcError(Exception):
     """JSON-RPC error."""
@@ -141,7 +143,7 @@ class Rpc:
             if stderr:
                 raise JsonRpcError(f"RPC server failed to start: {stderr}") from e
             raise JsonRpcError(f"RPC server startup check failed: {e}") from e
-        logging.info(
+        logger.info(
             "RPC server ready. Core version: %s",
             system_info.get("deltachat_core_version", "unknown"),
         )
@@ -195,10 +197,10 @@ class Rpc:
                     response_id = response["id"]
                     self.request_results.pop(response_id).put(response)
                 else:
-                    logging.warning("Got a response without ID: %s", response)
+                    logger.warning("Got a response without ID: %s", response)
         except Exception:
             # Log an exception if the reader loop dies.
-            logging.exception("Exception in the reader loop")
+            logger.exception("Exception in the reader loop")
         finally:
             # Shut the request queue first, so that requests registered from now
             # on are failed by their caller, then answer the pending ones here.
@@ -215,7 +217,7 @@ class Rpc:
                 self.process.stdin.flush()
         except Exception:
             # Log an exception if the writer loop dies.
-            logging.exception("Exception in the writer loop")
+            logger.exception("Exception in the writer loop")
 
     def get_queue(self, account_id: int) -> Queue:
         """Get event queue corresponding to the given account ID."""
@@ -231,13 +233,13 @@ class Rpc:
                     account_id = event["contextId"]
                     queue = self.get_queue(account_id)
                     payload = event["event"]
-                    logging.debug("account_id=%d got an event %s", account_id, payload)
+                    logger.debug("account_id=%d got an event %s", account_id, payload)
                     queue.put(payload)
                 if self.closing:
                     return
         except Exception:
             # Log an exception if the event loop dies.
-            logging.exception("Exception in the event loop")
+            logger.exception("Exception in the event loop")
 
     def wait_for_event(self, account_id: int) -> Optional[dict]:
         """Wait for the next event from the given account and returns it."""
