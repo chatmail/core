@@ -17,6 +17,8 @@ if TYPE_CHECKING:
     from .deltachat import DeltaChat
     from .rpc import Rpc
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class Account:
@@ -38,11 +40,11 @@ class Account:
 
     def wait_for_realtime_data(self, msg_id: int) -> bytes:
         """Wait for the next realtime data received for the given webxdc message and return it."""
-        logging.info(f"account {self.id}: waiting for realtime data for msg {msg_id}")
+        logger.info(f"account {self.id}: waiting for realtime data for msg {msg_id}")
         while True:
             event = self.wait_for_event(EventType.WEBXDC_REALTIME_DATA)
             if event.msg_id == msg_id:
-                logging.info(f"account {self.id}: got realtime data for msg {msg_id}: {event.data[:20]}")
+                logger.info(f"account {self.id}: got realtime data for msg {msg_id}: {event.data[:20]}")
                 return bytes(event.data)
 
     def clear_all_events(self):
