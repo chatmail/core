@@ -774,7 +774,7 @@ async fn test_webxdc_updates_in_post_message_after_deleted_pre_message() -> Resu
 }
 
 /// Tests receiving of a large webxdc post-message with updates attached
-/// to the the .xdc post-message when pre-message arrives later.
+/// to the .xdc post-message when pre-message arrives later.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_webxdc_updates_in_post_message_without_pre_message() -> Result<()> {
     let mut tcm = TestContextManager::new();
