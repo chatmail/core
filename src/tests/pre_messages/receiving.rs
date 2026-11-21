@@ -623,7 +623,7 @@ async fn test_webxdc_update_for_not_downloaded_instance() -> Result<()> {
     Ok(())
 }
 
-/// Tests receiving of a large webxdc with updates attached to the the .xdc message.
+/// Tests receiving of a large webxdc with updates attached to the .xdc message.
 ///
 /// Updates are sent in a post message and should be assigned to xdc instance
 /// once post message is downloaded.
