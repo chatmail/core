@@ -9,7 +9,7 @@ Content-Type: multipart/alternative; boundary="==BREAK=="
 --==BREAK==
 Content-Type: text/plain; charset=utf-8
 
-mime-modified should not be set set as there is no html and no special stuff;
+mime-modified should not be set as there is no html and no special stuff;
 although not being a delta-message.
 test some special html-characters as < > and & but also " and ' :)
 
