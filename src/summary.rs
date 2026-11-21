@@ -76,7 +76,7 @@ impl Summary {
         {
             // there is a reaction newer than the latest message, show that.
             // sorting and therefore date is still the one of the last message,
-            // the reaction is is more sth. that overlays temporarily.
+            // the reaction is more sth. that overlays temporarily.
             let summary = reaction_msg.get_summary_text_without_prefix(context).await;
             return Ok(Summary {
                 prefix: None,

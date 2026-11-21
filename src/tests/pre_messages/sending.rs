@@ -249,7 +249,7 @@ async fn test_not_sending_pre_message_no_attachment() -> Result<()> {
         "no 'Chat-Post-Message-ID'-header should be present"
     );
 
-    // test that pre message is not send for large large text
+    // test that pre message is not send for large text
     let mut msg = Message::new(Viewtype::Text);
     let long_text = String::from_utf8(vec![b'a'; 300_000])?;
     assert!(long_text.len() > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD.try_into().unwrap());

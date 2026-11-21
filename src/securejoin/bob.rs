@@ -46,7 +46,7 @@ use crate::{chatlist_events, mimefactory};
 /// chat with Alice, for a SecureJoin QR this is the group chat.
 pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Result<ChatId> {
     // A single chat is needed to send messages to Alice.  When joining a group this chat is
-    // hidden, if a user starts sending messages in it it will be unhidden in
+    // hidden, if a user starts sending messages in it will be unhidden in
     // receive_imf.
     let private_chat_id = private_chat_id(context, &invite).await?;
 

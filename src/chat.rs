@@ -3796,7 +3796,7 @@ pub(crate) async fn remove_from_chat_contacts_table(
 ///
 /// Note that if we call this function,
 /// and then receive a message from another device
-/// that doesn't know that this this member was removed
+/// that doesn't know that this member was removed
 /// then the group membership algorithm will wrongly re-add this member.
 pub(crate) async fn remove_from_chat_contacts_table_without_trace(
     context: &Context,
@@ -4695,7 +4695,7 @@ pub(crate) async fn resend_msgs_ext(
             msg.param.set(Param::Arg4, to_fingerprint.clone());
             if let Some(json) = broadcast_reactions::render_json(context, &[msg.id]).await? {
                 // The returned reaction array for the message may be empty,
-                // so rejoining members get reactions cleared as neccessary.
+                // so rejoining members get reactions cleared as necessary.
                 msg.param.set(Param::BroadcastReactions, json);
             }
         }

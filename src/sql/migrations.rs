@@ -2274,7 +2274,7 @@ ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
     // and self-sent messages are not sent there,
     // so that we don't cause extra messages to the corresponding inbox,
     // but can still receive messages from contacts who don't know our new transport addresses yet.
-    // The default is true, but when when the user updates the app,
+    // The default is true, but when the user updates the app,
     // existing secondary transports are set to unpublished,
     // so that an existing transport address doesn't suddenly get spammed with a lot of messages.
     inc_and_check(&mut migration_version, 149)?;

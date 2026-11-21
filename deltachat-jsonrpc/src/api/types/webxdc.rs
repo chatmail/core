@@ -20,7 +20,7 @@ pub struct WebxdcMessageInfo {
     ///
     /// To get the file, use dc_msg_get_webxdc_blob(). (not yet in jsonrpc, use rust api or cffi for it)
     ///
-    /// App icons should should be square,
+    /// App icons should be square,
     /// the implementations will add round corners etc. as needed.
     icon: String,
     /// if the Webxdc represents a document, then this is the name of the document

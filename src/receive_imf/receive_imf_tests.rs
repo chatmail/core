@@ -3316,7 +3316,7 @@ async fn test_no_private_reply_to_blocked_account() -> Result<()> {
 /// 1. If you blocked some spammer using DC, the single chat messages with that contact
 ///    are not received, but they could easily bypass this restriction creating
 ///    a new group with only you two as member.
-/// 2. A blocked group was sometimes not unblocked when when an unblocked
+/// 2. A blocked group was sometimes not unblocked when an unblocked
 ///    contact sent a message into it.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_blocked_contact_creates_group() -> Result<()> {
