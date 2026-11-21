@@ -1310,7 +1310,7 @@ async fn test_marknoticed_all_chats() -> Result<()> {
         .set_visibility(&alice.ctx, ChatVisibility::Archived)
         .await?;
 
-    tcm.section("bob: receive messages, accept all chats and send a reply to each messsage");
+    tcm.section("bob: receive messages, accept all chats and send a reply to each message");
 
     while let Some(sent_msg) = alice.pop_sent_msg_opt().await {
         let bob_message = bob.recv_msg(&sent_msg).await;
@@ -3244,7 +3244,7 @@ async fn test_get_broadcast_msgs_to_resend() -> Result<()> {
     let to_resend = get_broadcast_msgs_to_resend(alice, chat_id).await?;
     assert_eq!(to_resend.len(), 0);
 
-    // Alice sends 5 messsage to the channel, all of them will be resent
+    // Alice sends 5 messages to the channel, all of them will be resent
     let mut msg_ids = Vec::new(); // oldest is first
     for i in 0..5 {
         let msg_id = send_text_msg(alice, chat_id, format!("message {i}")).await?;
@@ -3256,7 +3256,7 @@ async fn test_get_broadcast_msgs_to_resend() -> Result<()> {
         assert!(to_resend.contains(msg_id));
     }
 
-    // If Alice has 50 messags in the channel, only the 10 newest will be resent
+    // If Alice has 50 messages in the channel, only the 10 newest will be resent
     for i in 5..50 {
         let msg_id = send_text_msg(alice, chat_id, format!("message {i}")).await?;
         msg_ids.push(msg_id);
@@ -6215,7 +6215,7 @@ async fn test_receive_edit_request_after_removal() -> Result<()> {
     let bob = &tcm.bob().await;
     let alice_chat = alice.create_chat(bob).await;
 
-    // Alice sends a messag with typos, followed by a correction message
+    // Alice sends a message with typos, followed by a correction message
     let sent1 = alice.send_text(alice_chat.id, "zext me in delra.cat").await;
     let alice_msg = sent1.load_from_db().await;
     send_edit_request(alice, alice_msg.id, "Text me on Delta.Chat".to_string()).await?;
@@ -6279,7 +6279,7 @@ async fn test_cannot_send_edit_request() -> Result<()> {
             .is_err()
     );
 
-    // If not text was given initally, there is nothing to edit
+    // If not text was given initially, there is nothing to edit
     // (this also avoids complexity in UI element changes; focus is typos and rewordings)
     let mut msg = Message::new(Viewtype::File);
     msg.make_vcard(alice, &[ContactId::SELF]).await?;

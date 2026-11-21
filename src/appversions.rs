@@ -220,7 +220,7 @@ mod tests {
         let mut accounts = Accounts::new(p.clone(), writable).await.unwrap();
 
         // no accounts configured, means no versions are reported
-        let version = get_app_version(&accounts, "non-", "existant").await?;
+        let version = get_app_version(&accounts, "non-", "existent").await?;
         assert!(version.is_none());
 
         // first account reports two clients, with one and two sources
@@ -274,7 +274,7 @@ mod tests {
         assert_eq!(version.version_string, "13.37"); // spaces are removed by sanitize_version_string()
         assert_eq!(version.download_url, "https://dl.org/1337.acc");
 
-        let version = get_app_version(&accounts, "non-", "existant").await?;
+        let version = get_app_version(&accounts, "non-", "existent").await?;
         assert!(version.is_none());
 
         // a second account reports a newer version for "bar"
@@ -311,7 +311,7 @@ mod tests {
         assert_eq!(version.version_string, "13.37");
         assert_eq!(version.download_url, "https://dl.org/1337.acc");
 
-        let version = get_app_version(&accounts, "non-", "existant").await?;
+        let version = get_app_version(&accounts, "non-", "existent").await?;
         assert!(version.is_none());
 
         // a third account reports a older version for "bar", that is ignored
@@ -348,7 +348,7 @@ mod tests {
         assert_eq!(version.version_string, "13.37");
         assert_eq!(version.download_url, "https://dl.org/1337.acc");
 
-        let version = get_app_version(&accounts, "non-", "existant").await?;
+        let version = get_app_version(&accounts, "non-", "existent").await?;
         assert!(version.is_none());
 
         // second account returns an invalid json, that account is skipped, but app versionss are still gathered from the other

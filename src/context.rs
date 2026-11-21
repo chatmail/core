@@ -247,7 +247,7 @@ pub struct InnerContext {
     pub(crate) scheduler: SchedulerState,
     pub(crate) ratelimit: RwLock<Ratelimit>,
 
-    /// Recently loaded quota information for each trasnport, if any.
+    /// Recently loaded quota information for each transport, if any.
     /// If quota was never tried to load, then the transport doesn't have an entry in the BTreeMap.
     pub(crate) quota: RwLock<BTreeMap<u32, QuotaInfo>>,
 
@@ -313,7 +313,7 @@ pub struct InnerContext {
     /// the standard library's OnceLock is enough, and it's a lot smaller in memory.
     pub(crate) self_fingerprint: OnceLock<String>,
 
-    /// OpenPGP certificate aka Transferrable Public Key.
+    /// OpenPGP certificate aka Transferable Public Key.
     ///
     /// It is generated on first use from the secret key stored in the database.
     ///

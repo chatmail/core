@@ -1058,7 +1058,7 @@ impl MimeMessage {
     #[cfg(test)]
     /// Returns whether the header exists in any part of the parsed message.
     ///
-    /// Use this to check for header absense. Header presense should be checked using
+    /// Use this to check for header absence. Header presence should be checked using
     /// `get_header(...).is_some()` as it also checks that the header isn't ignored.
     pub(crate) fn header_exists(&self, headerdef: HeaderDef) -> bool {
         let hname = headerdef.get_headername();

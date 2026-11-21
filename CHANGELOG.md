@@ -224,7 +224,7 @@
 - In SMTP loop, reset `transport_id` and `from` when disconnecting ([#8797](https://github.com/chatmail/core/pull/8797)).
 - deltachat-rpc-client: shutdown all threads after RPC server crash.
 - (linux-only) make sure large attachments return memory to kernel.
-- do not reencode animated WebPs into JPEG.
+- do not re-encode animated WebPs into JPEG.
 
 ### CI
 
@@ -529,9 +529,9 @@
 
 ### Tests
 
-- Fix flakyness of iroh tests by sending "forever" so that late swarm-joins still make the test work.
+- Fix flakiness of iroh tests by sending "forever" so that late swarm-joins still make the test work.
 - Move iroh tests into separate module.
-- Provide complete test isolation by not re-using account addresses.
+- Provide complete test isolation by not reusing account addresses.
 - Avoid another source of random failures with `direct_imap` failing to connect on first try.
 - Remove all cache-related logic in the FFI pytest plugin.
 - Add a CI-failing check that documented sql schema matches real one.
@@ -563,8 +563,8 @@
 
 ### Features / Changes
 
-- send Autocrypt pgp key in MDNs occassionally and when relaylist changes.
-- reduce unncessary gossipping of keys in group chats.
+- send Autocrypt pgp key in MDNs occasionally and when relaylist changes.
+- reduce unnecessary gossiping of keys in group chats.
 - stop requiring XDELTAPUSH capability for push notifications.
 - prepare basic multi-relay onboarding ([#8444](https://github.com/chatmail/core/pull/8444))
 - collect ICE servers from all relays.
@@ -1072,7 +1072,7 @@ Minor release to fix CI because releasing 2.54.0 failed.
 
 ### Fixes
 
-- Determine whether a message is an own message by looking at signature. multiple devices can temporarly have different sets of self addresses, and still need to properly recognize incoming versus outgoing messages. Disclaimer: some LLM tooling was initially involved but i went over everything by hand, and also addressed review comments..
+- Determine whether a message is an own message by looking at signature. multiple devices can temporarily have different sets of self addresses, and still need to properly recognize incoming versus outgoing messages. Disclaimer: some LLM tooling was initially involved but i went over everything by hand, and also addressed review comments..
 - Mark a message as delivered only after it has been fully sent out ([#8062](https://github.com/chatmail/core/pull/8062)).
 - Do not create 1:1 chat on second device when scanning a QR code.
 - Do not URL-encode proxy hostnames.
@@ -1870,7 +1870,7 @@ that failed to be published for 2.31.0 due to not configured "trusted publishers
 ### CI
 
 - Set timeout-minutes for all jobs in ci.yaml workflow.
-- Do not install Python manually to bulid RPC server wheels.
+- Do not install Python manually to build RPC server wheels.
 - Do not build fake RPC server source packages.
 - Build Python wheels in separate jobs.
 
@@ -2123,7 +2123,7 @@ use v2.23.0 or v2.25.0 instead.***
 
 Metadata reduction:
 - Protect Autocrypt header.
-- Anonymize OpenPGP recipients (temorarily disabled due to interoperability problems, see <https://github.com/chatmail/core/issues/7384>).
+- Anonymize OpenPGP recipients (temporarily disabled due to interoperability problems, see <https://github.com/chatmail/core/issues/7384>).
 - Protect the `Date` header.
 
 Onboarding improvements:
@@ -2785,7 +2785,7 @@ to the e-mail addresses.
 - Reduce the scope of the last_full_folder_scan lock in scan_folders.
 - Ignore verification error if the chat is not protected yet.
 - Create group chats unprotected on verification error.
-- `fetch_url`: return err on non 2xx reponses.
+- `fetch_url`: return err on non 2xx responses.
 - Sort multiple saved messages by timestamp ([#6862](https://github.com/chatmail/core/pull/6862)).
 - contact-tools: Escape commas in vCards' FN, KEY, PHOTO, NOTE ([#6912](https://github.com/chatmail/core/pull/6912)).
 - Don't change ConfiguredAddr when adding a transport ([#6804](https://github.com/chatmail/core/pull/6804)).
@@ -2876,7 +2876,7 @@ to the e-mail addresses.
 
 ### Tests
 
-- Check headers absense straightforwardly.
+- Check headers absence straightforwardly.
 - Fix mismatch between the contact and the account in securejoin tests.
 - Test that key of the recipient is gossiped in 1:1 chats.
 
@@ -3131,7 +3131,7 @@ to the e-mail addresses.
 
 ### Build system
 
-- Intergrate `fuzz` crate into workspace.
+- Integrate `fuzz` crate into workspace.
 - Update env_logger to get rid of unmaintained humantime dependency.
 - nix: Update NDK to 27.2.12479018.
 - Build Android wheels for PyPI.
@@ -3625,7 +3625,7 @@ due to iroh upgrade.
 
 ### Tests
 
-- Notifiy more prominently & in more tests about false positives when running `cargo test` ([#6308](https://github.com/chatmail/core/pull/6308)).
+- Notify more prominently & in more tests about false positives when running `cargo test` ([#6308](https://github.com/chatmail/core/pull/6308)).
 
 ## [1.151.5] - 2024-12-05
 
@@ -4123,7 +4123,7 @@ This reverts commit 6f22ce2722b51773d7fbb0d89e4764f963cafd91..
 
 ### Documentation
 
-- CONTRIBUTING.md: Add more SQL advices.
+- CONTRIBUTING.md: Add more SQL advice.
 
 ## [1.146.0] - 2024-10-03
 

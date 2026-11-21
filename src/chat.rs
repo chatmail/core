@@ -2540,7 +2540,7 @@ async fn prepare_msg_blob(context: &Context, msg: &mut Message) -> Result<()> {
     // running numbers, etc.
     let filename: String = match viewtype_orig {
         Viewtype::Voice => format!(
-            "voice-messsage_{}.{suffix}",
+            "voice-message_{}.{suffix}",
             chrono::Utc
                 .timestamp_opt(msg.timestamp_sort, 0)
                 .single()
@@ -2761,7 +2761,7 @@ async fn prepare_send_msg(
 /// Pre-Message is a small message with metadata which announces a larger Post-Message.
 /// Post-Messages are not downloaded in the background.
 ///
-/// If pre-message is not nessesary, this returns `None` as the 0th value.
+/// If pre-message is not necessary, this returns `None` as the 0th value.
 async fn render_mime_message_and_pre_message(
     context: &Context,
     msg: &mut Message,

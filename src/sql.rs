@@ -191,7 +191,7 @@ impl Sql {
 
         if let Err(e) = self.run_migrations(context).await {
             error!(context, "Running migrations failed: {e:#}");
-            // Emiting an error event probably doesn't work
+            // Emitting an error event probably doesn't work
             // because we are in the process of opening the context,
             // so there is no event emitter yet.
             // So, try to report the error in other ways:

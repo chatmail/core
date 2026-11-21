@@ -186,7 +186,7 @@ CREATE TABLE msgs (
     --
     -- For incoming messages, when a pre-message arrives,
     -- rfc724_mid is set to the Message-ID of the post-message,
-    -- and pre_rfc724_mid is set to the Message-ID of the arrived pre-messsage.
+    -- and pre_rfc724_mid is set to the Message-ID of the arrived pre-message.
     -- For other messages rfc724_mid is taken from the Message-ID
     -- and pre_rfc724_mid is set to empty string.
 
@@ -325,7 +325,7 @@ CREATE TABLE msgs (
     server_folder TEXT DEFAULT '', -- Deprecated column that was used before "imap" table, replaced by imap.folder
     server_uid INTEGER DEFAULT 0, -- Deprecated column that was used before "imap" table, replaced by imap.uid
 
-    -- Unused column formely used to mark the messages
+    -- Unused column formerly used to mark the messages
     -- that should be moved to the dedicated IMAP folder.
     -- It was replaced with imap.target, which is also now
     -- used only to mark the messages on IMAP for deletion.
@@ -602,7 +602,7 @@ CREATE TABLE iroh_gossip_peers (
 -- Storage for own private keys.
 -- Only one of the keys is used.
 --
--- In the past mulitple keys could be imported,
+-- In the past multiple keys could be imported,
 -- so this table can contain multiple keys for existing users.
 -- Used key is identified by the "key_id" config value.
 -- Other keys must never be used, even for decryption.
