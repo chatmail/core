@@ -162,7 +162,7 @@ class NewMessage(EventFilter):
         return False
 
     def filter(self, event: "AttrDict") -> bool:
-        """Return true if if the event is a new message event."""
+        """Return true if the event is a new message event."""
         if self.is_bot is not None and self.is_bot != event.message_snapshot.is_bot:
             return False
         if self.is_info is not None and self.is_info != event.message_snapshot.is_info:
