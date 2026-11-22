@@ -7,7 +7,7 @@ The JSON-RPC API is exposed in two fashions:
 * A executable `deltachat-rpc-server` that exposes the JSON-RPC API through stdio.
 * The JSON-RPC API can also be called through the [C FFI](../deltachat-ffi). It exposes the functions `dc_jsonrpc_init`, `dc_jsonrpc_request`, `dc_jsonrpc_next_response` and `dc_jsonrpc_unref`. See the docs in the [header file](../deltachat-ffi/deltachat.h) for details.
 
-We also include a JavaScript and TypeScript client for the JSON-RPC API. The source for this is in the [`typescript`](typescript) folder.
+We also include a JavaScript and TypeScript client for the JSON-RPC API. The source for this is in the [`typescript`](../deltachat-jsonrpc-bindings/typescript) folder.
 
 ## Usage
 
