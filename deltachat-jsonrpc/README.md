@@ -13,7 +13,7 @@ We also include a JavaScript and TypeScript client for the JSON-RPC API. The sou
 
 #### Using the TypeScript/JavaScript client
 
-The package includes a JavaScript/TypeScript client which is partially auto-generated through the JSON-RPC library used by this crate ([yerpc](https://github.com/chatmail/yerpc)). Find the source in the [`typescript`](typescript) folder. 
+The package includes a JavaScript/TypeScript client which is partially auto-generated through the JSON-RPC library used by this crate ([yerpc](https://github.com/chatmail/yerpc)). Find the source in the [`typescript`](../deltachat-jsonrpc-bindings/typescript) folder. 
 
 To use it locally, first install the dependencies and compile the TypeScript code to JavaScript:
 ```sh
