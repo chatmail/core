@@ -387,7 +387,11 @@ def test_downloaded_msg_deleted_on_all_transports(acf, direct_imap):
     after it was downloaded from one relay."""
     alice, _alice_chat, bob_chat = alice_with_two_transports_and_bob(acf)
     assert alice.get_config("bcc_self") == "0"
-    imaps = [direct_imap(alice, transport["addr"], transport["password"]) for transport in alice.list_transports()]
+    imaps = [
+        direct_imap(alice, transport["addr"], transport["password"])
+        for transport
+        in alice.list_transports()
+    ]
     assert len(imaps) == 2
 
     alice.stop_io()

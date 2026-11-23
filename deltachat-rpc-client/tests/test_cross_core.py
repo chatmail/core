@@ -1,5 +1,6 @@
 import subprocess
 import time
+from email.utils import formatdate
 
 import pytest
 
@@ -173,6 +174,61 @@ def test_keyupdate_against_core_2_48_march_2026(acf, alice_and_remote_bob, repla
     if replace_relay:
         remote_eval("bob_contact_alice.create_chat().send_text('hello after replacement')")
         assert alice.wait_for_incoming_msg().get_snapshot().text == "hello after replacement"
+
+
+def test_upgrade_keeps_unencrypted_msgs_on_server(alice_and_remote_bob, direct_imap) -> None:
+    """Test that after an upgrade from an old core core where `force_encryption` was off,
+    unencrypted messages downloaded before the upgrade are not deleted from the server."""
+    alice, alice_contact_bob, remote_eval = alice_and_remote_bob("2.69.0")
+    alice_chat = alice_contact_bob.create_chat()
+    remote_eval("bob_contact_alice.create_chat().id")
+    remote_eval("bob.set_config('force_encryption', '0')")
+    assert remote_eval("bob.get_config('bcc_self')") == "0"
+
+    transport = remote_eval("bob.list_transports()[0]")
+    bob_imap = direct_imap(None, transport["addr"], transport["password"])
+
+    def server_message_ids():
+        # Selecting the folder again updates the view of the mailbox.
+        bob_imap.select_folder("INBOX")
+        return {msg.obj["Message-ID"] for msg in bob_imap.get_all_messages()}
+
+    unencrypted_id = "<unencrypted@example.org>"
+    bob_imap.append(
+        "INBOX",
+        f"""
+        From: Charlie <charlie@example.org>
+        To: {transport["addr"]}
+        Subject: Hello
+        Message-ID: {unencrypted_id}
+        Date: {formatdate()}
+        Content-Type: text/plain
+
+        Hello from another email app
+        """,
+    )
+    remote_eval("bob.wait_for_incoming_msg().id")
+
+    # The old core deletes the encrypted message, but keeps the unencrypted one.
+    alice_chat.send_text("before upgrade")
+    assert remote_eval("bob.wait_for_incoming_msg().get_snapshot().text") == "before upgrade"
+    remote_eval("bob.wait_for_event('ImapMessageDeleted').kind")
+    assert unencrypted_id in server_message_ids()
+
+    remote_eval("bob._rpc.close()")
+
+    with Rpc(accounts_dir=remote_eval.accounts_dir) as rpc:
+        [bob] = DeltaChat(rpc).get_all_accounts()
+        bob.start_io()
+
+        alice_chat.send_text("after upgrade")
+        assert bob.wait_for_incoming_msg().get_snapshot().text == "after upgrade"
+        bob.wait_for_event(EventType.IMAP_MESSAGE_DELETED)
+        while True:
+            event = bob.wait_for_event()
+            if event.kind == EventType.INFO and "Close/expunge succeeded." in event.msg:
+                break
+        assert unencrypted_id in server_message_ids()
 
 
 class LocalSide:
