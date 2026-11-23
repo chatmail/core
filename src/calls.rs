@@ -1,7 +1,76 @@
 //! # Handle calls.
 //!
-//! Internally, calls are bound a user-visible message initializing the call.
-//! This means, the "Call ID" is a "Message ID" - similar to Webxdc IDs.
+//! Calls are using [WebRTC].
+//! Core does not implement WebRTC protocols and only offers a signalling channel.
+//! Group calls are not supported, so calls can only be started in single chats.
+//!
+//! [WebRTC]: https://webrtc.org/
+//!
+//! ## How it works
+//!
+//! Caller (Alice) calls callee (Bob).
+//!
+//! Before starting a call, caller (Alice below) makes an SDP offer which contains socket addresses
+//! that Alice can be reached on, called ICE candidates.
+//! Creating an SDP offer requires having some STUN/TURN server,
+//! so as a first step caller uses [`ice_servers`] to get a list
+//! of the servers to put into
+//! [`iceServers` argument of RTCPeerConnection constructor](https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/RTCPeerConnection#iceservers).
+//!
+//! Then Alice creates an SDP offer using
+//! [`RTCPeerConnection.createOffer()` API](https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/createOffer)
+//! and passes [created SDP offer in a text form](https://developer.mozilla.org/en-US/docs/Web/API/RTCSessionDescription/sdp)
+//! to [`place_outgoing_call()` API][Context::place_outgoing_call] to start a new call.
+//! `place_outgoing_call` returns ID of the call message that is visible in the chat.
+//!
+//! Starting a call results in sending a message with a `Chat-Webrtc-Room` header containing base64-encoded SDP offer.
+//! When Bob receives a call, he gets a call message in chat with Alice.
+//! and an [`EventType::IncomingCall`] event with an SDP offer.
+//! Bob can also configure [`who_can_call_me`][crate::config::Config::WhoCanCallMe] configuration
+//!
+//! If Bob wants to answer a call, he needs to use this SDP offer
+//! to construct an [SDP answer](https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/createAnswer).
+//! Similarly to Alice, he uses [`ice_servers`] API.
+//! Then Bob passes SDP answer to [`accept_incoming_call`][Context::accept_incoming_call].
+//! This sends a message with `Chat-Content: call-accepted` header.
+//!
+//! When Alice's devices receive "call accepted" message from Bob,
+//! they emit [`EventType::OutgoingCallAccepted`] event.
+//! This message is also sent to self if [`Config::BccSelf`] is enabled.
+//! When Bob's other device receives such message, it emits an [`EventType::IncomingCallAccepted`] event
+//! so notification will disappear and the phone will stop ringing.
+//!
+//! If Bob does not answer the call within two minutes,
+//! it becomes [missed][CallState::Missed]
+//! and Bob gets an [`EventType::CallEnded`] event.
+//! Call may also become missed immediately
+//! if Bob was offline and receives an outdated call request.
+//!
+//! If Alice or Bob want to end a call, they use [`end_call` method][`Context::end_call`].
+//! This results in sending a message with `Chat-Content: call-ended`.
+//! Both Alice and Bob can end a call before the call actually starts,
+//! in which case the call becomes
+//! [canceled][CallState::Canceled] (for outgoing calls)
+//! or [declined][CallState::Declined] (for incoming calls).
+//!
+//! For a reference implementation of the UI side refer to [Delta Chat webapp][webapp],
+//! which can be used in a WebView on platforms that have it.
+//! Using it is not required and does not prevent native implementations of the calls UI
+//! or bots accepting and starting the calls, e.g. for bridging.
+//!
+//! [webapp]: https://github.com/deltachat/calls-webapp
+//!
+//! ## Public APIs
+//!
+//! Calls are uniquely identified by the [`MsgId`].
+//! Internally, calls are bound to a user-visible message initializing the call.
+//!
+//! Public APIs for calls are:
+//! - [`Context::place_outgoing_call`] (`dc_place_outgoing_call` for CFFI and `place_outgoing_call` for JSON-RPC)
+//! - [`Context::accept_incoming_call`] (`dc_accept_incoming_call` for CFFI and `accept_incoming_call` for JSON-RPC)
+//! - [`Context::end_call`] (`dc_end_call` for CFFI and `end_call` for JSON-RPC)
+//! - [`CallInfo`] structure (loaded with `load_call_by_id` and `call_info` JSON-RPC API).
+
 use crate::chat::ChatIdBlocked;
 use crate::chat::{Chat, ChatId, send_msg};
 use crate::config::Config;
