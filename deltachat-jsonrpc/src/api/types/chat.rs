@@ -61,7 +61,7 @@ pub struct FullChat {
 
     is_device_chat: bool,
     /// Note that this is different from
-    /// [`ChatListItem::self_in_group`](`crate::api::types::chat_list::ChatListItemFetchResult::ChatListItem::self_in_group`).
+    /// [`ChatListItem::is_self_in_group`](`crate::api::types::chat_list::ChatListItemFetchResult::ChatListItem::is_self_in_group`).
     /// This property should only be accessed
     /// when [`FullChat::chat_type`] is [`Chattype::Group`].
     //

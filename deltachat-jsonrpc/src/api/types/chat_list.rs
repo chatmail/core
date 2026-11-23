@@ -64,7 +64,7 @@ pub enum ChatListItemFetchResult {
         is_self_talk: bool,
         is_device_talk: bool,
         is_sending_location: bool,
-        /// deprecated 2026-01
+        /// deprecated 2026-01, load the chat and check `self_in_group` instead
         is_self_in_group: bool,
         /// deprecated 2026-01, use archived instead
         is_archived: bool,
