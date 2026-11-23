@@ -1034,7 +1034,6 @@ impl Session {
         }
 
         let transport_id = self.transport_id();
-        let uidvalidity = get_uidvalidity(context, transport_id, folder).await?;
         let bcc_self = context.get_config_bool(Config::BccSelf).await?;
 
         for (request_uids, set) in build_sequence_sets(&request_uids)? {
@@ -1142,8 +1141,7 @@ impl Session {
                     ))?;
 
                 if res.is_ok() && !bcc_self {
-                    mark_msg_for_deletion(context, transport_id, folder, request_uid, uidvalidity)
-                        .await?;
+                    mark_msg_for_deletion(context, rfc724_mid).await?;
                 }
 
                 // If there was an error receiving the message, show a device message:
@@ -1604,7 +1602,7 @@ fn is_encrypted(headers: &[mailparse::MailHeader<'_>]) -> bool {
 /// Returns whether a newly seen message is a copy of an already downloaded message,
 /// e.g. a copy that arrived on another transport.
 ///
-/// Unencrypted copies are not considered, so that an old unencrypted email that appears with a new
+/// Unencrypted copies are excluded, so that an old unencrypted email that appears with a new
 /// UID (e.g. because the user moved it with a classical MUA) is not deleted.
 async fn is_encrypted_copy_of_downloaded_msg(
     context: &Context,
@@ -1625,21 +1623,17 @@ async fn is_encrypted_copy_of_downloaded_msg(
         .await
 }
 
-/// Marks the `imap` row of a message for deletion on the server.
+/// Marks all `imap` rows of a downloaded message for deletion on the server.
 /// Used if there are no other devices (`bcc_self` is off).
-async fn mark_msg_for_deletion(
-    context: &Context,
-    transport_id: u32,
-    folder: &str,
-    uid: u32,
-    uidvalidity: u32,
-) -> Result<()> {
+///
+/// This includes copies on other transports, e.g. of a post-message that was received
+/// on multiple transports, then downloaded from one transport.
+async fn mark_msg_for_deletion(context: &Context, rfc724_mid: &str) -> Result<()> {
     context
         .sql
         .execute(
-            "UPDATE imap SET target=''
-             WHERE transport_id=? AND folder=? AND uid=? AND uidvalidity=?",
-            (transport_id, folder, uid, uidvalidity),
+            "UPDATE imap SET target='' WHERE rfc724_mid=? AND target!=''",
+            (rfc724_mid,),
         )
         .await?;
     Ok(())
