@@ -294,6 +294,10 @@ async fn test_unencrypted_chats_migration_1to1_chat() -> Result<()> {
     let chat = Chat::load_from_db(t, ChatId::new(10)).await?;
     assert_eq!(chat.get_name(), "Bob (bob@example.net)");
     assert!(chat.get_profile_image(t).await?.unwrap().exists());
+    assert_eq!(
+        chat.why_cant_send(t).await?,
+        Some(chat::CantSendReason::MissingKey)
+    );
 
     Ok(())
 }
