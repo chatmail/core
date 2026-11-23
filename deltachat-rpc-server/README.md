@@ -35,3 +35,30 @@ languages other than Rust, for example:
 
 Run `deltachat-rpc-server --version` to check the version of the server.
 Run `deltachat-rpc-server --openrpc` to get [OpenRPC](https://open-rpc.org/) specification of the provided JSON-RPC API.
+
+## Windows ARM64 builds
+
+Windows ARM64 release binaries are cross-compiled on Linux with Nix, using
+`aarch64-pc-windows-gnullvm` and the LLVM/MinGW UCRT toolchain from the pinned
+Nixpkgs revision. OpenSSL is built by Nix and linked statically, alongside bundled
+SQLCipher. No Visual Studio tools or Windows runner are needed to produce the
+release binary, Python wheel, or npm prebuild.
+
+```sh
+nix build .#deltachat-rpc-server-win-arm64
+nix build .#deltachat-rpc-server-win-arm64-wheel --out-link wheel
+```
+
+The `Windows ARM64 RPC server` workflow runs on pull requests, pushes to `main`,
+and manual dispatch. It cross-compiles the binary and wheel on Linux, then tests
+those same artifacts on `windows-11-arm`: executable architecture, JSON-RPC
+account creation, and the installed wheel entry point. This runtime test is
+separate from the release workflow, which builds all Windows targets on Linux.
+
+Releases include `deltachat-rpc-server-win-arm64.exe`, a `py3-none-win_arm64`
+Python wheel, and a `@deltachat/stdio-rpc-server-win32-arm64` npm prebuild.
+Publishing to PyPI and npm is restricted to `chatmail/core`; fork releases still
+receive the binaries and packages as GitHub assets.
+
+For a Parla Windows ARM64 bundle, rename the release executable to
+`deltachat-rpc-server.exe` and put it in the same `bin` directory as `parla.exe`.

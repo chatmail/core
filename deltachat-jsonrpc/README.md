@@ -62,6 +62,12 @@ The test suite includes some tests that need online connectivity and a way to cr
 CHATMAIL_DOMAIN=ci-chatmail.testrun.org npm run test
 ```
 
+The GitHub Actions workflow uses the repository variable `CHATMAIL_DOMAIN` for
+online tests and coverage. When this variable is unset, as in a newly created
+fork, CI runs the offline integration tests with `npm run test:prepare` and
+`npm run test:run`. Online tests are skipped and coverage is not reported in
+that mode. Configure the variable to enable the full online suite.
+
 #### Test Coverage
 
 Running `npm run test` will report test coverage. For the coverage to be accurate the online tests need to be run.
