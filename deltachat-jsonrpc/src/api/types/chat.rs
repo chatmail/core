@@ -181,8 +181,9 @@ pub struct BasicChat {
     is_self_talk: bool,
     color: String,
     is_contact_request: bool,
-
+    // deprecated 2026-01, use is_device_talk instead
     is_device_chat: bool,
+    is_device_talk: bool,
     is_muted: bool,
 }
 
@@ -210,6 +211,7 @@ impl BasicChat {
             color,
             is_contact_request: chat.is_contact_request(),
             is_device_chat: chat.is_device_talk(),
+            is_device_talk: chat.is_device_talk(),
             is_muted: chat.is_muted(),
         })
     }
