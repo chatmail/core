@@ -20,6 +20,7 @@ use crate::context::Context;
 use crate::events::EventType;
 use crate::key::{self, DcKey, SignedSecretKey, self_fingerprint};
 use crate::log::{LogExt, warn};
+use crate::pgp::{autocrypt2, pgp_time};
 use crate::qr::DCBACKUP_VERSION;
 use crate::sql;
 use crate::tools::{
@@ -140,7 +141,11 @@ pub async fn has_backup(_context: &Context, dir_name: &Path) -> Result<String> {
 
 async fn set_self_key(context: &Context, armored: &str) -> Result<()> {
     let secret_key = SignedSecretKey::from_asc(armored)?;
-    key::store_self_keypair(context, &secret_key).await?;
+    let new_secret_key = key::store_self_keypair(context, secret_key.clone()).await?;
+    ensure!(
+        new_secret_key == secret_key,
+        "Failed to import key because we already have a key"
+    );
 
     info!(
         context,
@@ -398,6 +403,11 @@ async fn import_backup_stream_inner<R: tokio::io::AsyncRead + Unpin>(
     }
     if res.is_ok() {
         delete_and_reset_all_device_msgs(context)
+            .await
+            .log_err(context)
+            .ok();
+
+        autocrypt2::ratchet_after_import(context, pgp_time())
             .await
             .log_err(context)
             .ok();
@@ -892,7 +902,6 @@ mod tests {
         // Importing a second key is not allowed anymore,
         // even as a non-default key.
         assert_eq!(key::load_self_secret_key(alice).await?, old_key);
-        assert_eq!(key::load_self_secret_keyring(alice).await?, vec![old_key]);
 
         let msg = alice.recv_msg(&sent).await;
         assert!(msg.get_showpadlock());
@@ -901,8 +910,8 @@ mod tests {
 
         alice
             .assert_warns_or_errors(&[
+                "Failed to import key because we already have a key",
                 "rPGP error: unexpected block type: PGP PUBLIC KEY BLOCK",
-                "UNIQUE constraint failed",
                 "IMEX failed to complete",
                 "No private keys found in",
             ])

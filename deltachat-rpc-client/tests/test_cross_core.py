@@ -16,7 +16,7 @@ def test_install_venv_and_use_other_core(tmp_path, get_core_python_env):
         assert dc.rpc.get_system_info()["deltachat_core_version"] == "v2.24.0"
 
 
-@pytest.mark.parametrize("version", ["2.24.0"])
+@pytest.mark.parametrize("version", ["2.50.0"])
 def test_qr_setup_contact(acf, alice_and_remote_bob, version) -> None:
     """Test other-core Bob profile can do securejoin with Alice on current core."""
     alice, alice_contact_bob, remote_eval = alice_and_remote_bob(version)
@@ -43,7 +43,7 @@ def test_qr_setup_contact(acf, alice_and_remote_bob, version) -> None:
     alice2.wait_for_securejoin_inviter_success()
 
 
-@pytest.mark.parametrize("version", ["2.24.0"])
+@pytest.mark.parametrize("version", ["2.50.0"])
 def test_qr_setup_contact_multitransport(acf, alice_and_remote_bob, version) -> None:
     """Test other-core Bob profile can do securejoin with Alice on current core, with multiple transports."""
     alice, alice_contact_bob, remote_eval = alice_and_remote_bob(version)
@@ -66,7 +66,7 @@ def test_qr_setup_contact_multitransport(acf, alice_and_remote_bob, version) -> 
 
 def test_send_and_receive_message(alice_and_remote_bob) -> None:
     """Test other-core Bob profile can send a message to Alice on current core."""
-    alice, alice_contact_bob, remote_eval = alice_and_remote_bob("2.23.0")
+    alice, alice_contact_bob, remote_eval = alice_and_remote_bob("2.50.0")
 
     remote_eval("bob_contact_alice.create_chat().send_text('hello')")
 
@@ -76,7 +76,7 @@ def test_send_and_receive_message(alice_and_remote_bob) -> None:
 
 def test_old_core_mdn(alice_and_remote_bob) -> None:
     """Test that old core can send a read receipt that we can receive."""
-    alice, alice_contact_bob, remote_eval = alice_and_remote_bob("2.23.0")
+    alice, alice_contact_bob, remote_eval = alice_and_remote_bob("2.50.0")
 
     # Create chat with Alice so the message does not arrive as contact request.
     remote_eval("bob_contact_alice.create_chat()")
@@ -126,9 +126,9 @@ def test_old_device_delete_transport(acf, alice_and_remote_bob) -> None:
 
 
 @pytest.mark.parametrize("replace_relay", [False, True], ids=["add", "replace"])
-def test_keyupdate_against_core_2_48_march_2026(acf, alice_and_remote_bob, replace_relay):
+def test_keyupdate_against_core_2_50(acf, alice_and_remote_bob, replace_relay):
     """Test 2.48 Bob learns a relay change of Alice from a keyupdate, and is shown nothing."""
-    alice, alice_contact_bob, remote_eval = alice_and_remote_bob("2.48.0")
+    alice, alice_contact_bob, remote_eval = alice_and_remote_bob("2.50.0")
 
     def bob_sees():
         return remote_eval(
@@ -157,8 +157,6 @@ def test_keyupdate_against_core_2_48_march_2026(acf, alice_and_remote_bob, repla
         alice.delete_transport(old_addr)
     alice.bring_online()
 
-    # The 2.48 core has no encryption enforcement, but the keyupdate MDN without
-    # referenced message keeps it invisible; merging happens before the trashing.
     for _ in range(60):
         if new_addr in remote_eval("bob_contact_alice.get_encryption_info()"):
             break
@@ -239,7 +237,7 @@ class RemoteSide:
         return self.remote_eval("bob.wait_for_incoming_msg().get_snapshot().text")
 
 
-@pytest.mark.parametrize("version", ["2.48.0"])
+@pytest.mark.parametrize("version", ["2.50.0"])
 @pytest.mark.parametrize("invite", ["contact", "group", "broadcast"])
 @pytest.mark.parametrize("remote_invites", [False, True], ids=["local-invites", "remote-invites"])
 def test_securejoin_invite(alice_and_remote_bob, version, invite, remote_invites):

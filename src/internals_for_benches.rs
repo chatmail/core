@@ -1,7 +1,7 @@
 //! Re-exports of `pub(crate)` functions that are needed for benchmarks.
 #![allow(missing_docs)] // Not necessary to put a doc comment on the pub functions here
 
-use anyhow::Result;
+use anyhow::{Result, ensure};
 use deltachat_contact_tools::EmailAddress;
 
 use crate::chat::ChatId;
@@ -16,7 +16,9 @@ pub fn key_from_asc(data: &str) -> Result<key::SignedSecretKey> {
 }
 
 pub async fn store_self_keypair(context: &Context, keypair: &key::SignedSecretKey) -> Result<()> {
-    key::store_self_keypair(context, keypair).await
+    let new_keypair = key::store_self_keypair(context, keypair.clone()).await?;
+    ensure!(new_keypair == *keypair, "Failed to set the keypair");
+    Ok(())
 }
 
 pub async fn parse_and_get_text(context: &Context, imf_raw: &[u8]) -> Result<String> {
