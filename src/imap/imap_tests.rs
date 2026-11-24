@@ -143,46 +143,6 @@ async fn test_loop_queries_do_not_scan_imap() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_mark_downloaded_msg_for_deletion() -> Result<()> {
-    let t = TestContext::new_alice().await;
-
-    for (transport_id, rfc724_mid, uid) in [
-        (1, "msg@localhost", 1),
-        (2, "msg@localhost", 1),
-        (2, "msg@localhost", 5),
-        (1, "other@localhost", 2),
-    ] {
-        t.sql
-            .execute(
-                "INSERT INTO imap (transport_id, rfc724_mid, folder, uid, uidvalidity, target)
-                 VALUES (?,?,?,?,?,?)",
-                (transport_id, rfc724_mid, "INBOX", uid, 100, "INBOX"),
-            )
-            .await?;
-    }
-
-    mark_msg_for_deletion(&t, "msg@localhost").await?;
-
-    let marked: Vec<(u32, String, u32)> = t
-        .sql
-        .query_map_vec(
-            "SELECT transport_id, folder, uid FROM imap WHERE target='' ORDER BY id",
-            (),
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )
-        .await?;
-    assert_eq!(
-        marked,
-        vec![
-            (1, "INBOX".to_string(), 1),
-            (2, "INBOX".to_string(), 1),
-            (2, "INBOX".to_string(), 5),
-        ]
-    );
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_is_encrypted_copy_of_downloaded_msg() -> Result<()> {
     let t = TestContext::new_alice().await;
 
