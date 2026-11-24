@@ -177,11 +177,11 @@ def test_keyupdate_against_core_2_48_march_2026(acf, alice_and_remote_bob, repla
 
 
 def test_upgrade_keeps_unencrypted_msgs_on_server(alice_and_remote_bob, direct_imap) -> None:
-    """Test that after an upgrade from an old core core where `force_encryption` was off,
+    """Test that after an upgrade from an old core where `force_encryption` was off,
     unencrypted messages downloaded before the upgrade are not deleted from the server."""
     alice, alice_contact_bob, remote_eval = alice_and_remote_bob("2.69.0")
     alice_chat = alice_contact_bob.create_chat()
-    remote_eval("bob_contact_alice.create_chat().id")
+    remote_eval("bob_contact_alice.create_chat()")
     remote_eval("bob.set_config('force_encryption', '0')")
     assert remote_eval("bob.get_config('bcc_self')") == "0"
 
@@ -189,7 +189,7 @@ def test_upgrade_keeps_unencrypted_msgs_on_server(alice_and_remote_bob, direct_i
     bob_imap = direct_imap(None, transport["addr"], transport["password"])
 
     def server_message_ids():
-        # Selecting the folder again updates the view of the mailbox.
+        # Select the folder again to update the view of the mailbox
         bob_imap.select_folder("INBOX")
         return {msg.obj["Message-ID"] for msg in bob_imap.get_all_messages()}
 
