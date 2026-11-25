@@ -7263,6 +7263,10 @@ void dc_event_unref(dc_event_t* event);
 /// "Message unpinned by %1$s."
 #define DC_STR_MESSAGE_UNPINNED_BY_OTHER 247
 
+/// Device message explaining that unencrypted messages
+/// can't be sent or received anymore.
+#define DC_STR_NO_MORE_UNENCRYPTED 250
+
 /**
  * @}
  */

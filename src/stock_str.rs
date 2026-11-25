@@ -649,7 +649,8 @@ pub(crate) async fn msg_unpinned(context: &Context, by_contact: ContactId) -> St
     }
 }
 
-/// Stock that informs that Delta Chat no longer supports sending and receiving unencrypted.
+/// Device message explaining that unencrypted messages
+/// can't be sent or received anymore.
 pub(crate) fn no_more_unencrypted(context: &Context) -> String {
     translated(context, StockMessage::NoMoreUnencrypted)
 }
