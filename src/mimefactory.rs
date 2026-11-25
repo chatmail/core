@@ -1614,7 +1614,6 @@ impl MimeFactory {
                 SystemMessage::EphemeralTimerChanged => {}
                 SystemMessage::ChatProtectionEnabled => {}
                 SystemMessage::ChatProtectionDisabled => {}
-                SystemMessage::InvalidUnencryptedMail => {}
                 SystemMessage::SecurejoinWait => {}
                 SystemMessage::SecurejoinWaitTimeout => {}
                 SystemMessage::MultiDeviceSync => {}

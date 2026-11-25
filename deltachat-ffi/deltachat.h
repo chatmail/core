@@ -4462,8 +4462,6 @@ int             dc_msg_is_info                (const dc_msg_t* msg);
  * - DC_INFO_MEMBER_REMOVED_FROM_GROUP (5) - "Member CONTACT removed by OTHER_CONTACT"
  * - DC_INFO_EPHEMERAL_TIMER_CHANGED (10) - "Disappearing messages CHANGED_TO by CONTACT"
  * - DC_INFO_PROTECTION_ENABLED (11) - Info-message for "Chat is protected"
- * - DC_INFO_INVALID_UNENCRYPTED_MAIL (13) - Info-message that a message could not be sent because it could not be encrypted;
- *   the UI may offer a way to fix the encryption, eg. by a button offering a QR scan
  * - DC_INFO_WEBXDC_INFO_MESSAGE (32) - Info-message created by webxdc app sending `update.info`
  * - DC_INFO_CHAT_E2EE (50) - Info-message for "Chat is end-to-end-encrypted"
  * - DC_INFO_GROUP_DESCRIPTION_CHANGED (70) - Info-message "Description changed", UI should open the profile with the description
@@ -4524,7 +4522,6 @@ uint32_t        dc_msg_get_info_contact_id    (const dc_msg_t* msg);
 #define         DC_INFO_LOCATION_ONLY              9
 #define         DC_INFO_EPHEMERAL_TIMER_CHANGED   10
 #define         DC_INFO_PROTECTION_ENABLED        11
-#define         DC_INFO_INVALID_UNENCRYPTED_MAIL  13
 #define         DC_INFO_WEBXDC_INFO_MESSAGE       32
 #define         DC_INFO_CHAT_E2EE                 50
 #define         DC_INFO_GROUP_DESCRIPTION_CHANGED 70

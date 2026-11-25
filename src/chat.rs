@@ -2889,26 +2889,9 @@ async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -> Result<Ve
     let (queued_msg, side_effects) = queued_msg_pair;
 
     if needs_encryption && !is_encrypted {
-        let text: String = stock_str::error(
-            context,
-            "Can't send unencrypted messages. Tap for more info.",
-        );
-        message::set_msg_failed(context, msg, &text).await?;
-        add_info_msg_with_cmd(
-            context,
-            msg.chat_id,
-            &text,
-            SystemMessage::InvalidUnencryptedMail,
-            Some(msg.timestamp_sort),
-            msg.timestamp_sort,
-            None,
-            None,
-            None,
-            None,
-        )
-        .await?;
+        message::set_msg_failed(context, msg, "Can't send unencrypted messages.").await?;
         bail!(
-            "e2e encryption unavailable {} - {:?}",
+            "Can't send unencrypted messages {} - {:?}",
             msg.id,
             needs_encryption
         );
