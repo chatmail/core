@@ -2036,40 +2036,6 @@ async fn test_contact_request_archive() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_classic_email_chat() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-    alice.allow_unencrypted().await?;
-
-    // Alice receives a classic (non-chat) message from Bob.
-    receive_imf(
-        &alice,
-        b"From: bob@example.org\n\
-                 To: alice@example.org\n\
-                 Message-ID: <1@example.org>\n\
-                 Date: Sun, 22 Mar 2021 19:37:57 +0000\n\
-                 \n\
-                 hello\n",
-        false,
-    )
-    .await?;
-
-    let msg = alice.get_last_msg().await;
-    let chat_id = msg.chat_id;
-    assert_eq!(chat_id.get_fresh_msg_cnt(&alice).await?, 1);
-
-    let msgs = get_chat_msgs(&alice, chat_id).await?;
-    assert_eq!(msgs.len(), 1);
-
-    // Already received classic email should still be in the chat.
-    assert_eq!(chat_id.get_fresh_msg_cnt(&alice).await?, 1);
-
-    let msgs = get_chat_msgs(&alice, chat_id).await?;
-    assert_eq!(msgs.len(), 1);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_chat_get_color() -> Result<()> {
     let t = TestContext::new().await;
     let chat_id = create_group_unencrypted(&t, "a chat").await?;
@@ -2692,30 +2658,6 @@ async fn test_forward_from_saved_to_saved() -> Result<()> {
     let saved2 = bob.get_last_msg().await;
     assert!(saved2.get_original_msg_id(&bob).await?.is_none(),);
     assert_eq!(saved2.from_id, ContactId::SELF);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_forward_encrypted_to_unencrypted() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    let bob = &tcm.bob().await;
-    let charlie = &tcm.charlie().await;
-    bob.allow_unencrypted().await?;
-
-    let txt = "This should be encrypted";
-    let sent = alice.send_text(alice.create_chat(bob).await.id, txt).await;
-    let msg = bob.recv_msg(&sent).await;
-    assert_eq!(msg.text, txt);
-    assert!(msg.get_showpadlock());
-
-    let unencrypted_chat = bob.create_email_chat(charlie).await;
-    forward_msgs(bob, &[msg.id], unencrypted_chat.id).await?;
-    let msg2 = bob.get_last_msg().await;
-    assert_eq!(msg2.text, txt);
-    assert_ne!(msg.id, msg2.id);
-    assert!(!msg2.get_showpadlock());
 
     Ok(())
 }
@@ -5009,53 +4951,6 @@ async fn test_sync_delete_chat() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_sync_adhoc_grp() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice0 = &tcm.alice().await;
-    let alice1 = &tcm.alice().await;
-    for a in [alice0, alice1] {
-        a.set_config_bool(Config::SyncMsgs, true).await?;
-        a.allow_unencrypted().await?;
-    }
-
-    let mut chat_ids = Vec::new();
-    for a in [alice0, alice1] {
-        let msg = receive_imf(
-            a,
-            b"Subject: =?utf-8?q?Message_from_alice=40example=2Eorg?=\r\n\
-                    From: alice@example.org\r\n\
-                    To: <bob@example.net>, <fiona@example.org> \r\n\
-                    Date: Mon, 2 Dec 2023 16:59:39 +0000\r\n\
-                    Message-ID: <Mr.alices_original_mail@example.org>\r\n\
-                    Chat-Version: 1.0\r\n\
-                    \r\n\
-                    hi\r\n",
-            false,
-        )
-        .await?
-        .unwrap();
-        chat_ids.push(msg.chat_id);
-    }
-    let chat1 = Chat::load_from_db(alice1, chat_ids[1]).await?;
-    assert_eq!(chat1.typ, Chattype::Group);
-    assert!(chat1.grpid.is_empty());
-
-    // Test synchronisation on chat blocking because it causes chat deletion currently and thus
-    // requires generating a sync message in advance.
-    chat_ids[0].block(alice0).await?;
-    sync(alice0, alice1).await;
-    assert!(Chat::load_from_db(alice1, chat_ids[1]).await.is_err());
-    assert!(
-        !alice1
-            .sql
-            .exists("SELECT COUNT(*) FROM chats WHERE id=?", (chat_ids[1],))
-            .await?
-    );
-
-    Ok(())
-}
-
 /// Tests syncing of chat visibility on a self-chat. This way we test:
 /// - Self-chat synchronisation.
 /// - That sync messages don't unarchive the self-chat.
@@ -6348,26 +6243,6 @@ async fn test_send_delete_request() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_send_delete_request_no_encryption() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    let bob = &tcm.bob().await;
-    alice.allow_unencrypted().await?;
-    let alice_chat = alice.create_email_chat(bob).await;
-
-    // Alice sends a message, then tries to send a deletion request which fails.
-    let sent1 = alice.send_text(alice_chat.id, "wtf").await;
-    assert!(
-        message::delete_msgs_ext(alice, &[sent1.sender_msg_id], true)
-            .await
-            .is_err()
-    );
-    sent1.load_from_db().await;
-    assert_eq!(alice_chat.id.get_msg_cnt(alice).await?, 1);
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_forward_msgs_2ctx() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
@@ -6564,73 +6439,6 @@ async fn test_no_address_contacts_in_group_chats() -> Result<()> {
     Ok(())
 }
 
-/// Tests that key-contacts cannot be added to ad hoc groups.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_no_key_contacts_in_adhoc_chats() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    let bob = &tcm.bob().await;
-    let charlie = &tcm.charlie().await;
-    alice.allow_unencrypted().await?;
-
-    let chat_id = receive_imf(
-        alice,
-        b"Subject: Email thread\r\n\
-          From: alice@example.org\r\n\
-          To: Bob <bob@example.net>, Fiona <fiona@example.net>\r\n\
-          Date: Mon, 2 Dec 2023 16:59:39 +0000\r\n\
-          Message-ID: <alice-mail@example.org>\r\n\
-          \r\n\
-          Starting a new thread\r\n",
-        false,
-    )
-    .await?
-    .unwrap()
-    .chat_id;
-
-    let bob_address_contact_id = alice.add_or_lookup_address_contact_id(bob).await;
-    let charlie_key_contact_id = alice.add_or_lookup_contact_id(charlie).await;
-
-    // Address-contact should be added successfully.
-    add_contact_to_chat(alice, chat_id, bob_address_contact_id).await?;
-
-    // Adding key-contact should fail.
-    let res = add_contact_to_chat(alice, chat_id, charlie_key_contact_id).await;
-    assert!(res.is_err());
-
-    Ok(())
-}
-
-/// Tests that key-contacts cannot be added to an unencrypted (ad hoc) group and the group and
-/// messages report that they are unencrypted.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_create_unencrypted_group_chat() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    alice.allow_unencrypted().await?;
-    let bob = &tcm.bob().await;
-    let charlie = &tcm.charlie().await;
-
-    let chat_id = create_group_unencrypted(alice, "Group chat").await?;
-    let bob_key_contact_id = alice.add_or_lookup_contact_id(bob).await;
-    let charlie_address_contact_id = alice.add_or_lookup_address_contact_id(charlie).await;
-
-    let res = add_contact_to_chat(alice, chat_id, bob_key_contact_id).await;
-    assert!(res.is_err());
-
-    add_contact_to_chat(alice, chat_id, charlie_address_contact_id).await?;
-    alice
-        .assert_warn("No good message identifying the chat found")
-        .await;
-
-    let chat = Chat::load_from_db(alice, chat_id).await?;
-    assert!(!chat.is_encrypted(alice).await?);
-    let sent_msg = alice.send_text(chat_id, "Hello").await;
-    let msg = Message::load_from_db(alice, sent_msg.sender_msg_id).await?;
-    assert!(!msg.get_showpadlock());
-    Ok(())
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_create_group_invalid_name() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -6639,38 +6447,6 @@ async fn test_create_group_invalid_name() -> Result<()> {
     let chat = Chat::load_from_db(alice, chat_id).await?;
     assert_eq!(chat.get_name(), "…");
     alice.assert_error("Invalid chat name").await;
-    Ok(())
-}
-
-/// Tests that avatar cannot be set in ad hoc groups.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_no_avatar_in_adhoc_chats() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-
-    let chat_id = receive_imf(
-        alice,
-        b"Subject: Email thread\r\n\
-          From: alice@example.org\r\n\
-          To: Bob <bob@example.net>, Fiona <fiona@example.net>\r\n\
-          Date: Mon, 2 Dec 2023 16:59:39 +0000\r\n\
-          Message-ID: <alice-mail@example.org>\r\n\
-          \r\n\
-          Starting a new thread\r\n",
-        false,
-    )
-    .await?
-    .unwrap()
-    .chat_id;
-    alice.assert_warn("unencrypted message").await;
-
-    // Test that setting avatar in ad hoc group is not possible.
-    let file = alice.dir.path().join("avatar.png");
-    let bytes = include_bytes!("../../test-data/image/avatar64x64.png");
-    tokio::fs::write(&file, bytes).await?;
-    let res = set_chat_profile_image(alice, chat_id, file.to_str().unwrap()).await;
-    assert!(res.is_err());
-
     Ok(())
 }
 

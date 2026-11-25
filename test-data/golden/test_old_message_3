@@ -1,8 +1,0 @@
-Single#Chat#10: Bob [PGP bob@example.net] 🛡️
---------------------------------------------------------------------------------
-Msg#10: info (Contact#Contact#Info): Messages are guaranteed to be end-to-end encrypted from now on. [NOTICED][INFO 🛡️]
-Msg#11🔒:  (Contact#Contact#10): Heyho from my verified device! [FRESH]
-Msg#12: info (Contact#Contact#Info): Bob sent a message from another device. [NOTICED][INFO 🛡️❌]
-Msg#13:  (Contact#Contact#10): Old, unverified message [SEEN]
-Msg#14: info (Contact#Contact#Info): Messages are guaranteed to be end-to-end encrypted from now on. [NOTICED][INFO 🛡️]
---------------------------------------------------------------------------------

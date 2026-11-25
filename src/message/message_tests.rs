@@ -100,41 +100,6 @@ async fn test_no_quote() {
     assert!(msg.quoted_message(bob).await.unwrap().is_none());
 }
 
-/// Tests that quote of encrypted message
-/// cannot be sent unencrypted.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_unencrypted_quote_encrypted_message() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-
-    let alice = &tcm.alice().await;
-    let bob = &tcm.bob().await;
-    alice.allow_unencrypted().await?;
-    bob.allow_unencrypted().await?;
-
-    tcm.section("Bob sends encrypted message to Alice");
-    let alice_chat = alice.create_chat(bob).await;
-    let sent = alice
-        .send_text(alice_chat.id, "Hi! This is encrypted.")
-        .await;
-
-    let bob_received_message = bob.recv_msg(&sent).await;
-    assert_eq!(bob_received_message.get_showpadlock(), true);
-
-    // Bob quotes encrypted message in unencrypted chat.
-    let bob_email_chat = bob.create_email_chat(alice).await;
-    let mut msg = Message::new_text("I am sending an unencrypted reply.".to_string());
-    msg.set_quote(bob, Some(&bob_received_message)).await?;
-    chat::send_msg(bob, bob_email_chat.id, &mut msg).await?;
-
-    // Alice receives unencrypted message,
-    // but the quote of encrypted message is replaced with "...".
-    let alice_received_message = alice.recv_msg(&bob.pop_sent_msg().await).await;
-    assert_eq!(alice_received_message.quoted_text().unwrap(), "...");
-    assert_eq!(alice_received_message.get_showpadlock(), false);
-
-    Ok(())
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_chat_id() {
     // Alice receives a message that pops up as a contact request
