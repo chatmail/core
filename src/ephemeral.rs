@@ -632,8 +632,8 @@ pub(crate) async fn ephemeral_loop(context: &Context, interrupt_receiver: Receiv
     }
 }
 
-/// Driven by `msgs_index8`, because the `imap` table may keep a row for every message
-/// on the server, e.g. in multi-device mode, where downloaded messages are left on the server.
+/// Driven by `msgs_index8`: in multi-device mode core leaves downloaded messages on the server,
+/// so the `imap` table keeps a row for every message core has not deleted there.
 const MARK_EXPIRED_FOR_DELETION: &str = "
     UPDATE imap
     SET target=''

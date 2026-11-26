@@ -185,11 +185,10 @@ def test_upgrade_keeps_unencrypted_msgs_on_server(alice_and_remote_bob, direct_i
     remote_eval("bob.set_config('force_encryption', '0')")
     assert remote_eval("bob.get_config('bcc_self')") == "0"
 
-    transport = remote_eval("bob.list_transports()[0]")
-    bob_imap = direct_imap(None, transport["addr"], transport["password"])
+    bob_transport = remote_eval("bob.list_transports()[0]")
+    bob_imap = direct_imap(None, bob_transport["addr"], bob_transport["password"])
 
     def server_message_ids():
-        # Select the folder again to update the view of the mailbox
         bob_imap.select_folder("INBOX")
         return {msg.obj["Message-ID"] for msg in bob_imap.get_all_messages()}
 
@@ -198,7 +197,7 @@ def test_upgrade_keeps_unencrypted_msgs_on_server(alice_and_remote_bob, direct_i
         "INBOX",
         f"""
         From: Charlie <charlie@example.org>
-        To: {transport["addr"]}
+        To: {bob_transport["addr"]}
         Subject: Hello
         Message-ID: {unencrypted_id}
         Date: {formatdate()}
@@ -207,16 +206,18 @@ def test_upgrade_keeps_unencrypted_msgs_on_server(alice_and_remote_bob, direct_i
         Hello from another email app
         """,
     )
-    remote_eval("bob.wait_for_incoming_msg().id")
+    remote_eval("bob.wait_for_incoming_msg()")
 
-    # The old core deletes the encrypted message, but keeps the unencrypted one.
+    # The old core deletes the encrypted message, but keeps the unencrypted one
     alice_chat.send_text("before upgrade")
     assert remote_eval("bob.wait_for_incoming_msg().get_snapshot().text") == "before upgrade"
-    remote_eval("bob.wait_for_event('ImapMessageDeleted').kind")
+    remote_eval("bob.wait_for_event('ImapMessageDeleted')")
     assert unencrypted_id in server_message_ids()
 
     remote_eval("bob._rpc.close()")
 
+    # Bob upgrades Delta Chat,
+    # the unencrypted message should still not be deleted
     with Rpc(accounts_dir=remote_eval.accounts_dir) as rpc:
         [bob] = DeltaChat(rpc).get_all_accounts()
         bob.start_io()
@@ -224,10 +225,7 @@ def test_upgrade_keeps_unencrypted_msgs_on_server(alice_and_remote_bob, direct_i
         alice_chat.send_text("after upgrade")
         assert bob.wait_for_incoming_msg().get_snapshot().text == "after upgrade"
         bob.wait_for_event(EventType.IMAP_MESSAGE_DELETED)
-        while True:
-            event = bob.wait_for_event()
-            if event.kind == EventType.INFO and "Close/expunge succeeded." in event.msg:
-                break
+        bob._rpc.wait_for_all_work_done()
         assert unencrypted_id in server_message_ids()
 
 

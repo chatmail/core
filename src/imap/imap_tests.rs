@@ -146,16 +146,14 @@ async fn test_loop_queries_do_not_scan_imap() -> Result<()> {
 async fn test_is_encrypted_copy_of_downloaded_msg() -> Result<()> {
     let t = TestContext::new_alice().await;
 
-    // (rfc724_mid, pre_rfc724_mid, download_state)
-    let msgs = [
+    for (rfc724_mid, pre_rfc724_mid, download_state) in [
         ("done@localhost", "", DownloadState::Done),
         (
             "available_post@localhost",
             "pre@localhost",
             DownloadState::Available,
         ),
-    ];
-    for (rfc724_mid, pre_rfc724_mid, download_state) in msgs {
+    ] {
         t.sql
             .execute(
                 "INSERT INTO msgs (rfc724_mid, pre_rfc724_mid, download_state) VALUES (?,?,?)",
@@ -164,14 +162,14 @@ async fn test_is_encrypted_copy_of_downloaded_msg() -> Result<()> {
             .await?;
     }
 
-    let encrypted = b"Content-Type: multipart/encrypted; protocol=\"application/pgp-encrypted\"; boundary=\"x\"\r\n\r\n";
-    let unencrypted = b"Content-Type: text/plain\r\n\r\n";
+    let encrypted: &[u8] = b"Content-Type: multipart/encrypted; protocol=\"application/pgp-encrypted\"; boundary=\"x\"\r\n\r\n";
+    let unencrypted: &[u8] = b"Content-Type: text/plain\r\n\r\n";
     for (headers, message_id, expected) in [
-        (&encrypted[..], "done@localhost", true),
-        (&unencrypted[..], "done@localhost", false),
-        (&encrypted[..], "pre@localhost", true),
-        (&encrypted[..], "available_post@localhost", false),
-        (&encrypted[..], "unknown@localhost", false),
+        (encrypted, "done@localhost", true),
+        (unencrypted, "done@localhost", false),
+        (encrypted, "pre@localhost", true),
+        (encrypted, "available_post@localhost", false),
+        (encrypted, "unknown@localhost", false),
     ] {
         let (headers, _) = mailparse::parse_headers(headers)?;
         assert_eq!(
