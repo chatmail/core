@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use anyhow::{Result, anyhow, bail, ensure};
 use deltachat_derive::{FromSql, ToSql};
 use serde::{Deserialize, Serialize};
+use tokio::sync::MutexGuard;
 
 use crate::context::Context;
 use crate::imap::session::Session;
@@ -136,6 +137,7 @@ pub(crate) async fn download_msg(
     context: &Context,
     rfc724_mid: String,
     session: &mut Session,
+    _fetch_msgs_lock_guard: &MutexGuard<'_, ()>,
 ) -> Result<Option<()>> {
     let transport_id = session.transport_id();
     let row = context
@@ -160,7 +162,13 @@ pub(crate) async fn download_msg(
         return Ok(None);
     };
     session
-        .fetch_single_msg(context, &server_folder, server_uid, rfc724_mid)
+        .fetch_single_msg(
+            context,
+            &server_folder,
+            server_uid,
+            rfc724_mid,
+            _fetch_msgs_lock_guard,
+        )
         .await?;
 
     if ephemeral::should_delete_all_downloaded_messages(context).await? {
@@ -185,6 +193,7 @@ impl Session {
         folder: &str,
         uid: u32,
         rfc724_mid: String,
+        _fetch_msgs_lock_guard: &MutexGuard<'_, ()>,
     ) -> Result<()> {
         if uid == 0 {
             bail!("Attempt to fetch UID 0");
@@ -199,11 +208,15 @@ impl Session {
         let mut uid_message_ids: BTreeMap<u32, String> = BTreeMap::new();
         uid_message_ids.insert(uid, rfc724_mid);
         let (sender, receiver) = async_channel::unbounded();
-        {
-            let _fetch_msgs_lock_guard = context.fetch_msgs_mutex.lock().await;
-            Box::pin(self.fetch_many_msgs(context, folder, vec![uid], &uid_message_ids, sender))
-                .await?;
-        }
+        Box::pin(self.fetch_many_msgs(
+            context,
+            folder,
+            vec![uid],
+            &uid_message_ids,
+            sender,
+            _fetch_msgs_lock_guard,
+        ))
+        .await?;
         if receiver.recv().await.is_err() {
             bail!("Failed to fetch UID {uid}");
         }
@@ -275,7 +288,28 @@ pub(crate) async fn download_msgs(context: &Context, session: &mut Session) -> R
         .await?;
 
     for rfc724_mid in &rfc724_mids {
-        match download_msg(context, rfc724_mid.clone(), session).await {
+        let _fetch_msgs_lock_guard = context.fetch_msgs_mutex.lock().await;
+
+        if !context
+            .sql
+            .exists(
+                "SELECT COUNT(*) FROM download WHERE rfc724_mid=?",
+                (rfc724_mid,),
+            )
+            .await?
+        {
+            // Another transport has downloaded the message in the meantime
+            continue;
+        }
+
+        match download_msg(
+            context,
+            rfc724_mid.clone(),
+            session,
+            &_fetch_msgs_lock_guard,
+        )
+        .await
+        {
             Ok(Some(())) => {
                 delete_from_downloads(context, rfc724_mid).await?;
                 delete_from_available_post_msgs(context, rfc724_mid).await?;
@@ -329,6 +363,11 @@ pub(crate) async fn download_known_post_messages_without_pre_message(
         })
         .await?;
     for rfc724_mid in &rfc724_mids {
+        let _fetch_msgs_lock_guard = context.fetch_msgs_mutex.lock().await;
+        if !available_post_msgs_contains_rfc724_mid(context, rfc724_mid).await? {
+            // Another transport has downloaded the message in the meantime
+            continue;
+        }
         if msg_is_downloaded_for(context, rfc724_mid).await? {
             delete_from_available_post_msgs(context, rfc724_mid).await?;
             continue;
@@ -338,7 +377,13 @@ pub(crate) async fn download_known_post_messages_without_pre_message(
         // because the Pre-Message got lost.
         // The message may be in the wrong order,
         // but at least we have it at all.
-        let res = download_msg(context, rfc724_mid.clone(), session).await;
+        let res = download_msg(
+            context,
+            rfc724_mid.clone(),
+            session,
+            &_fetch_msgs_lock_guard,
+        )
+        .await;
         if let Ok(Some(())) = res {
             delete_from_available_post_msgs(context, rfc724_mid).await?;
         }

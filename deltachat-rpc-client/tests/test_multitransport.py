@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import urllib.parse
 
@@ -380,6 +381,52 @@ def test_background_fetch_no_duplicates(acf, direct_imap, dc):
 
     dc.background_fetch(300)
     assert len(messages_with_text(alice_chat, "hello")) == 1
+
+
+def test_post_msg_downloaded_once(acf, direct_imap, tmp_path):
+    """A post-message that is available on multiple relays
+    must be downloaded only once."""
+    # Min. UI setting as of v2.35
+    download_limit = 163840
+    alice, _alice_chat, bob_chat = alice_with_two_transports_and_bob(acf)
+    alice.set_config("download_limit", str(download_limit))
+    imaps = [direct_imap(alice, transport["addr"], transport["password"]) for transport in alice.list_transports()]
+    assert len(imaps) == 2
+
+    alice.stop_io()
+    path = tmp_path / "large"
+    path.write_bytes(os.urandom(download_limit + 1))
+    bob_chat.send_file(str(path))
+
+    # Wait for the pre- and post-message on both relays
+    for imap in imaps:
+        while len(imap.get_all_messages()) < 2:
+            time.sleep(0.1)
+
+    alice.start_io()
+    msg = alice.wait_for_incoming_msg()
+    assert msg.get_snapshot().download_state == DownloadState.AVAILABLE
+    alice._rpc.download_full_message(alice.id, msg.id)
+
+    # Wait until both transports are idle,
+    # then check that the message was downloaded only from one transport:
+
+    idle_transports = set()
+    downloaded = False
+    downloads = 0
+
+    while len(idle_transports) < 2:
+        event = alice.wait_for_event()
+
+        if event.kind == EventType.MSGS_CHANGED and event.msg_id == msg.id:
+            downloaded = msg.get_snapshot().download_state == DownloadState.DONE
+        elif event.kind == EventType.INFO:
+            if re.search(r"Downloading message \S+ fully", event.msg):
+                downloads += 1
+            elif downloaded and (m := re.search(r"Transport (\d+): IDLE entering wait-on-remote state", event.msg)):
+                idle_transports.add(m[1])
+
+    assert downloads == 1
 
 
 def test_multitransport_mdn(acf):

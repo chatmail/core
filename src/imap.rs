@@ -18,6 +18,7 @@ use async_channel::{self, Receiver, Sender};
 use async_imap::types::{Fetch, Flag, UnsolicitedResponse};
 use futures::TryStreamExt as _;
 use ratelimit::Ratelimit;
+use tokio::sync::MutexGuard;
 use tokio_util::sync::CancellationToken;
 use url::Url;
 
@@ -706,7 +707,14 @@ impl Imap {
 
         let actually_download_messages_future = async {
             session
-                .fetch_many_msgs(context, folder, uids_fetch, &uid_message_ids, sender)
+                .fetch_many_msgs(
+                    context,
+                    folder,
+                    uids_fetch,
+                    &uid_message_ids,
+                    sender,
+                    &_fetch_msgs_lock_guard,
+                )
                 .await
                 .context("fetch_many_msgs")
         };
@@ -1016,6 +1024,7 @@ impl Session {
         request_uids: Vec<u32>,
         uid_message_ids: &BTreeMap<u32, String>,
         received_msgs_channel: Sender<(u32, Option<ReceivedMsg>)>,
+        _fetch_msgs_lock_guard: &MutexGuard<'_, ()>,
     ) -> Result<()> {
         if request_uids.is_empty() {
             return Ok(());
