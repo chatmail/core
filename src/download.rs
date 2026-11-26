@@ -279,9 +279,6 @@ pub(crate) async fn msg_is_downloaded_for(context: &Context, rfc724_mid: &str) -
 }
 
 pub(crate) async fn download_msgs(context: &Context, session: &mut Session) -> Result<()> {
-    // Lock the mutex before querying the `download` table to prevent
-    // multiple transports from downloading the same message at the same time:
-    let _fetch_msgs_lock_guard = context.fetch_msgs_mutex.lock().await;
     let rfc724_mids = context
         .sql
         .query_map_vec("SELECT rfc724_mid FROM download", (), |row| {
@@ -291,6 +288,20 @@ pub(crate) async fn download_msgs(context: &Context, session: &mut Session) -> R
         .await?;
 
     for rfc724_mid in &rfc724_mids {
+        let _fetch_msgs_lock_guard = context.fetch_msgs_mutex.lock().await;
+
+        if !context
+            .sql
+            .exists(
+                "SELECT COUNT(*) FROM download WHERE rfc724_mid=?",
+                (rfc724_mid,),
+            )
+            .await?
+        {
+            // Another transport has downloaded the message in the meantime
+            continue;
+        }
+
         match download_msg(
             context,
             rfc724_mid.clone(),
@@ -344,7 +355,6 @@ pub(crate) async fn download_known_post_messages_without_pre_message(
     context: &Context,
     session: &mut Session,
 ) -> Result<()> {
-    let _fetch_msgs_lock_guard = context.fetch_msgs_mutex.lock().await;
     let rfc724_mids = context
         .sql
         .query_map_vec("SELECT rfc724_mid FROM available_post_msgs", (), |row| {
@@ -353,6 +363,11 @@ pub(crate) async fn download_known_post_messages_without_pre_message(
         })
         .await?;
     for rfc724_mid in &rfc724_mids {
+        let _fetch_msgs_lock_guard = context.fetch_msgs_mutex.lock().await;
+        if !available_post_msgs_contains_rfc724_mid(context, rfc724_mid).await? {
+            // Another transport has downloaded the message in the meantime
+            continue;
+        }
         if msg_is_downloaded_for(context, rfc724_mid).await? {
             delete_from_available_post_msgs(context, rfc724_mid).await?;
             continue;
