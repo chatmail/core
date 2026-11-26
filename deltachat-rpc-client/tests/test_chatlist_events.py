@@ -82,34 +82,6 @@ def test_delivery_status(acf: RPCAccountFactory) -> None:
     assert chat_item["summaryStatus"] == const.MessageState.OUT_MDN_RCVD
 
 
-def test_delivery_status_failed(acf: RPCAccountFactory) -> None:
-    """
-    Test change status on chatlistitem when status changes failed
-    """
-    (alice,) = acf.get_online_accounts(1)
-    alice.set_config("force_encryption", "0")
-
-    invalid_contact = alice.create_contact("example@example.com", "invalid address")
-    invalid_chat = alice.get_chat_by_id(alice._rpc.create_chat_by_contact_id(alice.id, invalid_contact.id))
-
-    alice.clear_all_events()
-
-    failing_message = invalid_chat.send_text("test")
-
-    wait_for_chatlist_and_specific_item(alice, invalid_chat.id)
-
-    assert failing_message.get_snapshot().state == const.MessageState.OUT_PENDING
-
-    while True:
-        event = alice.wait_for_event()
-        if event.kind == EventType.MSG_FAILED:
-            break
-
-    wait_for_chatlist_specific_item(alice, invalid_chat.id)
-
-    assert failing_message.get_snapshot().state == const.MessageState.OUT_FAILED
-
-
 def test_download_on_demand(acf: RPCAccountFactory, rpcdata) -> None:
     """
     Test if download on demand emits chatlist update events.

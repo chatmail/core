@@ -1377,14 +1377,14 @@ impl Message {
     ///
     /// A message can have an associated error status if something went wrong when sending or
     /// receiving message itself.  The error status is free-form text and should not be further parsed,
-    /// rather it's presence is meant to indicate *something* went wrong with the message and the
+    /// rather its presence is meant to indicate *something* went wrong with the message and the
     /// text of the error is detailed information on what.
     ///
     /// Some common reasons error can be associated with messages are:
     /// * Lack of valid signature on an e2ee message, usually for received messages.
     /// * Failure to decrypt an e2ee message, usually for received messages.
-    /// * When a message could not be delivered to one or more recipients the non-delivery
-    ///   notification text can be stored in the error status.
+    /// * When a message could not be delivered to one or more recipients the
+    ///   SMTP error text can be stored in the error status.
     pub fn error(&self) -> Option<String> {
         self.error.clone()
     }

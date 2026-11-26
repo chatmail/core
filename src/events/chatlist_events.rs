@@ -68,6 +68,7 @@ mod test_chatlist_events {
             self, Chat, ChatId, ChatVisibility, MuteDuration, create_broadcast, create_group,
             set_muted,
         },
+        chatlist::Chatlist,
         config::Config,
         constants::Chattype,
         contact::Contact,
@@ -613,6 +614,35 @@ First thread."#;
         alice.evtracker.clear_events();
         chat::resend_msgs(&alice, &[msg_id]).await?;
         wait_for_chatlist_specific_item(&alice, chat).await;
+
+        Ok(())
+    }
+
+    /// Test that the chatlist item is updated when a message fails,
+    /// so that the UI can show the failed state in the summary,
+    /// and that resending the message resets the failed state.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_msg_failed() -> Result<()> {
+        let alice = &TestContext::new_alice().await;
+        let chat = create_group(alice, "My Group").await?;
+
+        let msg_id = chat::send_text_msg(alice, chat, "Hello".to_owned()).await?;
+        let _ = alice.pop_sent_msg().await;
+
+        alice.evtracker.clear_events();
+        let mut msg = Message::load_from_db(alice, msg_id).await?;
+        message::set_msg_failed(alice, &mut msg, "SMTP error").await?;
+        alice.assert_warn("SMTP error").await;
+        wait_for_chatlist_specific_item(alice, chat).await;
+
+        let chatlist = Chatlist::try_load(alice, 0, None, None).await?;
+        let summary = chatlist.get_summary(alice, 0, None).await?;
+        assert_eq!(summary.state, MessageState::OutFailed);
+
+        chat::resend_msgs(alice, &[msg_id]).await?;
+        let msg = Message::load_from_db(alice, msg_id).await?;
+        assert_eq!(msg.state, MessageState::OutPending);
+        assert_eq!(msg.error(), None);
 
         Ok(())
     }
