@@ -92,6 +92,11 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
                 error!(context, "get_securejoin_qr: {}.", err);
                 bail!(err);
             }
+            if !chat.is_self_in_chat(context).await? {
+                let err = format!("Can't generate QR code, self is not a member of chat {id}");
+                error!(context, "get_securejoin_qr: {err}.");
+                bail!(err);
+            }
             if chat.typ == Chattype::OutBroadcast {
                 // If the user created the broadcast before updating Delta Chat,
                 // then the secret will be missing, and the user needs to recreate the broadcast:

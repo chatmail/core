@@ -317,6 +317,12 @@ async fn test_unencrypted_chats_migration_readonly_groups() -> Result<()> {
         assert!(chat::get_chat_contacts(t, chat_id).await?.is_empty());
         assert_eq!(chat.can_send(t).await?, false);
         assert!(chat.get_profile_image(t).await?.unwrap().exists());
+        assert!(
+            crate::securejoin::get_securejoin_qr(t, Some(chat_id))
+                .await
+                .is_err()
+        );
+        t.assert_error("Can't generate QR code").await;
     }
 
     Ok(())
