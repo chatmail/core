@@ -2881,24 +2881,27 @@ async fn test_resend_long_message() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_can_send_group() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-    let bob = Contact::create(&alice, "", "bob@f.br").await?;
-    let chat_id = ChatId::create_for_contact(&alice, bob).await?;
-    let chat = Chat::load_from_db(&alice, chat_id).await?;
-    assert!(chat.can_send(&alice).await?);
-    let chat_id = create_group(&alice, "foo").await?;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let chat_id = alice.create_chat(bob).await.id;
+    let chat = Chat::load_from_db(alice, chat_id).await?;
+    assert!(chat.can_send(alice).await?);
+
+    let chat_id = create_group(alice, "foo").await?;
     assert_eq!(
-        Chat::load_from_db(&alice, chat_id)
+        Chat::load_from_db(alice, chat_id)
             .await?
-            .can_send(&alice)
+            .can_send(alice)
             .await?,
         true
     );
-    remove_contact_from_chat(&alice, chat_id, ContactId::SELF).await?;
+    remove_contact_from_chat(alice, chat_id, ContactId::SELF).await?;
     assert_eq!(
-        Chat::load_from_db(&alice, chat_id)
+        Chat::load_from_db(alice, chat_id)
             .await?
-            .can_send(&alice)
+            .can_send(alice)
             .await?,
         false
     );

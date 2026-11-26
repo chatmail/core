@@ -523,10 +523,7 @@ pub(crate) async fn receive_imf_inner(
         return trash().await;
     }
 
-    if !mime_parser.was_encrypted()
-        && mime_parser.get_header(HeaderDef::SecureJoin).is_none()
-        && context.get_config_bool(Config::ForceEncryption).await?
-    {
+    if !mime_parser.was_encrypted() && mime_parser.get_header(HeaderDef::SecureJoin).is_none() {
         warn!(context, "Fetched unencrypted message, ignoring");
         return trash().await;
     }
@@ -4168,15 +4165,10 @@ async fn lookup_key_contact_by_fingerprint(
     context: &Context,
     fingerprint: &str,
 ) -> Result<Option<ContactId>> {
-    logged_debug_assert!(
-        context,
+    ensure!(
         !fingerprint.is_empty(),
         "lookup_key_contact_by_fingerprint: fingerprint is empty."
     );
-    if fingerprint.is_empty() {
-        // Avoid accidentally looking up a non-key-contact.
-        return Ok(None);
-    }
     if let Some(contact_id) = context
         .sql
         .query_row_optional(

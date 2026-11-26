@@ -215,10 +215,7 @@ pub enum SystemMessage {
     /// "%1$s sent a message from another device.", deprecated 2025-07
     ChatProtectionDisabled = 12,
 
-    /// Message can't be sent because of `Invalid unencrypted mail to <>`
-    /// which is sent by chatmail servers.
-    InvalidUnencryptedMail = 13,
-
+    // InvalidUnencryptedMail = 13 was removed
     /// Single chats info message telling that SecureJoin has started and the user should wait for it
     /// to complete.
     SecurejoinWait = 14,

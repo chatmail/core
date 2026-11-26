@@ -16,11 +16,16 @@ use crate::key::DcKey;
 use crate::log::warn;
 
 use crate::sql::Sql;
+use crate::sql::TransactionExt as _;
 use crate::tools::{self, Time, inc_and_check, time_elapsed};
 use crate::transport::ConfiguredLoginParam;
 
 const DBVERSION: i32 = 68;
 const VERSION_CFG: &str = "dbversion";
+
+/// Raw config key that is set by the unencrypted-chats migration
+/// if the device message about the removal of unencrypted messages should be shown.
+pub(crate) const SHOW_UNENCRYPTED_DEVICE_MSG: &str = "show_unencrypted_device_msg";
 const TABLES: &str = include_str!("./tables.sql");
 
 #[cfg(test)]
@@ -710,6 +715,112 @@ pub(crate) async fn msgs_to_key_contacts(context: &Context) -> Result<()> {
         "Rewriting {msgs_migrated} msgs to key-contacts took {:?}.",
         time_elapsed(&start),
     );
+    Ok(())
+}
+
+fn unencrypted_chats_migration(
+    context: &Context,
+    transaction: &mut rusqlite::Transaction<'_>,
+) -> Result<()> {
+    // Migrate:
+    // - all unencrypted (i.e. ad-hoc) groups to have 0 members
+    // - all chats of type Mailinglist into a group with 0 members
+    transaction.execute_batch(
+        "
+CREATE TEMP TABLE temp.legacy_unencrypted_chats(chat_id INTEGER PRIMARY KEY, type INTEGER) STRICT;
+
+INSERT INTO temp.legacy_unencrypted_chats(chat_id, type)
+SELECT id, type FROM chats
+WHERE ((type=120 AND grpid='') OR type=140) -- Ad-hoc groups and mailinglists
+  AND id>9;
+
+DELETE FROM chats_contacts
+WHERE chat_id IN (SELECT chat_id FROM temp.legacy_unencrypted_chats);
+
+UPDATE chats SET type=120
+WHERE id IN (SELECT chat_id FROM temp.legacy_unencrypted_chats);
+",
+    )?;
+
+    // Rewrite all address-contacts to have "Hidden" origin.
+    // We still need the contacts because we want to keep the messages, and every message needs a sender.
+    // Make sure that the address is available in the name, so that the user can still see it.
+    transaction.execute_batch(
+        "
+UPDATE contacts
+SET origin=8 -- Origin::Hidden
+WHERE fingerprint='' AND id>9;
+
+UPDATE contacts
+SET name=name || ' (' || addr || ')'
+WHERE fingerprint='' AND id>9 AND name!='';
+
+UPDATE contacts
+SET authname=authname || ' (' || addr || ')'
+WHERE fingerprint='' AND id>9 AND name='' AND authname!='';
+
+UPDATE contacts
+SET authname=addr
+WHERE fingerprint='' AND id>9 AND name='' AND authname='';
+
+-- Also update the names of the chats:
+UPDATE chats
+SET name = (
+    SELECT CASE
+        WHEN c.name != ''     THEN c.name
+        WHEN c.authname != '' THEN c.authname
+        ELSE c.addr
+    END
+    FROM chats_contacts cc
+    JOIN contacts c ON c.id = cc.contact_id
+    WHERE cc.chat_id = chats.id
+)
+WHERE type = 100 AND id > 9
+AND EXISTS (
+    SELECT 1 FROM chats_contacts cc
+    JOIN contacts c ON c.id = cc.contact_id
+    WHERE cc.chat_id = chats.id AND c.fingerprint = '' AND c.id > 9
+);
+",
+    )?;
+
+    let legacy_chats =
+        transaction.count("SELECT COUNT(*) FROM temp.legacy_unencrypted_chats", ())?;
+    let legacy_contacts = transaction.count(
+        "SELECT COUNT(*) FROM contacts WHERE fingerprint='' AND id>9",
+        (),
+    )?;
+    if legacy_chats > 0 || legacy_contacts > 0 {
+        // Set the gray letter avatar for all legacy chats:
+        let blob = crate::blob::BlobObject::create_and_deduplicate_from_bytes(
+            context,
+            include_bytes!("../../assets/icon-unencrypted.png"),
+            "icon-unencrypted.png",
+        )?;
+        let new_param = &format!("i={}", blob.as_name());
+        transaction.execute(
+            "UPDATE chats SET param=? WHERE id IN (SELECT chat_id FROM temp.legacy_unencrypted_chats)",
+            (new_param,),
+        )?;
+        transaction.execute(
+            "UPDATE contacts SET param=? WHERE fingerprint='' AND id>9",
+            (new_param,),
+        )?;
+
+        let force_encryption: Option<String> = transaction.query_get_value(
+            "SELECT value FROM config WHERE keyname='force_encryption'",
+            (),
+        )?;
+        if force_encryption == Some("0".to_string()) {
+            transaction.execute(
+                "INSERT OR REPLACE INTO config (keyname, value) VALUES (?, '1')",
+                (SHOW_UNENCRYPTED_DEVICE_MSG,),
+            )?;
+        }
+    }
+
+    transaction.execute("DROP TABLE temp.legacy_unencrypted_chats", ())?;
+
     Ok(())
 }
 
@@ -2708,6 +2819,19 @@ CREATE TABLE smtp_failure (
         sql.execute_migration(
             "CREATE INDEX IF NOT EXISTS imap_pending_deletions
              ON imap(transport_id, folder) WHERE target != folder",
+            migration_version,
+        )
+        .await?;
+    }
+
+    inc_and_check(&mut migration_version, 171)?;
+    if dbversion < migration_version {
+        sql.execute_migration_transaction(
+            |transaction| {
+                unencrypted_chats_migration(context, transaction)?;
+
+                Ok(())
+            },
             migration_version,
         )
         .await?;

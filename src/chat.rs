@@ -1521,7 +1521,7 @@ impl Chat {
             let contact_ids = get_chat_contacts(context, self.id).await?;
             if let Some(contact_id) = contact_ids.first() {
                 let contact = Contact::get_by_id(context, *contact_id).await?;
-                if contact.is_key_contact() && contact.public_key(context).await?.is_none() {
+                if contact.public_key(context).await?.is_none() {
                     return Ok(Some(reason));
                 }
             }
@@ -2841,8 +2841,7 @@ async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -> Result<Ve
         || (!msg
             .param
             .get_bool(Param::ForcePlaintext)
-            .unwrap_or_default()
-            && context.get_config_bool(Config::ForceEncryption).await?);
+            .unwrap_or_default());
     let mimefactory = match MimeFactory::from_msg(context, msg.clone()).await {
         Ok(mf) => mf,
         Err(err) => {
@@ -2890,25 +2889,9 @@ async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -> Result<Ve
     let (queued_msg, side_effects) = queued_msg_pair;
 
     if needs_encryption && !is_encrypted {
-        let addr = context.get_primary_self_addr().await?;
-        let text =
-            stock_str::unencrypted_email(context, addr.split('@').nth(1).unwrap_or_default()).await;
-        message::set_msg_failed(context, msg, &text).await?;
-        add_info_msg_with_cmd(
-            context,
-            msg.chat_id,
-            &text,
-            SystemMessage::InvalidUnencryptedMail,
-            Some(msg.timestamp_sort),
-            msg.timestamp_sort,
-            None,
-            None,
-            None,
-            None,
-        )
-        .await?;
+        message::set_msg_failed(context, msg, "Can't send unencrypted messages.").await?;
         bail!(
-            "e2e encryption unavailable {} - {:?}",
+            "Can't send unencrypted messages {} - {:?}",
             msg.id,
             needs_encryption
         );

@@ -398,7 +398,6 @@ pub enum SystemMessageType {
     SecurejoinMessage,
     LocationStreamingEnabled,
     LocationOnly,
-    InvalidUnencryptedMail,
 
     /// Single chats info message telling that SecureJoin has started and the user should wait for it
     /// to complete.
@@ -460,7 +459,6 @@ impl From<deltachat::mimeparser::SystemMessage> for SystemMessageType {
             SystemMessage::MultiDeviceSync => SystemMessageType::MultiDeviceSync,
             SystemMessage::WebxdcStatusUpdate => SystemMessageType::WebxdcStatusUpdate,
             SystemMessage::WebxdcInfoMessage => SystemMessageType::WebxdcInfoMessage,
-            SystemMessage::InvalidUnencryptedMail => SystemMessageType::InvalidUnencryptedMail,
             SystemMessage::IrohNodeAddr => SystemMessageType::IrohNodeAddr,
             SystemMessage::SecurejoinWait => SystemMessageType::SecurejoinWait,
             SystemMessage::SecurejoinWaitTimeout => SystemMessageType::SecurejoinWaitTimeout,

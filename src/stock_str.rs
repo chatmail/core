@@ -322,11 +322,6 @@ pub enum StockMessage {
     #[strum(props(fallback = "Member %1$s added."))]
     MsgAddMember = 173,
 
-    #[strum(props(
-        fallback = "⚠️ Your email provider %1$s requires end-to-end encryption which is not setup yet."
-    ))]
-    InvalidUnencryptedMail = 174,
-
     #[strum(props(fallback = "You reacted %1$s to \"%2$s\""))]
     MsgYouReacted = 176,
 
@@ -437,6 +432,17 @@ https://delta.chat/donate"))]
 
     #[strum(props(fallback = "Message unpinned by %1$s."))]
     MsgMessageUnpinnedBy = 247,
+
+    #[strum(props(
+        fallback = "To keep Delta Chat simpler and more secure, it no longer sends or receives messages that aren't end-to-end encrypted.
+
+Nothing is lost: your encrypted chats work as before, and old unencrypted chats remain readable.
+
+To keep sending and receiving unencrypted email, use a regular email app. You can find your email password in Delta Chat under \"Settings → Advanced → Relays\": tap (or right-click) your address and choose \"Edit Relay\".
+
+To keep chatting with someone, send them an invite link."
+    ))]
+    NoMoreUnencrypted = 250,
 }
 
 impl StockMessage {
@@ -641,6 +647,12 @@ pub(crate) async fn msg_unpinned(context: &Context, by_contact: ContactId) -> St
         translated(context, StockMessage::MsgMessageUnpinnedBy)
             .replace1(&by_contact.get_stock_name(context).await)
     }
+}
+
+/// Device message explaining that unencrypted messages
+/// can't be sent or received anymore.
+pub(crate) fn no_more_unencrypted(context: &Context) -> String {
+    translated(context, StockMessage::NoMoreUnencrypted)
 }
 
 /// Stock string, one of:
@@ -1188,11 +1200,6 @@ pub(crate) fn part_of_total_used(context: &Context, part: &str, total: &str) -> 
     translated(context, StockMessage::PartOfTotallUsed)
         .replace1(part)
         .replace2(total)
-}
-
-/// Stock string: `⚠️ Your email provider %1$s requires end-to-end encryption which is not setup yet. Tap to learn more.`.
-pub(crate) async fn unencrypted_email(context: &Context, provider: &str) -> String {
-    translated(context, StockMessage::InvalidUnencryptedMail).replace1(provider)
 }
 
 /// Stock string: `The attachment contains anonymous usage statistics, which helps us improve Delta Chat. Thank you!`

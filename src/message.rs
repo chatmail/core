@@ -1075,7 +1075,6 @@ impl Message {
             | SystemMessage::ChatE2ee
             | SystemMessage::ChatProtectionEnabled
             | SystemMessage::ChatProtectionDisabled
-            | SystemMessage::InvalidUnencryptedMail
             | SystemMessage::SecurejoinWait
             | SystemMessage::SecurejoinWaitTimeout
             | SystemMessage::MultiDeviceSync
