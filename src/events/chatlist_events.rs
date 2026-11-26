@@ -619,7 +619,8 @@ First thread."#;
     }
 
     /// Test that the chatlist item is updated when a message fails,
-    /// so that the UI can show the failed state in the summary.
+    /// so that the UI can show the failed state in the summary,
+    /// and that resending the message resets the failed state.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_msg_failed() -> Result<()> {
         let alice = &TestContext::new_alice().await;
@@ -637,6 +638,11 @@ First thread."#;
         let chatlist = Chatlist::try_load(alice, 0, None, None).await?;
         let summary = chatlist.get_summary(alice, 0, None).await?;
         assert_eq!(summary.state, MessageState::OutFailed);
+
+        chat::resend_msgs(alice, &[msg_id]).await?;
+        let msg = Message::load_from_db(alice, msg_id).await?;
+        assert_eq!(msg.state, MessageState::OutPending);
+        assert_eq!(msg.error(), None);
 
         Ok(())
     }
