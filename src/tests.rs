@@ -1,4 +1,4 @@
 mod account_events;
 mod aeap;
-mod pre_messages;
+pub(crate) mod pre_messages;
 mod verified_chats;

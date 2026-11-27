@@ -6,7 +6,6 @@ use anyhow::{Result, anyhow, bail, ensure};
 use deltachat_derive::{FromSql, ToSql};
 use serde::{Deserialize, Serialize};
 
-use crate::config::Config;
 use crate::context::Context;
 use crate::imap::session::Session;
 use crate::log::warn;
@@ -163,14 +162,6 @@ pub(crate) async fn download_msg(
     session
         .fetch_single_msg(context, &server_folder, server_uid, rfc724_mid)
         .await?;
-
-    if !context.get_config_bool(Config::BccSelf).await? {
-        // Now that the message was downloaded, it was likely marked for deletion;
-        // trigger the deletion by interrupting the inbox folder.
-        // This is mainly needed to make the tests pass;
-        // on real devices, it would be fine to delete the message at the next iteration.
-        context.scheduler.interrupt_inbox().await;
-    }
 
     Ok(Some(()))
 }

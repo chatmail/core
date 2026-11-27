@@ -1034,7 +1034,6 @@ impl Session {
         }
 
         let transport_id = self.transport_id();
-        let bcc_self = context.get_config_bool(Config::BccSelf).await?;
 
         for (request_uids, set) in build_sequence_sets(&request_uids)? {
             info!(context, "Starting UID FETCH of message set \"{}\".", set);
@@ -1139,10 +1138,6 @@ impl Session {
                         "Failed to update last_rcvd_timestamp of transport {}",
                         transport_id
                     ))?;
-
-                if res.is_ok() && !bcc_self {
-                    mark_msg_for_deletion(context, rfc724_mid).await?;
-                }
 
                 // If there was an error receiving the message, show a device message:
                 let received_msg = match res {
@@ -1623,12 +1618,9 @@ async fn is_encrypted_copy_of_downloaded_msg(
         .await
 }
 
-/// Marks all `imap` rows of a downloaded message for deletion on the server.
-/// Used if there are no other devices (`bcc_self` is off).
-///
-/// This includes copies on other transports, e.g. of a post-message that was received
-/// on multiple transports, then downloaded from one transport.
-async fn mark_msg_for_deletion(context: &Context, rfc724_mid: &str) -> Result<()> {
+/// Marks all `imap` rows of a message for deletion on the server,
+/// including copies on other transports.
+pub(crate) async fn mark_msg_for_deletion(context: &Context, rfc724_mid: &str) -> Result<()> {
     context
         .sql
         .execute(
@@ -1636,6 +1628,7 @@ async fn mark_msg_for_deletion(context: &Context, rfc724_mid: &str) -> Result<()
             (rfc724_mid,),
         )
         .await?;
+    context.scheduler.interrupt_inbox().await;
     Ok(())
 }
 
