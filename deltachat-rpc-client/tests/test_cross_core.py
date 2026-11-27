@@ -178,8 +178,8 @@ def test_keyupdate_against_core_2_48_march_2026(acf, alice_and_remote_bob, repla
 
 def test_upgrade_keeps_unencrypted_msgs_on_server(alice_and_remote_bob, direct_imap, request) -> None:
     """Test that after an upgrade from an old core where `force_encryption` was off,
-    unencrypted messages downloaded before the upgrade are not deleted from the server,
-    and that encrypted messages that can't be decrypted are not deleted either."""
+    unencrypted messages downloaded before the upgrade are not deleted from the server.
+    Also, test that undecryptable messages are not deleted."""
     alice, alice_contact_bob, remote_eval = alice_and_remote_bob("2.69.0")
     alice_chat = alice_contact_bob.create_chat()
     remote_eval("bob_contact_alice.create_chat()")
@@ -225,7 +225,7 @@ def test_upgrade_keeps_unencrypted_msgs_on_server(alice_and_remote_bob, direct_i
 
         # Encrypted to a key that Bob doesn't have:
         undecryptable_path = request.path.parent.parent.parent.joinpath(
-            "test-data/message/thunderbird_encrypted_unsigned.eml"
+            "test-data/message/thunderbird_encrypted_unsigned.eml",
         )
         undecryptable_id = "<1e87b947-d7be-1ebd-e374-e22ebaa5e00a@example.net>"
         bob_imap.conn.append(undecryptable_path.read_bytes(), "INBOX")

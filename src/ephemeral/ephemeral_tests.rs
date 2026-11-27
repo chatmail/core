@@ -545,8 +545,7 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
         }
 
         // Only expired messages are deleted. Whether downloaded messages are deleted is decided
-        // when they are downloaded, so existing rows of non-expired messages are kept
-        // even if `bcc_self` is off.
+        // when they are downloaded.
         for rfc724_mid in &rfc724_mids {
             let expired = rfc724_mid.starts_with("expired");
             assert_eq!(is_deleted(&t, rfc724_mid).await?, expired, "{rfc724_mid}");

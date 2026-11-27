@@ -1594,8 +1594,8 @@ fn is_encrypted(headers: &[mailparse::MailHeader<'_>]) -> bool {
         })
 }
 
-/// Returns whether a newly seen message is a copy of an already downloaded message,
-/// e.g. a copy that arrived on another transport.
+/// Returns whether a new message is a copy of an already downloaded message.
+/// In single-device mode, this means that it can be deleted immediately.
 ///
 /// Unencrypted copies are excluded, so that an old unencrypted email that appears with a new
 /// UID (e.g. because the user moved it with a classical MUA) is not deleted.
@@ -1628,6 +1628,9 @@ pub(crate) async fn mark_msg_for_deletion(context: &Context, rfc724_mid: &str) -
             (rfc724_mid,),
         )
         .await?;
+    // interrupt_inbox() so that all transports wake up and actually delete the message.
+    // This is mainly needed to ensure that the tests aren't flaky;
+    // on real devices, it would be fine to delete the message at the next iteration.
     context.scheduler.interrupt_inbox().await;
     Ok(())
 }

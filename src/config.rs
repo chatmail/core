@@ -168,9 +168,12 @@ pub enum Config {
     /// Own avatar filename.
     Selfavatar,
 
-    /// Send BCC copy to self.
+    /// `1` if there are other devices using this profile (multi-device),
+    /// `0` otherwise.
     ///
-    /// Should be enabled for multi-device setups.
+    /// Called `bcc_self` for historical reasons:
+    /// If there are multiple devices, then outgoing messages need to
+    /// be sent to self as a BCC-copy.
     ///
     /// This is automatically enabled when importing/exporting a backup,
     /// setting up a second device, or receiving a sync message.

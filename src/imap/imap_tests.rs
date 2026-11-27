@@ -1,5 +1,9 @@
 use super::*;
-use crate::test_utils::{TestContext, TestContextManager};
+use crate::{
+    message::Viewtype,
+    test_utils::{TestContext, TestContextManager},
+    tests::pre_messages::util::send_large_file_message,
+};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_set_uid_next_validity() {
@@ -181,19 +185,19 @@ async fn test_is_encrypted_copy_of_downloaded_msg() -> Result<()> {
     Ok(())
 }
 
-/// Adds an `imap` row for `payload` on each of `transport_ids`, like prefetching does,
-/// then receives the message like `fetch_many_msgs()` does.
-/// Returns the Message-ID used for the `imap` rows.
+/// Calls `receive_imf_inner` after adding the respective rows to the `imap` table.
+/// Returns the rfc724_mid and the result of receive_imf.
 async fn recv_with_imap_rows(
     t: &TestContext,
     payload: &[u8],
     transport_ids: &[u32],
-) -> Result<(String, Option<crate::receive_imf::ReceivedMsg>)> {
+) -> Result<(String, Option<ReceivedMsg>)> {
     let rfc724_mid = add_imap_rows(t, payload, transport_ids).await?;
-    let received = crate::receive_imf::receive_imf_inner(t, &rfc724_mid, payload, false).await?;
+    let received = receive_imf_inner(t, &rfc724_mid, payload, false).await?;
     Ok((rfc724_mid, received))
 }
 
+/// Emulates prefetch adding rows to the `imap` table during prefetch.
 async fn add_imap_rows(t: &TestContext, payload: &[u8], transport_ids: &[u32]) -> Result<String> {
     let mail = mailparse::parse_mail(payload)?;
     let rfc724_mid = prefetch_get_message_id(&mail.headers).unwrap();
@@ -211,19 +215,20 @@ async fn add_imap_rows(t: &TestContext, payload: &[u8], transport_ids: &[u32]) -
     Ok(rfc724_mid)
 }
 
-/// Returns for each `imap` row of `rfc724_mid`, ordered by transport, whether it is marked for deletion.
-async fn deleted_on_server(t: &TestContext, rfc724_mid: &str) -> Result<Vec<bool>> {
+/// Query whether `rfc724_mid` is marked for deletion,
+/// as a Vec where each item corresponds to one message on one of the transports.
+async fn is_marked_for_deletion(t: &TestContext, rfc724_mid: &str) -> Result<Vec<bool>> {
     t.sql
         .query_map_vec(
-            "SELECT target='' FROM imap WHERE rfc724_mid=? ORDER BY transport_id",
+            "SELECT target='' FROM imap WHERE rfc724_mid=?",
             (rfc724_mid,),
             |row| Ok(row.get::<_, bool>(0)?),
         )
         .await
 }
 
-/// With `bcc_self` off, processed messages are deleted on all relays.
-/// This includes keyupdates, which are trashed early in `receive_imf`.
+/// In single-device mode (`bcc_self=0`),
+/// processed messages are deleted on all relays.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_server_deletion() -> Result<()> {
     for bcc_self in [false, true] {
@@ -242,7 +247,7 @@ async fn test_server_deletion() -> Result<()> {
                 recv_with_imap_rows(bob, sent.payload.as_bytes(), &[1, 2]).await?;
             assert_eq!(received.unwrap().chat_id.is_trash(), is_trash);
             assert_eq!(
-                deleted_on_server(bob, &rfc724_mid).await?,
+                is_marked_for_deletion(bob, &rfc724_mid).await?,
                 [!bcc_self, !bcc_self]
             );
         }
@@ -250,7 +255,7 @@ async fn test_server_deletion() -> Result<()> {
     Ok(())
 }
 
-/// With `bcc_self` off, the pre-message is deleted from all relays when it is received,
+/// With `bcc_self=0`, the pre-message is deleted from all relays when it is received,
 /// and the post-message when it is downloaded.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_server_deletion_pre_and_post_msg() -> Result<()> {
@@ -261,50 +266,58 @@ async fn test_server_deletion_pre_and_post_msg() -> Result<()> {
         bob.set_config_bool(Config::BccSelf, bcc_self).await?;
 
         let chat_id = alice.create_chat_id(bob).await;
-        let (pre_msg, post_msg, _) = crate::tests::pre_messages::util::send_large_file_message(
-            alice,
-            chat_id,
-            crate::message::Viewtype::File,
-            &vec![0u8; 1_000_000],
-        )
-        .await?;
-        let post_rfc724_mid = add_imap_rows(bob, post_msg.payload.as_bytes(), &[1, 2]).await?;
+        let (pre_msg, post_msg, _) =
+            send_large_file_message(alice, chat_id, Viewtype::File, &vec![0u8; 200_000]).await?;
+
+        let transports = &[1, 2];
+        let post_rfc724_mid = add_imap_rows(bob, post_msg.payload.as_bytes(), transports).await?;
 
         let (pre_rfc724_mid, received) =
-            recv_with_imap_rows(bob, pre_msg.payload.as_bytes(), &[1, 2]).await?;
-        let msg = crate::message::Message::load_from_db(bob, received.unwrap().msg_ids[0]).await?;
+            recv_with_imap_rows(bob, pre_msg.payload.as_bytes(), transports).await?;
+        let msg = Message::load_from_db(bob, received.unwrap().msg_ids[0]).await?;
         assert_eq!(msg.download_state, DownloadState::Available);
         assert_eq!(
-            deleted_on_server(bob, &pre_rfc724_mid).await?,
+            is_marked_for_deletion(bob, &pre_rfc724_mid).await?,
             [!bcc_self, !bcc_self]
         );
         assert_eq!(
-            deleted_on_server(bob, &post_rfc724_mid).await?,
+            is_marked_for_deletion(bob, &post_rfc724_mid).await?,
             [false, false]
         );
 
-        let received = crate::receive_imf::receive_imf_inner(
-            bob,
-            &post_rfc724_mid,
-            post_msg.payload.as_bytes(),
-            false,
-        )
-        .await?;
+        let received =
+            receive_imf_inner(bob, &post_rfc724_mid, post_msg.payload.as_bytes(), false).await?;
         assert_eq!(received.unwrap().chat_id.is_trash(), true);
-        let msg = crate::message::Message::load_from_db(bob, msg.id).await?;
+        let msg = Message::load_from_db(bob, msg.id).await?;
         assert_eq!(msg.download_state, DownloadState::Done);
         assert_eq!(
-            deleted_on_server(bob, &post_rfc724_mid).await?,
+            is_marked_for_deletion(bob, &post_rfc724_mid).await?,
             [!bcc_self, !bcc_self]
         );
     }
     Ok(())
 }
 
-/// Messages that Delta Chat can't use are trashed, but kept on the server even with `bcc_self` off,
-/// so that the user can read them with a different email client.
+/// Unencrypted, undecryptable, and unsigned messages are trashed,
+/// but kept on the server even in single-device mode (`bcc_self=0`),
+/// so that the user can read them with a different MUA.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_server_keeps_unusable_msgs() -> Result<()> {
+    async fn assert_trashed_but_not_deleted(
+        t: &TestContext,
+        payload: &[u8],
+        extra_warnings: &[&str],
+    ) -> Result<()> {
+        let (rfc724_mid, received) = recv_with_imap_rows(t, payload, &[1]).await?;
+        for warning in extra_warnings {
+            t.assert_warn(warning).await;
+        }
+        t.assert_warn("Fetched unencrypted message, ignoring").await;
+        assert_eq!(received.unwrap().chat_id.is_trash(), true);
+        assert_eq!(is_marked_for_deletion(t, &rfc724_mid).await?, [false]);
+        Ok(())
+    }
+
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
@@ -313,7 +326,6 @@ async fn test_server_keeps_unusable_msgs() -> Result<()> {
         t.set_config_bool(Config::BccSelf, false).await?;
     }
 
-    // Unencrypted.
     let unencrypted = b"From: Fiona <fiona@example.net>\r\n\
         To: bob@example.net\r\n\
         Subject: Hello\r\n\
@@ -321,35 +333,20 @@ async fn test_server_keeps_unusable_msgs() -> Result<()> {
         Date: Sun, 22 Mar 2020 22:37:57 +0000\r\n\
         \r\n\
         Hello from another email app\r\n";
-    // Encrypted to a key that Bob doesn't have.
+    assert_trashed_but_not_deleted(bob, unencrypted, &[]).await?;
+
     let undecryptable = alice
         .send_text(alice.create_chat_id(fiona).await, "for fiona")
         .await;
-    for (payload, expected_warnings) in [
-        (&unencrypted[..], &[][..]),
-        (
-            undecryptable.payload.as_bytes(),
-            &["decryption failed: decrypt_the_ring: missing key"][..],
-        ),
-    ] {
-        let (rfc724_mid, received) = recv_with_imap_rows(bob, payload, &[1]).await?;
-        for warning in expected_warnings {
-            bob.assert_warn(warning).await;
-        }
-        bob.assert_warn("Fetched unencrypted message, ignoring")
-            .await;
-        assert_eq!(received.unwrap().chat_id.is_trash(), true);
-        assert_eq!(deleted_on_server(bob, &rfc724_mid).await?, [false]);
-    }
+    assert_trashed_but_not_deleted(
+        bob,
+        undecryptable.payload.as_bytes(),
+        &["decryption failed: decrypt_the_ring: missing key"],
+    )
+    .await?;
 
-    // Encrypted, but unsigned.
     let unsigned = include_bytes!("../../test-data/message/thunderbird_encrypted_unsigned.eml");
-    let (rfc724_mid, received) = recv_with_imap_rows(alice, unsigned, &[1]).await?;
-    alice
-        .assert_warn("Fetched unencrypted message, ignoring")
-        .await;
-    assert_eq!(received.unwrap().chat_id.is_trash(), true);
-    assert_eq!(deleted_on_server(alice, &rfc724_mid).await?, [false]);
+    assert_trashed_but_not_deleted(alice, unsigned, &[]).await?;
 
     Ok(())
 }
