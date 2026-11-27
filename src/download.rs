@@ -156,7 +156,6 @@ pub(crate) async fn download_msg(
 
     let Some((server_uid, server_folder)) = row else {
         // No IMAP record found, the message is not available on this transport.
-        delete_from_available_post_msgs(context, &rfc724_mid).await?;
         return Ok(None);
     };
     session
@@ -330,6 +329,19 @@ pub(crate) async fn download_known_post_messages_without_pre_message(
         .await?;
     for rfc724_mid in &rfc724_mids {
         if msg_is_downloaded_for(context, rfc724_mid).await? {
+            delete_from_available_post_msgs(context, rfc724_mid).await?;
+            continue;
+        }
+
+        if !context
+            .sql
+            .exists(
+                "SELECT COUNT(*) FROM imap WHERE rfc724_mid=? AND target!=''",
+                (&rfc724_mid,),
+            )
+            .await?
+        {
+            // The message is no longer available on any transport.
             delete_from_available_post_msgs(context, rfc724_mid).await?;
             continue;
         }
