@@ -32,9 +32,10 @@ use crate::config::Config;
 use crate::constants::{Blocked, Chattype, DC_GCL_NO_SPECIALS};
 use crate::contact::{Contact, ContactId, Modifier, Origin, import_vcard, make_vcard};
 use crate::context::Context;
+use crate::download::PRE_MSG_ATTACHMENT_SIZE_THRESHOLD;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::key::{self, DcKey, self_fingerprint};
-use crate::message::{Message, MessageState, MsgId};
+use crate::message::{Message, MessageState, MsgId, Viewtype};
 use crate::mimefactory;
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::pgp::SeipdVersion;
@@ -1319,6 +1320,35 @@ pub async fn receive_encrypted_imf(
         .await?
         .unwrap();
     Ok(received_msg)
+}
+
+/// Sends a message with an attachment larger than [`PRE_MSG_ATTACHMENT_SIZE_THRESHOLD`]
+/// and returns the sent pre- and post-message.
+pub(crate) async fn send_large_file_message<'a>(
+    sender: &'a TestContext,
+    target_chat: ChatId,
+    view_type: Viewtype,
+    content: &[u8],
+) -> Result<(SentMessage<'a>, SentMessage<'a>, MsgId)> {
+    let mut msg = Message::new(view_type);
+    let file_name = match view_type {
+        Viewtype::Webxdc => "test.xdc",
+        Viewtype::Vcard => "test.vcf",
+        _ => "test.bin",
+    };
+    msg.set_file_from_bytes(sender, file_name, content)?;
+    msg.set_text("test".to_owned());
+
+    // assert that test attachment is bigger than limit
+    assert!(msg.get_filebytes(sender).await?.unwrap() > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD);
+
+    let msg_id = chat::send_msg(sender, target_chat, &mut msg).await?;
+    let smtp_rows = sender.get_smtp_rows_for_msg(msg_id).await;
+
+    assert_eq!(smtp_rows.len(), 2);
+    let pre_message = smtp_rows.first().expect("Pre-Message exists");
+    let post_message = smtp_rows.get(1).expect("Post-Message exists");
+    Ok((pre_message.to_owned(), post_message.to_owned(), msg_id))
 }
 
 impl Deref for TestContext {

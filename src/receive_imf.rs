@@ -900,10 +900,6 @@ pub(crate) async fn receive_imf_inner(
                 .await?;
         }
 
-        // In single-device-mode (`bcc_self=0`), messages are deleted from all relays
-        // once they were processed.
-        // Messages that are trashed further above, e.g. because they can't be decrypted,
-        // are kept on the server so that they can still be read with a different email client.
         if received_msg.needs_delete_job || !context.get_config_bool(Config::BccSelf).await? {
             mark_msg_for_deletion(context, rfc724_mid_orig).await?;
         } else if !mime_parser.mdn_reports.is_empty() && mime_parser.has_chat_version() {

@@ -8,8 +8,7 @@ use crate::chat::{forward_msgs, save_msgs};
 use crate::chatlist::get_last_message_for_chat;
 use crate::download::{DownloadState, PRE_MSG_ATTACHMENT_SIZE_THRESHOLD};
 use crate::message::{Message, Viewtype};
-use crate::test_utils::TestContextManager;
-use crate::tests::pre_messages::util::send_large_file_message;
+use crate::test_utils::{TestContextManager, send_large_file_message};
 
 /// Test that forwarding Pre-Message should forward additional text to not be empty
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

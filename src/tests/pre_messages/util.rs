@@ -2,40 +2,11 @@ use anyhow::Result;
 use async_zip::tokio::write::ZipFileWriter;
 use async_zip::{Compression, ZipEntryBuilder};
 use futures::io::Cursor as FuturesCursor;
-use pretty_assertions::assert_eq;
 use tokio_util::compat::FuturesAsyncWriteCompatExt;
 
-use crate::chat::{self, ChatId};
-use crate::download::PRE_MSG_ATTACHMENT_SIZE_THRESHOLD;
-use crate::message::{Message, MsgId, Viewtype};
-use crate::test_utils::{SentMessage, TestContext, create_test_image};
-
-pub async fn send_large_file_message<'a>(
-    sender: &'a TestContext,
-    target_chat: ChatId,
-    view_type: Viewtype,
-    content: &[u8],
-) -> Result<(SentMessage<'a>, SentMessage<'a>, MsgId)> {
-    let mut msg = Message::new(view_type);
-    let file_name = match view_type {
-        Viewtype::Webxdc => "test.xdc",
-        Viewtype::Vcard => "test.vcf",
-        _ => "test.bin",
-    };
-    msg.set_file_from_bytes(sender, file_name, content)?;
-    msg.set_text("test".to_owned());
-
-    // assert that test attachment is bigger than limit
-    assert!(msg.get_filebytes(sender).await?.unwrap() > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD);
-
-    let msg_id = chat::send_msg(sender, target_chat, &mut msg).await?;
-    let smtp_rows = sender.get_smtp_rows_for_msg(msg_id).await;
-
-    assert_eq!(smtp_rows.len(), 2);
-    let pre_message = smtp_rows.first().expect("Pre-Message exists");
-    let post_message = smtp_rows.get(1).expect("Post-Message exists");
-    Ok((pre_message.to_owned(), post_message.to_owned(), msg_id))
-}
+use crate::chat::ChatId;
+use crate::message::{MsgId, Viewtype};
+use crate::test_utils::{SentMessage, TestContext, create_test_image, send_large_file_message};
 
 pub async fn big_webxdc_app() -> Result<Vec<u8>> {
     let futures_cursor = FuturesCursor::new(Vec::new());

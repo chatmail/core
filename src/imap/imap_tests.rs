@@ -1,8 +1,7 @@
 use super::*;
 use crate::{
     message::Viewtype,
-    test_utils::{TestContext, TestContextManager},
-    tests::pre_messages::util::send_large_file_message,
+    test_utils::{TestContext, TestContextManager, send_large_file_message},
 };
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

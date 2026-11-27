@@ -2,10 +2,8 @@ use anyhow::Result;
 use pretty_assertions::assert_eq;
 
 use crate::message::Viewtype;
-use crate::test_utils::TestContextManager;
-use crate::tests::pre_messages::util::{
-    send_large_file_message, send_large_image_message, send_large_webxdc_message,
-};
+use crate::test_utils::{TestContextManager, send_large_file_message};
+use crate::tests::pre_messages::util::{send_large_image_message, send_large_webxdc_message};
 
 /// Test the addition of the download info to message text
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
