@@ -744,12 +744,22 @@ CREATE TABLE imap_sync (
 ) STRICT;
 CREATE INDEX imap_sync_index ON imap_sync(transport_id, folder);
 
+-- Large messages scheduled for download.
 CREATE TABLE download (
+    -- Message-ID of the message scheduled for download.
+    --
+    -- In most cases it is a message with Chat-Is-Post-Message header,
+    -- but may also be a large non-post-message that is automatically postponed
+    -- because it is larger than download limit.
     rfc724_mid TEXT PRIMARY KEY,
+
+    -- Deprecated since migration 145.
     msg_id INTEGER NOT NULL DEFAULT 0
 ) STRICT;
 
+-- Message-IDs of post-messages that are not downloaded yet.
 CREATE TABLE available_post_msgs (
+    -- Message-ID of a message with a Chat-Is-Post-Message header.
     rfc724_mid TEXT PRIMARY KEY
 ) STRICT;
 
