@@ -22,7 +22,8 @@ ALL = "1:*"
 class DirectImap:
     """Internal Python-level IMAP handling."""
 
-    def __init__(self, account: Account, addr=None, password=None) -> None:
+    def __init__(self, account: Account | None, addr=None, password=None) -> None:
+        """If `account` is None, `addr` and `password` must be given."""
         self.account = account
         if addr is None or password is None:
             transport = account.list_transports()[-1]
@@ -34,13 +35,12 @@ class DirectImap:
             self.password = transport["password"]
         else:
             self.password = password
-        self.logid = account.get_config("displayname") or id(account)
+        self.logid = (account and account.get_config("displayname")) or id(self)
         self._idling = False
         self.connect()
 
     def connect(self):
         # Assume the testing server supports TLS on port 993.
-        host = self.account.get_config("configured_mail_server")
         port = 993
 
         user = self.addr

@@ -382,6 +382,62 @@ def test_background_fetch_no_duplicates(acf, direct_imap, dc):
     assert len(messages_with_text(alice_chat, "hello")) == 1
 
 
+def test_downloaded_msg_deleted_on_all_transports(acf, direct_imap):
+    """With `bcc_self` off, a message is deleted on all relays
+    after it was downloaded from one relay."""
+    alice, _alice_chat, bob_chat = alice_with_two_transports_and_bob(acf)
+    assert alice.get_config("bcc_self") == "0"
+    imaps = [direct_imap(alice, transport["addr"], transport["password"]) for transport in alice.list_transports()]
+    assert len(imaps) == 2
+
+    alice.stop_io()
+    bob_chat.send_text("hello")
+    for imap in imaps:
+        wait_for_imap_message(imap)
+
+    alice.start_io()
+    assert alice.wait_for_incoming_msg().get_snapshot().text == "hello"
+    # Wait until all messages on all relays have been deleted:
+    for imap in imaps:
+        while imap.get_all_messages():
+            time.sleep(0.1)
+
+
+def test_downloaded_post_msg_deleted_on_all_transports(acf, direct_imap, tmp_path):
+    """With `bcc_self` off, a post-message is deleted on all relays
+    after it was downloaded on demand from one relay."""
+    # Min. UI setting as of v2.35
+    download_limit = 163840
+    alice, _alice_chat, bob_chat = alice_with_two_transports_and_bob(acf)
+    assert alice.get_config("bcc_self") == "0"
+    alice.set_config("download_limit", str(download_limit))
+    imaps = [direct_imap(alice, transport["addr"], transport["password"]) for transport in alice.list_transports()]
+    assert len(imaps) == 2
+    for imap in imaps:
+        assert len(imap.get_all_messages()) == 0
+
+    alice.stop_io()
+    path = tmp_path / "large"
+    path.write_bytes(os.urandom(download_limit + 1))
+    bob_chat.send_file(str(path))
+    # Wait for the pre- and the post-message on both relays:
+    for imap in imaps:
+        while len(imap.get_all_messages()) < 2:
+            time.sleep(0.1)
+
+    alice.start_io()
+    msg = alice.wait_for_incoming_msg()
+    assert msg.get_snapshot().download_state == DownloadState.AVAILABLE
+    alice._rpc.download_full_message(alice.id, msg.id)
+    while msg.get_snapshot().download_state != DownloadState.DONE:
+        alice.wait_for_event(EventType.MSGS_CHANGED)
+
+    # Wait until all messages on all relays have been deleted:
+    for imap in imaps:
+        while imap.get_all_messages():
+            time.sleep(0.1)
+
+
 def test_multitransport_mdn(acf):
     """Test sending an MDN right after configuring two transports."""
     alice, bob = acf.get_online_accounts(2)

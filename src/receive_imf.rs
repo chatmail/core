@@ -25,7 +25,7 @@ use crate::download::{DownloadState, msg_is_downloaded_for};
 use crate::ephemeral::{Timer as EphemeralTimer, stock_ephemeral_timer_changed};
 use crate::events::EventType;
 use crate::headerdef::HeaderDef;
-use crate::imap::{GENERATED_PREFIX, markseen_on_imap_table};
+use crate::imap::{GENERATED_PREFIX, mark_msg_for_deletion, markseen_on_imap_table};
 use crate::key::{DcKey, Fingerprint, SignedPublicKey};
 use crate::key::{
     load_self_public_key, load_self_public_key_opt, self_fingerprint, self_fingerprint_opt,
@@ -520,7 +520,11 @@ pub(crate) async fn receive_imf_inner(
         // and no `last_seen` update lighting up an online dot.
         // This is also how keyupdates are trashed, see `crate::keyupdate`.
         info!(context, "Report without message reference (TRASH).");
-        return trash().await;
+        let received_msg = trash().await?;
+        if !context.get_config_bool(Config::BccSelf).await? {
+            mark_msg_for_deletion(context, rfc724_mid).await?;
+        }
+        return Ok(received_msg);
     }
 
     if !mime_parser.was_encrypted() && mime_parser.get_header(HeaderDef::SecureJoin).is_none() {
@@ -885,36 +889,24 @@ pub(crate) async fn receive_imf_inner(
         warn!(context, "Cannot update contact status: {err:#}.");
     }
 
-    // Get user-configured server deletion
     if !received_msg.msg_ids.is_empty() {
-        let target = if received_msg.needs_delete_job {
-            Some("".to_string())
-        } else {
-            None
-        };
-        if target.is_some() || rfc724_mid_orig != rfc724_mid {
-            let target_subst = match &target {
-                Some(_) => "target=?1,",
-                None => "",
-            };
+        if rfc724_mid_orig != rfc724_mid {
             context
                 .sql
                 .execute(
-                    &format!("UPDATE imap SET {target_subst} rfc724_mid=?2 WHERE rfc724_mid=?3"),
-                    (
-                        target.as_deref().unwrap_or_default(),
-                        rfc724_mid_orig,
-                        rfc724_mid,
-                    ),
+                    "UPDATE imap SET rfc724_mid=? WHERE rfc724_mid=?",
+                    (rfc724_mid_orig, rfc724_mid),
                 )
                 .await?;
-            context.scheduler.interrupt_inbox().await;
         }
-        if target.is_none() && !mime_parser.mdn_reports.is_empty() && mime_parser.has_chat_version()
-        {
+
+        if received_msg.needs_delete_job || !context.get_config_bool(Config::BccSelf).await? {
+            mark_msg_for_deletion(context, rfc724_mid_orig).await?;
+        } else if !mime_parser.mdn_reports.is_empty() && mime_parser.has_chat_version() {
             // This is a Delta Chat MDN. Mark as read.
             markseen_on_imap_table(context, rfc724_mid_orig).await?;
         }
+
         if !mime_parser.incoming && !context.get_config_bool(Config::TeamProfile).await? {
             let mut updated_chats = BTreeMap::new();
             let mut archived_chats_maybe_noticed = false;

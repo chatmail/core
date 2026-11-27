@@ -20,8 +20,9 @@ use crate::summary::assert_summary_texts;
 use crate::test_utils::SentMessage;
 use crate::test_utils::TestContext;
 use crate::test_utils::TestContextManager;
+use crate::test_utils::send_large_file_message;
 use crate::tests::pre_messages::util::{
-    big_webxdc_app, send_large_file_message, send_large_image_message, send_large_webxdc_message,
+    big_webxdc_app, send_large_image_message, send_large_webxdc_message,
 };
 use crate::webxdc::StatusUpdateSerial;
 

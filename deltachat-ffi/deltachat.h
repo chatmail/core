@@ -400,10 +400,13 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  * - `mdns_enabled` = 0=do not send or request read receipts,
  *                    1=send and request read receipts
  *                    default=send and request read receipts, only send but not request if `bot` is set
- * - `bcc_self`     = 0=do not send a copy of outgoing messages to self,
- *                    1=send a copy of outgoing messages to self (default).
- *                    Sending messages to self is needed for a proper multi-account setup,
- *                    however, on the other hand, may lead to unwanted notifications in non-delta clients.
+ * - `bcc_self`     = 1=there are other devices using this profile (multi-device),
+ *                    0=this is the only device (single-device, default).
+ *                    Called `bcc_self` for historical reasons:
+ *                    If there are multiple devices, then outgoing messages need to
+ *                    be sent to self as a BCC-copy.
+ *                    This is automatically enabled when importing/exporting a backup,
+ *                    setting up a second device, or receiving a sync message.
  * - `delete_device_after` = 0=do not delete messages from device automatically (default),
  *                    >=1=seconds, after which messages are deleted automatically from the device.
  *                    Messages in the "saved messages" chat (see dc_chat_is_self_talk()) are skipped.

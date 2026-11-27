@@ -297,6 +297,7 @@ def alice_and_remote_bob(tmp_path, acf, get_core_python_env):
 
     The 'eval' function allows to remote-execute arbitrary expressions
     that can use the `bob` online account, and the `bob_contact_alice`.
+    Its `accounts_dir` attribute is the accounts directory of the remote core.
     """
     from execnet import makegateway
 
@@ -331,6 +332,7 @@ def alice_and_remote_bob(tmp_path, acf, get_core_python_env):
             channel.send(eval_str)
             return channel.receive()
 
+        eval.accounts_dir = accounts_dir
         return alice, alice_contact_bob, eval
 
     return factory
