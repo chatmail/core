@@ -88,6 +88,8 @@ FULLY_DOCUMENTED_TABLES = {
     "imap_sync",
     "multi_device_sync",
     "transports",
+    "download",
+    "available_post_msgs",
 }
 
 
