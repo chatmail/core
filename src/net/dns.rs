@@ -743,7 +743,7 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
         ),
         (
             "chatmail.uk",
-            vec![IpAddr::V4(Ipv4Addr::new(213, 165, 89, 146))],
+            vec![IpAddr::V4(Ipv4Addr::new(77, 68, 103, 218))],
         ),
         (
             "e2ee.wang",
